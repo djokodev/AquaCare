@@ -14,8 +14,12 @@ from aquaculture.models import (
     FarmFeedReference,
     ProductionCycle,
 )
+from aquaculture.services.cycle_feed_plan_progression_service import (
+    CycleFeedPlanProgressionService,
+)
 from aquaculture.services.cycle_feed_recommendation_service import CycleFeedRecommendationService
 from aquaculture.services.cycle_store_application_service import CycleStoreApplicationService
+from aquaculture.services.log_service import CycleLogService
 from commerce.models import Order, OrderItem, Product
 from django.db import close_old_connections, connection
 from django.urls import reverse
@@ -51,6 +55,89 @@ def create_plan(cycle, simulation):
         phases=CycleFeedRecommendationService._json_safe(simulation.get('feeding_phases', [])),
         total_feed_kg=Decimal(str(simulation['summary']['total_feed_kg'])),
     )
+
+
+@pytest.mark.django_db
+def test_daily_weight_persists_monotone_phase_progression(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    plan = CycleFeedPlan.objects.create(
+        cycle=cycle,
+        version=2,
+        parameters={},
+        phases=[
+            {'planned_weight_range_g': ['1', '50'], 'planned_consumption_kg': '10'},
+            {'planned_weight_range_g': ['51', '150'], 'planned_consumption_kg': '20'},
+            {'planned_weight_range_g': ['151', '300'], 'planned_consumption_kg': '30'},
+        ],
+        total_feed_kg=Decimal('60'),
+        highest_reached_phase_sequence=1,
+    )
+
+    CycleLogService.create_log(
+        cycle,
+        {
+            'log_date': timezone.localdate(),
+            'mortality_count': 0,
+            'sample_count': 10,
+            'sample_total_weight': Decimal('2500'),
+            'mortality_reason': '',
+            'observations': '',
+        },
+        user=authenticated_user,
+    )
+
+    plan.refresh_from_db()
+    assert plan.highest_reached_phase_sequence == 3
+    CycleFeedPlanProgressionService.record_progress_from_weight(
+        cycle=cycle,
+        observed_weight=Decimal('20'),
+    )
+    plan.refresh_from_db()
+    assert plan.highest_reached_phase_sequence == 3
+
+
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Nécessite PostgreSQL.')
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize('weights', [
+    (Decimal('120'), Decimal('250')),
+    (Decimal('250'), Decimal('20')),
+])
+def test_concurrent_phase_progress_keeps_highest_sequence(
+    authenticated_user,
+    weights,
+):
+    cycle = create_cycle(authenticated_user)
+    plan = CycleFeedPlan.objects.create(
+        cycle=cycle,
+        version=2,
+        parameters={},
+        phases=[
+            {'planned_weight_range_g': ['1', '50']},
+            {'planned_weight_range_g': ['51', '150']},
+            {'planned_weight_range_g': ['151', '300']},
+        ],
+        total_feed_kg=Decimal('60'),
+        highest_reached_phase_sequence=1,
+    )
+    barrier = Barrier(2)
+
+    def record(weight):
+        close_old_connections()
+        try:
+            local_cycle = ProductionCycle.objects.get(pk=cycle.pk)
+            barrier.wait(timeout=5)
+            CycleFeedPlanProgressionService.record_progress_from_weight(
+                cycle=local_cycle,
+                observed_weight=weight,
+            )
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(record, weights))
+
+    plan.refresh_from_db()
+    assert plan.highest_reached_phase_sequence == 3
 
 
 @pytest.mark.skipif(connection.vendor != 'postgresql', reason='Nécessite PostgreSQL.')
@@ -224,6 +311,14 @@ def test_classifying_legacy_stock_preserves_physical_remainder(authenticated_use
     )
 
     before = CycleStoreApplicationService.get_store(cycle)
+    assert before['unclassified_entries'] == [{
+        'id': str(entry.id),
+        'label': 'Ancien aliment 2 mm',
+        'quantity_kg': '110.00',
+        'quantity_added_kg': '110.00',
+        'historical_consumption_kg': '30.00',
+        'quantity_available_kg': '80.00',
+    }]
     CycleStoreApplicationService.classify_legacy_stock(
         user=authenticated_user,
         cycle=cycle,
@@ -239,7 +334,7 @@ def test_classifying_legacy_stock_preserves_physical_remainder(authenticated_use
 
 
 @pytest.mark.django_db
-def test_classifying_ambiguous_legacy_stock_is_refused(authenticated_user):
+def test_legacy_consumption_is_allocated_fifo_across_same_identity(authenticated_user):
     cycle = create_cycle(authenticated_user)
     entry_date = timezone.localdate() - timedelta(days=2)
     entries = [
@@ -268,15 +363,30 @@ def test_classifying_ambiguous_legacy_stock_is_refused(authenticated_user):
         pellet_size_mm=Decimal('2.00'),
     )
 
-    with pytest.raises(ValueError, match='Plusieurs stocks historiques'):
-        CycleStoreApplicationService.classify_legacy_stock(
-            user=authenticated_user,
-            cycle=cycle,
-            entry_id=entries[0].id,
-            feed_reference_id=reference.id,
-        )
+    before = CycleStoreApplicationService.get_store(cycle)
+    breakdown = {
+        item['id']: item
+        for item in before['unclassified_entries']
+    }
+    assert breakdown[str(entries[0].id)]['historical_consumption_kg'] == '10.00'
+    assert breakdown[str(entries[0].id)]['quantity_available_kg'] == '40.00'
+    assert breakdown[str(entries[1].id)]['historical_consumption_kg'] == '0.00'
+    assert breakdown[str(entries[1].id)]['quantity_available_kg'] == '50.00'
 
-    assert all(entry.feed_reference_id is None for entry in entries)
+    CycleStoreApplicationService.classify_legacy_stock(
+        user=authenticated_user,
+        cycle=cycle,
+        entry_id=entries[0].id,
+        feed_reference_id=reference.id,
+    )
+
+    assert (
+        CycleFeedStockAdjustment.objects.get(stock_entry=entries[0]).quantity_kg
+        == Decimal('10.00')
+    )
+    assert not CycleFeedStockAdjustment.objects.filter(
+        stock_entry=entries[1],
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -446,6 +556,10 @@ def test_phase_ids_and_past_phase_stay_stable_after_weighing(authenticated_user,
     before = CycleFeedRecommendationService.build(cycle)
     cycle.current_average_weight = Decimal('180.00')
     cycle.save(update_fields=['current_average_weight'])
+    CycleFeedPlanProgressionService.record_progress_from_weight(
+        cycle=cycle,
+        observed_weight=cycle.current_average_weight,
+    )
     after = CycleFeedRecommendationService.build(cycle)
 
     assert [phase['phase_id'] for phase in before['feeding_phases']] == [

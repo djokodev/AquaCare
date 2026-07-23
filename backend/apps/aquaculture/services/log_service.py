@@ -34,6 +34,10 @@ from ..domain.exceptions import (
 )
 from ..models import CycleLog, ProductionCycle
 from .base import BaseService
+from .feed_stock_ledger_service import (
+    FeedStockLedgerService,
+    FeedStockReservation,
+)
 
 if TYPE_CHECKING:
     from accounts.models import User
@@ -234,6 +238,11 @@ class CycleLogService(BaseService):
             created_offline=created_offline,
             **log_data
         )
+        from .cycle_feed_plan_progression_service import (
+            CycleFeedPlanProgressionService,
+        )
+
+        CycleFeedPlanProgressionService.record_progress_from_log(log)
 
         CycleLogService.log_operation(
             "log_created",
@@ -311,7 +320,10 @@ class CycleLogService(BaseService):
 
         # Track UUIDs already processed in this batch to handle in-batch duplicates
         batch_uuid_map: dict[str, CycleLog] = {}
-        reserved_feed_by_reference: dict[tuple[UUID, UUID], Decimal] = {}
+        reserved_feed_by_reference: dict[
+            tuple[UUID, UUID],
+            list[FeedStockReservation],
+        ] = {}
 
         # Collect new logs to bulk_create (bypass signals)
         new_logs_to_create: list[CycleLog] = []
@@ -423,18 +435,18 @@ class CycleLogService(BaseService):
                     clean_log_data['feed_type'] = feed_reference.name
                     clean_log_data['feed_size_mm'] = feed_reference.pellet_size_mm
                 reservation_key = None
-                reserved_feed_kg = Decimal('0')
+                reserved_feed_events: list[FeedStockReservation] = []
                 if feed_reference is not None:
                     reservation_key = (cycle.id, feed_reference.id)
-                    reserved_feed_kg = reserved_feed_by_reference.get(
+                    reserved_feed_events = reserved_feed_by_reference.get(
                         reservation_key,
-                        Decimal('0'),
+                        [],
                     )
                 CycleLogService._validate_log_business_rules(
                     cycle,
                     clean_log_data,
                     user=user,
-                    reserved_feed_kg=reserved_feed_kg,
+                    reserved_feed_events=reserved_feed_events,
                 )
 
                 # Auto-calculate average weight if sample provided
@@ -465,9 +477,17 @@ class CycleLogService(BaseService):
                 )
                 new_logs_to_create.append(log)
                 if reservation_key is not None:
-                    reserved_feed_by_reference[reservation_key] = (
-                        reserved_feed_kg
-                        + Decimal(str(clean_log_data.get('feed_quantity') or 0))
+                    reserved_feed_by_reference.setdefault(
+                        reservation_key,
+                        [],
+                    ).append(
+                        FeedStockLedgerService.reservation(
+                            log_date=log_date_val,
+                            quantity_kg=Decimal(
+                                str(clean_log_data.get('feed_quantity') or 0)
+                            ),
+                            event_id=client_uuid or log.id,
+                        )
                     )
                 result['cycles_affected'].add(cycle.id)
                 if date_key:
@@ -492,6 +512,12 @@ class CycleLogService(BaseService):
         # Bulk create all new logs at once (bypasses post_save signals)
         if new_logs_to_create:
             created_logs = CycleLog.objects.bulk_create(new_logs_to_create)
+            from .cycle_feed_plan_progression_service import (
+                CycleFeedPlanProgressionService,
+            )
+
+            for created_log in created_logs:
+                CycleFeedPlanProgressionService.record_progress_from_log(created_log)
             result['created'] = len(created_logs)
             result['logs'].extend(created_logs)
 
@@ -555,15 +581,10 @@ class CycleLogService(BaseService):
             user=user,
         )
 
-        from .cycle_store_service import CycleStoreService
-
         # Reconstitue la valeur finale avant toute écriture. Toute modification
         # qui peut changer la compatibilité du stock repasse par le même ledger.
         feed_reference = update_data.get('feed_reference', log.feed_reference)
         feed_quantity = update_data.get('feed_quantity', log.feed_quantity)
-        final_log_date = update_data.get('log_date', log.log_date)
-        if isinstance(final_log_date, str):
-            final_log_date = date.fromisoformat(final_log_date)
         final_values = {
             field: update_data.get(field, getattr(log, field))
             for field in (
@@ -586,15 +607,6 @@ class CycleLogService(BaseService):
             user=user,
             existing_log=log,
         )
-        CycleStoreService.validate_daily_feed_quantity(
-            cycle=cycle,
-            feed_quantity=feed_quantity,
-            log_date=final_log_date,
-            cycle_unit_allocation=cycle_unit_allocation,
-            existing_log=log,
-            feed_reference=feed_reference,
-        )
-
         # Validation des nouvelles données si mortalité modifiée
         if 'mortality_count' in update_data:
             new_mortality = update_data['mortality_count']
@@ -612,6 +624,11 @@ class CycleLogService(BaseService):
                 setattr(log, key, value)
 
         log.save()
+        from .cycle_feed_plan_progression_service import (
+            CycleFeedPlanProgressionService,
+        )
+
+        CycleFeedPlanProgressionService.record_progress_from_log(log)
         return log
 
     @staticmethod
@@ -678,6 +695,7 @@ class CycleLogService(BaseService):
         user: User | None = None,
         existing_log: CycleLog | None = None,
         reserved_feed_kg: Decimal = Decimal('0'),
+        reserved_feed_events: list[FeedStockReservation] | None = None,
     ) -> None:
         """
         Valide les règles métier pour la création d'un log.
@@ -769,6 +787,7 @@ class CycleLogService(BaseService):
                 existing_log=existing_log,
                 feed_reference=log_data.get('feed_reference'),
                 reserved_feed_kg=reserved_feed_kg,
+                reserved_feed_events=reserved_feed_events,
             )
 
     @staticmethod

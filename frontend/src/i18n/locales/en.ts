@@ -582,6 +582,8 @@
   dailyLogUnitRequiredMessage: 'Daily entries are now recorded for a specific unit.',
   chooseProductionUnit: 'Choose a unit',
   dailyLogUpdatingToday: 'Today’s entry will be updated.',
+  dailyLogPendingLocalUpdate: 'Local update pending synchronization.',
+  dailyLogServerLocalConflict: 'A different server entry exists for this day. Synchronize before continuing.',
   updateTodayEntry: 'Update my entry',
   observations: 'Observations',
   observationsPlaceholder: 'Notes, special observations...',

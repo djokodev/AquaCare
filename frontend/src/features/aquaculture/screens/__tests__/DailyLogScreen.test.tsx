@@ -31,6 +31,10 @@ jest.mock('@/services/offlineService', () => ({
     hasAnyPendingSync: jest.fn(),
     syncAllOfflineData: jest.fn(),
     saveCycleLogOffline: jest.fn(),
+    findPendingCycleLogForScope: jest.fn(),
+    getOfflineStockDeclarations: jest.fn(),
+    getOfflineFeedReferences: jest.fn(),
+    getPendingSyncLogs: jest.fn(),
   },
 }));
 
@@ -135,6 +139,10 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     mockService.getCycleStore.mockResolvedValue(store);
     mockService.createCycleLog.mockResolvedValue({ id: 'log-1' } as any);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
+    mockOffline.findPendingCycleLogForScope.mockResolvedValue(null);
+    mockOffline.getOfflineStockDeclarations.mockResolvedValue([]);
+    mockOffline.getOfflineFeedReferences.mockResolvedValue([]);
+    mockOffline.getPendingSyncLogs.mockResolvedValue([]);
     mockOffline.syncAllOfflineData.mockResolvedValue({
       success: 0,
       failed: 0,
@@ -274,6 +282,90 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     expect(getByDisplayValue('16,8')).toBeTruthy();
     expect(getByText('updateTodayEntry')).toBeTruthy();
     expect(getByText('feedStockAvailable')).toBeTruthy();
+  });
+
+  it('rouvre et modifie la saisie locale du jour sans accès serveur', async () => {
+    const today = new Date();
+    const offset = today.getTimezoneOffset() * 60_000;
+    const localDate = new Date(today.getTime() - offset).toISOString().slice(0, 10);
+    const localLog = {
+      id: 'offline-log-1',
+      cycleId: 'cycle-1',
+      logData: {
+        cycle_unit_allocation: 'allocation-1',
+        log_date: localDate,
+        client_uuid: 'offline-client-uuid',
+        mortality_count: 0,
+        mortality_reason: '',
+        feed_quantity: 5,
+        feed_type: 'Dibaq',
+        feed_size_mm: 2.5,
+        feed_reference: 'feed-1',
+        feeding_times: ['08:00'],
+        created_offline: true,
+      },
+      fingerprint: 'fingerprint',
+      timestamp: Date.now(),
+      synced: false,
+    };
+    mockService.getCycleLogs.mockRejectedValue(new TypeError('Network request failed'));
+    mockService.getCycleStore.mockRejectedValue(new TypeError('Network request failed'));
+    mockService.createCycleLog.mockRejectedValue(new TypeError('Network request failed'));
+    mockOffline.findPendingCycleLogForScope.mockResolvedValue(localLog);
+    mockOffline.getPendingSyncLogs.mockResolvedValue([localLog]);
+    mockOffline.getOfflineFeedReferences.mockResolvedValue([{
+      id: 'offline-reference',
+      clientUuid: 'offline-reference-uuid',
+      serverId: 'feed-1',
+      payload: {
+        client_uuid: 'offline-reference-uuid',
+        farm_profile: 'farm-1',
+        source: 'external',
+        name: 'Dibaq',
+        species: 'tilapia',
+        pellet_size_mm: '2.50',
+      },
+      fingerprint: 'reference-fingerprint',
+      timestamp: Date.now(),
+      synced: true,
+    }]);
+    mockOffline.getOfflineStockDeclarations.mockResolvedValue([{
+      id: 'offline-stock',
+      cycleId: 'cycle-1',
+      clientUuid: 'offline-stock-uuid',
+      feedReferenceClientUuid: 'offline-reference-uuid',
+      payload: {
+        client_uuid: 'offline-stock-uuid',
+        feed_reference_client_uuid: 'offline-reference-uuid',
+        quantity_kg: '10.00',
+        total_cost_fcfa: '8000.00',
+        entry_date: localDate,
+      },
+      fingerprint: 'stock-fingerprint',
+      timestamp: Date.now(),
+      synced: false,
+    }]);
+
+    const { getByText, getByDisplayValue, getByPlaceholderText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => expect(getByText('dailyLogPendingLocalUpdate')).toBeTruthy());
+    expect(getByDisplayValue('5')).toBeTruthy();
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '11');
+    expect(getByText('feedStockInsufficient')).toBeTruthy();
+    expect(mockOffline.saveCycleLogOffline).not.toHaveBeenCalled();
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '4');
+    fireEvent.press(getByText('updateTodayEntry'));
+
+    await waitFor(() => expect(mockOffline.saveCycleLogOffline).toHaveBeenCalledWith(
+      'cycle-1',
+      expect.objectContaining({
+        client_uuid: 'offline-client-uuid',
+        feed_quantity: 4,
+        feed_reference: 'feed-1',
+      }),
+    ));
   });
 
   it('affiche une validation serveur sous le champ concerné', async () => {

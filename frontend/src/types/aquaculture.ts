@@ -291,6 +291,7 @@ export interface CycleLog {
   feed_type?: string;
   feed_size_mm?: number | null;
   feed_reference?: string | null;
+  feed_reference_client_uuid?: string | null;
   feeding_times?: string[];
 
   // Parametres environnementaux
@@ -304,6 +305,7 @@ export interface CycleLog {
 
   // Metadonnees synchronisation
   created_offline: boolean;
+  pending_sync?: boolean;
   synced_at?: string;
   created_at: string;
 }

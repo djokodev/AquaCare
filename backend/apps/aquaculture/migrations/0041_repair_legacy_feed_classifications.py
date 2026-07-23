@@ -1,9 +1,9 @@
-"""Répare les rattachements heuristiques de 0038 déjà exécutés.
+"""Point de compatibilité conservateur après 0040.
 
-La migration est volontairement conservatrice : une association manuelle ou un
-journal ne contient pas assez de provenance pour être distingué d'une
-association déduite par l'ancien backfill. Elle est donc retirée sans toucher à
-la quantité, au coût, aux dates ni aux snapshots historiques.
+La première version de cette migration utilisait ``client_uuid IS NULL`` comme
+preuve d'un rattachement heuristique. Cette preuve est insuffisante pour une
+référence créée en ligne. La réparation démontrable et la restauration des
+bases de revue sont donc réalisées par la migration additive 0043.
 """
 
 from django.db import migrations
@@ -37,25 +37,8 @@ def _certain_order_entry(entry):
 
 
 def repair_legacy_classifications(apps, schema_editor):
-    StockEntry = apps.get_model('aquaculture', 'CycleFeedStockEntry')
-    CycleLog = apps.get_model('aquaculture', 'CycleLog')
-
-    entries = StockEntry.objects.select_related(
-        'cycle', 'feed_reference', 'order_item', 'order_item__order',
-    ).filter(feed_reference__isnull=False)
-    for entry in entries.iterator():
-        reference = entry.feed_reference
-        if _certain_order_entry(entry) or reference.client_uuid is not None:
-            continue
-        StockEntry.objects.filter(pk=entry.pk).update(feed_reference_id=None)
-
-    # A journal has no order snapshot proving that the old association was
-    # intentional. Explicit references carry a client_uuid; old heuristic
-    # references do not. Snapshots feed_type/feed_size_mm remain untouched.
-    CycleLog.objects.filter(
-        feed_reference__isnull=False,
-        feed_reference__client_uuid__isnull=True,
-    ).update(feed_reference_id=None)
+    # Ne jamais retirer une association sans provenance démontrable.
+    return None
 
 
 class Migration(migrations.Migration):

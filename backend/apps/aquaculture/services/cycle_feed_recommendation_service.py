@@ -135,6 +135,15 @@ class CycleFeedRecommendationService:
         parameters['snapshot_source'] = source
         try:
             with transaction.atomic():
+                initial_sequence = (
+                    cls._current_phase_index(
+                        phases,
+                        cls._decimal(cycle.initial_average_weight),
+                    )
+                    + 1
+                    if phases and cycle.initial_average_weight
+                    else 0
+                )
                 return CycleFeedPlan.objects.create(
                     cycle=cycle,
                     version=PLAN_VERSION,
@@ -143,6 +152,7 @@ class CycleFeedRecommendationService:
                     total_feed_kg=cls._decimal(
                         simulation['summary']['total_feed_kg']
                     ).quantize(QUANTIZE_KG),
+                    highest_reached_phase_sequence=initial_sequence,
                 )
         except IntegrityError:
             return CycleFeedPlan.objects.get(cycle=cycle)
@@ -343,22 +353,6 @@ class CycleFeedRecommendationService:
             'warnings': warnings or ['feed_estimate_unavailable'],
         }
 
-    @staticmethod
-    @transaction.atomic
-    def _record_phase_progression(
-        plan: CycleFeedPlan,
-        *,
-        current_index: int,
-        phase_count: int,
-    ) -> CycleFeedPlan:
-        """Persiste uniquement une progression de phase monotone."""
-        locked_plan = CycleFeedPlan.objects.select_for_update().get(pk=plan.pk)
-        reached = min(max(current_index + 1, 0), phase_count)
-        if reached > locked_plan.highest_reached_phase_sequence:
-            locked_plan.highest_reached_phase_sequence = reached
-            locked_plan.save(update_fields=['highest_reached_phase_sequence'])
-        return locked_plan
-
     @classmethod
     def build(cls, cycle: ProductionCycle) -> dict[str, Any]:
         plan = cls.ensure_plan(cycle)
@@ -383,11 +377,6 @@ class CycleFeedRecommendationService:
             return cls._unavailable_payload(cycle, phases, plan, ['feed_estimate_unavailable'])
 
         current_index = cls._current_phase_index(phases, current_weight)
-        plan = cls._record_phase_progression(
-            plan,
-            current_index=current_index,
-            phase_count=len(phases),
-        )
         progression_index = max(
             current_index,
             max(plan.highest_reached_phase_sequence - 1, 0),

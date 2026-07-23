@@ -1,7 +1,7 @@
 """Invariants transactionnels du stock alimentaire."""
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from threading import Barrier
 from uuid import uuid4
@@ -34,7 +34,7 @@ def _feed_reference(cycle, *, name="Dibaq 2 mm", size="2.00"):
     )
 
 
-def _stock(cycle, feed_reference, quantity="10.00"):
+def _stock(cycle, feed_reference, quantity="10.00", *, entry_date=None):
     return CycleFeedStockEntry.objects.create(
         cycle=cycle,
         feed_reference=feed_reference,
@@ -43,7 +43,7 @@ def _stock(cycle, feed_reference, quantity="10.00"):
         feed_size_mm=feed_reference.pellet_size_mm,
         quantity_kg=Decimal(quantity),
         total_cost_fcfa=Decimal("10000.00"),
-        entry_date=date.today(),
+        entry_date=entry_date or date.today(),
     )
 
 
@@ -64,9 +64,16 @@ def _allocation(cycle, name):
     )
 
 
-def _payload(feed_reference, allocation, quantity, *, client_uuid=None):
+def _payload(
+    feed_reference,
+    allocation,
+    quantity,
+    *,
+    client_uuid=None,
+    log_date=None,
+):
     payload = {
-        "log_date": date.today(),
+        "log_date": log_date or date.today(),
         "cycle_unit_allocation": allocation,
         "feed_reference": feed_reference,
         "feed_quantity": Decimal(quantity),
@@ -74,6 +81,221 @@ def _payload(feed_reference, allocation, quantity, *, client_uuid=None):
     if client_uuid is not None:
         payload["client_uuid"] = client_uuid
     return payload
+
+
+@pytest.mark.django_db
+def test_future_stock_cannot_fund_historical_feed_log():
+    today = date.today()
+    cycle = ProductionCycleFactory(start_date=today - timedelta(days=30))
+    feed_reference = _feed_reference(cycle)
+    _stock(
+        cycle,
+        feed_reference,
+        "10.00",
+        entry_date=today - timedelta(days=20),
+    )
+    _stock(
+        cycle,
+        feed_reference,
+        "100.00",
+        entry_date=today - timedelta(days=1),
+    )
+
+    with pytest.raises(FeedStockValidationError) as exc_info:
+        CycleLogService.create_log(
+            cycle,
+            _payload(
+                feed_reference,
+                _allocation(cycle, "Bac historique"),
+                "50.00",
+                log_date=today - timedelta(days=10),
+            ),
+        )
+
+    assert exc_info.value.detail["code"] == "insufficient_feed_stock"
+    assert exc_info.value.detail["available_feed_kg"] == "10.00"
+
+
+@pytest.mark.django_db
+def test_retroactive_feed_log_cannot_make_future_ledger_negative():
+    today = date.today()
+    cycle = ProductionCycleFactory(start_date=today - timedelta(days=30))
+    feed_reference = _feed_reference(cycle)
+    _stock(
+        cycle,
+        feed_reference,
+        "10.00",
+        entry_date=today - timedelta(days=20),
+    )
+    first = _allocation(cycle, "Bac futur 1")
+    second = _allocation(cycle, "Bac futur 2")
+    CycleLogService.create_log(
+        cycle,
+        _payload(
+            feed_reference,
+            first,
+            "5.00",
+            log_date=today - timedelta(days=17),
+        ),
+    )
+    _stock(
+        cycle,
+        feed_reference,
+        "20.00",
+        entry_date=today - timedelta(days=15),
+    )
+    CycleLogService.create_log(
+        cycle,
+        _payload(
+            feed_reference,
+            second,
+            "20.00",
+            log_date=today - timedelta(days=10),
+        ),
+    )
+
+    with pytest.raises(FeedStockValidationError) as exc_info:
+        CycleLogService.create_log(
+            cycle,
+            _payload(
+                feed_reference,
+                _allocation(cycle, "Bac rétroactif"),
+                "10.00",
+                log_date=today - timedelta(days=18),
+            ),
+        )
+
+    assert exc_info.value.detail["available_feed_kg"] == "5.00"
+
+
+@pytest.mark.django_db
+def test_retroactive_feed_log_is_accepted_when_full_timeline_stays_non_negative():
+    today = date.today()
+    cycle = ProductionCycleFactory(start_date=today - timedelta(days=30))
+    feed_reference = _feed_reference(cycle)
+    _stock(
+        cycle,
+        feed_reference,
+        "20.00",
+        entry_date=today - timedelta(days=20),
+    )
+    _stock(
+        cycle,
+        feed_reference,
+        "20.00",
+        entry_date=today - timedelta(days=10),
+    )
+    CycleLogService.create_log(
+        cycle,
+        _payload(
+            feed_reference,
+            _allocation(cycle, "Bac futur compatible"),
+            "20.00",
+            log_date=today - timedelta(days=5),
+        ),
+    )
+
+    log = CycleLogService.create_log(
+        cycle,
+        _payload(
+            feed_reference,
+            _allocation(cycle, "Bac rétroactif compatible"),
+            "10.00",
+            log_date=today - timedelta(days=15),
+        ),
+    )
+
+    assert log.feed_quantity == Decimal("10.00")
+
+
+@pytest.mark.django_db
+def test_feed_log_date_update_validates_full_future_timeline():
+    today = date.today()
+    cycle = ProductionCycleFactory(start_date=today - timedelta(days=30))
+    feed_reference = _feed_reference(cycle)
+    _stock(cycle, feed_reference, "10.00", entry_date=today - timedelta(days=20))
+    _stock(cycle, feed_reference, "20.00", entry_date=today - timedelta(days=10))
+    log = CycleLogService.create_log(
+        cycle,
+        _payload(
+            feed_reference,
+            _allocation(cycle, "Bac déplacement date"),
+            "15.00",
+            log_date=today - timedelta(days=5),
+        ),
+    )
+
+    with pytest.raises(FeedStockValidationError):
+        CycleLogService.update_log(
+            log,
+            {"log_date": today - timedelta(days=15)},
+            user=cycle.farm_profile.user,
+        )
+
+    log.refresh_from_db()
+    assert log.log_date == today - timedelta(days=5)
+    assert log.feed_quantity == Decimal("15.00")
+
+
+@pytest.mark.django_db
+def test_same_day_entries_are_available_before_consumption():
+    cycle = ProductionCycleFactory(start_date=date.today())
+    feed_reference = _feed_reference(cycle)
+    _stock(cycle, feed_reference, "4.00")
+    _stock(cycle, feed_reference, "6.00")
+
+    CycleLogService.create_log(
+        cycle,
+        _payload(
+            feed_reference,
+            _allocation(cycle, "Bac même jour"),
+            "10.00",
+        ),
+    )
+
+    available, _ = CycleStoreService.get_available_feed_quantity(
+        cycle=cycle,
+        feed_reference=feed_reference,
+        log_date=date.today(),
+    )
+    assert available == Decimal("0.00")
+
+
+@pytest.mark.django_db
+def test_bulk_feed_reservations_follow_each_log_date():
+    today = date.today()
+    cycle = ProductionCycleFactory(start_date=today - timedelta(days=30))
+    feed_reference = _feed_reference(cycle)
+    _stock(cycle, feed_reference, "5.00", entry_date=today - timedelta(days=20))
+    _stock(cycle, feed_reference, "10.00", entry_date=today - timedelta(days=5))
+
+    result = CycleLogService.create_bulk_logs(
+        [
+            {
+                "cycle": cycle.id,
+                **_payload(
+                    feed_reference,
+                    _allocation(cycle, "Bac bulk ancien"),
+                    "7.00",
+                    log_date=today - timedelta(days=10),
+                ),
+            },
+            {
+                "cycle": cycle.id,
+                **_payload(
+                    feed_reference,
+                    _allocation(cycle, "Bac bulk récent"),
+                    "7.00",
+                    log_date=today,
+                ),
+            },
+        ],
+        cycle.farm_profile.user,
+    )
+
+    assert result["created"] == 1
+    assert len(result["errors"]) == 1
+    assert result["logs"][0].log_date == today
 
 
 @pytest.mark.django_db
@@ -283,6 +505,57 @@ def test_concurrent_feed_consumption_never_exceeds_stock():
     assert sorted(outcomes) == ["created", "rejected"]
     consumed = CycleLog.objects.filter(cycle=cycle).aggregate(total=Sum("feed_quantity"))["total"]
     assert consumed <= Decimal("10.00")
+
+
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="Verrou PostgreSQL requis")
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_retroactive_feed_logs_never_make_future_ledger_negative():
+    today = date.today()
+    cycle = ProductionCycleFactory(start_date=today - timedelta(days=30))
+    feed_reference = _feed_reference(cycle)
+    _stock(cycle, feed_reference, "10.00", entry_date=today - timedelta(days=20))
+    CycleLogService.create_log(
+        cycle,
+        _payload(
+            feed_reference,
+            _allocation(cycle, "Bac futur existant"),
+            "5.00",
+            log_date=today - timedelta(days=5),
+        ),
+    )
+    allocations = [
+        _allocation(cycle, "Bac rétroactif concurrent 1"),
+        _allocation(cycle, "Bac rétroactif concurrent 2"),
+    ]
+    barrier = Barrier(2)
+
+    def consume(allocation_id):
+        close_old_connections()
+        try:
+            local_cycle = type(cycle).objects.get(pk=cycle.pk)
+            local_reference = FarmFeedReference.objects.get(pk=feed_reference.pk)
+            local_allocation = CycleUnitAllocation.objects.get(pk=allocation_id)
+            barrier.wait(timeout=10)
+            try:
+                CycleLogService.create_log(
+                    local_cycle,
+                    _payload(
+                        local_reference,
+                        local_allocation,
+                        "3.00",
+                        log_date=today - timedelta(days=10),
+                    ),
+                )
+                return "created"
+            except FeedStockValidationError:
+                return "rejected"
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(consume, [item.id for item in allocations]))
+
+    assert sorted(outcomes) == ["created", "rejected"]
 
 
 @pytest.mark.skipif(connection.vendor != 'postgresql', reason='Verrou PostgreSQL requis')

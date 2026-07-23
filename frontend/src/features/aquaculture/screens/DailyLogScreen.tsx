@@ -35,6 +35,7 @@ import { aquacultureService } from '@/features/aquaculture/services/aquacultureS
 import FeedingTimesField from '@/features/aquaculture/components/FeedingTimesField';
 import { formatEditableNumber, parseLocalizedNumber } from '@/utils/localizedNumber';
 import { projectOfflineStore } from '@/features/aquaculture/services/offlineStoreProjection';
+import { OfflineCycleLog, offlineService } from '@/services/offlineService';
 
 interface DailyLogData {
   mortality_count: string;
@@ -106,6 +107,32 @@ const parseOptionalInteger = (value: string): number | null => {
   return Number(trimmed);
 };
 
+const offlineLogAsCycleLog = (offlineLog: OfflineCycleLog): CycleLog => ({
+  id: offlineLog.id,
+  cycle: offlineLog.cycleId,
+  cycle_unit_allocation: offlineLog.logData.cycle_unit_allocation ?? null,
+  log_date: offlineLog.logData.log_date ?? getLocalIsoDate(),
+  client_uuid: offlineLog.logData.client_uuid,
+  mortality_count: offlineLog.logData.mortality_count,
+  mortality_reason: offlineLog.logData.mortality_reason,
+  sample_count: offlineLog.logData.sample_count,
+  sample_total_weight: offlineLog.logData.sample_total_weight,
+  feed_quantity: offlineLog.logData.feed_quantity,
+  feed_type: offlineLog.logData.feed_type,
+  feed_size_mm: offlineLog.logData.feed_size_mm,
+  feed_reference: offlineLog.logData.feed_reference,
+  feed_reference_client_uuid: offlineLog.logData.feed_reference_client_uuid,
+  feeding_times: offlineLog.logData.feeding_times,
+  water_temperature: offlineLog.logData.water_temperature,
+  dissolved_oxygen: offlineLog.logData.dissolved_oxygen,
+  ph_level: offlineLog.logData.ph_level,
+  ammonia_level: offlineLog.logData.ammonia_level,
+  observations: offlineLog.logData.observations,
+  created_offline: true,
+  pending_sync: true,
+  created_at: new Date(offlineLog.timestamp).toISOString(),
+});
+
 export default function DailyLogScreen({ navigation, route }: DailyLogScreenProps) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
@@ -122,6 +149,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
   const [feedingTimes, setFeedingTimes] = useState<string[]>([]);
   const [store, setStore] = useState<CycleStore | null>(null);
   const [existingLog, setExistingLog] = useState<CycleLog | null>(null);
+  const [localLogConflict, setLocalLogConflict] = useState(false);
   const [loadingContext, setLoadingContext] = useState(Boolean(cycleId && unitAllocationId));
   const [contextError, setContextError] = useState(false);
   const [touched, setTouched] = useState<Partial<Record<DailyLogField, boolean>>>({});
@@ -154,9 +182,16 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     const loadContext = async () => {
       setLoadingContext(true);
       setContextError(false);
-      const [logsResult, storeResult] = await Promise.allSettled([
+      setLocalLogConflict(false);
+      const today = getLocalIsoDate();
+      const [logsResult, storeResult, localLogResult] = await Promise.allSettled([
         aquacultureService.getCycleLogs(cycleId, { cycleUnitAllocationId: unitAllocationId }),
         aquacultureService.getCycleStore(cycleId),
+        offlineService.findPendingCycleLogForScope({
+          cycleId,
+          logDate: today,
+          cycleUnitAllocationId: unitAllocationId || null,
+        }),
       ]);
       if (!active) {
         return;
@@ -164,28 +199,43 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
 
       const serverStore = storeResult.status === 'fulfilled' ? storeResult.value : null;
       setStore(serverStore);
-      if (storeResult.status === 'rejected' && !serverStore?.stock_items?.length) {
-        setContextError(true);
+      try {
+        const projection = await projectOfflineStore(
+          cycleId,
+          serverStore,
+          t('storePendingStockLabel'),
+        );
+        if (active) setStore(projection.store);
+      } catch {
+        if (storeResult.status === 'rejected') setContextError(true);
       }
-      void projectOfflineStore(cycleId, serverStore, t('storePendingStockLabel'))
-        .then((projection) => {
-          if (active) setStore(projection.store);
-        })
-        .catch((projectionError) => {
-          if (__DEV__) console.warn('offline store projection unavailable', projectionError);
-        });
 
-      if (logsResult.status === 'fulfilled') {
-        const todayLog = logsResult.value.find((log) => log.log_date === getLocalIsoDate()) || null;
-        setExistingLog(todayLog);
-        if (todayLog) {
+      const serverLog = logsResult.status === 'fulfilled'
+        ? logsResult.value.find((log) => log.log_date === today) ?? null
+        : null;
+      const offlineLog = localLogResult.status === 'fulfilled'
+        ? localLogResult.value
+        : null;
+      const localEditableLog = offlineLog ? offlineLogAsCycleLog(offlineLog) : null;
+      let todayLog = serverLog;
+      if (localEditableLog) {
+        if (serverLog && serverLog.client_uuid !== localEditableLog.client_uuid) {
+          setLocalLogConflict(true);
+        } else {
+          todayLog = localEditableLog;
+        }
+      }
+      setExistingLog(todayLog);
+      if (todayLog) {
           setFormData({
             mortality_count: String(todayLog.mortality_count ?? 0),
             mortality_reason: todayLog.mortality_reason ?? '',
             feed_quantity: formatEditableNumber(todayLog.feed_quantity, useComma),
             feed_type: todayLog.feed_type ?? '',
             feed_size_mm: formatEditableNumber(todayLog.feed_size_mm, useComma),
-            feed_reference: todayLog.feed_reference ?? '',
+            feed_reference: todayLog.feed_reference
+              ?? todayLog.feed_reference_client_uuid
+              ?? '',
             dissolved_oxygen: formatEditableNumber(todayLog.dissolved_oxygen, useComma),
             water_temperature: formatEditableNumber(todayLog.water_temperature, useComma),
             ph_level: formatEditableNumber(todayLog.ph_level, useComma),
@@ -197,8 +247,8 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
           const wasFed = Number(todayLog.feed_quantity ?? 0) > 0 || (todayLog.feeding_times?.length ?? 0) > 0;
           setFeedingStatus(wasFed ? 'fed' : 'not_fed');
           setFeedingTimes(todayLog.feeding_times ?? []);
-        }
-      } else {
+      }
+      if (logsResult.status === 'rejected' && !localEditableLog) {
         setContextError(true);
       }
       setLoadingContext(false);
@@ -219,11 +269,15 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       return null;
     }
     const remaining = Number(selectedStockItem.quantity_available_kg);
-    const previousMatchesSelection = existingLog
-      && (existingLog.feed_type ?? '').trim().toLocaleLowerCase() === selectedStockItem.label.trim().toLocaleLowerCase()
-      && (selectedStockItem.feed_size_mm === null
-        ? existingLog.feed_size_mm == null
-        : Number(existingLog.feed_size_mm) === Number(selectedStockItem.feed_size_mm));
+    const previousReference = existingLog?.feed_reference
+      ?? existingLog?.feed_reference_client_uuid
+      ?? null;
+    const selectedReference = selectedStockItem.feed_reference_id
+      ?? selectedStockItem.feed_reference_client_uuid
+      ?? null;
+    const previousMatchesSelection = Boolean(
+      previousReference && selectedReference && previousReference === selectedReference,
+    );
     const previous = previousMatchesSelection ? Number(existingLog?.feed_quantity ?? 0) : 0;
     return Math.max(0, remaining + previous);
   }, [existingLog, selectedStockItem]);
@@ -233,6 +287,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
 
   const validationErrors = useMemo<FormErrors>(() => {
     const errors: FormErrors = {};
+    if (localLogConflict) {
+      errors.scope = t('dailyLogServerLocalConflict');
+    }
     const mortality = parseOptionalInteger(formData.mortality_count);
     if (!formData.mortality_count.trim()) {
       errors.mortality_count = t('fieldRequired');
@@ -301,7 +358,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     }
 
     return errors;
-  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, selectedStockItem, store, t]);
+  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, localLogConflict, selectedStockItem, store, t]);
 
   const visibleError = (field: DailyLogField): string | undefined =>
     submitted || touched[field] ? serverErrors[field] ?? validationErrors[field] : undefined;
@@ -368,6 +425,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       ph_level: parseOptionalDecimal(formData.ph_level),
       ammonia_level: parseOptionalDecimal(formData.ammonia_level),
       observations: formData.observations.trim(),
+      client_uuid: existingLog?.client_uuid,
     };
 
     setSaving(true);
@@ -471,12 +529,17 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             <AppText variant="body" color="muted">{t('dailyLogUnitContextLabel', { unitName })}</AppText>
             {existingLog ? (
               <AppText variant="helper" color="link" style={{ marginTop: spacing[2] }}>
-                {t('dailyLogUpdatingToday')}
+                {existingLog.pending_sync
+                  ? t('dailyLogPendingLocalUpdate')
+                  : t('dailyLogUpdatingToday')}
               </AppText>
             ) : null}
           </Card>
 
           {contextError ? <InlineAlert tone="warning" message={t('dailyLogContextLoadError')} /> : null}
+          {localLogConflict ? (
+            <InlineAlert tone="warning" message={t('dailyLogServerLocalConflict')} />
+          ) : null}
 
           <Card>
             <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('dailyRecommendedSection')}</AppText>
@@ -553,7 +616,8 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                 </AppText>
                 <View style={{ gap: spacing[2], marginBottom: spacing[2] }}>
                   {store?.stock_items?.filter((item) => (item.feed_reference_id || item.feed_reference_client_uuid) && (Number(item.quantity_available_kg) > 0 || (
-                    (existingLog?.feed_type ?? '').trim().toLocaleLowerCase() === item.label.trim().toLocaleLowerCase()
+                    (existingLog?.feed_reference ?? existingLog?.feed_reference_client_uuid)
+                      === (item.feed_reference_id ?? item.feed_reference_client_uuid)
                   ))).map((item) => {
                     const selected = selectedStockItem === item;
                     const optionLabel = item.feed_size_mm

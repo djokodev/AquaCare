@@ -30,6 +30,25 @@ const numeric = (value: string | number | null | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+interface ProjectedStockGroup {
+  key: string;
+  item: CycleStore['stock_items'][number];
+}
+
+const identityKey = (
+  feedReferenceId: string | null | undefined,
+  feedReferenceClientUuid: string | null | undefined,
+  clientToServer: Map<string, string>,
+  fallback: string,
+): string => {
+  if (feedReferenceId) return `server:${feedReferenceId}`;
+  if (feedReferenceClientUuid) {
+    const serverId = clientToServer.get(feedReferenceClientUuid);
+    return serverId ? `server:${serverId}` : `client:${feedReferenceClientUuid}`;
+  }
+  return fallback;
+};
+
 /**
  * Projette les dépendances locales dans le même contrat que le Magasin serveur.
  * L'ordre des dépendances est intentionnel : référence, stock, puis journal.
@@ -49,6 +68,11 @@ export const projectOfflineStore = async (
   ]);
   const pendingStocks = stockDeclarations.filter((item) => item.cycleId === cycleId && !item.synced);
   const pendingLogs = localLogs.filter((item) => item.cycleId === cycleId && !item.synced);
+  const clientToServer = new Map(
+    localReferences
+      .filter((reference) => reference.serverId)
+      .map((reference) => [reference.clientUuid, reference.serverId as string]),
+  );
   const base: CycleStore = serverStore ? {
     ...serverStore,
     calculation_warnings: serverStore.calculation_warnings ?? [],
@@ -70,12 +94,56 @@ export const projectOfflineStore = async (
     unclassified_entries: [],
   };
 
-  const pendingItems = pendingStocks.map((item) => {
+  const groups = new Map<string, ProjectedStockGroup>();
+  const mergeItem = (
+    item: CycleStore['stock_items'][number],
+    key: string,
+  ) => {
+    const current = groups.get(key);
+    if (!current) {
+      groups.set(key, { key, item: { ...item } });
+      return;
+    }
+    current.item = {
+      ...current.item,
+      feed_reference_id: current.item.feed_reference_id ?? item.feed_reference_id,
+      feed_reference_client_uuid:
+        current.item.feed_reference_client_uuid ?? item.feed_reference_client_uuid,
+      pending_sync: Boolean(current.item.pending_sync || item.pending_sync),
+      quantity_added_kg: (
+        numeric(current.item.quantity_added_kg) + numeric(item.quantity_added_kg)
+      ).toFixed(2),
+      quantity_consumed_kg: (
+        numeric(current.item.quantity_consumed_kg) + numeric(item.quantity_consumed_kg)
+      ).toFixed(2),
+      quantity_available_kg: (
+        numeric(current.item.quantity_available_kg) + numeric(item.quantity_available_kg)
+      ).toFixed(2),
+    };
+  };
+
+  base.stock_items.forEach((item, index) => {
+    mergeItem(
+      item,
+      identityKey(
+        item.feed_reference_id,
+        item.feed_reference_client_uuid,
+        clientToServer,
+        `server-legacy:${index}`,
+      ),
+    );
+  });
+
+  pendingStocks.forEach((item) => {
     const reference = localReferences.find(
       (candidate) => candidate.clientUuid === item.feedReferenceClientUuid,
     );
-    return {
-      feed_reference_id: item.payload.feed_reference_id ?? null,
+    const resolvedServerId = item.payload.feed_reference_id
+      ?? (item.feedReferenceClientUuid
+        ? clientToServer.get(item.feedReferenceClientUuid)
+        : undefined);
+    const pendingItem = {
+      feed_reference_id: resolvedServerId ?? null,
       feed_reference_client_uuid: item.feedReferenceClientUuid ?? null,
       source: reference?.payload.source ?? null,
       species: reference?.payload.species ?? null,
@@ -86,27 +154,53 @@ export const projectOfflineStore = async (
       quantity_available_kg: item.payload.quantity_kg,
       pending_sync: true,
     } satisfies CycleStore['stock_items'][number];
+    mergeItem(
+      pendingItem,
+      identityKey(
+        resolvedServerId,
+        item.feedReferenceClientUuid,
+        clientToServer,
+        `pending-stock:${item.id}`,
+      ),
+    );
   });
-  const stockItems = [...base.stock_items, ...pendingItems];
+
   const pendingStockKg = pendingStocks.reduce((total, item) => total + numeric(item.payload.quantity_kg), 0);
   const pendingCost = pendingStocks.reduce((total, item) => total + numeric(item.payload.total_cost_fcfa), 0);
   let pendingConsumedKg = 0;
-  const projectedItems = stockItems.map((item) => {
-    const itemLogQuantity = pendingLogs.reduce((total, log) => {
-      const referenceId = log.logData.feed_reference ?? null;
-      const referenceClientUuid = log.logData.feed_reference_client_uuid ?? null;
-      const matches = (referenceId && item.feed_reference_id === referenceId)
-        || (referenceClientUuid && item.feed_reference_client_uuid === referenceClientUuid);
-      return matches ? total + numeric(log.logData.feed_quantity) : total;
-    }, 0);
-    pendingConsumedKg += itemLogQuantity;
-    return {
-      ...item,
-      quantity_consumed_kg: (numeric(item.quantity_consumed_kg) + itemLogQuantity).toFixed(2),
-      quantity_available_kg: (numeric(item.quantity_available_kg) - itemLogQuantity).toFixed(2),
+  let hasOfflineStockConflict = false;
+  pendingLogs.forEach((log) => {
+    const quantity = numeric(log.logData.feed_quantity);
+    if (quantity <= 0) return;
+    pendingConsumedKg += quantity;
+    const referenceId = log.logData.feed_reference ?? null;
+    const referenceClientUuid = log.logData.feed_reference_client_uuid ?? null;
+    const key = identityKey(
+      referenceId,
+      referenceClientUuid,
+      clientToServer,
+      `orphan-log:${log.id}`,
+    );
+    const group = groups.get(key);
+    if (!group) {
+      hasOfflineStockConflict = true;
+      return;
+    }
+    const available = numeric(group.item.quantity_available_kg) - quantity;
+    group.item = {
+      ...group.item,
+      quantity_consumed_kg: (
+        numeric(group.item.quantity_consumed_kg) + quantity
+      ).toFixed(2),
+      quantity_available_kg: available.toFixed(2),
     };
+    if (available < 0) hasOfflineStockConflict = true;
   });
-  const remaining = numeric(base.summary.estimated_feed_remaining_kg) + pendingStockKg - pendingConsumedKg;
+  const projectedItems = Array.from(groups.values(), ({ item }) => item);
+  const remaining = projectedItems.reduce(
+    (total, item) => total + numeric(item.quantity_available_kg),
+    0,
+  );
   const feedToSecure = base.summary.feed_to_secure_kg === null
     ? null
     : Math.max(0, numeric(base.summary.feed_to_secure_kg) - pendingStockKg + pendingConsumedKg).toFixed(2);
@@ -117,6 +211,7 @@ export const projectOfflineStore = async (
       ...base.calculation_warnings,
       ...(pendingStocks.length ? ['offline_stock_pending'] : []),
       ...(pendingLogs.length ? ['offline_log_pending'] : []),
+      ...(hasOfflineStockConflict ? ['offline_stock_conflict'] : []),
     ].filter((warning, index, warnings) => warnings.indexOf(warning) === index),
     summary: {
       ...base.summary,
@@ -128,7 +223,11 @@ export const projectOfflineStore = async (
       feed_to_secure_kg: feedToSecure,
     },
     stock_items: projectedItems,
-    status: serverStore ? base.status : (projectedItems.length > 0 ? 'ok' : base.status),
+    status: hasOfflineStockConflict
+      ? 'check_stock'
+      : serverStore
+        ? base.status
+        : (projectedItems.length > 0 ? 'ok' : base.status),
   };
   return {
     store: projected,

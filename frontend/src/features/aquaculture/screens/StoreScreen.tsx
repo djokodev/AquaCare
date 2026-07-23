@@ -522,7 +522,10 @@ export default function StoreScreen() {
                 <Card key={entry.id} variant="outlined" style={styles.section}>
                   <InlineAlert
                     tone="warning"
-                    message={t('storeUnclassifiedStockMessage', { quantity: entry.quantity_kg, name: entry.label })}
+                    message={t('storeUnclassifiedStockMessage', {
+                      quantity: entry.quantity_available_kg,
+                      name: entry.label,
+                    })}
                   />
                   <AppText variant="helper">
                     {t('storeUnclassifiedStockBreakdown', {

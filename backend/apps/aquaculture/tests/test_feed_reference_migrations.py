@@ -1,10 +1,12 @@
 from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from django.conf import settings
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+from django.utils import timezone
 
 MIGRATIONS_DISABLED = (
     getattr(settings, 'MIGRATION_MODULES', None) is not None
@@ -110,10 +112,161 @@ def test_0038_only_classifies_certain_order_snapshots_and_preserves_source_ident
         ).apps
         FeedReference = apps.get_model('aquaculture', 'FarmFeedReference')
         external = FeedReference.objects.create(
-            farm_profile_id=farm.id, source='external', name=reference.name,
-            normalized_name=reference.normalized_name, species=reference.species,
-            pellet_size_mm=reference.pellet_size_mm,
+            farm_profile_id=farm.id,
+            source='external',
+            name='Aliment en ligne 3 mm',
+            normalized_name='aliment en ligne 3 mm',
+            species='tilapia',
+            pellet_size_mm=Decimal('3.00'),
+            synced_at=timezone.now(),
         )
         assert external.id != reference.id
+
+        # Reproduit une base ayant déjà appliqué l'ancienne 0041 : une référence
+        # créée en ligne sans client_uuid a été détachée à tort.
+        MigratedEntry = apps.get_model('aquaculture', 'CycleFeedStockEntry')
+        online_entry = MigratedEntry.objects.create(
+            cycle_id=cycle.id,
+            source='manual',
+            label='Aliment en ligne 3 mm',
+            feed_size_mm=Decimal('3.00'),
+            feed_reference_id=external.id,
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('18000.00'),
+            entry_date=date(2026, 7, 12),
+            note='Stock explicite en ligne',
+        )
+        MigratedLog = apps.get_model('aquaculture', 'CycleLog')
+        online_log = MigratedLog.objects.create(
+            cycle_id=cycle.id,
+            log_date=date(2026, 7, 13),
+            feed_quantity=Decimal('2.00'),
+            feed_type='Aliment en ligne 3 mm',
+            feed_size_mm=Decimal('3.00'),
+            feed_reference_id=external.id,
+            mortality_reason='',
+            observations='',
+        )
+        catalog_reference = FeedReference.objects.create(
+            farm_profile_id=farm.id,
+            source='aquacare_catalog',
+            catalog_product_id=product.id,
+            name='Catalogue explicite 4 mm',
+            normalized_name='catalogue explicite 4 mm',
+            species='tilapia',
+            pellet_size_mm=Decimal('4.00'),
+            synced_at=timezone.now(),
+        )
+        catalog_entry = MigratedEntry.objects.create(
+            cycle_id=cycle.id,
+            source='manual',
+            label='Catalogue explicite 4 mm',
+            feed_size_mm=Decimal('4.00'),
+            feed_reference_id=catalog_reference.id,
+            product_id=product.id,
+            quantity_kg=Decimal('15.00'),
+            total_cost_fcfa=Decimal('23000.00'),
+            entry_date=date(2026, 7, 12),
+            note='Catalogue choisi explicitement',
+        )
+        preserved_entry = MigratedEntry.objects.values(
+            'quantity_kg',
+            'total_cost_fcfa',
+            'entry_date',
+            'label',
+            'feed_size_mm',
+        ).get(pk=online_entry.pk)
+        MigratedEntry.objects.filter(pk=online_entry.pk).update(
+            feed_reference_id=None,
+        )
+        MigratedLog.objects.filter(pk=online_log.pk).update(
+            feed_reference_id=None,
+        )
+        MigratedEntry.objects.filter(pk=catalog_entry.pk).update(
+            feed_reference_id=None,
+        )
+
+        # Même scénario pour une saisie hors ligne dont l'UUID prouve l'identité.
+        offline_reference = FeedReference.objects.create(
+            client_uuid=uuid4(),
+            farm_profile_id=farm.id,
+            source='external',
+            name='Aliment externe 3 mm',
+            normalized_name='aliment externe 3 mm',
+            species='tilapia',
+            pellet_size_mm=Decimal('3.00'),
+            created_offline=True,
+        )
+        offline_log = MigratedLog.objects.create(
+            cycle_id=cycle.id,
+            log_date=date(2026, 7, 12),
+            feed_quantity=Decimal('3.00'),
+            feed_type='Aliment externe 3 mm',
+            feed_size_mm=Decimal('3.00'),
+            mortality_reason='',
+            observations='',
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([
+            ('aquaculture', '0043_safe_legacy_feed_classification_repair'),
+        ])
+        apps = executor.loader.project_state([
+            ('aquaculture', '0043_safe_legacy_feed_classification_repair'),
+        ]).apps
+        RepairedEntry = apps.get_model('aquaculture', 'CycleFeedStockEntry')
+        RepairedLog = apps.get_model('aquaculture', 'CycleLog')
+
+        repaired_entry = RepairedEntry.objects.get(pk=online_entry.pk)
+        assert repaired_entry.feed_reference_id == external.id
+        assert RepairedLog.objects.get(pk=online_log.pk).feed_reference_id == external.id
+        assert (
+            RepairedEntry.objects.get(pk=catalog_entry.pk).feed_reference_id
+            == catalog_reference.id
+        )
+        assert RepairedEntry.objects.values(
+            'quantity_kg',
+            'total_cost_fcfa',
+            'entry_date',
+            'label',
+            'feed_size_mm',
+        ).get(pk=online_entry.pk) == preserved_entry
+        assert (
+            RepairedLog.objects.get(pk=offline_log.pk).feed_reference_id
+            == offline_reference.id
+        )
+
+        # Le backfill suivant utilise le maximum historique et ne diminue jamais
+        # une progression déjà enregistrée.
+        FeedPlan = apps.get_model('aquaculture', 'CycleFeedPlan')
+        progression_plan = FeedPlan.objects.create(
+            cycle_id=cycle.id,
+            version=2,
+            parameters={},
+            phases=[
+                {'planned_weight_range_g': ['1', '50']},
+                {'planned_weight_range_g': ['51', '150']},
+                {'planned_weight_range_g': ['151', '300']},
+            ],
+            total_feed_kg=Decimal('60.00'),
+            highest_reached_phase_sequence=1,
+        )
+        RepairedLog.objects.filter(pk=offline_log.pk).update(
+            average_weight=Decimal('250.00'),
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([
+            ('aquaculture', '0044_backfill_cycle_feed_phase_progression'),
+        ])
+        apps = executor.loader.project_state([
+            ('aquaculture', '0044_backfill_cycle_feed_phase_progression'),
+        ]).apps
+        BackfilledPlan = apps.get_model('aquaculture', 'CycleFeedPlan')
+        assert (
+            BackfilledPlan.objects.get(pk=progression_plan.pk)
+            .highest_reached_phase_sequence
+            == 3
+        )
     finally:
         MigrationExecutor(connection).migrate(final_targets)

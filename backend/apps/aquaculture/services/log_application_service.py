@@ -76,6 +76,11 @@ class CycleLogApplicationService:
             if not validated_data.get("sample_count") or not validated_data.get("sample_total_weight"):
                 existing_log.average_weight = None
             existing_log.save()
+            from .cycle_feed_plan_progression_service import (
+                CycleFeedPlanProgressionService,
+            )
+
+            CycleFeedPlanProgressionService.record_progress_from_log(existing_log)
             ProductionCycleService.recalculate_all_metrics(cycle)
             CycleLogApplicationService._refresh_cycles_and_cache(
                 user=user,

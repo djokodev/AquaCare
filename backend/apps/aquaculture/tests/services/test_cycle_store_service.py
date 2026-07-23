@@ -435,7 +435,9 @@ class TestCycleStoreService:
         payload = CycleStoreApplicationService.get_store(cycle)
 
         assert payload['summary']['feed_consumed_kg'] == '12.50'
-        assert payload['summary']['estimated_feed_remaining_kg'] == '87.50'
+        # Une ration historique sans référence, nom ni granulométrie reste dans
+        # le total consommé, mais n'est pas retirée arbitrairement d'un aliment.
+        assert payload['summary']['estimated_feed_remaining_kg'] == '100.00'
         assert payload['status'] == 'ok'
 
     def test_store_ignores_logs_created_before_tracking_started(self):
@@ -469,8 +471,9 @@ class TestCycleStoreService:
 
         payload = CycleStoreApplicationService.get_store(cycle)
 
-        # L'indicateur affiche toute la consommation du cycle, tandis que le
-        # stock physique ne déduit que les rations postérieures à son suivi.
+        # L'indicateur affiche toute la consommation du cycle. Les rations sans
+        # identité alimentaire restent non classifiées et ne sont pas retirées
+        # arbitrairement d'une ligne de stock.
         assert payload['summary']['feed_consumed_kg'] == '75.00'
-        assert payload['summary']['estimated_feed_remaining_kg'] == '20.00'
+        assert payload['summary']['estimated_feed_remaining_kg'] == '25.00'
         assert payload['stock_tracking_started_at'] == timezone.localdate() - timedelta(days=1)

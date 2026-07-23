@@ -247,6 +247,30 @@ jobs:
             exit 1
           fi
 
+      - name: Run PostgreSQL feed ledger and migration tests
+        working-directory: ./backend
+        env:
+          DJANGO_SETTINGS_MODULE: aquacare_api.settings.development
+          POSTGRES_DB: aquacare_ci
+          POSTGRES_USER: aquacare
+          POSTGRES_PASSWORD: aquacare
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: 5432
+          REDIS_CACHE_URL: redis://127.0.0.1:6379/1
+          CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+          CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
+        run: |
+          feed_output="$(pytest -n 0 \
+            apps/aquaculture/tests/test_feed_reference_migrations.py \
+            apps/aquaculture/tests/services/test_feed_stock_transactions.py \
+            apps/aquaculture/tests/test_feed_recommendations.py \
+            -q)"
+          echo "$feed_output"
+          if echo "$feed_output" | grep -qi skipped; then
+            echo "PostgreSQL feed ledger, migration, and progression tests must not be skipped"
+            exit 1
+          fi
+
       - name: Run PostgreSQL report scope tests
         working-directory: ./backend
         env:

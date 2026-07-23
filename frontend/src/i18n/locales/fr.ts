@@ -581,6 +581,8 @@ export const fr = {
   dailyLogUnitRequiredMessage: 'La saisie du jour se fait désormais pour une unité précise.',
   chooseProductionUnit: 'Choisir une unité',
   dailyLogUpdatingToday: 'La saisie d’aujourd’hui sera mise à jour.',
+  dailyLogPendingLocalUpdate: 'Modification locale en attente de synchronisation.',
+  dailyLogServerLocalConflict: 'Une saisie serveur différente existe pour cette journée. Synchronisez avant de continuer.',
   updateTodayEntry: 'Mettre à jour ma saisie',
   observations: 'Observations',
   observationsPlaceholder: 'Notes, observations particulières...',

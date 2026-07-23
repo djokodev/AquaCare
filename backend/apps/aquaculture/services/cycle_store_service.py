@@ -23,6 +23,7 @@ from ..models import (
     ProductionCycle,
 )
 from .base import BaseService
+from .feed_stock_ledger_service import FeedStockLedgerService, FeedStockReservation
 
 logger = logging.getLogger(__name__)
 
@@ -197,16 +198,7 @@ class CycleStoreService(BaseService):
 
     @staticmethod
     def _get_consumption_queryset(cycle: ProductionCycle, since_date=None):
-        if cycle.unit_allocations.exists():
-            queryset = CycleLog.objects.filter(
-                cycle=cycle,
-                cycle_unit_allocation__isnull=False,
-            )
-        else:
-            queryset = CycleLog.objects.filter(
-                cycle=cycle,
-                cycle_unit_allocation__isnull=True,
-            )
+        queryset = FeedStockLedgerService.consumption_queryset(cycle)
         if since_date is not None:
             queryset = queryset.filter(log_date__gte=since_date)
         return queryset
@@ -219,44 +211,76 @@ class CycleStoreService(BaseService):
         log_date: date | None = None,
         existing_log: CycleLog | None = None,
         reserved_feed_kg: Decimal = ZERO_DECIMAL,
+        reserved_feed_events: list[FeedStockReservation] | None = None,
     ) -> tuple[Decimal, date | None]:
-        """Retourne la disponibilité canonique d'une référence dans le ledger.
-
-        Les ajustements de classification représentent une consommation antérieure
-        au rattachement de l'entrée et doivent être déduits partout, pas seulement
-        dans le résumé du Magasin.
-        """
-        entries = CycleFeedStockEntry.objects.filter(
+        """Retourne le solde à la date demandée depuis le ledger canonique."""
+        reservations = list(reserved_feed_events or [])
+        if reserved_feed_kg > ZERO_DECIMAL:
+            reservations.append(
+                FeedStockLedgerService.reservation(
+                    log_date=log_date or timezone.localdate(),
+                    quantity_kg=CycleStoreService._to_decimal(reserved_feed_kg),
+                    event_id="legacy-reservation",
+                )
+            )
+        state = FeedStockLedgerService.calculate(
             cycle=cycle,
             feed_reference=feed_reference,
+            at_date=log_date,
+            existing_log=existing_log,
+            reservations=reservations,
         )
-        tracking_started_at = entries.order_by('entry_date').values_list(
-            'entry_date', flat=True
-        ).first()
-        if tracking_started_at is None:
-            return ZERO_DECIMAL, None
+        return state.balance_at_date, state.tracking_started_at
 
-        added = CycleStoreService._to_decimal(
-            entries.aggregate(total=Sum('quantity_kg'))['total']
+    @staticmethod
+    def _allocate_legacy_consumption(
+        *,
+        cycle: ProductionCycle,
+        entries: list[CycleFeedStockEntry],
+    ) -> dict[Any, Decimal]:
+        """Alloue les rations legacy aux entrées compatibles en FIFO chronologique."""
+        allocations = {entry.id: ZERO_DECIMAL for entry in entries}
+        entries_by_identity: dict[
+            tuple[str, Decimal | None],
+            list[CycleFeedStockEntry],
+        ] = {}
+        for entry in entries:
+            entries_by_identity.setdefault(
+                CycleStoreService._feed_identity(
+                    entry.label,
+                    CycleStoreService._entry_feed_size(entry),
+                ),
+                [],
+            ).append(entry)
+        for identity_entries in entries_by_identity.values():
+            identity_entries.sort(
+                key=lambda item: (item.entry_date, item.created_at, str(item.id))
+            )
+
+        logs = (
+            CycleStoreService._get_consumption_queryset(cycle)
+            .filter(feed_reference__isnull=True, feed_quantity__gt=0)
+            .order_by("log_date", "created_at", "id")
         )
-        historical_consumed = CycleStoreService._to_decimal(
-            CycleFeedStockAdjustment.objects.filter(
-                stock_entry__in=entries,
-            ).aggregate(total=Sum('quantity_kg'))['total']
-        )
-        consumptions = CycleStoreService._get_consumption_queryset(
-            cycle,
-            tracking_started_at,
-        ).filter(feed_reference=feed_reference)
-        if existing_log is not None:
-            consumptions = consumptions.exclude(pk=existing_log.pk)
-        consumed = CycleStoreService._to_decimal(
-            consumptions.aggregate(total=Sum('feed_quantity'))['total']
-        )
-        available = added - historical_consumed - consumed - CycleStoreService._to_decimal(
-            reserved_feed_kg
-        )
-        return CycleStoreService._quantize(available), tracking_started_at
+        remaining_by_entry = {
+            entry.id: CycleStoreService._to_decimal(entry.quantity_kg)
+            for entry in entries
+        }
+        for log in logs:
+            identity = CycleStoreService._feed_identity(
+                log.feed_type,
+                log.feed_size_mm,
+            )
+            remaining_consumption = CycleStoreService._to_decimal(log.feed_quantity)
+            for entry in entries_by_identity.get(identity, []):
+                if entry.entry_date > log.log_date or remaining_consumption <= ZERO_DECIMAL:
+                    continue
+                available = remaining_by_entry[entry.id]
+                allocated = min(available, remaining_consumption)
+                allocations[entry.id] += allocated
+                remaining_by_entry[entry.id] -= allocated
+                remaining_consumption -= allocated
+        return allocations
 
     @staticmethod
     def _build_stock_items(
@@ -272,6 +296,10 @@ class CycleStoreService(BaseService):
                 stock_entry_id__in=[entry.id for entry in entries]
             )
         }
+        legacy_allocations = CycleStoreService._allocate_legacy_consumption(
+            cycle=cycle,
+            entries=entries,
+        )
         for entry in entries:
             size = CycleStoreService._entry_feed_size(entry)
             identity = (
@@ -293,7 +321,11 @@ class CycleStoreService(BaseService):
                 },
             )
             item['quantity_added_kg'] += entry.quantity_kg
-            item['quantity_consumed_kg'] += adjustments.get(entry.id, ZERO_DECIMAL)
+            item['quantity_consumed_kg'] += (
+                adjustments.get(entry.id, ZERO_DECIMAL)
+                if entry.feed_reference_id
+                else legacy_allocations.get(entry.id, ZERO_DECIMAL)
+            )
 
         if stock_tracking_started_at is not None:
             logs = CycleStoreService._get_consumption_queryset(
@@ -306,7 +338,7 @@ class CycleStoreService(BaseService):
                     if log.feed_reference_id
                     else ('legacy', *CycleStoreService._feed_identity(log.feed_type, log.feed_size_mm))
                 )
-                if identity in grouped:
+                if identity in grouped and log.feed_reference_id:
                     grouped[identity]['quantity_consumed_kg'] += CycleStoreService._to_decimal(
                         log.feed_quantity
                     )
@@ -317,6 +349,7 @@ class CycleStoreService(BaseService):
                 available, _tracking_date = CycleStoreService.get_available_feed_quantity(
                     cycle=cycle,
                     feed_reference=item['_feed_reference'],
+                    log_date=timezone.localdate(),
                 )
                 item['quantity_consumed_kg'] = item['quantity_added_kg'] - available
             available = item['quantity_added_kg'] - item['quantity_consumed_kg']
@@ -366,7 +399,11 @@ class CycleStoreService(BaseService):
     @staticmethod
     def get_store_payload(cycle: ProductionCycle) -> CycleStorePayload:
         """Construit le résumé du Magasin pour un cycle."""
-        entries = list(cycle.feed_stock_entries.for_api().order_by('entry_date', 'created_at'))
+        entries = list(
+            cycle.feed_stock_entries.for_api()
+            .filter(entry_date__lte=timezone.localdate())
+            .order_by('entry_date', 'created_at')
+        )
         pending_orders = list(
             Order.objects.with_details()
             .filter(
@@ -384,9 +421,6 @@ class CycleStoreService(BaseService):
         received_order_feed_kg = sum((entry.quantity_kg for entry in received_entries), ZERO_DECIMAL)
         total_feed_added_kg = manual_feed_kg + received_order_feed_kg
         feed_expenses_fcfa = sum((entry.total_cost_fcfa for entry in entries), ZERO_DECIMAL)
-        stock_feed_consumed_kg = CycleStoreService._calculate_feed_consumed_kg(cycle, stock_tracking_started_at)
-        estimated_feed_remaining_kg = total_feed_added_kg - stock_feed_consumed_kg
-
         pending_order_amount_fcfa = sum((order.total for order in pending_orders), ZERO_DECIMAL)
         pending_order_feed_kg = sum(
             (CycleStoreService._calculate_pending_order_feed_kg(order) for order in pending_orders),
@@ -399,6 +433,13 @@ class CycleStoreService(BaseService):
             cycle=cycle,
             entries=entries,
             stock_tracking_started_at=stock_tracking_started_at,
+        )
+        estimated_feed_remaining_kg = sum(
+            (
+                CycleStoreService._to_decimal(item['quantity_available_kg'])
+                for item in stock_items
+            ),
+            ZERO_DECIMAL,
         )
         from .cycle_feed_recommendation_service import CycleFeedRecommendationService
 
@@ -427,6 +468,10 @@ class CycleStoreService(BaseService):
             else None
         )
         unclassified_entries = [entry for entry in entries if entry.feed_reference_id is None]
+        legacy_allocations = CycleStoreService._allocate_legacy_consumption(
+            cycle=cycle,
+            entries=entries,
+        )
         unclassified_stock_kg = sum(
             (
                 CycleStoreService._to_decimal(item['quantity_available_kg'])
@@ -495,8 +540,17 @@ class CycleStoreService(BaseService):
                     'label': entry.label,
                     'quantity_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
                     'quantity_added_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
-                    'historical_consumption_kg': '0.00',
-                    'quantity_available_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
+                    'historical_consumption_kg': str(
+                        CycleStoreService._quantize(
+                            legacy_allocations.get(entry.id, ZERO_DECIMAL)
+                        )
+                    ),
+                    'quantity_available_kg': str(
+                        CycleStoreService._quantize(
+                            entry.quantity_kg
+                            - legacy_allocations.get(entry.id, ZERO_DECIMAL)
+                        )
+                    ),
                 }
                 for entry in unclassified_entries
             ],
@@ -512,6 +566,7 @@ class CycleStoreService(BaseService):
         existing_log: CycleLog | None = None,
         feed_reference: FarmFeedReference | None = None,
         reserved_feed_kg: Decimal = ZERO_DECIMAL,
+        reserved_feed_events: list[FeedStockReservation] | None = None,
     ) -> None:
         """Valide une ration par référence sous le verrou du cycle appelant."""
         quantity = CycleStoreService._to_decimal(feed_quantity)
@@ -563,13 +618,23 @@ class CycleStoreService(BaseService):
                 feed_reference_id=feed_reference.id,
             )
 
-        available, _tracking_date = CycleStoreService.get_available_feed_quantity(
+        reservations = list(reserved_feed_events or [])
+        if reserved_feed_kg > ZERO_DECIMAL:
+            reservations.append(
+                FeedStockLedgerService.reservation(
+                    log_date=log_date,
+                    quantity_kg=CycleStoreService._to_decimal(reserved_feed_kg),
+                    event_id="legacy-reservation",
+                )
+            )
+        state = FeedStockLedgerService.calculate(
             cycle=cycle,
             feed_reference=feed_reference,
-            log_date=log_date,
+            at_date=log_date,
             existing_log=existing_log,
-            reserved_feed_kg=reserved_feed_kg,
+            reservations=reservations,
         )
+        available = min(state.balance_at_date, state.future_headroom)
         if available < ZERO_DECIMAL:
             raise FeedStockValidationError(
                 code='insufficient_feed_stock',
@@ -678,38 +743,17 @@ class CycleStoreService(BaseService):
             raise ValueError(_('Cette entrée de stock est déjà classifiée.'))
         if feed_reference.farm_profile_id != cycle.farm_profile_id or feed_reference.species != cycle.species:
             raise ValueError(_('Cet aliment n’est pas compatible avec le cycle.'))
-        legacy_identity = CycleStoreService._feed_identity(entry.label, entry.feed_size_mm)
-        matching_entries = [
-            candidate
-            for candidate in CycleFeedStockEntry.objects.select_for_update().filter(
+        all_legacy_entries = list(
+            CycleFeedStockEntry.objects.select_for_update().filter(
                 cycle=cycle,
                 feed_reference__isnull=True,
             )
-            if CycleStoreService._feed_identity(
-                candidate.label,
-                candidate.feed_size_mm,
-            ) == legacy_identity
-        ]
-        matching_logs = [
-            log
-            for log in CycleStoreService._get_consumption_queryset(
-                cycle,
-                entry.entry_date,
-            ).filter(feed_reference__isnull=True, feed_quantity__gt=0)
-            if CycleStoreService._feed_identity(
-                log.feed_type,
-                log.feed_size_mm,
-            ) == legacy_identity
-        ]
-        consumed_kg = sum(
-            (CycleStoreService._to_decimal(log.feed_quantity) for log in matching_logs),
-            ZERO_DECIMAL,
         )
-        if consumed_kg > ZERO_DECIMAL and len(matching_entries) != 1:
-            raise ValueError(_(
-                'Plusieurs stocks historiques correspondent à ces consommations. '
-                'Précisez d’abord le reliquat physique.'
-            ))
+        allocations = CycleStoreService._allocate_legacy_consumption(
+            cycle=cycle,
+            entries=all_legacy_entries,
+        )
+        consumed_kg = allocations.get(entry.id, ZERO_DECIMAL)
         if consumed_kg > entry.quantity_kg:
             raise ValueError(_(
                 'Les consommations historiques dépassent cette entrée de stock. '
@@ -717,10 +761,8 @@ class CycleStoreService(BaseService):
             ))
 
         entry.feed_reference = feed_reference
-        entry.label = feed_reference.name
-        entry.feed_size_mm = feed_reference.pellet_size_mm
         entry.product = feed_reference.catalog_product
-        entry.save(update_fields=['feed_reference', 'label', 'feed_size_mm', 'product', 'updated_at'])
+        entry.save(update_fields=['feed_reference', 'product', 'updated_at'])
         if consumed_kg > ZERO_DECIMAL:
             CycleFeedStockAdjustment.objects.get_or_create(
                 stock_entry=entry,

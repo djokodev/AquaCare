@@ -20,6 +20,7 @@ export interface OfflineCycleLog {
   id: string;
   cycleId: string;
   logData: DailyLogForm;
+  fingerprint: string;
   timestamp: number;
   synced: boolean;
 }
@@ -138,6 +139,26 @@ const stockDeclarationFingerprint = (
   total_cost_fcfa: payload.total_cost_fcfa,
   entry_date: payload.entry_date,
   note: payload.note ?? '',
+});
+
+const cycleLogFingerprint = (cycleId: string, data: DailyLogForm): string => JSON.stringify({
+  cycle_id: cycleId,
+  client_uuid: data.client_uuid ?? null,
+  cycle_unit_allocation: data.cycle_unit_allocation ?? null,
+  log_date: data.log_date ?? null,
+  mortality_count: data.mortality_count ?? 0,
+  mortality_reason: data.mortality_reason ?? '',
+  sample_count: data.sample_count ?? null,
+  sample_total_weight: data.sample_total_weight ?? null,
+  feed_quantity: data.feed_quantity ?? null,
+  feed_reference: data.feed_reference ?? null,
+  feed_reference_client_uuid: data.feed_reference_client_uuid ?? null,
+  feeding_times: data.feeding_times ?? [],
+  water_temperature: data.water_temperature ?? null,
+  dissolved_oxygen: data.dissolved_oxygen ?? null,
+  ph_level: data.ph_level ?? null,
+  ammonia_level: data.ammonia_level ?? null,
+  observations: data.observations ?? '',
 });
 
 const finalHarvestFingerprint = (data: HarvestData): string => JSON.stringify({
@@ -506,9 +527,11 @@ class OfflineService {
           client_uuid: existingLog?.logData.client_uuid ?? logData.client_uuid ?? this.generateClientUUID(),
           created_offline: true,
         },
+        fingerprint: '',
         timestamp: Date.now(),
         synced: false,
       };
+      offlineLog.fingerprint = cycleLogFingerprint(cycleId, offlineLog.logData);
 
       if (existingIndex >= 0) {
         existingLogs[existingIndex] = offlineLog;
@@ -532,6 +555,23 @@ class OfflineService {
   async getPendingSyncLogs(): Promise<OfflineCycleLog[]> {
     const logs = await this.getOfflineCycleLogs();
     return logs.filter((log) => !log.synced);
+  }
+
+  async findPendingCycleLogForScope({
+    cycleId,
+    logDate,
+    cycleUnitAllocationId,
+  }: {
+    cycleId: string;
+    logDate: string;
+    cycleUnitAllocationId: string | null;
+  }): Promise<OfflineCycleLog | null> {
+    const logs = await this.getPendingSyncLogs();
+    return logs.find((log) =>
+      log.cycleId === cycleId
+      && log.logData.log_date === logDate
+      && (log.logData.cycle_unit_allocation ?? null) === cycleUnitAllocationId
+    ) ?? null;
   }
 
   async syncOfflineLogs(): Promise<SyncCounter> {

@@ -555,7 +555,13 @@ class ProductionCycleService(BaseService):
         )
 
         if cycle.unit_allocations.exists():
-            return ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
+            cycle = ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
+            from .cycle_feed_plan_progression_service import (
+                CycleFeedPlanProgressionService,
+            )
+
+            CycleFeedPlanProgressionService.record_progress_from_history(cycle)
+            return cycle
 
         # Les sessions de calibrage rejouent leurs entrées depuis zéro afin de ne
         # jamais compter deux fois le premier mouvement.
@@ -644,6 +650,11 @@ class ProductionCycleService(BaseService):
             cycle.fcr = None
 
         cycle.save()
+        from .cycle_feed_plan_progression_service import (
+            CycleFeedPlanProgressionService,
+        )
+
+        CycleFeedPlanProgressionService.record_progress_from_history(cycle)
 
         ProductionCycleService.log_operation(
             "metrics_recalculated",
@@ -677,7 +688,13 @@ class ProductionCycleService(BaseService):
         if cycle.unit_allocations.exists():
             if log.cycle_unit_allocation_id:
                 ProductionCycleService.recalculate_allocation_current_metrics(log.cycle_unit_allocation)
-            return ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
+            cycle = ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
+            from .cycle_feed_plan_progression_service import (
+                CycleFeedPlanProgressionService,
+            )
+
+            CycleFeedPlanProgressionService.record_progress_from_log(log)
+            return cycle
 
         # Mise à jour mortalité
         if log.mortality_count:
@@ -711,6 +728,11 @@ class ProductionCycleService(BaseService):
             )
 
         cycle.save()
+        from .cycle_feed_plan_progression_service import (
+            CycleFeedPlanProgressionService,
+        )
+
+        CycleFeedPlanProgressionService.record_progress_from_log(log)
         return cycle
 
     @staticmethod

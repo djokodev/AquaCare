@@ -204,6 +204,27 @@ describe('services/offlineService', () => {
     expect(await offlineService.getOfflineCycleLogs()).toHaveLength(2);
   });
 
+  it('retrouve le journal local par cycle date et unité', async () => {
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-17',
+      cycle_unit_allocation: 'allocation-1',
+      feed_quantity: 7,
+    } as any);
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-17',
+      cycle_unit_allocation: 'allocation-2',
+      feed_quantity: 3,
+    } as any);
+
+    const found = await offlineService.findPendingCycleLogForScope({
+      cycleId: 'cycle-1',
+      logDate: '2026-07-17',
+      cycleUnitAllocationId: 'allocation-1',
+    });
+
+    expect(found?.logData.feed_quantity).toBe(7);
+  });
+
   it('syncOfflineLogs synchronise succes/erreurs et met last_sync', async () => {
     await offlineService.saveCycleLogOffline('cycle-1', { log_date: '2026-02-20', mortality_count: 1 } as any);
     await offlineService.saveCycleLogOffline('cycle-2', { log_date: '2026-02-20', mortality_count: 3 } as any);
