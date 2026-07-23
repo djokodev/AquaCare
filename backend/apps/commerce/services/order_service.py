@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from ..constants import PICKUP_LOCATION_CHOICES
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
-from ..domain.exceptions import InvalidOrderError
+from ..domain.exceptions import DeliveryAddressIncompleteError, InvalidOrderError
 from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
 from ..models import Order, OrderItem
 from .base import BaseCommerceService
@@ -316,16 +316,22 @@ class OrderService(BaseCommerceService):
 
     @staticmethod
     def _validate_delivery_snapshot(delivery_method, delivery_address_data, user):
-        if delivery_method == 'home' and (
-            any(
-                not str(delivery_address_data.get(field) or '').strip()
-                for field in (
-                    'delivery_name', 'delivery_phone', 'delivery_region', 'delivery_city', 'delivery_full_address',
-                )
-            )
-            or not (user.neighborhood or '').strip()
-        ):
-            raise InvalidOrderError("Informations de livraison à domicile incomplètes")
+        if delivery_method != 'home':
+            return
+
+        required_fields = {
+            'delivery_name': delivery_address_data.get('delivery_name'),
+            'delivery_phone': delivery_address_data.get('delivery_phone'),
+            'delivery_region': delivery_address_data.get('delivery_region'),
+            'delivery_city': delivery_address_data.get('delivery_city'),
+            'neighborhood': user.neighborhood,
+        }
+        missing_fields = [
+            field for field, value in required_fields.items()
+            if not str(value or '').strip()
+        ]
+        if missing_fields:
+            raise DeliveryAddressIncompleteError(missing_fields)
 
     @staticmethod
     def _notify_order_created(order: Order) -> None:

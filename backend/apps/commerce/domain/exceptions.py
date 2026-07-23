@@ -26,6 +26,16 @@ class InvalidOrderError(CommerceException):
     pass
 
 
+class DeliveryAddressIncompleteError(InvalidOrderError):
+    """Adresse de livraison à domicile incomplète pour créer une commande."""
+
+    code = 'delivery_address_incomplete'
+
+    def __init__(self, missing_fields: list[str]):
+        self.missing_fields = tuple(missing_fields)
+        super().__init__('Informations de livraison à domicile incomplètes')
+
+
 class OrderNotFoundError(CommerceException):
     """Commande introuvable pour cet utilisateur."""
     pass

@@ -120,6 +120,12 @@ class CommerceErrorResponseSerializer(serializers.Serializer):
 
     error = serializers.CharField(read_only=True)
     message = serializers.CharField(read_only=True, required=False, allow_blank=True)
+    code = serializers.CharField(read_only=True, required=False)
+    missing_fields = serializers.ListField(
+        child=serializers.CharField(),
+        read_only=True,
+        required=False,
+    )
 
 
 class RecommendedProductQuerySerializer(serializers.Serializer):

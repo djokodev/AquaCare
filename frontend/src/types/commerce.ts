@@ -121,6 +121,12 @@ export interface CreateOrderPayload {
   created_offline?: boolean;
 }
 
+export interface DeliveryAddressIncompleteError {
+  code: 'delivery_address_incomplete';
+  message: string;
+  missing_fields: string[];
+}
+
 export interface OrderStatistics {
   total_orders: number;
   total_spent: string;

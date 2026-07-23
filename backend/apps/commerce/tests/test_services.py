@@ -11,7 +11,12 @@ import pytest
 from accounts.models import FarmProfile, User
 from aquaculture.models import CycleFeedStockEntry, CycleLog, ProductionCycle
 from aquaculture.services.cycle_store_application_service import CycleStoreApplicationService
-from commerce.domain.exceptions import InvalidOrderError, ProductNotAvailableError, ProductNotFoundError
+from commerce.domain.exceptions import (
+    DeliveryAddressIncompleteError,
+    InvalidOrderError,
+    ProductNotAvailableError,
+    ProductNotFoundError,
+)
 from commerce.models import Order, Product
 from commerce.services import (
     CatalogApplicationService,
@@ -315,6 +320,21 @@ class TestOrderService:
         assert order.farm_profile == test_farm
         assert order.items.count() == 1
         assert order.subtotal == Decimal("60000.00")
+
+    def test_create_home_order_reports_missing_delivery_fields(self, test_user, test_product):
+        test_user.city = ''
+        test_user.neighborhood = ''
+        test_user.save()
+
+        with pytest.raises(DeliveryAddressIncompleteError) as exc_info:
+            OrderService.create_order(
+                user=test_user,
+                items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+                delivery_method="home",
+            )
+
+        assert exc_info.value.code == 'delivery_address_incomplete'
+        assert exc_info.value.missing_fields == ('delivery_city', 'neighborhood')
 
     def test_calculate_delivery_fee_below_threshold(self, test_user, test_product):
         items_data = [{"product_id": str(test_product.id), "quantity": 2}]

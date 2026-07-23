@@ -54,7 +54,7 @@ import type { CycleLog, ReportScopeType } from '@/types/aquaculture';
 export type MainTabParamList = {
   Dashboard: undefined;
   Support: undefined;
-  ProfileStack: undefined;
+  ProfileStack: NavigatorScreenParams<ProfileStackParamList> | undefined;
 };
 
 export type RootStackParamList = {
@@ -196,7 +196,7 @@ export type RootStackParamList = {
 };
 
 export type ProfileStackParamList = {
-  ProfileMain: undefined;
+  ProfileMain: { startEditing?: boolean; returnToCart?: boolean } | undefined;
   FarmProfile: undefined;
   Settings: undefined;
   DesignSystemGallery: undefined;

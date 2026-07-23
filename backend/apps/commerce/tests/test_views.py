@@ -270,6 +270,28 @@ class TestOrderViewSet:
         assert response.status_code == status.HTTP_201_CREATED
         assert "order_number" in response.data
 
+    def test_create_home_order_returns_structured_delivery_address_error(
+        self, authenticated_client, test_user, test_product
+    ):
+        test_user.city = ''
+        test_user.neighborhood = ''
+        test_user.save()
+
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+        }, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["code"] == "delivery_address_incomplete"
+        assert response.data["message"] == (
+            "Informations de livraison à domicile incomplètes"
+        )
+        assert response.data["missing_fields"] == [
+            "delivery_city",
+            "neighborhood",
+        ]
+
     def test_create_order_with_production_cycle_link(self, authenticated_client, test_farm, test_product):
         cycle = ProductionCycle.objects.create(
             farm_profile=test_farm,

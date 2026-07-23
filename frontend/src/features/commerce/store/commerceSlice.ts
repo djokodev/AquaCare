@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   CommerceState,
+  DeliveryAddressIncompleteError,
+  Order,
   Product,
   ProductFilters,
   DeliveryMethod,
@@ -55,6 +57,30 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   }
 
   return fallback;
+};
+
+const extractCreateOrderError = (
+  error: unknown,
+  fallback: string,
+): string | DeliveryAddressIncompleteError => {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (data && typeof data === 'object') {
+    const payload = data as Record<string, unknown>;
+    if (
+      payload.code === 'delivery_address_incomplete'
+      && typeof payload.message === 'string'
+      && Array.isArray(payload.missing_fields)
+    ) {
+      return {
+        code: 'delivery_address_incomplete',
+        message: payload.message,
+        missing_fields: payload.missing_fields.filter(
+          (field): field is string => typeof field === 'string',
+        ),
+      };
+    }
+  }
+  return extractApiErrorMessage(error, fallback);
 };
 
 const initialState: CommerceState = {
@@ -172,13 +198,17 @@ export const fetchOrderDetail = createAsyncThunk(
   }
 );
 
-export const createOrder = createAsyncThunk(
+export const createOrder = createAsyncThunk<
+  Order,
+  CreateOrderPayload,
+  { rejectValue: string | DeliveryAddressIncompleteError }
+>(
   'commerce/createOrder',
   async (orderData: CreateOrderPayload, { rejectWithValue }) => {
     try {
       return await commerceApi.createOrder(orderData);
     } catch (error) {
-      return rejectWithValue(extractApiErrorMessage(error, 'Erreur création commande'));
+      return rejectWithValue(extractCreateOrderError(error, 'Erreur création commande'));
     }
   }
 );
@@ -386,7 +416,9 @@ const commerceSlice = createSlice({
       })
       .addCase(createOrder.rejected, (state, action) => {
         state.orders.loading = false;
-        state.orders.error = action.payload as string;
+        state.orders.error = typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.message ?? 'Erreur création commande';
       });
 
     builder

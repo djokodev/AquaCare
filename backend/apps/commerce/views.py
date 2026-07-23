@@ -20,6 +20,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from .domain.exceptions import (
+    DeliveryAddressIncompleteError,
     InvalidOrderError,
     ProductNotAvailableError,
     ProductNotFoundError,
@@ -425,7 +426,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         request=OrderCreateSerializer,
         responses={
             201: OrderSerializer,
-            400: OpenApiResponse(description="Erreurs de validation"),
+            400: CommerceErrorResponseSerializer,
         },
     ),
     statistics=extend_schema(
@@ -481,6 +482,12 @@ class OrderViewSet(
 
     @staticmethod
     def _raise_service_validation_error(exc: Exception) -> None:
+        if isinstance(exc, DeliveryAddressIncompleteError):
+            raise ValidationError({
+                'code': exc.code,
+                'message': str(exc),
+                'missing_fields': list(exc.missing_fields),
+            }) from exc
         raise ValidationError({'message': str(exc)}) from exc
 
     @staticmethod

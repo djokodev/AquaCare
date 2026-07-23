@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import LocationSelector from '@/components/common/LocationSelector';
@@ -16,24 +17,41 @@ import type { ProfileStackParamList } from '@/navigation/MainNavigator';
 import { colors, radii, spacing } from '@/theme';
 
 type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList, 'ProfileMain'>;
+type ProfileScreenRouteProp = RouteProp<ProfileStackParamList, 'ProfileMain'>;
 
-interface Props { navigation: ProfileScreenNavigationProp; }
+interface Props {
+  navigation: ProfileScreenNavigationProp;
+  route?: ProfileScreenRouteProp;
+}
 
-export default function ProfileScreen({ navigation }: Props) {
+export default function ProfileScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const { user, farmProfile, isLoading, error, updateProfile, loadProfile, logout, displayName, isIndividual } = useAuth();
   const [showInterventionZoneModal, setShowInterventionZoneModal] = useState(false);
   const { isEditing, setIsEditing, isSaving, editData, updateEditField, locationData, setLocationData, save } = useProfileEditor({ user, updateProfile });
+  const returnToCart = route?.params?.returnToCart === true;
   const certification = useMemo(() => getCertificationPresentation(farmProfile, t), [farmProfile, t]);
 
   useEffect(() => {
     if (!user && !farmProfile && !isLoading && !error) void loadProfile();
   }, [error, farmProfile, isLoading, loadProfile, user]);
 
+  useEffect(() => {
+    if (route?.params?.startEditing) {
+      setIsEditing(true);
+    }
+  }, [route?.params?.startEditing, setIsEditing]);
+
   const handleSave = async () => {
     try {
       await save();
-      Alert.alert(t('success'), t('profileUpdatedSuccess'));
+      Alert.alert(
+        t('success'),
+        t('profileUpdatedSuccess'),
+        returnToCart
+          ? [{ text: t('backToCart'), onPress: () => navigation.goBack() }]
+          : undefined,
+      );
     } catch (saveError) {
       Alert.alert(t('error'), getAccountErrorMessage(saveError, t));
     }

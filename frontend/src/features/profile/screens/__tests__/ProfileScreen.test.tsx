@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,6 +9,7 @@ import { useProfileEditor } from '@/features/profile/hooks/useProfileEditor';
 
 const navigation = {
   navigate: jest.fn(),
+  goBack: jest.fn(),
 } as any;
 
 jest.mock('react-i18next', () => ({
@@ -111,6 +112,35 @@ describe('features/profile/screens/ProfileScreen', () => {
     await waitFor(() => expect(save).toHaveBeenCalled());
     fireEvent.press(screen.getByText('settings'));
     expect(navigation.navigate).toHaveBeenCalledWith('Settings');
+  });
+
+  it('ouvre directement l’édition et revient au panier après sauvegarde', async () => {
+    save.mockResolvedValue(undefined);
+    (useProfileEditor as jest.Mock).mockReturnValue({
+      isEditing: true,
+      setIsEditing,
+      isSaving: false,
+      editData: { email: 'jean@example.com', intervention_zone: 'coastal' },
+      updateEditField: jest.fn(),
+      locationData: {},
+      setLocationData: jest.fn(),
+      save,
+    });
+
+    render(
+      <ProfileScreen
+        navigation={navigation}
+        route={{ params: { startEditing: true, returnToCart: true } } as any}
+      />
+    );
+
+    expect(setIsEditing).toHaveBeenCalledWith(true);
+    fireEvent.press(screen.getByText('saveChanges'));
+
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    const actions = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{ onPress?: () => void }>;
+    actions[0]?.onPress?.();
+    expect(navigation.goBack).toHaveBeenCalled();
   });
 
   it('configure le champ email sans correction ni majuscule', () => {
