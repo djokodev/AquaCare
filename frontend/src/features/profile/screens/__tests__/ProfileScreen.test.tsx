@@ -10,7 +10,9 @@ import { useProfileEditor } from '@/features/profile/hooks/useProfileEditor';
 const navigation = {
   navigate: jest.fn(),
   goBack: jest.fn(),
+  getParent: jest.fn(),
 } as any;
+const rootNavigation = { navigate: jest.fn() };
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -39,6 +41,7 @@ describe('features/profile/screens/ProfileScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    navigation.getParent.mockReturnValue({ getParent: () => rootNavigation });
 
     (useAuth as jest.Mock).mockReturnValue({
       user: {
@@ -140,7 +143,7 @@ describe('features/profile/screens/ProfileScreen', () => {
     await waitFor(() => expect(save).toHaveBeenCalled());
     const actions = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{ onPress?: () => void }>;
     actions[0]?.onPress?.();
-    expect(navigation.goBack).toHaveBeenCalled();
+    expect(rootNavigation.navigate).toHaveBeenCalledWith('Cart');
   });
 
   it('configure le champ email sans correction ni majuscule', () => {

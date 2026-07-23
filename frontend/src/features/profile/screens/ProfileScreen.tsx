@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import type { RouteProp } from '@react-navigation/native';
+import type { NavigationProp, RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import LocationSelector from '@/components/common/LocationSelector';
@@ -13,7 +13,7 @@ import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
 import { useProfileEditor } from '@/features/profile/hooks/useProfileEditor';
 import { getCertificationPresentation } from '@/features/profile/utils/accountProfilePresentation';
 import { useAuth } from '@/hooks/useAuth';
-import type { ProfileStackParamList } from '@/navigation/MainNavigator';
+import type { ProfileStackParamList, RootStackParamList } from '@/navigation/MainNavigator';
 import { colors, radii, spacing } from '@/theme';
 
 type ProfileScreenNavigationProp = StackNavigationProp<ProfileStackParamList, 'ProfileMain'>;
@@ -32,6 +32,15 @@ export default function ProfileScreen({ navigation, route }: Props) {
   const returnToCart = route?.params?.returnToCart === true;
   const certification = useMemo(() => getCertificationPresentation(farmProfile, t), [farmProfile, t]);
 
+  const handleReturnToCart = () => {
+    const rootNavigation = navigation.getParent()?.getParent() as NavigationProp<RootStackParamList> | undefined;
+    if (rootNavigation) {
+      rootNavigation.navigate('Cart');
+      return;
+    }
+    navigation.goBack();
+  };
+
   useEffect(() => {
     if (!user && !farmProfile && !isLoading && !error) void loadProfile();
   }, [error, farmProfile, isLoading, loadProfile, user]);
@@ -49,7 +58,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
         t('success'),
         t('profileUpdatedSuccess'),
         returnToCart
-          ? [{ text: t('backToCart'), onPress: () => navigation.goBack() }]
+          ? [{ text: t('backToCart'), onPress: handleReturnToCart }]
           : undefined,
       );
     } catch (saveError) {
@@ -104,7 +113,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
         <ProfileInfoRow icon="shield-checkmark" label={t('accountVerified')} value={user.is_verified ? t('yes') : t('no')} />
       </Section>
 
-      {isEditing ? <Button label={isSaving ? t('saving') : t('saveChanges')} loading={isSaving} onPress={handleSave} /> : null}
+      {isEditing ? <Button label={isSaving ? t('saving') : t('saveChanges')} loading={isSaving} onPress={handleSave} containerStyle={styles.saveButton} /> : null}
       <View style={styles.links}>
         <InteractiveCard accessibilityLabel={t('farmManagement')} onPress={() => navigation.navigate('FarmProfile')}><AppText variant="bodyStrong">{t('farmManagement')}</AppText><Ionicons name="chevron-forward" size={20} color={colors.text.muted} /></InteractiveCard>
         <InteractiveCard accessibilityLabel={t('settings')} onPress={() => navigation.navigate('Settings')}><View style={styles.row}><Ionicons name="settings" size={20} color={colors.brand.primary} /><AppText variant="bodyStrong">{t('settings')}</AppText></View><Ionicons name="chevron-forward" size={20} color={colors.text.muted} /></InteractiveCard>
@@ -123,6 +132,7 @@ function Section({ title, action, children }: { title: string; action?: React.Re
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface.page },
   content: { gap: spacing[4], paddingBottom: spacing[6] },
+  saveButton: { marginHorizontal: spacing[4] },
   hero: { alignItems: 'center', gap: spacing[2], backgroundColor: colors.brand.primary, padding: spacing[5] },
   avatar: { width: 80, height: 80, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand.dark },
   certification: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], borderRadius: radii.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },

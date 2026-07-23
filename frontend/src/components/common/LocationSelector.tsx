@@ -117,15 +117,6 @@ export default function LocationSelector({
       setArrondissementOptions([]);
     }
     
-    // Reset les niveaux infÃ©rieurs
-    if (value.arrondissement || value.city || value.neighborhood) {
-      onChange({
-        ...value,
-        arrondissement: undefined,
-        city: undefined,
-        neighborhood: undefined
-      });
-    }
   }, [value.department, value.region]);
 
   // Mettre Ã  jour les villes selon l'arrondissement sÃ©lectionnÃ©
@@ -151,14 +142,6 @@ export default function LocationSelector({
       setCityOptions([]);
     }
     
-    // Reset les niveaux infÃ©rieurs si on change d'arrondissement
-    if (value.city || value.neighborhood) {
-      onChange({
-        ...value,
-        city: undefined,
-        neighborhood: undefined
-      });
-    }
   }, [value.arrondissement, value.region, value.department]);
 
   // Mettre Ã  jour les quartiers selon l'arrondissement sÃ©lectionnÃ©
@@ -172,13 +155,6 @@ export default function LocationSelector({
       setNeighborhoodOptions([]);
     }
 
-    // Reset neighborhood si l'arrondissement change
-    if (value.neighborhood) {
-      onChange({
-        ...value,
-        neighborhood: undefined
-      });
-    }
   }, [value.arrondissement, value.region, value.department]);
 
   const handleRegionSelect = (regionCode: string) => {

@@ -155,6 +155,24 @@ class TestAccountProfileMutationService:
         assert updated.last_name == "Name"
         assert updated.is_active is True
 
+    def test_update_user_profile_persists_neighborhood(self, user_factory) -> None:
+        user = user_factory()
+
+        updated = AccountProfileMutationService.update_user_profile(
+            user_id=user.pk,
+            updates={
+                "region": "littoral",
+                "department": "Wouri",
+                "district": "Douala 2ème",
+                "city": "Douala",
+                "neighborhood": "New-Bell",
+            },
+        )
+
+        assert updated.neighborhood == "New-Bell"
+        user.refresh_from_db()
+        assert user.neighborhood == "New-Bell"
+
     def test_update_farm_profile_rejects_deleted_farm(self, user_factory) -> None:
         user = user_factory()
         user.farm_profile.is_deleted = True
