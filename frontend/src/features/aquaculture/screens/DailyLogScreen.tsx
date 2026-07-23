@@ -61,6 +61,7 @@ const FEED_STOCK_ERROR_CODES = new Set([
   'feed_stock_not_started',
   'feed_log_before_stock_tracking',
   'insufficient_feed_stock',
+  'feed_stock_history_inconsistent',
   'feed_stock_item_unavailable',
 ]);
 
@@ -131,6 +132,7 @@ const offlineLogAsCycleLog = (offlineLog: OfflineCycleLog): CycleLog => ({
   created_offline: true,
   pending_sync: true,
   created_at: new Date(offlineLog.timestamp).toISOString(),
+  server_log_id: offlineLog.server_log_id ?? null,
 });
 
 export default function DailyLogScreen({ navigation, route }: DailyLogScreenProps) {
@@ -219,7 +221,10 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       const localEditableLog = offlineLog ? offlineLogAsCycleLog(offlineLog) : null;
       let todayLog = serverLog;
       if (localEditableLog) {
-        if (serverLog && serverLog.client_uuid !== localEditableLog.client_uuid) {
+        const sameServerLog = Boolean(
+          serverLog && localEditableLog.server_log_id && localEditableLog.server_log_id === serverLog.id,
+        );
+        if (serverLog && !sameServerLog && serverLog.client_uuid !== localEditableLog.client_uuid) {
           setLocalLogConflict(true);
         } else {
           todayLog = localEditableLog;
@@ -279,10 +284,10 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       previousReference && selectedReference && previousReference === selectedReference,
     );
     const previous = previousMatchesSelection ? Number(existingLog?.feed_quantity ?? 0) : 0;
-    return Math.max(0, remaining + previous);
+    return remaining + previous;
   }, [existingLog, selectedStockItem]);
   const totalAvailableFeedKg = store
-    ? Math.max(0, Number(store.summary.estimated_feed_remaining_kg))
+    ? Number(store.summary.estimated_feed_remaining_kg)
     : null;
 
   const validationErrors = useMemo<FormErrors>(() => {
@@ -430,7 +435,11 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
 
     setSaving(true);
     try {
-      const creationResult = await createCycleLogWithOfflineFallback(cycleId, logData);
+      const serverLogId = existingLog?.server_log_id
+        ?? (existingLog && !existingLog.pending_sync ? existingLog.id : null);
+      const creationResult = serverLogId
+        ? await createCycleLogWithOfflineFallback(cycleId, logData, { serverLogId })
+        : await createCycleLogWithOfflineFallback(cycleId, logData);
       dispatch(fetchDashboardData({ lightweight: true }));
 
       if (sampleCount && sampleWeight && selectedCycle) {
@@ -456,6 +465,10 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       if (parsedError.code && FEED_STOCK_ERROR_CODES.has(parsedError.code)) {
         const message = parsedError.code === 'insufficient_feed_stock'
           ? t('feedStockInsufficient', { available: String(rawError.available_feed_kg ?? '0') })
+          : parsedError.code === 'feed_stock_history_inconsistent'
+            ? t('feedStockHistoryInconsistent', {
+              minimum: String(rawError.minimum_balance_kg ?? '0'),
+            })
           : parsedError.code === 'feed_stock_item_unavailable'
             ? t('feedStockItemRequired')
           : parsedError.code === 'feed_log_before_stock_tracking'

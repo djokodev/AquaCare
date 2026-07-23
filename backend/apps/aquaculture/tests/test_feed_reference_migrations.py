@@ -1,12 +1,14 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
+from aquaculture.models import CycleFeedStockEntry, CycleLog
+from aquaculture.services.feed_reference_service import FeedReferenceService
+from django.apps import apps as django_apps
 from django.conf import settings
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
-from django.utils import timezone
 
 MIGRATIONS_DISABLED = (
     getattr(settings, 'MIGRATION_MODULES', None) is not None
@@ -118,7 +120,6 @@ def test_0038_only_classifies_certain_order_snapshots_and_preserves_source_ident
             normalized_name='aliment en ligne 3 mm',
             species='tilapia',
             pellet_size_mm=Decimal('3.00'),
-            synced_at=timezone.now(),
         )
         assert external.id != reference.id
 
@@ -155,7 +156,6 @@ def test_0038_only_classifies_certain_order_snapshots_and_preserves_source_ident
             normalized_name='catalogue explicite 4 mm',
             species='tilapia',
             pellet_size_mm=Decimal('4.00'),
-            synced_at=timezone.now(),
         )
         catalog_entry = MigratedEntry.objects.create(
             cycle_id=cycle.id,
@@ -185,6 +185,38 @@ def test_0038_only_classifies_certain_order_snapshots_and_preserves_source_ident
         MigratedEntry.objects.filter(pk=catalog_entry.pk).update(
             feed_reference_id=None,
         )
+
+        # Deux candidats exacts restent volontairement non classifiés : la
+        # migration ne peut pas deviner l'intention de l'utilisateur.
+        ambiguous_external = FeedReference.objects.create(
+            farm_profile_id=farm.id,
+            source='external',
+            name='Aliment ambigu 3 mm',
+            normalized_name='aliment ambigu 3 mm',
+            species='tilapia',
+            pellet_size_mm=Decimal('3.00'),
+        )
+        FeedReference.objects.create(
+            farm_profile_id=farm.id,
+            source='aquacare_catalog',
+            catalog_product_id=product.id,
+            name='Aliment ambigu 3 mm',
+            normalized_name='aliment ambigu 3 mm',
+            species='tilapia',
+            pellet_size_mm=Decimal('3.00'),
+        )
+        ambiguous_entry = MigratedEntry.objects.create(
+            cycle_id=cycle.id,
+            source='manual',
+            label='Aliment ambigu 3 mm',
+            feed_size_mm=Decimal('3.00'),
+            feed_reference_id=ambiguous_external.id,
+            quantity_kg=Decimal('12.00'),
+            total_cost_fcfa=Decimal('12000.00'),
+            entry_date=date(2026, 7, 12),
+            note='Candidat ambigu',
+        )
+        MigratedEntry.objects.filter(pk=ambiguous_entry.pk).update(feed_reference_id=None)
 
         # Même scénario pour une saisie hors ligne dont l'UUID prouve l'identité.
         offline_reference = FeedReference.objects.create(
@@ -235,6 +267,7 @@ def test_0038_only_classifies_certain_order_snapshots_and_preserves_source_ident
             RepairedLog.objects.get(pk=offline_log.pk).feed_reference_id
             == offline_reference.id
         )
+        assert RepairedEntry.objects.get(pk=ambiguous_entry.pk).feed_reference_id is None
 
         # Le backfill suivant utilise le maximum historique et ne diminue jamais
         # une progression déjà enregistrée.
@@ -270,3 +303,55 @@ def test_0038_only_classifies_certain_order_snapshots_and_preserves_source_ident
         )
     finally:
         MigrationExecutor(connection).migrate(final_targets)
+
+
+@pytest.mark.skipif(MIGRATIONS_DISABLED, reason='Nécessite le profil PostgreSQL avec migrations activées.')
+@pytest.mark.django_db(transaction=True)
+def test_0043_restores_reference_created_online_by_the_real_service():
+    """Reproduit les valeurs online réelles, sans client_uuid ni synced_at."""
+    from tests.fixtures.factories import ProductionCycleFactory
+
+    cycle = ProductionCycleFactory(start_date=date.today() - timedelta(days=5))
+    reference = FeedReferenceService.create(
+        user=cycle.farm_profile.user,
+        farm_profile=cycle.farm_profile,
+        data={
+            'source': 'external',
+            'name': 'Aliment online 3 mm',
+            'species': cycle.species,
+            'pellet_size_mm': Decimal('3.00'),
+        },
+    )
+    entry = CycleFeedStockEntry.objects.create(
+        cycle=cycle,
+        source=CycleFeedStockEntry.SOURCE_MANUAL,
+        feed_reference=reference,
+        label=reference.name,
+        feed_size_mm=reference.pellet_size_mm,
+        quantity_kg=Decimal('20.00'),
+        total_cost_fcfa=Decimal('18000.00'),
+        entry_date=date.today(),
+    )
+    log = CycleLog.objects.create(
+        cycle=cycle,
+        log_date=date.today(),
+        feed_quantity=Decimal('2.00'),
+        feed_type=reference.name,
+        feed_size_mm=reference.pellet_size_mm,
+    )
+    assert reference.client_uuid is None
+    assert reference.created_offline is False
+    assert reference.synced_at is None
+
+    CycleFeedStockEntry.objects.filter(pk=entry.pk).update(feed_reference=None)
+    CycleLog.objects.filter(pk=log.pk).update(feed_reference=None)
+
+    import importlib
+
+    repair_module = importlib.import_module(
+        'aquaculture.migrations.0043_safe_legacy_feed_classification_repair'
+    )
+    repair_module.repair_safe_classifications(django_apps, None)
+
+    assert CycleFeedStockEntry.objects.get(pk=entry.pk).feed_reference_id == reference.id
+    assert CycleLog.objects.get(pk=log.pk).feed_reference_id == reference.id

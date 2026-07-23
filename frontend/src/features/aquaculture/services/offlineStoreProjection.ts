@@ -203,7 +203,7 @@ export const projectOfflineStore = async (
   );
   const feedToSecure = base.summary.feed_to_secure_kg === null
     ? null
-    : Math.max(0, numeric(base.summary.feed_to_secure_kg) - pendingStockKg + pendingConsumedKg).toFixed(2);
+    : (numeric(base.summary.feed_to_secure_kg) - pendingStockKg + pendingConsumedKg).toFixed(2);
   const projected: CycleStore = {
     ...base,
     calculation_status: pendingStocks.length || pendingLogs.length ? 'incomplete' : base.calculation_status,

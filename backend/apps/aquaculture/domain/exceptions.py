@@ -283,6 +283,7 @@ class FeedStockValidationError(BusinessRuleViolation):
         code: str,
         detail,
         available_feed_kg=None,
+        minimum_balance_kg=None,
         requested_feed_kg=None,
         feed_reference_id=None,
     ):
@@ -293,6 +294,8 @@ class FeedStockValidationError(BusinessRuleViolation):
         }
         if available_feed_kg is not None:
             payload['available_feed_kg'] = str(available_feed_kg)
+        if minimum_balance_kg is not None:
+            payload['minimum_balance_kg'] = str(minimum_balance_kg)
         if requested_feed_kg is not None:
             payload['requested_feed_kg'] = str(requested_feed_kg)
         if feed_reference_id is not None:

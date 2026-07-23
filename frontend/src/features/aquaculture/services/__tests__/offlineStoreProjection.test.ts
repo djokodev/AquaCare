@@ -54,6 +54,51 @@ describe('projectOfflineStore', () => {
     expect(result.store.calculation_warnings).toEqual(['offline_stock_pending', 'offline_log_pending']);
   });
 
+  it('fusionne une declaration pending et un journal par feed_reference_id serveur', async () => {
+    (offlineService.getOfflineStockDeclarations as jest.Mock).mockResolvedValue([{
+      id: 'stock-server-id',
+      cycleId: 'cycle-1',
+      clientUuid: 'stock-client',
+      synced: false,
+      timestamp: 1,
+      payload: {
+        feed_reference_id: 'server-feed-1',
+        quantity_kg: '20.00',
+        total_cost_fcfa: '2000.00',
+      },
+    }]);
+    (offlineService.getOfflineFeedReferences as jest.Mock).mockResolvedValue([]);
+    (offlineService.getPendingSyncLogs as jest.Mock).mockResolvedValue([{
+      id: 'log-1',
+      cycleId: 'cycle-1',
+      synced: false,
+      timestamp: 1,
+      logData: { feed_reference: 'server-feed-1', feed_quantity: 3, log_date: '2026-07-23' },
+    }]);
+    const store = {
+      cycle_id: 'cycle-1', calculation_status: 'available', calculation_source: 'server',
+      calculated_at: '2026-07-23T00:00:00Z', calculation_warnings: [], status: 'ok',
+      summary: {
+        manual_feed_kg: '0.00', received_order_feed_kg: '0.00', total_feed_added_kg: '0.00',
+        feed_consumed_kg: '0.00', estimated_feed_remaining_kg: '0.00', feed_expenses_fcfa: '0.00',
+        pending_orders_count: 0, pending_order_amount_fcfa: '0.00', pending_order_feed_kg: '0.00',
+        total_feed_needed_kg: null, feed_need_remaining_kg: null, secured_feed_kg: null,
+        feed_to_secure_kg: null, stock_tracking_started_at: null, unclassified_stock_kg: '0.00',
+      },
+      stock_items: [{
+        feed_reference_id: 'server-feed-1', source: 'external', species: 'tilapia', label: 'Dibaq',
+        feed_size_mm: '2.00', quantity_added_kg: '10.00', quantity_consumed_kg: '0.00',
+        quantity_available_kg: '10.00',
+      }], pending_orders: [], stock_tracking_started_at: null, unclassified_entries: [],
+    } as CycleStore;
+
+    const result = await projectOfflineStore('cycle-1', store, 'Pending stock');
+
+    expect(result.store.stock_items).toHaveLength(1);
+    expect(result.store.stock_items[0].quantity_available_kg).toBe('27.00');
+    expect(result.store.calculation_warnings).toEqual(['offline_stock_pending', 'offline_log_pending']);
+  });
+
   it('regroupe le stock serveur et local avant de soustraire chaque journal une fois', async () => {
     const store = {
       cycle_id: 'cycle-1',

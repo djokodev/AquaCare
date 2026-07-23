@@ -23,6 +23,7 @@ export interface OfflineCycleLog {
   fingerprint: string;
   timestamp: number;
   synced: boolean;
+  server_log_id?: string;
 }
 
 export interface OfflineFeedReference {
@@ -89,6 +90,42 @@ interface SyncCounter {
   success: number;
   failed: number;
 }
+
+const resolveReferenceIdentity = (
+  referenceId: string | null | undefined,
+  referenceClientUuid: string | null | undefined,
+  references: OfflineFeedReference[],
+): string | null => {
+  if (referenceId) return `server:${referenceId}`;
+  if (!referenceClientUuid) return null;
+  const localReference = references.find((reference) => reference.clientUuid === referenceClientUuid);
+  return localReference?.serverId
+    ? `server:${localReference.serverId}`
+    : `client:${referenceClientUuid}`;
+};
+
+const hasPendingStockDependency = (
+  cycleId: string,
+  logData: DailyLogForm,
+  stockDeclarations: OfflineStockDeclaration[],
+  references: OfflineFeedReference[],
+): boolean => {
+  const logIdentity = resolveReferenceIdentity(
+    logData.feed_reference,
+    logData.feed_reference_client_uuid,
+    references,
+  );
+  if (!logIdentity) return false;
+  return stockDeclarations.some((stock) => {
+    if (stock.synced || stock.cycleId !== cycleId) return false;
+    const stockIdentity = resolveReferenceIdentity(
+      stock.payload.feed_reference_id,
+      stock.feedReferenceClientUuid ?? stock.payload.feed_reference_client_uuid,
+      references,
+    );
+    return stockIdentity === logIdentity;
+  });
+};
 
 interface OfflineSyncDetails {
   feedReferences?: SyncCounter;
@@ -505,7 +542,11 @@ class OfflineService {
     return this.readList(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS, 'Erreur lecture calibrages offline');
   }
 
-  async saveCycleLogOffline(cycleId: string, logData: DailyLogForm): Promise<string> {
+  async saveCycleLogOffline(
+    cycleId: string,
+    logData: DailyLogForm,
+    options?: { serverLogId?: string | null },
+  ): Promise<string> {
     try {
       const logDate = logData.log_date || this.today();
       const allocationId = logData.cycle_unit_allocation ?? null;
@@ -530,6 +571,7 @@ class OfflineService {
         fingerprint: '',
         timestamp: Date.now(),
         synced: false,
+        server_log_id: options?.serverLogId ?? existingLog?.server_log_id,
       };
       offlineLog.fingerprint = cycleLogFingerprint(cycleId, offlineLog.logData);
 
@@ -586,15 +628,12 @@ class OfflineService {
     const stockDeclarations = await this.getOfflineStockDeclarations();
     const feedReferences = await this.getOfflineFeedReferences();
     for (const log of pendingLogs) {
-      const feedReferenceClientUuid = log.logData.feed_reference_client_uuid;
-      const dependentStocks = feedReferenceClientUuid
-        ? stockDeclarations.filter((item) => item.feedReferenceClientUuid === feedReferenceClientUuid)
-        : [];
-      if (dependentStocks.some((item) => !item.synced)) {
+      if (hasPendingStockDependency(log.cycleId, log.logData, stockDeclarations, feedReferences)) {
         failed += 1;
         continue;
       }
       try {
+        const feedReferenceClientUuid = log.logData.feed_reference_client_uuid;
         const localReference = feedReferenceClientUuid
           ? feedReferences.find((item) => item.clientUuid === feedReferenceClientUuid)
           : undefined;
@@ -605,7 +644,11 @@ class OfflineService {
             feed_reference_client_uuid: undefined,
           }
           : log.logData;
-        await aquacultureService.createCycleLog(log.cycleId, logData);
+        if (log.server_log_id) {
+          await aquacultureService.updateCycleLog(log.server_log_id, logData);
+        } else {
+          await aquacultureService.createCycleLog(log.cycleId, logData);
+        }
         await this.markLogAsSynced(log.id);
         success += 1;
       } catch (error) {

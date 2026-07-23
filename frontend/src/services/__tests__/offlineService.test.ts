@@ -5,6 +5,7 @@ import { aquacultureService } from '@/features/aquaculture/services/aquacultureS
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     createCycleLog: jest.fn(),
+    updateCycleLog: jest.fn(),
     createProductionCycle: jest.fn(),
     createSanitaryLog: jest.fn(),
     createCalibrationTank: jest.fn(),
@@ -243,6 +244,56 @@ describe('services/offlineService', () => {
 
     const lastSync = await AsyncStorage.getItem('aquacare_last_sync');
     expect(Number(lastSync)).toBeGreaterThan(0);
+  });
+
+  it('synchronise une edition offline par server_log_id sans creer un nouveau journal', async () => {
+    await offlineService.saveCycleLogOffline(
+      'cycle-1',
+      {
+        log_date: '2026-07-23',
+        cycle_unit_allocation: 'unit-1',
+        feed_quantity: 4,
+        client_uuid: 'stable-client-uuid',
+      },
+      { serverLogId: 'server-log-1' },
+    );
+    mockAquaculture.updateCycleLog.mockResolvedValue({ id: 'server-log-1' } as any);
+
+    const result = await offlineService.syncOfflineLogs();
+
+    expect(result).toEqual({ success: 1, failed: 0 });
+    expect(mockAquaculture.updateCycleLog).toHaveBeenCalledWith(
+      'server-log-1',
+      expect.objectContaining({ client_uuid: 'stable-client-uuid', feed_quantity: 4 }),
+    );
+    expect(mockAquaculture.createCycleLog).not.toHaveBeenCalled();
+    const [saved] = await offlineService.getOfflineCycleLogs();
+    expect(saved.server_log_id).toBe('server-log-1');
+    expect(saved.synced).toBe(true);
+  });
+
+  it('bloque un journal lie par feed_reference_id tant que le stock pending ne passe pas', async () => {
+    await offlineService.saveStockDeclarationOffline('cycle-1', {
+      feed_reference_id: 'server-feed-1',
+      quantity_kg: '20.00',
+      total_cost_fcfa: '20000.00',
+      entry_date: '2026-07-23',
+    });
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-23',
+      feed_reference: 'server-feed-1',
+      feed_quantity: 3,
+    });
+
+    const blocked = await offlineService.syncOfflineLogs();
+    expect(blocked).toEqual({ success: 0, failed: 1 });
+    expect(mockAquaculture.createCycleLog).not.toHaveBeenCalled();
+
+    mockAquaculture.declareCycleStoreManualStock.mockResolvedValue({ cycle_id: 'cycle-1' } as any);
+    mockAquaculture.createCycleLog.mockResolvedValue({ id: 'server-log-1' } as any);
+    const synced = await offlineService.syncAllOfflineData();
+    expect(synced.success).toBe(2);
+    expect(mockAquaculture.createCycleLog).toHaveBeenCalledTimes(1);
   });
 
   it('cleanupSyncedLogs supprime uniquement les logs synchronises trop anciens', async () => {

@@ -238,13 +238,30 @@ class CycleStoreService(BaseService):
         cycle: ProductionCycle,
         entries: list[CycleFeedStockEntry],
     ) -> dict[Any, Decimal]:
-        """Alloue les rations legacy aux entrées compatibles en FIFO chronologique."""
-        allocations = {entry.id: ZERO_DECIMAL for entry in entries}
+        """Alloue les rations legacy aux entrées compatibles en FIFO chronologique.
+
+        Une entrée déjà classifiée est incluse uniquement si elle possède un
+        ajustement ``legacy_consumption``. Cela permet de rejouer exactement la
+        même allocation après une classification successive sans réattribuer
+        une ration legacy à une seconde entrée.
+        """
+        adjustments = {
+            adjustment.stock_entry_id: CycleStoreService._to_decimal(adjustment.quantity_kg)
+            for adjustment in CycleFeedStockAdjustment.objects.filter(
+                stock_entry_id__in=[entry.id for entry in entries],
+                reason=CycleFeedStockAdjustment.REASON_LEGACY_CONSUMPTION,
+            )
+        }
+        eligible_entries = [
+            entry for entry in entries
+            if entry.feed_reference_id is None or entry.id in adjustments
+        ]
+        allocations = {entry.id: ZERO_DECIMAL for entry in eligible_entries}
         entries_by_identity: dict[
             tuple[str, Decimal | None],
             list[CycleFeedStockEntry],
         ] = {}
-        for entry in entries:
+        for entry in eligible_entries:
             entries_by_identity.setdefault(
                 CycleStoreService._feed_identity(
                     entry.label,
@@ -264,7 +281,7 @@ class CycleStoreService(BaseService):
         )
         remaining_by_entry = {
             entry.id: CycleStoreService._to_decimal(entry.quantity_kg)
-            for entry in entries
+            for entry in eligible_entries
         }
         for log in logs:
             identity = CycleStoreService._feed_identity(
@@ -434,6 +451,22 @@ class CycleStoreService(BaseService):
             entries=entries,
             stock_tracking_started_at=stock_tracking_started_at,
         )
+        inconsistent_reference_ids = {
+            item['feed_reference_id']
+            for item in stock_items
+            if item['feed_reference_id'] is not None
+        }
+        history_inconsistent = False
+        for reference_id in inconsistent_reference_ids:
+            reference = FarmFeedReference.objects.get(pk=reference_id)
+            ledger_state = FeedStockLedgerService.calculate(
+                cycle=cycle,
+                feed_reference=reference,
+                at_date=timezone.localdate(),
+            )
+            if ledger_state.minimum_balance < ZERO_DECIMAL:
+                history_inconsistent = True
+                break
         estimated_feed_remaining_kg = sum(
             (
                 CycleStoreService._to_decimal(item['quantity_available_kg'])
@@ -484,6 +517,8 @@ class CycleStoreService(BaseService):
         pending_orders_count = len(pending_orders)
         if not entries:
             status = 'not_started'
+        elif history_inconsistent:
+            status = 'check_stock'
         elif estimated_feed_remaining_kg <= ZERO_DECIMAL:
             status = 'check_stock'
         elif estimated_feed_remaining_kg <= LOW_STOCK_THRESHOLD_KG:
@@ -496,7 +531,10 @@ class CycleStoreService(BaseService):
             'calculation_status': recommendation['status'],
             'calculation_source': recommendation['source'],
             'calculated_at': recommendation['calculated_at'],
-            'calculation_warnings': recommendation['warnings'],
+            'calculation_warnings': list(dict.fromkeys([
+                *recommendation['warnings'],
+                *(['feed_stock_history_inconsistent'] if history_inconsistent else []),
+            ])),
             'summary': {
                 'manual_feed_kg': str(CycleStoreService._quantize(manual_feed_kg)),
                 'received_order_feed_kg': str(CycleStoreService._quantize(received_order_feed_kg)),
@@ -635,6 +673,17 @@ class CycleStoreService(BaseService):
             reservations=reservations,
         )
         available = min(state.balance_at_date, state.future_headroom)
+        if state.minimum_balance < ZERO_DECIMAL:
+            raise FeedStockValidationError(
+                code='feed_stock_history_inconsistent',
+                detail=_(
+                    "L'historique du stock est incohérent. Corrigez une ration passée avant d'en ajouter une."
+                ),
+                available_feed_kg=CycleStoreService._quantize(available),
+                minimum_balance_kg=CycleStoreService._quantize(state.minimum_balance),
+                requested_feed_kg=CycleStoreService._quantize(quantity),
+                feed_reference_id=feed_reference.id,
+            )
         if available < ZERO_DECIMAL:
             raise FeedStockValidationError(
                 code='insufficient_feed_stock',
@@ -744,10 +793,8 @@ class CycleStoreService(BaseService):
         if feed_reference.farm_profile_id != cycle.farm_profile_id or feed_reference.species != cycle.species:
             raise ValueError(_('Cet aliment n’est pas compatible avec le cycle.'))
         all_legacy_entries = list(
-            CycleFeedStockEntry.objects.select_for_update().filter(
-                cycle=cycle,
-                feed_reference__isnull=True,
-            )
+            CycleFeedStockEntry.objects.select_for_update()
+            .filter(cycle=cycle)
         )
         allocations = CycleStoreService._allocate_legacy_consumption(
             cycle=cycle,
@@ -763,11 +810,30 @@ class CycleStoreService(BaseService):
         entry.feed_reference = feed_reference
         entry.product = feed_reference.catalog_product
         entry.save(update_fields=['feed_reference', 'product', 'updated_at'])
-        if consumed_kg > ZERO_DECIMAL:
-            CycleFeedStockAdjustment.objects.get_or_create(
-                stock_entry=entry,
-                defaults={'quantity_kg': consumed_kg},
-            )
+        # La classification est une capture persistée de l'allocation FIFO.
+        # Recalculer les ajustements déjà créés permet de traiter correctement
+        # le cas où plusieurs journaux legacy existent avant la classification
+        # de la seconde entrée, sans compter un journal deux fois.
+        for candidate in all_legacy_entries:
+            desired = allocations.get(candidate.id, ZERO_DECIMAL)
+            if candidate.id != entry.id and candidate.feed_reference_id is None:
+                continue
+            adjustment = CycleFeedStockAdjustment.objects.filter(
+                stock_entry_id=candidate.id,
+                reason=CycleFeedStockAdjustment.REASON_LEGACY_CONSUMPTION,
+            ).first()
+            if desired <= ZERO_DECIMAL:
+                if adjustment is not None:
+                    adjustment.delete()
+                continue
+            if adjustment is None:
+                CycleFeedStockAdjustment.objects.create(
+                    stock_entry_id=candidate.id,
+                    quantity_kg=desired,
+                )
+            elif adjustment.quantity_kg != desired:
+                adjustment.quantity_kg = desired
+                adjustment.save(update_fields=['quantity_kg'])
         return entry
 
     @staticmethod

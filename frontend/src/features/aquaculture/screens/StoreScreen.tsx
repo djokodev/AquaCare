@@ -517,6 +517,9 @@ export default function StoreScreen() {
                 {pendingStockCount > 0 ? (
                   <InlineAlert tone="info" message={t('storePendingSyncMessage', { count: pendingStockCount })} />
                 ) : null}
+                {store.calculation_warnings?.includes('feed_stock_history_inconsistent') ? (
+                  <InlineAlert tone="warning" message={t('feedStockHistoryInconsistentWarning')} />
+                ) : null}
               </DashboardSection>
               {store.unclassified_entries?.map((entry) => (
                 <Card key={entry.id} variant="outlined" style={styles.section}>

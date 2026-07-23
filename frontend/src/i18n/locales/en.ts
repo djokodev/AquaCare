@@ -1745,6 +1745,8 @@
   feedWarning_target_weight_unavailable: 'Set the cycle target weight to recalculate requirements.',
   feedWarning_planned_harvest_date_elapsed: 'The planned harvest date has passed. Update the cycle.',
   feedWarning_negative_feed_stock: 'A stock inconsistency must be corrected.',
+  feedStockHistoryInconsistent: 'The stock history is inconsistent (minimum {{minimum}} kg). Correct a previous ration before adding another one.',
+  feedStockHistoryInconsistentWarning: 'The stock history is negative. Correct a previous ration before adding a new ration.',
   feedWarning_unclassified_stock: 'Some stock must be identified before it can cover a phase.',
   feedWarning_unclassified_consumption: 'A historical consumption cannot yet be allocated to a phase.',
   feedWarning_exact_product_unavailable: 'No AquaCare product with the exact pellet size covers one of the shortfalls.',

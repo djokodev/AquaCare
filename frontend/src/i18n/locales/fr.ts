@@ -1746,6 +1746,8 @@ export const fr = {
   feedWarning_target_weight_unavailable: 'Précisez le poids cible du cycle pour recalculer les besoins.',
   feedWarning_planned_harvest_date_elapsed: 'La date de récolte prévue est dépassée. Mettez le cycle à jour.',
   feedWarning_negative_feed_stock: 'Une incohérence de stock doit être corrigée.',
+  feedStockHistoryInconsistent: 'L’historique du stock est incohérent (minimum {{minimum}} kg). Corrigez une ration passée avant d’en ajouter une.',
+  feedStockHistoryInconsistentWarning: 'L’historique du stock est négatif. Corrigez une ration passée avant d’ajouter une nouvelle ration.',
   feedWarning_unclassified_stock: 'Du stock doit encore être identifié avant de pouvoir couvrir une phase.',
   feedWarning_unclassified_consumption: 'Une consommation historique ne peut pas encore être affectée à une phase.',
   feedWarning_exact_product_unavailable: 'Aucun produit AquaCare de granulométrie exacte ne couvre un des déficits.',

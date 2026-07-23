@@ -276,6 +276,7 @@ export interface CycleLog {
   log_date: string;
   log_time?: string;
   client_uuid?: string; // Pour synchronisation offline
+  server_log_id?: string | null;
 
   // Donnees de mortalite
   mortality_count?: number;
@@ -359,6 +360,7 @@ export interface FeedingPlan {
 export interface SanitaryLog {
   id: string;
   client_uuid?: string;
+  server_log_id?: string | null;
   cycle: string;
   cycle_unit_allocation?: string | null;
   production_unit?: string | null;

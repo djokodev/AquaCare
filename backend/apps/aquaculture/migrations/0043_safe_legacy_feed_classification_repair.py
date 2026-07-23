@@ -11,14 +11,6 @@ def _normalized_species(value):
     return "clarias" if value == "catfish" else value
 
 
-def _explicit_reference(reference):
-    return bool(
-        reference.client_uuid
-        or reference.created_offline
-        or reference.synced_at
-    )
-
-
 def _certain_order_entry(entry):
     item = getattr(entry, "order_item", None)
     order = getattr(item, "order", None) if item is not None else None
@@ -72,8 +64,11 @@ def repair_safe_classifications(apps, schema_editor):
     StockEntry = apps.get_model("aquaculture", "CycleFeedStockEntry")
     CycleLog = apps.get_model("aquaculture", "CycleLog")
 
-    # Restaure uniquement une correspondance unique dont l'intention utilisateur
-    # est prouvée par les métadonnées écrites par le service de création.
+    # Restaure uniquement une correspondance unique et exacte. Les références
+    # créées en ligne peuvent légitimement ne posséder ni client_uuid, ni
+    # created_offline, ni synced_at : ces champs ne constituent donc pas une
+    # preuve de provenance suffisante. L'identité ferme/espèce/nom/granulométrie
+    # est utilisée uniquement lorsqu'elle est unique et antérieure à la ligne.
     entries = StockEntry.objects.select_related("cycle").filter(
         feed_reference__isnull=True,
     )
@@ -81,8 +76,7 @@ def repair_safe_classifications(apps, schema_editor):
         candidates = [
             reference
             for reference in _entry_candidates(FeedReference, entry)
-            if _explicit_reference(reference)
-            and reference.created_at <= entry.created_at
+            if reference.created_at <= entry.created_at
         ]
         if len(candidates) == 1:
             StockEntry.objects.filter(pk=entry.pk).update(
@@ -97,8 +91,7 @@ def repair_safe_classifications(apps, schema_editor):
         candidates = [
             reference
             for reference in _log_candidates(FeedReference, log)
-            if _explicit_reference(reference)
-            and reference.created_at <= log.created_at
+            if reference.created_at <= log.created_at
         ]
         if len(candidates) == 1:
             CycleLog.objects.filter(pk=log.pk).update(

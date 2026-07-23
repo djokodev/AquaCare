@@ -16,8 +16,10 @@ from aquaculture.models import (
     FarmFeedReference,
     ProductionUnit,
 )
+from aquaculture.services.administrative_log_deletion_service import AdministrativeLogDeletionService
 from aquaculture.services.cycle_store_service import CycleStoreService
 from aquaculture.services.log_service import CycleLogService
+from commerce.models import Product
 from django.db import close_old_connections, connection
 from django.db.models import Sum
 
@@ -470,6 +472,121 @@ def test_classification_adjustment_is_used_by_display_and_validation():
             feed_reference=reference,
         )
     assert exc_info.value.detail['available_feed_kg'] == '80.00'
+
+
+@pytest.mark.django_db
+def test_successive_legacy_classifications_capture_each_consumption_once():
+    cycle = ProductionCycleFactory(start_date=date.today() - timedelta(days=3))
+    external = _feed_reference(cycle, name='Dibaq historique', size='2.00')
+    product = Product.objects.create(
+        brand='AquaCare',
+        name='Dibaq historique',
+        species='tilapia',
+        pellet_size_mm=Decimal('2.00'),
+        package_weight_kg=Decimal('25.00'),
+        price_per_package=Decimal('25000.00'),
+    )
+    catalog = FarmFeedReference.objects.create(
+        farm_profile=cycle.farm_profile,
+        source=FarmFeedReference.SOURCE_CATALOG,
+        catalog_product=product,
+        name='Dibaq historique',
+        species=cycle.species,
+        pellet_size_mm=Decimal('2.00'),
+    )
+    entry_a = CycleFeedStockEntry.objects.create(
+        cycle=cycle, source=CycleFeedStockEntry.SOURCE_MANUAL,
+        label='Dibaq historique', feed_size_mm=Decimal('2.00'),
+        quantity_kg=Decimal('60.00'), total_cost_fcfa=Decimal('60000.00'),
+        entry_date=date.today() - timedelta(days=2),
+    )
+    entry_b = CycleFeedStockEntry.objects.create(
+        cycle=cycle, source=CycleFeedStockEntry.SOURCE_MANUAL,
+        label='Dibaq historique', feed_size_mm=Decimal('2.00'),
+        quantity_kg=Decimal('50.00'), total_cost_fcfa=Decimal('50000.00'),
+        entry_date=date.today() - timedelta(days=1),
+    )
+    CycleLog.objects.create(
+        cycle=cycle, log_date=date.today() - timedelta(days=1),
+        feed_quantity=Decimal('30.00'), feed_type='Dibaq historique',
+        feed_size_mm=Decimal('2.00'),
+    )
+
+    CycleStoreService.classify_legacy_stock(
+        user=cycle.farm_profile.user, cycle=cycle,
+        entry_id=entry_a.id, feed_reference=external,
+    )
+    CycleStoreService.classify_legacy_stock(
+        user=cycle.farm_profile.user, cycle=cycle,
+        entry_id=entry_b.id, feed_reference=catalog,
+    )
+    CycleStoreService.classify_legacy_stock(
+        user=cycle.farm_profile.user, cycle=cycle,
+        entry_id=entry_b.id, feed_reference=catalog,
+    )
+
+    assert CycleFeedStockAdjustment.objects.aggregate(total=Sum('quantity_kg'))['total'] == Decimal('30.00')
+    available = sum(
+        Decimal(item['quantity_available_kg'])
+        for item in CycleStoreService.get_store_payload(cycle)['stock_items']
+    )
+    assert available == Decimal('80.00')
+
+
+@pytest.mark.django_db
+def test_negative_feed_history_blocks_new_ration_but_allows_corrections():
+    today = date.today()
+    cycle = ProductionCycleFactory(start_date=today - timedelta(days=10))
+    reference = _feed_reference(cycle)
+    _stock(cycle, reference, '10.00', entry_date=today - timedelta(days=3))
+    faulty_log = CycleLog.objects.create(
+        cycle=cycle,
+        log_date=today - timedelta(days=2),
+        feed_quantity=Decimal('15.00'),
+        feed_reference=reference,
+        feed_type=reference.name,
+        feed_size_mm=reference.pellet_size_mm,
+    )
+    _stock(cycle, reference, '20.00', entry_date=today - timedelta(days=1))
+
+    with pytest.raises(FeedStockValidationError) as exc_info:
+        CycleStoreService.validate_daily_feed_quantity(
+            cycle=cycle,
+            feed_quantity=Decimal('1.00'),
+            log_date=today,
+            feed_reference=reference,
+        )
+    assert exc_info.value.detail == {
+        'code': 'feed_stock_history_inconsistent',
+        'detail': exc_info.value.detail['detail'],
+        'field': 'feed_quantity',
+        'available_feed_kg': '15.00',
+        'minimum_balance_kg': '-5.00',
+        'requested_feed_kg': '1.00',
+        'feed_reference_id': str(reference.id),
+    }
+    store = CycleStoreService.get_store_payload(cycle)
+    assert 'feed_stock_history_inconsistent' in store['calculation_warnings']
+    assert store['status'] == 'check_stock'
+
+    CycleLogService.update_log(
+        faulty_log,
+        {'feed_quantity': Decimal('10.00')},
+        user=cycle.farm_profile.user,
+    )
+    faulty_log.refresh_from_db()
+    assert faulty_log.feed_quantity == Decimal('10.00')
+
+    deletable = CycleLog.objects.create(
+        cycle=cycle,
+        log_date=today - timedelta(days=4),
+        feed_quantity=Decimal('2.00'),
+        feed_reference=reference,
+        feed_type=reference.name,
+        feed_size_mm=reference.pellet_size_mm,
+    )
+    AdministrativeLogDeletionService.delete(deletable)
+    assert not CycleLog.objects.filter(pk=deletable.pk).exists()
 
 
 @pytest.mark.skipif(connection.vendor != "postgresql", reason="Verrou PostgreSQL requis")

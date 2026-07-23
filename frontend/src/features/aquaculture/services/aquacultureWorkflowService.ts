@@ -67,28 +67,67 @@ export const createProductionCycleWithOfflineFallback = async (
  */
 export const createCycleLogWithOfflineFallback = async (
   cycleId: string,
-  logData: DailyLogForm
+  logData: DailyLogForm,
+  options?: { serverLogId?: string | null },
 ): Promise<OnlineOrOffline<CycleLog>> => {
-  if (logData.feed_reference_client_uuid) {
-    const pendingStocks = await offlineService.getOfflineStockDeclarations();
-    const hasPendingDependency = pendingStocks.some(
-      (item) => !item.synced && item.cycleId === cycleId
-        && item.feedReferenceClientUuid === logData.feed_reference_client_uuid,
-    );
-    if (hasPendingDependency) {
+  const [pendingStocks, references] = await Promise.all([
+    offlineService.getOfflineStockDeclarations(),
+    offlineService.getOfflineFeedReferences(),
+  ]);
+  const mappedLogReference = logData.feed_reference_client_uuid
+    ? references.find((reference) => reference.clientUuid === logData.feed_reference_client_uuid)?.serverId
+    : undefined;
+  const resolvedLogIdentity = logData.feed_reference
+    ? `server:${logData.feed_reference}`
+    : mappedLogReference
+      ? `server:${mappedLogReference}`
+      : logData.feed_reference_client_uuid
+        ? `client:${logData.feed_reference_client_uuid}`
+        : null;
+  const hasPendingDependency = pendingStocks.some((item) => {
+    if (item.synced || item.cycleId !== cycleId) return false;
+    const stockReferenceId = item.payload.feed_reference_id
+      ?? (item.feedReferenceClientUuid
+        ? references.find((reference) => reference.clientUuid === item.feedReferenceClientUuid)?.serverId
+        : undefined);
+    const stockIdentity = stockReferenceId
+      ? `server:${stockReferenceId}`
+      : item.feedReferenceClientUuid
+        ? `client:${item.feedReferenceClientUuid}`
+        : null;
+    return Boolean(stockIdentity && resolvedLogIdentity && stockIdentity === resolvedLogIdentity);
+  });
+  if (hasPendingDependency) {
+    if (options?.serverLogId) {
+      await offlineService.saveCycleLogOffline(cycleId, logData, options);
+    } else {
       await offlineService.saveCycleLogOffline(cycleId, logData);
-      return { mode: 'offline' };
     }
+    return { mode: 'offline' };
   }
+  const pendingLocal = await offlineService.findPendingCycleLogForScope({
+    cycleId,
+    logDate: logData.log_date,
+    cycleUnitAllocationId: logData.cycle_unit_allocation ?? null,
+  });
   try {
-    const createdLog = await aquacultureService.createCycleLog(cycleId, {
-      ...logData,
-      created_offline: false,
-    });
-    return { mode: 'online', data: createdLog };
+    const savedLog = options?.serverLogId
+      ? await aquacultureService.updateCycleLog(options.serverLogId, logData)
+      : await aquacultureService.createCycleLog(cycleId, {
+        ...logData,
+        created_offline: Boolean(pendingLocal),
+      });
+    if (pendingLocal && typeof offlineService.markLogAsSynced === 'function') {
+      await offlineService.markLogAsSynced(pendingLocal.id);
+    }
+    return { mode: 'online', data: savedLog };
   } catch (error: unknown) {
     if (isNetworkError(error)) {
-      await offlineService.saveCycleLogOffline(cycleId, logData);
+      if (options?.serverLogId) {
+        await offlineService.saveCycleLogOffline(cycleId, logData, options);
+      } else {
+        await offlineService.saveCycleLogOffline(cycleId, logData);
+      }
       return { mode: 'offline' };
     }
     throw error;
