@@ -324,6 +324,10 @@ class CycleLogService(BaseService):
             tuple[UUID, UUID],
             list[FeedStockReservation],
         ] = {}
+        reserved_feed_by_size: dict[
+            tuple[UUID, Decimal],
+            list[FeedStockReservation],
+        ] = {}
 
         # Collect new logs to bulk_create (bypass signals)
         new_logs_to_create: list[CycleLog] = []
@@ -442,6 +446,15 @@ class CycleLogService(BaseService):
                         reservation_key,
                         [],
                     )
+                elif clean_log_data.get('feed_size_mm') is not None:
+                    reservation_key = (
+                        cycle.id,
+                        Decimal(str(clean_log_data['feed_size_mm'])),
+                    )
+                    reserved_feed_events = reserved_feed_by_size.get(
+                        reservation_key,
+                        [],
+                    )
                 CycleLogService._validate_log_business_rules(
                     cycle,
                     clean_log_data,
@@ -477,17 +490,20 @@ class CycleLogService(BaseService):
                 )
                 new_logs_to_create.append(log)
                 if reservation_key is not None:
-                    reserved_feed_by_reference.setdefault(
-                        reservation_key,
-                        [],
-                    ).append(
-                        FeedStockLedgerService.reservation(
-                            log_date=log_date_val,
-                            quantity_kg=Decimal(
-                                str(clean_log_data.get('feed_quantity') or 0)
-                            ),
-                            event_id=client_uuid or log.id,
-                        )
+                    reservation = FeedStockLedgerService.reservation(
+                        log_date=log_date_val,
+                        quantity_kg=Decimal(
+                            str(clean_log_data.get('feed_quantity') or 0)
+                        ),
+                        event_id=client_uuid or log.id,
+                    )
+                    reservation_bucket = (
+                        reserved_feed_by_reference
+                        if feed_reference is not None
+                        else reserved_feed_by_size
+                    )
+                    reservation_bucket.setdefault(reservation_key, []).append(
+                        reservation
                     )
                 result['cycles_affected'].add(cycle.id)
                 if date_key:
@@ -786,6 +802,7 @@ class CycleLogService(BaseService):
                 cycle_unit_allocation=cycle_unit_allocation,
                 existing_log=existing_log,
                 feed_reference=log_data.get('feed_reference'),
+                feed_size_mm=log_data.get('feed_size_mm'),
                 reserved_feed_kg=reserved_feed_kg,
                 reserved_feed_events=reserved_feed_events,
             )

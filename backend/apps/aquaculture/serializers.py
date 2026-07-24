@@ -1012,6 +1012,7 @@ class CycleLogSerializer(serializers.ModelSerializer):
         effective_cycle = cycle or getattr(self.instance, 'cycle', None)
         feed_quantity = attrs.get('feed_quantity', getattr(self.instance, 'feed_quantity', None))
         feed_reference = attrs.get('feed_reference', getattr(self.instance, 'feed_reference', None))
+        feed_size_mm = attrs.get('feed_size_mm', getattr(self.instance, 'feed_size_mm', None))
         feed_reference_client_uuid = attrs.pop('feed_reference_client_uuid', None)
         if feed_reference_client_uuid:
             if effective_cycle is None:
@@ -1035,18 +1036,45 @@ class CycleLogSerializer(serializers.ModelSerializer):
             feed_reference = resolved_reference
             attrs['feed_reference'] = resolved_reference
         if feed_quantity is not None and feed_quantity > 0:
-            if feed_reference is None:
-                raise serializers.ValidationError({'feed_reference': _('Sélectionnez l’aliment distribué.')})
+            if feed_reference is None and feed_size_mm is None:
+                raise serializers.ValidationError({'feed_size_mm': _('Sélectionnez la granulométrie distribuée.')})
+            if feed_reference is None and effective_cycle is not None:
+                from .services.cycle_store_service import CycleStoreService
+
+                feed_reference = CycleStoreService.resolve_feed_reference_for_size(
+                    cycle=effective_cycle,
+                    feed_size_mm=feed_size_mm,
+                )
+                if feed_reference is None:
+                    raise serializers.ValidationError({
+                        'feed_size_mm': _('Aucun stock disponible pour cette granulométrie.')
+                    })
             if effective_cycle and feed_reference.farm_profile_id != effective_cycle.farm_profile_id:
                 raise serializers.ValidationError({'feed_reference': _('Cet aliment appartient à une autre ferme.')})
             if effective_cycle and feed_reference.species != effective_cycle.species:
                 raise serializers.ValidationError(
                     {'feed_reference': _('Cet aliment ne correspond pas à l’espèce du cycle.')}
                 )
-            attrs['feed_type'] = feed_reference.name
-            attrs['feed_size_mm'] = feed_reference.pellet_size_mm
+            if (
+                feed_size_mm is not None
+                and feed_reference.pellet_size_mm is not None
+                and feed_reference.pellet_size_mm != feed_size_mm
+            ):
+                raise serializers.ValidationError(
+                    {'feed_size_mm': _('La granulométrie ne correspond pas à l’aliment sélectionné.')}
+                )
+            if attrs.get('feed_reference') is not None or feed_reference_client_uuid:
+                attrs['feed_type'] = feed_reference.name
+                attrs['feed_size_mm'] = feed_reference.pellet_size_mm
+            else:
+                # A size-only mobile entry may consume several compatible
+                # origins. Keep the origin unset so the service can allocate
+                # the quantity deterministically instead of choosing one.
+                attrs['feed_type'] = feed_reference.name
+                attrs['feed_size_mm'] = feed_size_mm
         elif feed_quantity in (None, 0):
             attrs['feed_reference'] = None
+            attrs['feed_size_mm'] = None
 
         # Validate log date within cycle period (shared domain validator)
         if cycle and log_date:
@@ -1890,6 +1918,15 @@ class CycleStoreStockItemSerializer(serializers.Serializer):
     quantity_available_kg = serializers.CharField()
 
 
+class CycleStoreStockBySizeSerializer(serializers.Serializer):
+    """Stock utilisable regroupé sans exposer son origine à l'utilisateur."""
+
+    feed_size_mm = serializers.CharField()
+    quantity_added_kg = serializers.CharField()
+    quantity_consumed_kg = serializers.CharField()
+    quantity_available_kg = serializers.CharField()
+
+
 class CycleStoreUnclassifiedEntrySerializer(serializers.Serializer):
     """Ancienne entrée de stock nécessitant une classification humaine."""
 
@@ -2025,6 +2062,9 @@ class CycleStoreSerializer(serializers.Serializer):
     summary = CycleStoreSummarySerializer()
     status = serializers.CharField()
     stock_items = CycleStoreStockItemSerializer(many=True)
+    stock_by_size = CycleStoreStockBySizeSerializer(many=True, required=False)
+    available_pellet_sizes = serializers.ListField(child=serializers.CharField(), required=False)
+    recommended_pellet_size_mm = serializers.CharField(required=False, allow_null=True)
     pending_orders = CycleStorePendingOrderSerializer(many=True)
     stock_tracking_started_at = serializers.DateField(required=False, allow_null=True)
     unclassified_entries = CycleStoreUnclassifiedEntrySerializer(many=True, required=False)

@@ -363,7 +363,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
       expect.objectContaining({
         client_uuid: 'offline-client-uuid',
         feed_quantity: 4,
-        feed_reference: 'feed-1',
+        feed_reference: null,
       }),
     ));
   });

@@ -1042,6 +1042,13 @@ export interface CycleStoreStockItem {
   pending_sync?: boolean;
 }
 
+export interface CycleStoreStockBySize {
+  feed_size_mm: string;
+  quantity_added_kg: string;
+  quantity_consumed_kg: string;
+  quantity_available_kg: string;
+}
+
 export interface CycleStore {
   cycle_id: string;
   calculation_status: 'available' | 'incomplete' | 'unavailable';
@@ -1051,6 +1058,9 @@ export interface CycleStore {
   summary: CycleStoreSummary;
   status: CycleStoreStatus;
   stock_items: CycleStoreStockItem[];
+  stock_by_size?: CycleStoreStockBySize[];
+  available_pellet_sizes?: string[];
+  recommended_pellet_size_mm?: string | null;
   pending_orders: CycleStorePendingOrder[];
   stock_tracking_started_at: string | null;
   unclassified_entries: Array<{
@@ -1123,6 +1133,7 @@ export interface CycleFeedRecommendation {
     pending_order_kg?: string;
     feed_to_order_kg?: string;
     unclassified_stock_kg?: string;
+    unclassified_consumption_kg?: string;
   };
   feeding_phases: FeedPhase[];
   warnings: string[];

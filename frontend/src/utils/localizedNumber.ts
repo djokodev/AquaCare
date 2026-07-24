@@ -32,3 +32,20 @@ export function formatEditableNumber(value: number | null | undefined, useComma:
   const raw = String(value);
   return useComma ? raw.replace('.', ',') : raw;
 }
+
+export function formatDecimalForDisplay(
+  value: string | number | null | undefined,
+  locale: string,
+  maximumFractionDigits = 2,
+): string {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return '—';
+  }
+  return new Intl.NumberFormat(locale, {
+    maximumFractionDigits,
+  }).format(parsed);
+}

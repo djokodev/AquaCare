@@ -84,6 +84,7 @@ export const createCycleLogWithOfflineFallback = async (
       : logData.feed_reference_client_uuid
         ? `client:${logData.feed_reference_client_uuid}`
         : null;
+  const requestedFeedSize = logData.feed_size_mm == null ? null : Number(logData.feed_size_mm);
   const hasPendingDependency = pendingStocks.some((item) => {
     if (item.synced || item.cycleId !== cycleId) return false;
     const stockReferenceId = item.payload.feed_reference_id
@@ -95,7 +96,18 @@ export const createCycleLogWithOfflineFallback = async (
       : item.feedReferenceClientUuid
         ? `client:${item.feedReferenceClientUuid}`
         : null;
-    return Boolean(stockIdentity && resolvedLogIdentity && stockIdentity === resolvedLogIdentity);
+    const reference = item.feedReferenceClientUuid
+      ? references.find((candidate) => candidate.clientUuid === item.feedReferenceClientUuid)
+      : undefined;
+    const pendingFeedSize = reference?.payload.pellet_size_mm
+      ?? item.payload.external_feed?.pellet_size_mm;
+    const sameSize = requestedFeedSize !== null
+      && pendingFeedSize !== undefined
+      && Number(pendingFeedSize) === requestedFeedSize;
+    return Boolean(
+      (stockIdentity && resolvedLogIdentity && stockIdentity === resolvedLogIdentity)
+      || sameSize,
+    );
   });
   if (hasPendingDependency) {
     if (options?.serverLogId) {

@@ -181,7 +181,12 @@ export const projectOfflineStore = async (
       clientToServer,
       `orphan-log:${log.id}`,
     );
-    const group = groups.get(key);
+    const group = groups.get(key)
+      ?? (log.logData.feed_size_mm
+        ? Array.from(groups.values()).find(
+          (candidate) => Number(candidate.item.feed_size_mm) === Number(log.logData.feed_size_mm),
+        )
+        : undefined);
     if (!group) {
       hasOfflineStockConflict = true;
       return;
@@ -197,6 +202,27 @@ export const projectOfflineStore = async (
     if (available < 0) hasOfflineStockConflict = true;
   });
   const projectedItems = Array.from(groups.values(), ({ item }) => item);
+  const projectedBySize = new Map<string, NonNullable<CycleStore['stock_by_size']>[number]>();
+  const exposePelletSizes = base.available_pellet_sizes !== undefined || !serverStore || localReferences.length > 0;
+  const projectedSizes = new Set<string>(base.available_pellet_sizes ?? []);
+  projectedItems.forEach((item) => {
+    if (!item.feed_size_mm) return;
+    projectedSizes.add(String(Number(item.feed_size_mm)));
+    const current = projectedBySize.get(item.feed_size_mm) ?? {
+      feed_size_mm: item.feed_size_mm,
+      quantity_added_kg: '0.00',
+      quantity_consumed_kg: '0.00',
+      quantity_available_kg: '0.00',
+    };
+    current.quantity_added_kg = (numeric(current.quantity_added_kg) + numeric(item.quantity_added_kg)).toFixed(2);
+    current.quantity_consumed_kg = (numeric(current.quantity_consumed_kg) + numeric(item.quantity_consumed_kg)).toFixed(2);
+    current.quantity_available_kg = (numeric(current.quantity_available_kg) + numeric(item.quantity_available_kg)).toFixed(2);
+    projectedBySize.set(item.feed_size_mm, current);
+  });
+  localReferences.forEach((reference) => {
+    const size = reference.payload.pellet_size_mm;
+    if (size) projectedSizes.add(String(Number(size)));
+  });
   const remaining = projectedItems.reduce(
     (total, item) => total + numeric(item.quantity_available_kg),
     0,
@@ -223,6 +249,12 @@ export const projectOfflineStore = async (
       feed_to_secure_kg: feedToSecure,
     },
     stock_items: projectedItems,
+    stock_by_size: Array.from(projectedBySize.values()).sort(
+      (left, right) => Number(left.feed_size_mm) - Number(right.feed_size_mm),
+    ),
+    available_pellet_sizes: exposePelletSizes
+      ? Array.from(projectedSizes).sort((left, right) => Number(left) - Number(right))
+      : undefined,
     status: hasOfflineStockConflict
       ? 'check_stock'
       : serverStore

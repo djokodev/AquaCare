@@ -8,9 +8,9 @@ from decimal import Decimal
 from typing import Any, TypedDict
 
 from accounts.models import User
-from commerce.models import Order, OrderItem
+from commerce.models import Order, OrderItem, Product
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Min, Sum
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -72,6 +72,13 @@ class CycleStoreStockItem(TypedDict):
     quantity_available_kg: str
 
 
+class CycleStoreStockBySize(TypedDict):
+    feed_size_mm: str
+    quantity_added_kg: str
+    quantity_consumed_kg: str
+    quantity_available_kg: str
+
+
 class CycleStorePayload(TypedDict):
     cycle_id: str
     summary: CycleStoreSummary
@@ -81,6 +88,9 @@ class CycleStorePayload(TypedDict):
     calculated_at: datetime
     calculation_warnings: list[str]
     stock_items: list[CycleStoreStockItem]
+    stock_by_size: list[CycleStoreStockBySize]
+    available_pellet_sizes: list[str]
+    recommended_pellet_size_mm: str | None
     pending_orders: list[CycleStorePendingOrder]
     stock_tracking_started_at: date | None
     unclassified_entries: list[dict[str, str]]
@@ -105,6 +115,61 @@ class CycleStoreService(BaseService):
     def _ensure_cycle_owner(cycle: ProductionCycle, user: User) -> None:
         if cycle.farm_profile.user_id != user.id:
             raise PermissionError("Cycle non autorisé.")
+
+    @classmethod
+    def _available_pellet_sizes(cls, cycle: ProductionCycle) -> list[str]:
+        """Retourne les granulométries compatibles avec l'espèce du cycle.
+
+        Les valeurs viennent des plans persistés, du catalogue et des références
+        déjà enregistrées. Elles restent des chaînes afin de préserver le contrat
+        Decimal de l'API sans imposer une liste codée dans le mobile.
+        """
+        sizes: set[Decimal] = set()
+        plan = getattr(cycle, 'feed_plan_snapshot', None)
+        if plan is not None:
+            for phase in plan.phases or []:
+                value = phase.get('pellet_size_mm')
+                if value is not None:
+                    sizes.add(cls._to_decimal(value))
+
+        catalog_species = 'catfish' if cycle.species == 'clarias' else cycle.species
+        sizes.update(
+            cls._to_decimal(value)
+            for value in Product.objects.filter(
+                is_available=True,
+                species=catalog_species,
+                pellet_size_mm__isnull=False,
+            ).values_list('pellet_size_mm', flat=True)
+        )
+        sizes.update(
+            cls._to_decimal(value)
+            for value in FarmFeedReference.objects.filter(
+                farm_profile=cycle.farm_profile,
+                species=cycle.species,
+                pellet_size_mm__isnull=False,
+            ).values_list('pellet_size_mm', flat=True)
+        )
+        return [str(cls._quantize(value).normalize()) for value in sorted(sizes)]
+
+    @classmethod
+    def _stock_by_size(cls, stock_items: list[CycleStoreStockItem]) -> list[CycleStoreStockBySize]:
+        grouped: dict[Decimal, CycleStoreStockBySize] = {}
+        for item in stock_items:
+            size = item.get('feed_size_mm')
+            if size is None:
+                continue
+            size_decimal = cls._to_decimal(size)
+            current = grouped.setdefault(size_decimal, {
+                'feed_size_mm': str(cls._quantize(size_decimal).normalize()),
+                'quantity_added_kg': '0.00',
+                'quantity_consumed_kg': '0.00',
+                'quantity_available_kg': '0.00',
+            })
+            for field in ('quantity_added_kg', 'quantity_consumed_kg', 'quantity_available_kg'):
+                current[field] = str(cls._quantize(
+                    cls._to_decimal(current[field]) + cls._to_decimal(item[field])
+                ))
+        return [grouped[size] for size in sorted(grouped)]
 
     @staticmethod
     def _can_import_order_item(
@@ -252,10 +317,7 @@ class CycleStoreService(BaseService):
                 reason=CycleFeedStockAdjustment.REASON_LEGACY_CONSUMPTION,
             )
         }
-        eligible_entries = [
-            entry for entry in entries
-            if entry.feed_reference_id is None or entry.id in adjustments
-        ]
+        eligible_entries = list(entries)
         allocations = {entry.id: ZERO_DECIMAL for entry in eligible_entries}
         entries_by_identity: dict[
             tuple[str, Decimal | None],
@@ -274,22 +336,35 @@ class CycleStoreService(BaseService):
                 key=lambda item: (item.entry_date, item.created_at, str(item.id))
             )
 
+        entries_by_size: dict[Decimal, list[CycleFeedStockEntry]] = {}
+        for entry in eligible_entries:
+            size = CycleStoreService._entry_feed_size(entry)
+            if size is not None:
+                entries_by_size.setdefault(size, []).append(entry)
+        for size_entries in entries_by_size.values():
+            size_entries.sort(
+                key=lambda item: (item.entry_date, item.created_at, str(item.id))
+            )
+
         logs = (
             CycleStoreService._get_consumption_queryset(cycle)
             .filter(feed_reference__isnull=True, feed_quantity__gt=0)
             .order_by("log_date", "created_at", "id")
         )
         remaining_by_entry = {
-            entry.id: CycleStoreService._to_decimal(entry.quantity_kg)
+            entry.id: max(
+                ZERO_DECIMAL,
+                CycleStoreService._to_decimal(entry.quantity_kg)
+                - CycleStoreService._to_decimal(adjustments.get(entry.id, ZERO_DECIMAL)),
+            )
             for entry in eligible_entries
         }
         for log in logs:
-            identity = CycleStoreService._feed_identity(
-                log.feed_type,
-                log.feed_size_mm,
-            )
+            size = CycleStoreService._normalize_feed_size(log.feed_size_mm)
+            identity = CycleStoreService._feed_identity(log.feed_type, size)
             remaining_consumption = CycleStoreService._to_decimal(log.feed_quantity)
-            for entry in entries_by_identity.get(identity, []):
+            candidates = entries_by_size.get(size, []) if size is not None else entries_by_identity.get(identity, [])
+            for entry in candidates:
                 if entry.entry_date > log.log_date or remaining_consumption <= ZERO_DECIMAL:
                     continue
                 available = remaining_by_entry[entry.id]
@@ -338,10 +413,11 @@ class CycleStoreService(BaseService):
                 },
             )
             item['quantity_added_kg'] += entry.quantity_kg
-            item['quantity_consumed_kg'] += (
-                adjustments.get(entry.id, ZERO_DECIMAL)
-                if entry.feed_reference_id
-                else legacy_allocations.get(entry.id, ZERO_DECIMAL)
+            item['quantity_consumed_kg'] += adjustments.get(entry.id, ZERO_DECIMAL)
+            item['quantity_consumed_kg'] += max(
+                ZERO_DECIMAL,
+                legacy_allocations.get(entry.id, ZERO_DECIMAL)
+                - adjustments.get(entry.id, ZERO_DECIMAL),
             )
 
         if stock_tracking_started_at is not None:
@@ -368,7 +444,21 @@ class CycleStoreService(BaseService):
                     feed_reference=item['_feed_reference'],
                     log_date=timezone.localdate(),
                 )
-                item['quantity_consumed_kg'] = item['quantity_added_kg'] - available
+                item['quantity_consumed_kg'] = (
+                    item['quantity_added_kg'] - available
+                    + sum(
+                        (
+                            max(
+                                ZERO_DECIMAL,
+                                legacy_allocations.get(entry.id, ZERO_DECIMAL)
+                                - adjustments.get(entry.id, ZERO_DECIMAL),
+                            )
+                            for entry in entries
+                            if str(entry.feed_reference_id) == item['feed_reference_id']
+                        ),
+                        ZERO_DECIMAL,
+                    )
+                )
             available = item['quantity_added_kg'] - item['quantity_consumed_kg']
             result.append({
                 'feed_reference_id': item['feed_reference_id'],
@@ -451,6 +541,7 @@ class CycleStoreService(BaseService):
             entries=entries,
             stock_tracking_started_at=stock_tracking_started_at,
         )
+        stock_by_size = CycleStoreService._stock_by_size(stock_items)
         inconsistent_reference_ids = {
             item['feed_reference_id']
             for item in stock_items
@@ -478,6 +569,16 @@ class CycleStoreService(BaseService):
 
         recommendation = CycleFeedRecommendationService.build(cycle)
         recommendation_summary = recommendation['summary']
+        available_pellet_sizes = CycleStoreService._available_pellet_sizes(cycle)
+        recommended_pellet_size_mm = next(
+            (
+                phase['pellet_size_mm']
+                for phase in recommendation.get('feeding_phases', [])
+                if phase.get('phase_status') in {'current', 'future'}
+                and phase.get('pellet_size_mm') is not None
+            ),
+            None,
+        )
         calculation_available = recommendation['status'] != 'unavailable'
         total_feed_needed_kg = (
             CycleStoreService._to_decimal(recommendation_summary['planned_total_feed_kg'])
@@ -570,6 +671,9 @@ class CycleStoreService(BaseService):
             },
             'status': status,
             'stock_items': stock_items,
+            'stock_by_size': stock_by_size,
+            'available_pellet_sizes': available_pellet_sizes,
+            'recommended_pellet_size_mm': recommended_pellet_size_mm,
             'pending_orders': [CycleStoreService._format_pending_order(order) for order in pending_orders],
             'stock_tracking_started_at': stock_tracking_started_at,
             'unclassified_entries': [
@@ -594,8 +698,42 @@ class CycleStoreService(BaseService):
             ],
         }
 
-    @staticmethod
+    @classmethod
+    def compatible_feed_references(
+        cls,
+        *,
+        cycle: ProductionCycle,
+        feed_size_mm: Decimal,
+    ) -> list[FarmFeedReference]:
+        """Retourne les références de la ferme compatibles avec une granulométrie."""
+        return list(
+            FarmFeedReference.objects.filter(
+                farm_profile=cycle.farm_profile,
+                species=cycle.species,
+                pellet_size_mm=cls._to_decimal(feed_size_mm),
+                stock_entries__cycle=cycle,
+            )
+            .distinct()
+            .annotate(first_stock_date=Min('stock_entries__entry_date'))
+            .order_by('first_stock_date', 'created_at', 'id')
+        )
+
+    @classmethod
+    def resolve_feed_reference_for_size(
+        cls,
+        *,
+        cycle: ProductionCycle,
+        feed_size_mm: Decimal,
+    ) -> FarmFeedReference | None:
+        """Résout une référence interne sans demander son origine au mobile."""
+        return next(iter(cls.compatible_feed_references(
+            cycle=cycle,
+            feed_size_mm=feed_size_mm,
+        )), None)
+
+    @classmethod
     def validate_daily_feed_quantity(
+        cls,
         *,
         cycle: ProductionCycle,
         feed_quantity: Decimal | None,
@@ -603,57 +741,58 @@ class CycleStoreService(BaseService):
         cycle_unit_allocation=None,
         existing_log: CycleLog | None = None,
         feed_reference: FarmFeedReference | None = None,
+        feed_size_mm: Decimal | None = None,
         reserved_feed_kg: Decimal = ZERO_DECIMAL,
         reserved_feed_events: list[FeedStockReservation] | None = None,
     ) -> None:
-        """Valide une ration par référence sous le verrou du cycle appelant."""
-        quantity = CycleStoreService._to_decimal(feed_quantity)
+        """Valide une ration par granulométrie, toutes origines confondues."""
+        quantity = cls._to_decimal(feed_quantity)
         if quantity <= ZERO_DECIMAL:
             return
 
-        if feed_reference is None:
+        size = cls._to_decimal(feed_size_mm) if feed_size_mm is not None else None
+        if size is None and feed_reference is not None:
+            size = cls._to_decimal(feed_reference.pellet_size_mm)
+        if size is None:
             raise FeedStockValidationError(
                 code='feed_reference_required',
-                detail=_("Sélectionnez l’aliment distribué."),
+                detail=_("Sélectionnez la granulométrie distribuée."),
                 requested_feed_kg=CycleStoreService._quantize(quantity),
             )
-        if feed_reference.farm_profile_id != cycle.farm_profile_id:
+        if feed_reference is not None and feed_reference.farm_profile_id != cycle.farm_profile_id:
             raise FeedStockValidationError(
                 code='feed_reference_mismatch',
                 detail=_("Cet aliment appartient à une autre ferme."),
                 requested_feed_kg=CycleStoreService._quantize(quantity),
                 feed_reference_id=feed_reference.id,
             )
-        if feed_reference.species != cycle.species:
+        if feed_reference is not None and feed_reference.species != cycle.species:
             raise FeedStockValidationError(
                 code='feed_reference_mismatch',
                 detail=_("Cet aliment ne correspond pas à l’espèce du cycle."),
                 requested_feed_kg=CycleStoreService._quantize(quantity),
                 feed_reference_id=feed_reference.id,
             )
-
-        stock_entries = CycleFeedStockEntry.objects.filter(
-            cycle=cycle,
-            feed_reference=feed_reference,
-        )
-        tracking_started_at = stock_entries.order_by('entry_date').values_list(
-            'entry_date', flat=True
-        ).first()
-        if tracking_started_at is None:
+        if (
+            feed_reference is not None
+            and feed_size_mm is not None
+            and feed_reference.pellet_size_mm is not None
+            and cls._to_decimal(feed_reference.pellet_size_mm) != size
+        ):
             raise FeedStockValidationError(
-                code='feed_stock_item_unavailable',
-                detail=_("Sélectionnez un aliment disponible dans votre stock."),
-                requested_feed_kg=CycleStoreService._quantize(quantity),
+                code='feed_reference_mismatch',
+                detail=_("La granulométrie ne correspond pas à l’aliment sélectionné."),
+                requested_feed_kg=cls._quantize(quantity),
                 feed_reference_id=feed_reference.id,
             )
-        if log_date < tracking_started_at:
+
+        references = cls.compatible_feed_references(cycle=cycle, feed_size_mm=size)
+        if not references:
             raise FeedStockValidationError(
-                code='feed_log_before_stock_tracking',
-                detail=_(
-                    "Cette ration précède le début du suivi du stock d'aliment."
-                ),
+                code='feed_stock_item_unavailable',
+                detail=_("Aucun stock disponible pour cette granulométrie."),
                 requested_feed_kg=CycleStoreService._quantize(quantity),
-                feed_reference_id=feed_reference.id,
+                feed_reference_id=feed_reference.id if feed_reference else None,
             )
 
         reservations = list(reserved_feed_events or [])
@@ -665,24 +804,50 @@ class CycleStoreService(BaseService):
                     event_id="legacy-reservation",
                 )
             )
-        state = FeedStockLedgerService.calculate(
-            cycle=cycle,
-            feed_reference=feed_reference,
-            at_date=log_date,
-            existing_log=existing_log,
-            reservations=reservations,
+        available = ZERO_DECIMAL
+        minimum_balance = ZERO_DECIMAL
+        for index, reference in enumerate(references):
+            state = FeedStockLedgerService.calculate(
+                cycle=cycle,
+                feed_reference=reference,
+                at_date=log_date,
+                existing_log=existing_log,
+                # Reservations represent a size-level quantity in the mobile
+                # flow and must be applied once, not once per origin.
+                reservations=reservations if index == 0 else [],
+            )
+            available += max(ZERO_DECIMAL, min(state.balance_at_date, state.future_headroom))
+            minimum_balance = min(minimum_balance, state.minimum_balance)
+        unassigned_consumption = cls._get_consumption_queryset(cycle).filter(
+            feed_reference__isnull=True,
+            feed_size_mm=cls._to_decimal(size),
+            feed_quantity__gt=0,
         )
-        available = min(state.balance_at_date, state.future_headroom)
-        if state.minimum_balance < ZERO_DECIMAL:
+        if existing_log is not None:
+            unassigned_consumption = unassigned_consumption.exclude(pk=existing_log.pk)
+        unassigned_quantity = sum(
+            (cls._to_decimal(quantity) for quantity in unassigned_consumption.values_list('feed_quantity', flat=True)),
+            ZERO_DECIMAL,
+        )
+        classified_legacy_adjustments = cls._to_decimal(
+            CycleFeedStockAdjustment.objects.filter(
+                stock_entry__cycle=cycle,
+                stock_entry__feed_size_mm=cls._to_decimal(size),
+                reason=CycleFeedStockAdjustment.REASON_LEGACY_CONSUMPTION,
+            ).aggregate(total=Sum('quantity_kg'))['total']
+        )
+        available -= max(ZERO_DECIMAL, unassigned_quantity - classified_legacy_adjustments)
+        minimum_balance = min(minimum_balance, available)
+        if minimum_balance < ZERO_DECIMAL:
             raise FeedStockValidationError(
                 code='feed_stock_history_inconsistent',
                 detail=_(
                     "L'historique du stock est incohérent. Corrigez une ration passée avant d'en ajouter une."
                 ),
-                available_feed_kg=CycleStoreService._quantize(available),
-                minimum_balance_kg=CycleStoreService._quantize(state.minimum_balance),
+                available_feed_kg=cls._quantize(available),
+                minimum_balance_kg=cls._quantize(minimum_balance),
                 requested_feed_kg=CycleStoreService._quantize(quantity),
-                feed_reference_id=feed_reference.id,
+                feed_reference_id=feed_reference.id if feed_reference else None,
             )
         if available < ZERO_DECIMAL:
             raise FeedStockValidationError(
@@ -690,7 +855,7 @@ class CycleStoreService(BaseService):
                 detail=_("Le stock enregistré est déjà dépassé. Corrigez l’historique avant de continuer."),
                 available_feed_kg=CycleStoreService._quantize(available),
                 requested_feed_kg=CycleStoreService._quantize(quantity),
-                feed_reference_id=feed_reference.id,
+                feed_reference_id=feed_reference.id if feed_reference else None,
             )
         if quantity > available:
             raise FeedStockValidationError(
@@ -700,7 +865,7 @@ class CycleStoreService(BaseService):
                 ) % {'available': CycleStoreService._quantize(available)},
                 available_feed_kg=CycleStoreService._quantize(available),
                 requested_feed_kg=CycleStoreService._quantize(quantity),
-                feed_reference_id=feed_reference.id,
+                feed_reference_id=feed_reference.id if feed_reference else None,
             )
 
     @staticmethod

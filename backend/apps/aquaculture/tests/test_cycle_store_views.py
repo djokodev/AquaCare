@@ -234,3 +234,77 @@ class TestCycleStoreViews:
 
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['feed_reference'] == reference.id
+
+    def test_cycle_log_resolves_stock_by_pellet_size_without_origin_choice(
+        self, auth_client, authenticated_user, farm_profile,
+    ):
+        cycle = _create_cycle(authenticated_user)
+        references = [
+            FarmFeedReference.objects.create(
+                farm_profile=cycle.farm_profile,
+                source='external',
+                name=f'Aliment externe {index}',
+                species='tilapia',
+                pellet_size_mm=Decimal('2.00'),
+            )
+            for index in range(2)
+        ]
+        for reference, quantity in zip(references, (Decimal('4.00'), Decimal('6.00'))):
+            CycleFeedStockEntry.objects.create(
+                cycle=cycle,
+                feed_reference=reference,
+                source='manual',
+                label=reference.name,
+                feed_size_mm=reference.pellet_size_mm,
+                quantity_kg=quantity,
+                total_cost_fcfa=Decimal('10000.00'),
+                entry_date=timezone.localdate(),
+            )
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-log-list'),
+            {
+                'cycle': str(cycle.id),
+                'log_date': timezone.localdate().isoformat(),
+                'feed_quantity': '10.00',
+                'feed_size_mm': '2.0',
+                'client_uuid': str(uuid4()),
+                'created_offline': True,
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED, response.data
+        assert response.data['feed_size_mm'] == '2.0'
+        assert response.data['feed_reference'] is None
+
+        store_response = auth_client.get(
+            reverse('aquaculture:production-cycle-store', kwargs={'pk': cycle.id}),
+        )
+        assert store_response.data['stock_by_size'] == [{
+            'feed_size_mm': '2',
+            'quantity_added_kg': '10.00',
+            'quantity_consumed_kg': '10.00',
+            'quantity_available_kg': '0.00',
+        }]
+        assert all(item['quantity_available_kg'] == '0.00' for item in store_response.data['stock_items'])
+
+    def test_cycle_log_rejects_a_pellet_size_without_compatible_stock(
+        self, auth_client, authenticated_user,
+    ):
+        cycle = _create_cycle(authenticated_user)
+
+        response = auth_client.post(
+            reverse('aquaculture:cycle-log-list'),
+            {
+                'cycle': str(cycle.id),
+                'log_date': timezone.localdate().isoformat(),
+                'feed_quantity': '5.00',
+                'feed_size_mm': '4.00',
+                'client_uuid': str(uuid4()),
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'feed_size_mm' in response.data

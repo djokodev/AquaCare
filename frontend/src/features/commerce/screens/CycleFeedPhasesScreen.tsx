@@ -25,6 +25,7 @@ import {
 } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import { formatDecimalForDisplay } from '@/utils/localizedNumber';
 
 type Props = StackScreenProps<RootStackParamList, 'CycleFeedPhases'>;
 
@@ -67,7 +68,8 @@ const calculationSourceKey = (source: string): string => {
 };
 
 export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const numberLocale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const dispatch = useDispatch<AppDispatch>();
   const { cycleId } = route.params;
   const cartItemsCount = useSelector((state: RootState) =>
@@ -79,6 +81,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [submittedScopes, setSubmittedScopes] = useState<Record<string, boolean>>({});
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
   const loadPhases = useCallback(async () => {
     try {
@@ -168,6 +171,8 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
     ),
     [phases, quantities]
   );
+  const uncoveredPhases = phases.filter((phase) => !phase.product_available && Number(phase.shortfall_kg ?? 0) > 0);
+  const uncoveredKg = uncoveredPhases.reduce((sum, phase) => sum + Number(phase.shortfall_kg ?? 0), 0);
 
   return (
     <View style={styles.screen}>
@@ -199,30 +204,45 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
             {recommendation?.status === 'unavailable' ? (
               <InlineAlert compact message={t('feedEstimateUnavailable')} tone="warning" />
             ) : (
-              <InlineAlert
-                compact
-                message={t('feedRecommendationSummary', {
-                  need: recommendation?.summary.estimated_remaining_need_kg,
-                  stock: recommendation?.summary.compatible_stock_kg,
-                  pending: recommendation?.summary.pending_order_kg,
-                  order: recommendation?.summary.feed_to_order_kg,
-                })}
-                tone={recommendation?.status === 'incomplete' ? 'warning' : 'info'}
-              />
+              <Card variant="outlined" style={styles.summaryCard}>
+                <AppText variant="sectionTitle">{t('feedNeedSummaryTitle')}</AppText>
+                <View style={styles.summaryRow}><AppText color="muted">{t('feedNeedRemainingLabel')}</AppText><AppText variant="bodyStrong">{formatDecimalForDisplay(recommendation?.summary.estimated_remaining_need_kg, numberLocale)} kg</AppText></View>
+                <View style={styles.summaryRow}><AppText color="muted">{t('feedCompatibleStockLabel')}</AppText><AppText variant="bodyStrong">{formatDecimalForDisplay(recommendation?.summary.compatible_stock_kg, numberLocale)} kg</AppText></View>
+                <View style={styles.summaryRow}><AppText color="muted">{t('feedToSecureLabel')}</AppText><AppText variant="bodyStrong" color="link">{formatDecimalForDisplay(recommendation?.summary.feed_to_order_kg, numberLocale)} kg</AppText></View>
+                <View style={styles.summaryRow}><AppText color="muted">{t('feedPendingOrdersLabel')}</AppText><AppText variant="bodyStrong">{formatDecimalForDisplay(recommendation?.summary.pending_order_kg, numberLocale)} kg</AppText></View>
+              </Card>
             )}
             {recommendation ? (
               <>
-                <AppText variant="caption" color="muted">
-                  {t('feedRecommendationCalculatedAt', {
-                    date: new Date(recommendation.calculated_at).toLocaleString(),
-                  })}
-                </AppText>
-                <AppText variant="caption" color="muted">
-                  {t('feedRecommendationSource', { source: t(calculationSourceKey(recommendation.source)) })}
-                </AppText>
-                {recommendation.warnings.map((warning) => (
+                {recommendation.summary.unclassified_consumption_kg && Number(recommendation.summary.unclassified_consumption_kg) > 0 ? (
+                  <InlineAlert
+                    compact
+                    tone="info"
+                    message={t('feedHistoricalConsumptionMessage', { quantity: recommendation.summary.unclassified_consumption_kg })}
+                  />
+                ) : null}
+                {recommendation.warnings.includes('unclassified_consumption') && !recommendation.summary.unclassified_consumption_kg ? (
+                  <InlineAlert compact tone="info" message={t('feedWarning_unclassified_consumption')} />
+                ) : null}
+                {recommendation.warnings.filter((warning) => warning !== 'exact_product_unavailable' && warning !== 'unclassified_consumption').map((warning) => (
                   <InlineAlert key={warning} compact tone="warning" message={t(`feedWarning_${warning}`)} />
                 ))}
+                <Button
+                  label={t('feedCalculationDetails')}
+                  variant="ghost"
+                  onPress={() => setShowTechnicalDetails((value) => !value)}
+                />
+                {showTechnicalDetails ? (
+                  <Card variant="outlined" style={styles.detailsCard}>
+                    <AppText variant="body" color="muted">{t('feedCalculationCurrentData')}</AppText>
+                    <AppText variant="caption" color="muted">
+                      {t('feedRecommendationCalculatedAt', { date: new Date(recommendation.calculated_at).toLocaleString() })}
+                    </AppText>
+                    <AppText variant="caption" color="muted">
+                      {t('feedRecommendationSource', { source: t(calculationSourceKey(recommendation.source)) })}
+                    </AppText>
+                  </Card>
+                ) : null}
               </>
             ) : null}
             {phases.map((phase, phaseIndex) => (
@@ -247,7 +267,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                 </AppText>
 
                 {!phase.product_available && Number(phase.shortfall_kg) > 0 ? (
-                  <InlineAlert compact tone="warning" message={t('feedPhaseNoExactProduct')} />
+                  <InlineAlert compact tone="warning" message={t('feedPhaseNoExactProduct', { size: phase.pellet_size_mm })} />
                 ) : null}
 
                 {phase.products.map((product) => {
@@ -301,6 +321,14 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
             ))}
           </ScrollView>
           <View style={styles.footer}>
+            {uncoveredPhases.length > 0 ? (
+              <AppText variant="caption" color="warning" style={styles.uncoveredMessage}>
+                {t('feedAvailableProductsOnly', {
+                  phases: uncoveredPhases.length,
+                  quantity: formatDecimalForDisplay(uncoveredKg, numberLocale),
+                })}
+              </AppText>
+            ) : null}
             <Button
               label={`${t('feedPhaseOrderAllBtn')} · ${totalBags} ${t('bags')}`}
               iconLeft="cart"
@@ -318,6 +346,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface.page },
   content: { padding: spacing[4], paddingBottom: spacing[16], gap: spacing[3] },
   phaseCard: {},
+  summaryCard: { gap: spacing[3] },
+  detailsCard: { gap: spacing[2] },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3] },
+  uncoveredMessage: { marginBottom: spacing[2] },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
   phaseMeta: { marginTop: spacing[1], marginBottom: spacing[3] },
   flex: { flex: 1 },

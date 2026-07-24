@@ -11,7 +11,7 @@ from commerce.services.cycle_simulation_service import CycleSimulationService
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from ..models import CycleFeedPlan, ProductionCycle
+from ..models import CycleFeedPlan, FarmFeedReference, ProductionCycle
 from .cycle_store_service import ZERO_DECIMAL, CycleStoreService
 from .feed_reference_service import FeedReferenceService
 
@@ -253,7 +253,17 @@ class CycleFeedRecommendationService:
         ).order_by('log_date', 'created_at')
         for log in logs:
             quantity = cls._decimal(log.feed_quantity)
-            if log.feed_reference_id is None:
+            feed_size = cls._decimal(log.feed_size_mm) if log.feed_size_mm is not None else None
+            if feed_size is None and log.feed_reference is not None:
+                feed_size = cls._decimal(log.feed_reference.pellet_size_mm)
+            if log.feed_reference_id is None and feed_size is None:
+                unclassified += quantity
+                continue
+            if log.feed_reference_id is None and not FarmFeedReference.objects.filter(
+                farm_profile=cycle.farm_profile,
+                species=cycle.species,
+                pellet_size_mm=feed_size,
+            ).exists():
                 unclassified += quantity
                 continue
             day = max((log.log_date - cycle.start_date).days + 1, 1)
@@ -261,15 +271,15 @@ class CycleFeedRecommendationService:
                 index
                 for index, phase in enumerate(phases)
                 if phase['planned_days_range'][0] <= day <= phase['planned_days_range'][1]
-                and cls._decimal(phase['pellet_size_mm']) == log.feed_reference.pellet_size_mm
-                and log.feed_reference.species == cycle.species
+                and cls._decimal(phase['pellet_size_mm']) == feed_size
+                and (log.feed_reference is None or log.feed_reference.species == cycle.species)
             ]
             if not candidates:
                 compatible = [
                     index
                     for index, phase in enumerate(phases)
-                    if cls._decimal(phase['pellet_size_mm']) == log.feed_reference.pellet_size_mm
-                    and log.feed_reference.species == cycle.species
+                    if cls._decimal(phase['pellet_size_mm']) == feed_size
+                    and (log.feed_reference is None or log.feed_reference.species == cycle.species)
                 ]
                 candidates = [min(compatible, key=lambda index: abs(index - current_index))] if compatible else []
             if candidates:

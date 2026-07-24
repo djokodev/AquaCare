@@ -108,6 +108,13 @@ const parseOptionalInteger = (value: string): number | null => {
   return Number(trimmed);
 };
 
+const numericFeedSize = (value: string | number | null | undefined): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const parsed = parseLocalizedNumber(value);
+  return parsed.kind === 'valid' ? parsed.value : null;
+};
+
 const offlineLogAsCycleLog = (offlineLog: OfflineCycleLog): CycleLog => ({
   id: offlineLog.id,
   cycle: offlineLog.cycleId,
@@ -265,27 +272,45 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     };
   }, [cycleId, unitAllocationId, useComma]);
 
+  const stockBySize = useMemo(() => {
+    if (!store) return [];
+    if (store.stock_by_size?.length) return store.stock_by_size;
+    const groups = new Map<string, NonNullable<CycleStore['stock_by_size']>[number]>();
+    store.stock_items.forEach((item) => {
+      if (!item.feed_size_mm) return;
+      const key = String(Number(item.feed_size_mm));
+      const current = groups.get(key) ?? {
+        feed_size_mm: item.feed_size_mm,
+        quantity_added_kg: '0.00',
+        quantity_consumed_kg: '0.00',
+        quantity_available_kg: '0.00',
+      };
+      current.quantity_added_kg = (Number(current.quantity_added_kg) + Number(item.quantity_added_kg)).toFixed(2);
+      current.quantity_consumed_kg = (Number(current.quantity_consumed_kg) + Number(item.quantity_consumed_kg)).toFixed(2);
+      current.quantity_available_kg = (Number(current.quantity_available_kg) + Number(item.quantity_available_kg)).toFixed(2);
+      groups.set(key, current);
+    });
+    return Array.from(groups.values()).sort((left, right) => Number(left.feed_size_mm) - Number(right.feed_size_mm));
+  }, [store]);
+
   const selectedStockItem = useMemo(() => store?.stock_items?.find((item) => (
-    (item.feed_reference_id ?? item.feed_reference_client_uuid) === formData.feed_reference
-  )) ?? null, [formData.feed_reference, formData.feed_size_mm, formData.feed_type, store?.stock_items]);
+    Number(item.feed_size_mm) === numericFeedSize(formData.feed_size_mm)
+      && Number(item.quantity_available_kg) > 0
+  )) ?? null, [formData.feed_size_mm, store?.stock_items]);
+  const selectedStockBySize = stockBySize.find(
+    (item) => Number(item.feed_size_mm) === numericFeedSize(formData.feed_size_mm),
+  ) ?? null;
 
   const availableFeedKg = useMemo(() => {
-    if (!selectedStockItem) {
+    if (!selectedStockBySize) {
       return null;
     }
-    const remaining = Number(selectedStockItem.quantity_available_kg);
-    const previousReference = existingLog?.feed_reference
-      ?? existingLog?.feed_reference_client_uuid
-      ?? null;
-    const selectedReference = selectedStockItem.feed_reference_id
-      ?? selectedStockItem.feed_reference_client_uuid
-      ?? null;
-    const previousMatchesSelection = Boolean(
-      previousReference && selectedReference && previousReference === selectedReference,
-    );
-    const previous = previousMatchesSelection ? Number(existingLog?.feed_quantity ?? 0) : 0;
+    const remaining = Number(selectedStockBySize.quantity_available_kg ?? 0);
+    const previous = numericFeedSize(existingLog?.feed_size_mm) === numericFeedSize(formData.feed_size_mm)
+      ? Number(existingLog?.feed_quantity ?? 0)
+      : 0;
     return remaining + previous;
-  }, [existingLog, selectedStockItem]);
+  }, [existingLog, formData.feed_size_mm, selectedStockBySize]);
   const totalAvailableFeedKg = store
     ? Number(store.summary.estimated_feed_remaining_kg)
     : null;
@@ -319,7 +344,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         errors.feed_quantity = t('feedStockUnavailable');
       } else if (store.status === 'not_started') {
         errors.feed_quantity = t('feedStockRequired');
-      } else if (!selectedStockItem) {
+      } else if (!selectedStockBySize) {
         errors.feed_stock_item = t('feedStockItemRequired');
       } else if (availableFeedKg !== null && quantity.value > availableFeedKg) {
         errors.feed_quantity = t('feedStockInsufficient', { available: availableFeedKg.toFixed(2) });
@@ -363,7 +388,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     }
 
     return errors;
-  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, localLogConflict, selectedStockItem, store, t]);
+  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, localLogConflict, selectedStockBySize, store, t]);
 
   const visibleError = (field: DailyLogField): string | undefined =>
     submitted || touched[field] ? serverErrors[field] ?? validationErrors[field] : undefined;
@@ -418,12 +443,12 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       sample_count: sampleCount,
       sample_total_weight: sampleWeight,
       feed_quantity: feedQuantity,
-      feed_type: feedingStatus === 'fed' ? formData.feed_type.trim() : '',
+      feed_type: feedingStatus === 'fed' ? selectedStockItem?.label ?? '' : '',
       feed_size_mm: feedingStatus === 'fed' ? parseOptionalDecimal(formData.feed_size_mm) : null,
-      feed_reference: feedingStatus === 'fed' ? selectedStockItem?.feed_reference_id ?? null : null,
-      feed_reference_client_uuid: feedingStatus === 'fed'
-        ? selectedStockItem?.feed_reference_client_uuid ?? null
-        : null,
+      // The mobile flow selects only the compatible pellet size. The backend
+      // owns origin resolution and FIFO allocation across all matching feeds.
+      feed_reference: null,
+      feed_reference_client_uuid: null,
       feeding_times: feedingStatus === 'fed' ? feedingTimes : [],
       water_temperature: parseOptionalDecimal(formData.water_temperature),
       dissolved_oxygen: parseOptionalDecimal(formData.dissolved_oxygen),
@@ -625,43 +650,49 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                 ) : <View style={{ height: spacing[4] }} />}
 
                 <AppText variant="label" style={{ marginBottom: spacing[2] }}>
-                  {t('feedStockItem')} <AppText variant="label" color="error">*</AppText>
+                  {t('feedGranulometry')} <AppText variant="label" color="error">*</AppText>
                 </AppText>
                 <View style={{ gap: spacing[2], marginBottom: spacing[2] }}>
-                  {store?.stock_items?.filter((item) => (item.feed_reference_id || item.feed_reference_client_uuid) && (Number(item.quantity_available_kg) > 0 || (
-                    (existingLog?.feed_reference ?? existingLog?.feed_reference_client_uuid)
-                      === (item.feed_reference_id ?? item.feed_reference_client_uuid)
-                  ))).map((item) => {
-                    const selected = selectedStockItem === item;
-                    const optionLabel = item.feed_size_mm
-                      ? t('feedStockItemOption', {
-                        label: item.label,
-                        size: item.feed_size_mm,
-                        available: item.quantity_available_kg,
-                      })
-                      : t('feedStockItemOptionWithoutSize', {
-                        label: item.label,
-                        available: item.quantity_available_kg,
-                      });
+                  {(store?.available_pellet_sizes ?? stockBySize.map((item) => item.feed_size_mm)).map((size) => {
+                    const group = stockBySize.find((item) => Number(item.feed_size_mm) === Number(size));
+                    const sizeItem = store?.stock_items.find(
+                      (item) => Number(item.feed_size_mm) === Number(size) && Number(item.quantity_available_kg) > 0,
+                    );
+                    const selected = numericFeedSize(formData.feed_size_mm) === Number(size);
+                    const recommended = numericFeedSize(store?.recommended_pellet_size_mm) === Number(size);
+                    const optionLabel = t('feedStockItemOption', {
+                      label: '',
+                      size,
+                      available: group?.quantity_available_kg ?? '0',
+                    });
+                    const displayLabel = recommended
+                      ? `${optionLabel} · ${t('recommendedPelletSizeChip')}`
+                      : optionLabel;
                     return (
                       <Button
-                        key={item.feed_reference_id ?? item.feed_reference_client_uuid ?? `${item.label}-${item.feed_size_mm}`}
-                        label={item.pending_sync ? `${optionLabel} · ${t('pendingSync')}` : optionLabel}
+                        key={size}
+                        label={displayLabel}
                         variant={selected ? 'primary' : 'outline'}
+                        disabled={!group || Number(group.quantity_available_kg) <= 0}
                         onPress={() => {
                           setTouched((previous) => ({ ...previous, feed_stock_item: true }));
                           setServerErrors((previous) => ({ ...previous, feed_stock_item: undefined }));
                           setFormData((previous) => ({
                             ...previous,
-                            feed_type: item.label,
-                            feed_size_mm: item.feed_size_mm ?? '',
-                            feed_reference: item.feed_reference_id ?? item.feed_reference_client_uuid ?? '',
+                            feed_type: sizeItem?.label ?? '',
+                            feed_size_mm: String(size),
+                            feed_reference: sizeItem?.feed_reference_id ?? sizeItem?.feed_reference_client_uuid ?? '',
                           }));
                         }}
                       />
                     );
                   })}
                 </View>
+                {Number(store?.recommended_pellet_size_mm) > 0 ? (
+                  <AppText variant="helper" color="link" style={{ marginBottom: spacing[2] }}>
+                    {t('recommendedPelletSize', { size: store?.recommended_pellet_size_mm })}
+                  </AppText>
+                ) : null}
                 {visibleError('feed_stock_item') ? (
                   <AppText variant="helper" color="error" style={{ marginBottom: spacing[3] }}>
                     {visibleError('feed_stock_item')}
