@@ -680,7 +680,9 @@ export default function StoreScreen() {
                       <View style={styles.productOptionHeader}>
                         <View style={styles.flex}>
                           <AppText variant="bodyStrong" color="link" numberOfLines={1}>
-                            {t('storeProductTitle', { brand: product.brand || product.name, name: product.name })}
+                            {t('storeProductTitle', {
+                              species: product.species === 'catfish' ? t('catfish') : t('tilapia'),
+                            })}
                           </AppText>
                         </View>
                         <Ionicons
@@ -691,7 +693,7 @@ export default function StoreScreen() {
                       </View>
                       <AppText variant="helper" color="muted">
                         {t('storeProductDetails', {
-                          species: product.species === 'catfish' ? t('catfish') : t('tilapia'),
+                          brand: product.brand || t('storeProductBrandFallback'),
                           size: displayDecimal(product.pellet_size_mm),
                           weight: displayDecimal(product.package_weight_kg),
                         })}
