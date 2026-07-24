@@ -318,6 +318,11 @@ def test_classifying_legacy_stock_preserves_physical_remainder(authenticated_use
         'quantity_added_kg': '110.00',
         'historical_consumption_kg': '30.00',
         'quantity_available_kg': '80.00',
+        'source': 'manual',
+        'classification_reason': 'legacy_manual',
+        'catalog_product_id': None,
+        'catalog_product_species': None,
+        'catalog_product_pellet_size_mm': None,
     }]
     CycleStoreApplicationService.classify_legacy_stock(
         user=authenticated_user,

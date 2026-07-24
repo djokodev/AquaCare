@@ -1070,6 +1070,11 @@ export interface CycleStore {
     quantity_added_kg: string;
     historical_consumption_kg: string;
     quantity_available_kg: string;
+    source?: 'manual' | 'order' | null;
+    classification_reason?: 'legacy_manual' | 'legacy_order' | 'order_species_mismatch' | string | null;
+    catalog_product_id?: string | null;
+    catalog_product_species?: Species | null;
+    catalog_product_pellet_size_mm?: string | null;
   }>;
 }
 

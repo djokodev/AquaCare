@@ -9,6 +9,7 @@ from django.apps import apps as django_apps
 from django.conf import settings
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+from django.utils import timezone
 
 MIGRATIONS_DISABLED = (
     getattr(settings, 'MIGRATION_MODULES', None) is not None
@@ -355,3 +356,128 @@ def test_0043_restores_reference_created_online_by_the_real_service():
 
     assert CycleFeedStockEntry.objects.get(pk=entry.pk).feed_reference_id == reference.id
     assert CycleLog.objects.get(pk=log.pk).feed_reference_id == reference.id
+
+
+@pytest.mark.django_db
+def test_0045_backfills_only_compatible_legacy_order_entries():
+    from aquaculture.models import FarmFeedReference
+    from commerce.models import Order, OrderItem, Product
+
+    from tests.fixtures.factories import ProductionCycleFactory
+
+    cycle = ProductionCycleFactory(species='tilapia')
+    product = Product.objects.create(
+        brand='dibaq',
+        name='DIBAQ Tilapia 2 mm',
+        species='tilapia',
+        pellet_size_mm=Decimal('2.00'),
+        package_weight_kg=15,
+        price_per_package=Decimal('23500.00'),
+    )
+    order = Order.objects.create(
+        user=cycle.farm_profile.user,
+        farm_profile=cycle.farm_profile,
+        production_cycle=cycle,
+        order_number=f'MIGRATION-0045-{uuid4().hex[:8]}',
+        delivery_method='pickup',
+        pickup_location='ndokoti',
+        delivery_name='Migration Feed',
+        delivery_phone='+237699000045',
+        delivery_region='Littoral',
+        delivery_city='Douala',
+        delivery_full_address='Douala',
+        subtotal=Decimal('23500.00'),
+        total=Decimal('23500.00'),
+    )
+    item = OrderItem.objects.create(
+        order=order,
+        product=product,
+        product_name=product.name,
+        product_brand_snapshot=product.brand,
+        product_species_snapshot=product.species,
+        product_pellet_size_mm_snapshot=product.pellet_size_mm,
+        product_package_weight_kg_snapshot=product.package_weight_kg,
+        unit_price=product.price_per_package,
+        quantity=1,
+        line_total=product.price_per_package,
+    )
+    entry = CycleFeedStockEntry.objects.create(
+        cycle=cycle,
+        source=CycleFeedStockEntry.SOURCE_ORDER,
+        order=order,
+        order_item=item,
+        product=product,
+        label=product.name,
+        feed_size_mm=product.pellet_size_mm,
+        quantity_kg=Decimal('15.00'),
+        total_cost_fcfa=product.price_per_package,
+        entry_date=timezone.localdate(),
+    )
+
+    import importlib
+
+    migration = importlib.import_module(
+        'aquaculture.migrations.0045_backfill_compatible_order_feed_references'
+    )
+    migration.backfill_compatible_order_references(django_apps, None)
+
+    entry.refresh_from_db()
+    reference = FarmFeedReference.objects.get(pk=entry.feed_reference_id)
+    assert reference.source == FarmFeedReference.SOURCE_CATALOG
+    assert reference.catalog_product_id == product.id
+    assert reference.species == cycle.species
+    assert reference.pellet_size_mm == Decimal('2.00')
+
+    mismatch_cycle = ProductionCycleFactory(species='tilapia')
+    mismatch_product = Product.objects.create(
+        brand='dibaq',
+        name='DIBAQ Catfish 2 mm',
+        species='catfish',
+        pellet_size_mm=Decimal('2.00'),
+        package_weight_kg=15,
+        price_per_package=Decimal('23500.00'),
+    )
+    mismatch_order = Order.objects.create(
+        user=mismatch_cycle.farm_profile.user,
+        farm_profile=mismatch_cycle.farm_profile,
+        production_cycle=mismatch_cycle,
+        order_number=f'MIGRATION-0045-MISMATCH-{uuid4().hex[:8]}',
+        delivery_method='pickup',
+        pickup_location='ndokoti',
+        delivery_name='Migration Feed',
+        delivery_phone='+237699000046',
+        delivery_region='Littoral',
+        delivery_city='Douala',
+        delivery_full_address='Douala',
+        subtotal=Decimal('23500.00'),
+        total=Decimal('23500.00'),
+    )
+    mismatch_item = OrderItem.objects.create(
+        order=mismatch_order,
+        product=mismatch_product,
+        product_name=mismatch_product.name,
+        product_brand_snapshot=mismatch_product.brand,
+        product_species_snapshot=mismatch_product.species,
+        product_pellet_size_mm_snapshot=mismatch_product.pellet_size_mm,
+        product_package_weight_kg_snapshot=mismatch_product.package_weight_kg,
+        unit_price=mismatch_product.price_per_package,
+        quantity=1,
+        line_total=mismatch_product.price_per_package,
+    )
+    mismatch_entry = CycleFeedStockEntry.objects.create(
+        cycle=mismatch_cycle,
+        source=CycleFeedStockEntry.SOURCE_ORDER,
+        order=mismatch_order,
+        order_item=mismatch_item,
+        product=mismatch_product,
+        label=mismatch_product.name,
+        feed_size_mm=mismatch_product.pellet_size_mm,
+        quantity_kg=Decimal('15.00'),
+        total_cost_fcfa=mismatch_product.price_per_package,
+        entry_date=timezone.localdate(),
+    )
+
+    migration.backfill_compatible_order_references(django_apps, None)
+
+    mismatch_entry.refresh_from_db()
+    assert mismatch_entry.feed_reference_id is None

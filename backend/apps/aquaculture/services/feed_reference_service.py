@@ -51,7 +51,14 @@ class FeedReferenceService:
 
     @classmethod
     @transaction.atomic
-    def create(cls, *, user, farm_profile, data: dict) -> FarmFeedReference:
+    def create(
+        cls,
+        *,
+        user,
+        farm_profile,
+        data: dict,
+        allow_catalog_snapshot: bool = False,
+    ) -> FarmFeedReference:
         if farm_profile.user_id != user.id:
             raise PermissionError(_('Cette ferme ne vous appartient pas.'))
 
@@ -61,10 +68,26 @@ class FeedReferenceService:
             if not product:
                 raise ValueError(_('Un produit AquaCare est requis.'))
             name = (data.get('name') or product.name).strip()
-            species = cls.normalize_species(data.get('species') or product.species)
-            pellet_size = data.get('pellet_size_mm')
-            if pellet_size is None:
-                pellet_size = product.pellet_size_mm
+            requested_species = data.get('species')
+            product_species = cls.normalize_species(product.species)
+            if (
+                not allow_catalog_snapshot
+                and requested_species
+                and cls.normalize_species(requested_species) != product_species
+            ):
+                raise ValueError(_('L’espèce du produit AquaCare ne correspond pas à l’espèce indiquée.'))
+            species = cls.normalize_species(requested_species or product_species)
+            product_pellet_size = product.pellet_size_mm
+            requested_pellet_size = data.get('pellet_size_mm')
+            if (
+                not allow_catalog_snapshot
+                and requested_pellet_size is not None
+                and cls._decimal(requested_pellet_size) != cls._decimal(product_pellet_size)
+            ):
+                raise ValueError(_('La granulométrie du produit AquaCare ne peut pas être modifiée.'))
+            pellet_size = requested_pellet_size if allow_catalog_snapshot else product_pellet_size
+            if species not in {'tilapia', 'clarias'} or pellet_size is None:
+                raise ValueError(_('L’instantané du produit AquaCare est incomplet.'))
             defaults = {
                 'catalog_product': product,
                 'brand': data.get('brand', product.brand) or '',

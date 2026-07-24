@@ -32,6 +32,7 @@ import {
   InlineAlert,
   InteractiveCard,
   LoadingState,
+  SelectableCard,
   TextField,
   formatDashboardCurrency,
   formatDashboardNumber,
@@ -275,8 +276,13 @@ export default function StoreScreen() {
   };
 
   const openClassificationModal = (entryId: string) => {
+    const entry = store?.unclassified_entries.find((item) => item.id === entryId);
     openManualModal();
     setClassificationEntryId(entryId);
+    if (entry?.source === 'order') {
+      setFeedMode('catalog');
+      setCreatingExternalFeed(false);
+    }
   };
 
   const handleOpenProducts = () => navigation.navigate('ProductCatalog', storeNavigationParams);
@@ -532,24 +538,46 @@ export default function StoreScreen() {
               {store.unclassified_entries?.map((entry) => (
                 <Card key={entry.id} variant="outlined" style={styles.section}>
                   <InlineAlert
-                    tone="warning"
-                    message={t('storeUnclassifiedStockMessage', {
-                      quantity: displayDecimal(entry.quantity_available_kg),
-                      name: entry.label,
-                    })}
+                    tone={entry.classification_reason === 'order_species_mismatch' ? 'error' : 'warning'}
+                    message={
+                      entry.classification_reason === 'order_species_mismatch'
+                        ? t('storeLegacyOrderSpeciesMismatch', {
+                          productSpecies: entry.catalog_product_species === 'clarias' ? t('catfish') : t('tilapia'),
+                          cycleSpecies: selectedCycle?.species === 'clarias' ? t('catfish') : t('tilapia'),
+                        })
+                        : t('storeUnclassifiedStockMessage', {
+                          quantity: displayDecimal(entry.quantity_available_kg),
+                          name: entry.label,
+                        })
+                    }
                   />
                   <AppText variant="helper">
+                    {entry.classification_reason === 'order_species_mismatch'
+                      ? t('storeReviewCycleOrOrder')
+                      : entry.source === 'order'
+                        ? t('storeLegacyOrderMessage')
+                        : t('storeLegacyManualStockMessage')}
+                  </AppText>
+                  <AppText variant="helper" color="muted">
                     {t('storeUnclassifiedStockBreakdown', {
                       added: displayDecimal(entry.quantity_added_kg),
                       consumed: displayDecimal(entry.historical_consumption_kg),
                       available: displayDecimal(entry.quantity_available_kg),
                     })}
                   </AppText>
-                  <Button
-                    label={t('storeClassifyStockAction')}
-                    variant="outline"
-                    onPress={() => openClassificationModal(entry.id)}
-                  />
+                  {entry.classification_reason === 'order_species_mismatch' ? (
+                    <Button
+                      label={t('storeReviewCycleOrOrder')}
+                      variant="outline"
+                      onPress={handleOpenOrders}
+                    />
+                  ) : (
+                    <Button
+                      label={entry.source === 'order' ? t('storeClassificationCatalogAction') : t('storeClassifyStockAction')}
+                      variant="outline"
+                      onPress={() => openClassificationModal(entry.id)}
+                    />
+                  )}
                 </Card>
               ))}
             </>
@@ -613,7 +641,9 @@ export default function StoreScreen() {
               <View style={styles.modalHeader}>
                 <View style={styles.flex}>
                   <AppText variant="sectionTitle">{t('storeManualFormTitle')}</AppText>
-                  <AppText variant="helper" color="muted">{t('storeManualFormDescription')}</AppText>
+                  <AppText variant="helper" color="muted">
+                    {classificationEntryId ? t('storeClassificationFormDescription') : t('storeManualFormDescription')}
+                  </AppText>
                 </View>
                 <IconButton icon="close" variant="surface" accessibilityLabel={t('close')} onPress={() => setManualModalVisible(false)} disabled={submitting} />
               </View>
@@ -636,40 +666,73 @@ export default function StoreScreen() {
                     </View>
                   </View>
                   {feedMode === 'catalog' ? products.map((product) => (
-                    <Button
+                    <SelectableCard
                       key={product.id}
-                      label={t('storeProductCard', {
-                        brand: product.brand || product.name,
-                        species: product.species === 'catfish' ? t('catfish') : t('tilapia'),
-                        size: displayDecimal(product.pellet_size_mm),
-                        weight: displayDecimal(product.package_weight_kg),
-                      })}
-                      variant={selectedProductId === product.id ? 'primary' : 'outline'}
+                      accessibilityLabel={`${product.brand || product.name} ${product.name}`}
+                      selected={selectedProductId === product.id}
+                      layout="column"
+                      primaryBorder
                       onPress={() => {
                         setSelectedProductId(product.id);
                         setFeedSizeMm(String(product.pellet_size_mm));
                       }}
-                    />
+                    >
+                      <View style={styles.productOptionHeader}>
+                        <View style={styles.flex}>
+                          <AppText variant="bodyStrong" color="link" numberOfLines={1}>
+                            {t('storeProductTitle', { brand: product.brand || product.name, name: product.name })}
+                          </AppText>
+                        </View>
+                        <Ionicons
+                          name={selectedProductId === product.id ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={24}
+                          color={colors.brand.primary}
+                        />
+                      </View>
+                      <AppText variant="helper" color="muted">
+                        {t('storeProductDetails', {
+                          species: product.species === 'catfish' ? t('catfish') : t('tilapia'),
+                          size: displayDecimal(product.pellet_size_mm),
+                          weight: displayDecimal(product.package_weight_kg),
+                        })}
+                      </AppText>
+                    </SelectableCard>
                   )) : (
                     <>
                       <AppText variant="label">{t('storeExistingExternalFeeds')}</AppText>
                       {feedReferences.filter((reference) => (
                         reference.source === 'external' && reference.species === selectedCycle?.species
                       )).map((reference) => (
-                        <Button
+                        <SelectableCard
                           key={reference.id}
-                          label={t('storeExternalFeedOption', {
+                          accessibilityLabel={t('storeExternalFeedOption', {
                             name: reference.name,
                             size: displayDecimal(reference.pellet_size_mm),
                           })}
-                          variant={selectedFeedReferenceId === reference.id ? 'primary' : 'outline'}
+                          selected={selectedFeedReferenceId === reference.id}
+                          layout="column"
+                          primaryBorder
                           onPress={() => {
                             setSelectedFeedReferenceId(reference.id);
                             setLabel(reference.name);
                             setFeedSizeMm(reference.pellet_size_mm);
                             setCreatingExternalFeed(false);
                           }}
-                        />
+                        >
+                          <View style={styles.productOptionHeader}>
+                            <View style={styles.flex}>
+                              <AppText variant="bodyStrong">{reference.name}</AppText>
+                              <AppText variant="helper" color="muted">
+                                {t('storePelletSizeChip', { size: displayDecimal(reference.pellet_size_mm) })}
+                              </AppText>
+                            </View>
+                            <Ionicons
+                              name={selectedFeedReferenceId === reference.id ? 'checkmark-circle' : 'ellipse-outline'}
+                              size={24}
+                              color={colors.brand.primary}
+                            />
+                          </View>
+                        </SelectableCard>
                       ))}
                       <Button
                         label={t('storeAddExternalFeed')}
@@ -756,6 +819,7 @@ const styles = StyleSheet.create({
   orderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
   pendingOrderAction: { marginTop: spacing[3], gap: spacing[2] },
   orderAmount: { alignItems: 'flex-end', gap: spacing[1] },
+  productOptionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], width: '100%' },
   stockItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2] },
   actionList: { gap: spacing[3] },
   flex: { flex: 1 },

@@ -79,6 +79,20 @@ class CycleStoreStockBySize(TypedDict):
     quantity_available_kg: str
 
 
+class CycleStoreUnclassifiedEntry(TypedDict):
+    id: str
+    label: str
+    quantity_kg: str
+    quantity_added_kg: str
+    historical_consumption_kg: str
+    quantity_available_kg: str
+    source: str
+    classification_reason: str
+    catalog_product_id: str | None
+    catalog_product_species: str | None
+    catalog_product_pellet_size_mm: str | None
+
+
 class CycleStorePayload(TypedDict):
     cycle_id: str
     summary: CycleStoreSummary
@@ -93,7 +107,7 @@ class CycleStorePayload(TypedDict):
     recommended_pellet_size_mm: str | None
     pending_orders: list[CycleStorePendingOrder]
     stock_tracking_started_at: date | None
-    unclassified_entries: list[dict[str, str]]
+    unclassified_entries: list[CycleStoreUnclassifiedEntry]
 
 
 class CycleStoreService(BaseService):
@@ -547,6 +561,32 @@ class CycleStoreService(BaseService):
         return min(entry.entry_date for entry in entries)
 
     @staticmethod
+    def _unclassified_entry_metadata(
+        *,
+        cycle: ProductionCycle,
+        entry: CycleFeedStockEntry,
+    ) -> tuple[str, str, Product | None]:
+        """Décrit pourquoi une ancienne entrée nécessite encore une action.
+
+        Les entrées de commande conservent leur produit et leur commande, mais
+        une référence alimentaire peut manquer si la ligne est antérieure au
+        référentiel ou si l'espèce du produit ne correspond pas au cycle. Cette
+        distinction permet au mobile de proposer une classification seulement
+        lorsqu'elle est sûre.
+        """
+        product = entry.product or (
+            entry.order_item.product
+            if entry.order_item_id and entry.order_item is not None
+            else None
+        )
+        if entry.source == CycleFeedStockEntry.SOURCE_ORDER and product is not None:
+            product_species = 'clarias' if product.species == 'catfish' else product.species
+            if product_species != cycle.species:
+                return 'order', 'order_species_mismatch', product
+            return 'order', 'legacy_order', product
+        return 'manual', 'legacy_manual', product
+
+    @staticmethod
     def get_store_payload(cycle: ProductionCycle) -> CycleStorePayload:
         """Construit le résumé du Magasin pour un cycle."""
         entries = list(
@@ -722,25 +762,50 @@ class CycleStoreService(BaseService):
             'pending_orders': [CycleStoreService._format_pending_order(order) for order in pending_orders],
             'stock_tracking_started_at': stock_tracking_started_at,
             'unclassified_entries': [
-                {
-                    'id': str(entry.id),
-                    'label': entry.label,
-                    'quantity_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
-                    'quantity_added_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
-                    'historical_consumption_kg': str(
-                        CycleStoreService._quantize(
-                            legacy_allocations.get(entry.id, ZERO_DECIMAL)
-                        )
-                    ),
-                    'quantity_available_kg': str(
-                        CycleStoreService._quantize(
-                            entry.quantity_kg
-                            - legacy_allocations.get(entry.id, ZERO_DECIMAL)
-                        )
-                    ),
-                }
+                CycleStoreService._format_unclassified_entry(
+                    cycle=cycle,
+                    entry=entry,
+                    historical_consumption_kg=legacy_allocations.get(entry.id, ZERO_DECIMAL),
+                )
                 for entry in unclassified_entries
             ],
+        }
+
+    @staticmethod
+    def _format_unclassified_entry(
+        *,
+        cycle: ProductionCycle,
+        entry: CycleFeedStockEntry,
+        historical_consumption_kg: Decimal,
+    ) -> CycleStoreUnclassifiedEntry:
+        source, classification_reason, product = CycleStoreService._unclassified_entry_metadata(
+            cycle=cycle,
+            entry=entry,
+        )
+        product_species = None
+        product_size = None
+        if product is not None:
+            product_species = 'clarias' if product.species == 'catfish' else product.species
+            product_size = CycleStoreService._entry_feed_size(entry)
+        quantity_available = entry.quantity_kg - historical_consumption_kg
+        return {
+            'id': str(entry.id),
+            'label': entry.label,
+            'quantity_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
+            'quantity_added_kg': str(CycleStoreService._quantize(entry.quantity_kg)),
+            'historical_consumption_kg': str(
+                CycleStoreService._quantize(historical_consumption_kg)
+            ),
+            'quantity_available_kg': str(CycleStoreService._quantize(quantity_available)),
+            'source': source,
+            'classification_reason': classification_reason,
+            'catalog_product_id': str(product.id) if product is not None else None,
+            'catalog_product_species': product_species,
+            'catalog_product_pellet_size_mm': (
+                str(CycleStoreService._quantize(product_size))
+                if product_size is not None
+                else None
+            ),
         }
 
     @classmethod
@@ -1052,14 +1117,26 @@ class CycleStoreService(BaseService):
             feed_reference = FeedReferenceService.create(
                 user=order.user,
                 farm_profile=cycle.farm_profile,
+                allow_catalog_snapshot=True,
                 data={
                     'source': FarmFeedReference.SOURCE_CATALOG,
                     'catalog_product': order_item.product,
                     'name': order_item.product_name,
-                    'species': order_item.product_species_snapshot,
-                    'pellet_size_mm': order_item.product_pellet_size_mm_snapshot,
-                    'brand': order_item.product_brand_snapshot,
-                    'package_weight_kg': order_item.product_package_weight_kg_snapshot,
+                    'species': (
+                        order_item.product_species_snapshot
+                        or order_item.product.species
+                    ),
+                    'pellet_size_mm': (
+                        order_item.product_pellet_size_mm_snapshot
+                        if order_item.product_pellet_size_mm_snapshot is not None
+                        else order_item.product.pellet_size_mm
+                    ),
+                    'brand': order_item.product_brand_snapshot or order_item.product.brand,
+                    'package_weight_kg': (
+                        order_item.product_package_weight_kg_snapshot
+                        if order_item.product_package_weight_kg_snapshot is not None
+                        else order_item.product.package_weight_kg
+                    ),
                     'created_offline': False,
                 },
             )

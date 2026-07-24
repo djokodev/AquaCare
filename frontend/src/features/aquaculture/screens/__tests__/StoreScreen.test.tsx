@@ -12,6 +12,7 @@ const mockGetCycleStore = jest.fn();
 const mockDeclareCycleStoreManualStock = jest.fn();
 const mockCreateFarmFeedReference = jest.fn();
 const mockConfirmOrderReceipt = jest.fn();
+const mockGetProducts = jest.fn();
 const mockT = (key: string) => key;
 let mockState: any;
 let mockRouteParams: { cycleId?: string };
@@ -46,6 +47,7 @@ jest.mock('@/features/commerce/services/commerceApi', () => ({
   __esModule: true,
   default: {
     confirmOrderReceipt: (...args: unknown[]) => mockConfirmOrderReceipt(...args),
+    getProducts: (...args: unknown[]) => mockGetProducts(...args),
   },
 }));
 
@@ -163,6 +165,14 @@ describe('StoreScreen', () => {
     });
     mockCreateFarmFeedReference.mockResolvedValue({ id: 'feed-server-1' });
     mockConfirmOrderReceipt.mockResolvedValue({ status: 'received' });
+    mockGetProducts.mockResolvedValue([
+      {
+        id: 'product-1', brand: 'dibaq', name: 'DIBAQ Tilapia 2 mm', species: 'tilapia',
+        phase: 'grossissement', pellet_size_mm: '2.00', protein_percentage: 32,
+        lipid_percentage: 10, package_weight_kg: 15, price_per_package: '23500.00',
+        price_per_kg: '1566.67', is_available: true, created_at: '', updated_at: '',
+      },
+    ]);
   });
 
   it('affiche le stock du cycle et ouvre les actions du Magasin', async () => {
@@ -223,6 +233,20 @@ describe('StoreScreen', () => {
         })
       );
     });
+  });
+
+  it('présente les produits AquaCare comme des fiches sélectionnables structurées', async () => {
+    const { getByText, getAllByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('storeManualSubmit')).toBeTruthy());
+    fireEvent.press(getByText('storeManualSubmit'));
+    fireEvent.press(getByText('storeAquacareFeed'));
+
+    await waitFor(() => {
+      expect(getByText('storeProductTitle')).toBeTruthy();
+      expect(getByText('storeProductDetails')).toBeTruthy();
+    });
+    expect(getAllByText('storeProductTitle').length).toBeGreaterThan(0);
   });
 
   it('recommande un réapprovisionnement seulement avec un stock explicitement nul', async () => {
@@ -302,6 +326,31 @@ describe('StoreScreen', () => {
       expect(getByText('storePendingOrdersEmptyTitle')).toBeTruthy();
       expect(getByText('storePendingOrdersEmptyDescription')).toBeTruthy();
     });
+  });
+
+  it('explique une commande legacy incompatible sans proposer une classification dangereuse', async () => {
+    const payload = await mockGetCycleStore();
+    mockGetCycleStore.mockResolvedValueOnce({
+      ...payload,
+      unclassified_entries: [{
+        id: 'legacy-order-1',
+        label: 'Catfish 2mm',
+        quantity_kg: '30.00',
+        quantity_added_kg: '30.00',
+        historical_consumption_kg: '0.00',
+        quantity_available_kg: '30.00',
+        source: 'order',
+        classification_reason: 'order_species_mismatch',
+        catalog_product_id: 'product-catfish',
+        catalog_product_species: 'clarias',
+        catalog_product_pellet_size_mm: '2.00',
+      }],
+    });
+
+    const { findByText, queryByText } = render(<StoreScreen />);
+
+    expect(await findByText('storeLegacyOrderSpeciesMismatch')).toBeTruthy();
+    expect(queryByText('storeClassificationCatalogAction')).toBeNull();
   });
 
   it('affiche une validation lorsque le formulaire de stock est vide', async () => {

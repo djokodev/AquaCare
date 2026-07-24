@@ -1936,6 +1936,11 @@ class CycleStoreUnclassifiedEntrySerializer(serializers.Serializer):
     quantity_added_kg = serializers.CharField()
     historical_consumption_kg = serializers.CharField()
     quantity_available_kg = serializers.CharField()
+    source = serializers.CharField(required=False, allow_null=True)
+    classification_reason = serializers.CharField(required=False, allow_null=True)
+    catalog_product_id = serializers.UUIDField(required=False, allow_null=True)
+    catalog_product_species = serializers.CharField(required=False, allow_null=True)
+    catalog_product_pellet_size_mm = serializers.CharField(required=False, allow_null=True)
 
 
 class CycleFeedRecommendationProductSerializer(serializers.Serializer):
