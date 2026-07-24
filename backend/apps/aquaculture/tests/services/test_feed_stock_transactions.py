@@ -119,6 +119,114 @@ def test_future_stock_cannot_fund_historical_feed_log():
 
 
 @pytest.mark.django_db
+def test_canonical_size_ledger_detects_negative_history_across_references():
+    today = date.today()
+    cycle = ProductionCycleFactory(start_date=today - timedelta(days=30))
+    feed_a = _feed_reference(cycle, name="Aliment A")
+    feed_b = _feed_reference(cycle, name="Aliment B")
+    _stock(cycle, feed_a, "10.00", entry_date=today - timedelta(days=3))
+    _stock(cycle, feed_b, "20.00", entry_date=today - timedelta(days=1))
+    CycleLog.objects.create(
+        cycle=cycle,
+        log_date=today - timedelta(days=2),
+        feed_quantity=Decimal("15.00"),
+        feed_type="Aliment A/B",
+        feed_size_mm=Decimal("2.00"),
+    )
+
+    with pytest.raises(FeedStockValidationError) as exc_info:
+        CycleStoreService.validate_daily_feed_quantity(
+            cycle=cycle,
+            feed_quantity=Decimal("1.00"),
+            feed_size_mm=Decimal("2.00"),
+            log_date=today,
+        )
+
+    assert exc_info.value.detail["code"] == "feed_stock_history_inconsistent"
+    assert exc_info.value.detail["minimum_balance_kg"] == "-5.00"
+    assert exc_info.value.detail["available_feed_kg"] == "15.00"
+    store = CycleStoreService.get_store_payload(cycle)
+    assert store["stock_by_size"] == [{
+        "feed_size_mm": "2",
+        "quantity_added_kg": "30.00",
+        "quantity_consumed_kg": "15.00",
+        "quantity_available_kg": "15.00",
+    }]
+    assert "feed_stock_history_inconsistent" in store["calculation_warnings"]
+
+
+@pytest.mark.django_db
+def test_bulk_size_reservations_are_distributed_across_compatible_references():
+    cycle = ProductionCycleFactory(start_date=date.today())
+    feed_a = _feed_reference(cycle, name="Aliment A")
+    feed_b = _feed_reference(cycle, name="Aliment B")
+    _stock(cycle, feed_a, "5.00")
+    _stock(cycle, feed_b, "5.00")
+
+    result = CycleLogService.create_bulk_logs(
+        [
+            {
+                "cycle": cycle.id,
+                "log_date": date.today(),
+                "feed_type": "Aliment 2 mm",
+                "feed_size_mm": Decimal("2.00"),
+                "feed_quantity": Decimal("6.00"),
+                "cycle_unit_allocation": _allocation(cycle, "Bac bulk 6"),
+            },
+            {
+                "cycle": cycle.id,
+                "log_date": date.today(),
+                "feed_type": "Aliment 2 mm",
+                "feed_size_mm": Decimal("2.00"),
+                "feed_quantity": Decimal("3.00"),
+                "cycle_unit_allocation": _allocation(cycle, "Bac bulk 3"),
+            },
+        ],
+        cycle.farm_profile.user,
+    )
+
+    assert result["created"] == 2
+    assert result["errors"] == []
+    assert CycleLog.objects.filter(cycle=cycle).aggregate(total=Sum("feed_quantity"))["total"] == Decimal("9.00")
+    assert CycleStoreService.get_store_payload(cycle)["stock_by_size"][0]["quantity_available_kg"] == "1.00"
+
+
+@pytest.mark.django_db
+def test_bulk_size_reservations_reject_total_above_group_balance():
+    cycle = ProductionCycleFactory(start_date=date.today())
+    feed_a = _feed_reference(cycle, name="Aliment A")
+    feed_b = _feed_reference(cycle, name="Aliment B")
+    _stock(cycle, feed_a, "5.00")
+    _stock(cycle, feed_b, "5.00")
+
+    result = CycleLogService.create_bulk_logs(
+        [
+            {
+                "cycle": cycle.id,
+                "log_date": date.today(),
+                "feed_type": "Aliment 2 mm",
+                "feed_size_mm": Decimal("2.00"),
+                "feed_quantity": Decimal("6.00"),
+                "cycle_unit_allocation": _allocation(cycle, "Bac bulk 6"),
+            },
+            {
+                "cycle": cycle.id,
+                "log_date": date.today(),
+                "feed_type": "Aliment 2 mm",
+                "feed_size_mm": Decimal("2.00"),
+                "feed_quantity": Decimal("5.00"),
+                "cycle_unit_allocation": _allocation(cycle, "Bac bulk 5"),
+            },
+        ],
+        cycle.farm_profile.user,
+    )
+
+    assert result["created"] == 1
+    assert len(result["errors"]) == 1
+    assert CycleLog.objects.filter(cycle=cycle).aggregate(total=Sum("feed_quantity"))["total"] == Decimal("6.00")
+
+
+@pytest.mark.django_db
 def test_retroactive_feed_log_cannot_make_future_ledger_negative():
     today = date.today()
     cycle = ProductionCycleFactory(start_date=today - timedelta(days=30))

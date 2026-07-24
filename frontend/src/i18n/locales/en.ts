@@ -1746,7 +1746,7 @@
   feedPhaseOrderAllBtn: 'Order available products',
   feedPhaseRecommended: '{{count}} bags recommended',
   feedPhaseProductUnavailable: 'Product unavailable',
-  feedPhasePellet: '{{size}}mm pellet',
+  feedPhasePellet: '{{size}} mm pellet',
   feedPhasesLoadError: 'Unable to load feeding phases.',
   feedPhasesEmpty: 'No feeding phases available for this cycle.',
   feedPhaseAddedToCart: 'Added to cart',

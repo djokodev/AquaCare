@@ -10,7 +10,7 @@ from typing import Any, TypedDict
 from accounts.models import User
 from commerce.models import Order, OrderItem, Product
 from django.db import transaction
-from django.db.models import Min, Sum
+from django.db.models import Sum
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -152,9 +152,17 @@ class CycleStoreService(BaseService):
         return [str(cls._quantize(value).normalize()) for value in sorted(sizes)]
 
     @classmethod
-    def _stock_by_size(cls, stock_items: list[CycleStoreStockItem]) -> list[CycleStoreStockBySize]:
+    def _stock_by_size(
+        cls,
+        *,
+        cycle: ProductionCycle,
+        stock_items: list[CycleStoreStockItem],
+        at_date: date | None = None,
+    ) -> list[CycleStoreStockBySize]:
         grouped: dict[Decimal, CycleStoreStockBySize] = {}
         for item in stock_items:
+            if item.get('feed_reference_id') is None:
+                continue
             size = item.get('feed_size_mm')
             if size is None:
                 continue
@@ -165,10 +173,24 @@ class CycleStoreService(BaseService):
                 'quantity_consumed_kg': '0.00',
                 'quantity_available_kg': '0.00',
             })
-            for field in ('quantity_added_kg', 'quantity_consumed_kg', 'quantity_available_kg'):
-                current[field] = str(cls._quantize(
-                    cls._to_decimal(current[field]) + cls._to_decimal(item[field])
-                ))
+            current['quantity_added_kg'] = str(cls._quantize(
+                cls._to_decimal(current['quantity_added_kg'])
+                + cls._to_decimal(item['quantity_added_kg'])
+            ))
+
+        for size_decimal, current in grouped.items():
+            state = FeedStockLedgerService.calculate_for_size(
+                cycle=cycle,
+                feed_size_mm=size_decimal,
+                at_date=at_date,
+            )
+            added = cls._to_decimal(current['quantity_added_kg'])
+            # Le magasin et la validation doivent utiliser le même solde
+            # réellement disponible à la date courante, sans financer une
+            # ration passée avec une entrée future.
+            available = min(state.balance_at_date, state.future_headroom)
+            current['quantity_consumed_kg'] = str(cls._quantize(added - available))
+            current['quantity_available_kg'] = str(cls._quantize(available))
         return [grouped[size] for size in sorted(grouped)]
 
     @staticmethod
@@ -288,14 +310,14 @@ class CycleStoreService(BaseService):
                     event_id="legacy-reservation",
                 )
             )
-        state = FeedStockLedgerService.calculate(
+        state = FeedStockLedgerService.calculate_for_size(
             cycle=cycle,
-            feed_reference=feed_reference,
+            feed_size_mm=CycleStoreService._to_decimal(feed_reference.pellet_size_mm),
             at_date=log_date,
             existing_log=existing_log,
             reservations=reservations,
         )
-        return state.balance_at_date, state.tracking_started_at
+        return min(state.balance_at_date, state.future_headroom), state.tracking_started_at
 
     @staticmethod
     def _allocate_legacy_consumption(
@@ -437,28 +459,49 @@ class CycleStoreService(BaseService):
                     )
 
         result: list[CycleStoreStockItem] = []
+        reference_items_by_size: dict[Decimal, list[dict[str, Any]]] = {}
+        reference_first_entry: dict[str, tuple[date, datetime, str]] = {}
+        for entry in entries:
+            if entry.feed_reference_id is None:
+                continue
+            reference_id = str(entry.feed_reference_id)
+            order_key = (entry.entry_date, entry.created_at, reference_id)
+            current_key = reference_first_entry.get(reference_id)
+            if current_key is None or order_key < current_key:
+                reference_first_entry[reference_id] = order_key
         for item in grouped.values():
-            if item['_feed_reference'] is not None:
-                available, _tracking_date = CycleStoreService.get_available_feed_quantity(
-                    cycle=cycle,
-                    feed_reference=item['_feed_reference'],
-                    log_date=timezone.localdate(),
+            if item['_feed_reference'] is not None and item['feed_size_mm'] is not None:
+                reference_items_by_size.setdefault(item['feed_size_mm'], []).append(item)
+
+        for size, size_items in reference_items_by_size.items():
+            state = FeedStockLedgerService.calculate_for_size(
+                cycle=cycle,
+                feed_size_mm=size,
+                at_date=timezone.localdate(),
+            )
+            available = min(state.balance_at_date, state.future_headroom)
+            remaining_consumed = max(
+                ZERO_DECIMAL,
+                sum((item['quantity_added_kg'] for item in size_items), ZERO_DECIMAL)
+                - available,
+            )
+            size_items.sort(
+                key=lambda item: reference_first_entry.get(
+                    item['feed_reference_id'],
+                    (date.max, datetime.max, item['feed_reference_id']),
                 )
-                item['quantity_consumed_kg'] = (
-                    item['quantity_added_kg'] - available
-                    + sum(
-                        (
-                            max(
-                                ZERO_DECIMAL,
-                                legacy_allocations.get(entry.id, ZERO_DECIMAL)
-                                - adjustments.get(entry.id, ZERO_DECIMAL),
-                            )
-                            for entry in entries
-                            if str(entry.feed_reference_id) == item['feed_reference_id']
-                        ),
-                        ZERO_DECIMAL,
-                    )
-                )
+            )
+            for index, item in enumerate(size_items):
+                if remaining_consumed <= ZERO_DECIMAL:
+                    item['quantity_consumed_kg'] = ZERO_DECIMAL
+                    continue
+                if index == len(size_items) - 1:
+                    consumed = remaining_consumed
+                else:
+                    consumed = min(item['quantity_added_kg'], remaining_consumed)
+                item['quantity_consumed_kg'] = consumed
+                remaining_consumed -= consumed
+        for item in grouped.values():
             available = item['quantity_added_kg'] - item['quantity_consumed_kg']
             result.append({
                 'feed_reference_id': item['feed_reference_id'],
@@ -541,30 +584,32 @@ class CycleStoreService(BaseService):
             entries=entries,
             stock_tracking_started_at=stock_tracking_started_at,
         )
-        stock_by_size = CycleStoreService._stock_by_size(stock_items)
-        inconsistent_reference_ids = {
-            item['feed_reference_id']
-            for item in stock_items
-            if item['feed_reference_id'] is not None
-        }
-        history_inconsistent = False
-        for reference_id in inconsistent_reference_ids:
-            reference = FarmFeedReference.objects.get(pk=reference_id)
-            ledger_state = FeedStockLedgerService.calculate(
+        stock_by_size = CycleStoreService._stock_by_size(
+            cycle=cycle,
+            stock_items=stock_items,
+            at_date=timezone.localdate(),
+        )
+        history_inconsistent = any(
+            FeedStockLedgerService.calculate_for_size(
                 cycle=cycle,
-                feed_reference=reference,
+                feed_size_mm=item['feed_size_mm'],
                 at_date=timezone.localdate(),
-            )
-            if ledger_state.minimum_balance < ZERO_DECIMAL:
-                history_inconsistent = True
-                break
-        estimated_feed_remaining_kg = sum(
+            ).minimum_balance < ZERO_DECIMAL
+            for item in stock_by_size
+        )
+        compatible_remaining_kg = sum(
+            (CycleStoreService._to_decimal(item['quantity_available_kg']) for item in stock_by_size),
+            ZERO_DECIMAL,
+        )
+        unclassified_remaining_kg = sum(
             (
                 CycleStoreService._to_decimal(item['quantity_available_kg'])
                 for item in stock_items
+                if item['feed_reference_id'] is None
             ),
             ZERO_DECIMAL,
         )
+        estimated_feed_remaining_kg = compatible_remaining_kg + unclassified_remaining_kg
         from .cycle_feed_recommendation_service import CycleFeedRecommendationService
 
         recommendation = CycleFeedRecommendationService.build(cycle)
@@ -706,16 +751,9 @@ class CycleStoreService(BaseService):
         feed_size_mm: Decimal,
     ) -> list[FarmFeedReference]:
         """Retourne les références de la ferme compatibles avec une granulométrie."""
-        return list(
-            FarmFeedReference.objects.filter(
-                farm_profile=cycle.farm_profile,
-                species=cycle.species,
-                pellet_size_mm=cls._to_decimal(feed_size_mm),
-                stock_entries__cycle=cycle,
-            )
-            .distinct()
-            .annotate(first_stock_date=Min('stock_entries__entry_date'))
-            .order_by('first_stock_date', 'created_at', 'id')
+        return FeedStockLedgerService.compatible_references(
+            cycle=cycle,
+            feed_size_mm=feed_size_mm,
         )
 
     @classmethod
@@ -804,48 +842,22 @@ class CycleStoreService(BaseService):
                     event_id="legacy-reservation",
                 )
             )
-        available = ZERO_DECIMAL
-        minimum_balance = ZERO_DECIMAL
-        for index, reference in enumerate(references):
-            state = FeedStockLedgerService.calculate(
-                cycle=cycle,
-                feed_reference=reference,
-                at_date=log_date,
-                existing_log=existing_log,
-                # Reservations represent a size-level quantity in the mobile
-                # flow and must be applied once, not once per origin.
-                reservations=reservations if index == 0 else [],
-            )
-            available += max(ZERO_DECIMAL, min(state.balance_at_date, state.future_headroom))
-            minimum_balance = min(minimum_balance, state.minimum_balance)
-        unassigned_consumption = cls._get_consumption_queryset(cycle).filter(
-            feed_reference__isnull=True,
-            feed_size_mm=cls._to_decimal(size),
-            feed_quantity__gt=0,
+        state = FeedStockLedgerService.calculate_for_size(
+            cycle=cycle,
+            feed_size_mm=size,
+            at_date=log_date,
+            existing_log=existing_log,
+            reservations=reservations,
         )
-        if existing_log is not None:
-            unassigned_consumption = unassigned_consumption.exclude(pk=existing_log.pk)
-        unassigned_quantity = sum(
-            (cls._to_decimal(quantity) for quantity in unassigned_consumption.values_list('feed_quantity', flat=True)),
-            ZERO_DECIMAL,
-        )
-        classified_legacy_adjustments = cls._to_decimal(
-            CycleFeedStockAdjustment.objects.filter(
-                stock_entry__cycle=cycle,
-                stock_entry__feed_size_mm=cls._to_decimal(size),
-                reason=CycleFeedStockAdjustment.REASON_LEGACY_CONSUMPTION,
-            ).aggregate(total=Sum('quantity_kg'))['total']
-        )
-        available -= max(ZERO_DECIMAL, unassigned_quantity - classified_legacy_adjustments)
-        minimum_balance = min(minimum_balance, available)
-        if minimum_balance < ZERO_DECIMAL:
+        available = min(state.balance_at_date, state.future_headroom)
+        if state.minimum_balance < ZERO_DECIMAL:
             raise FeedStockValidationError(
                 code='feed_stock_history_inconsistent',
                 detail=_(
                     "L'historique du stock est incohérent. Corrigez une ration passée avant d'en ajouter une."
                 ),
                 available_feed_kg=cls._quantize(available),
-                minimum_balance_kg=cls._quantize(minimum_balance),
+                minimum_balance_kg=cls._quantize(state.minimum_balance),
                 requested_feed_kg=CycleStoreService._quantize(quantity),
                 feed_reference_id=feed_reference.id if feed_reference else None,
             )

@@ -259,6 +259,44 @@ describe('projectOfflineStore', () => {
     expect(result.store.summary.estimated_feed_remaining_kg).toBe('45.00');
   });
 
+  it('répartit une ration par granulométrie entre deux stocks offline', async () => {
+    (offlineService.getOfflineFeedReferences as jest.Mock).mockResolvedValue([
+      {
+        id: 'reference-a', clientUuid: 'feed-a', synced: false, timestamp: 1,
+        payload: { name: 'Feed A', source: 'external', species: 'tilapia', pellet_size_mm: '2.00' },
+      },
+      {
+        id: 'reference-b', clientUuid: 'feed-b', synced: false, timestamp: 2,
+        payload: { name: 'Feed B', source: 'external', species: 'tilapia', pellet_size_mm: '2.00' },
+      },
+    ]);
+    (offlineService.getOfflineStockDeclarations as jest.Mock).mockResolvedValue([
+      {
+        id: 'stock-a', cycleId: 'cycle-1', clientUuid: 'stock-a', feedReferenceClientUuid: 'feed-a',
+        synced: false, timestamp: 1, payload: { quantity_kg: '5.00', total_cost_fcfa: '1000.00' },
+      },
+      {
+        id: 'stock-b', cycleId: 'cycle-1', clientUuid: 'stock-b', feedReferenceClientUuid: 'feed-b',
+        synced: false, timestamp: 2, payload: { quantity_kg: '5.00', total_cost_fcfa: '1000.00' },
+      },
+    ]);
+    (offlineService.getPendingSyncLogs as jest.Mock).mockResolvedValue([{
+      id: 'log-size-only', cycleId: 'cycle-1', synced: false, timestamp: 3,
+      logData: { feed_size_mm: '2.00', feed_quantity: 6, log_date: '2026-07-23' },
+    }]);
+
+    const result = await projectOfflineStore('cycle-1', null, 'Pending stock');
+
+    expect(result.store.stock_by_size).toEqual([expect.objectContaining({
+      feed_size_mm: '2.00',
+      quantity_consumed_kg: '6.00',
+      quantity_available_kg: '4.00',
+    })]);
+    expect(result.store.summary.estimated_feed_remaining_kg).toBe('4.00');
+    expect(result.store.calculation_warnings).not.toContain('offline_stock_conflict');
+    expect(result.store.stock_items.map((item) => item.quantity_consumed_kg)).toEqual(['5.00', '1.00']);
+  });
+
   it('ne fusionne jamais deux références différentes portant le même nom', async () => {
     (offlineService.getOfflineFeedReferences as jest.Mock).mockResolvedValue([
       {

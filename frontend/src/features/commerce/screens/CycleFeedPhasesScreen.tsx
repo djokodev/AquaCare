@@ -50,10 +50,15 @@ function buildProductForCart(product: FeedPhaseProduct): Product {
   };
 }
 
-function phaseLabel(phase: FeedPhase, phases: FeedPhase[], translate: (key: string) => string): string {
+function phaseLabel(
+  phase: FeedPhase,
+  phases: FeedPhase[],
+  translate: (key: string) => string,
+  formatNumber: (value: string | number | null | undefined) => string,
+): string {
   const base = translate(phase.phase_name);
   return phases.filter((item) => item.phase_name === phase.phase_name).length > 1
-    ? `${base} · ${phase.pellet_size_mm}mm`
+    ? `${base} · ${formatNumber(phase.pellet_size_mm)} mm`
     : base;
 }
 
@@ -70,6 +75,8 @@ const calculationSourceKey = (source: string): string => {
 export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
   const numberLocale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+  const displayDecimal = (value: string | number | null | undefined, maximumFractionDigits = 2): string =>
+    formatDecimalForDisplay(value, numberLocale, maximumFractionDigits);
   const dispatch = useDispatch<AppDispatch>();
   const { cycleId } = route.params;
   const cartItemsCount = useSelector((state: RootState) =>
@@ -126,7 +133,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
             product: buildProductForCart(product),
             quantity,
             recommendation: {
-              phase_name: phaseLabel(phase, phases, t),
+              phase_name: phaseLabel(phase, phases, t, displayDecimal),
               pellet_size_mm: String(phase.pellet_size_mm),
               suggested_bags: quantity,
             },
@@ -136,7 +143,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
       setSubmittedScopes((current) => ({ ...current, [phase.phase_id]: true }));
       Alert.alert(t('success'), t('feedPhaseAddedToCart'), [{ text: t('ok') }]);
     },
-    [dispatch, phases, quantities, recommendation?.status, submittedScopes, t]
+    [dispatch, displayDecimal, phases, quantities, recommendation?.status, submittedScopes, t]
   );
 
   const handleOrderAll = useCallback(() => {
@@ -149,7 +156,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
             product: buildProductForCart(product),
             quantity,
             recommendation: {
-              phase_name: phaseLabel(phase, phases, t),
+              phase_name: phaseLabel(phase, phases, t, displayDecimal),
               pellet_size_mm: String(phase.pellet_size_mm),
               suggested_bags: quantity,
             },
@@ -159,7 +166,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
     );
     setSubmittedScopes((current) => ({ ...current, all: true }));
     navigation.navigate('Cart', { cycleId });
-  }, [cycleId, dispatch, navigation, phases, quantities, recommendation?.status, submittedScopes.all]);
+  }, [cycleId, dispatch, displayDecimal, navigation, phases, quantities, recommendation?.status, submittedScopes.all]);
 
   const totalBags = useMemo(
     () => phases.reduce(
@@ -249,25 +256,25 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
               <Card key={`${phase.phase_name}-${phaseIndex}`} variant="outlined" style={styles.phaseCard}>
                 <View style={styles.rowBetween}>
                   <AppText variant="sectionTitle" style={styles.flex}>
-                    {phaseLabel(phase, phases, t)}
+                    {phaseLabel(phase, phases, t, displayDecimal)}
                   </AppText>
                   {phase.total_bags !== null ? <Badge label={`${phase.total_bags} ${t('bags')}`} tone="success" /> : null}
                 </View>
                 <AppText color="muted" style={styles.phaseMeta}>
-                  {phase.duration_days} {t('days')} · {t('feedPhasePellet', { size: phase.pellet_size_mm })}
+                  {phase.duration_days} {t('days')} · {t('feedPhasePellet', { size: displayDecimal(phase.pellet_size_mm) })}
                 </AppText>
                 <AppText variant="body" color="muted">
                   {t('feedPhaseCoverage', {
-                    need: phase.remaining_need_kg,
-                    consumed: phase.actual_consumed_kg,
-                    stock: phase.allocated_stock_kg,
-                    pending: phase.allocated_pending_kg,
-                    shortfall: phase.shortfall_kg,
+                    need: displayDecimal(phase.remaining_need_kg),
+                    consumed: displayDecimal(phase.actual_consumed_kg),
+                    stock: displayDecimal(phase.allocated_stock_kg),
+                    pending: displayDecimal(phase.allocated_pending_kg),
+                    shortfall: displayDecimal(phase.shortfall_kg),
                   })}
                 </AppText>
 
                 {!phase.product_available && Number(phase.shortfall_kg) > 0 ? (
-                  <InlineAlert compact tone="warning" message={t('feedPhaseNoExactProduct', { size: phase.pellet_size_mm })} />
+                  <InlineAlert compact tone="warning" message={t('feedPhaseNoExactProduct', { size: displayDecimal(phase.pellet_size_mm) })} />
                 ) : null}
 
                 {phase.products.map((product) => {
@@ -280,11 +287,13 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                         <View style={styles.flex}>
                           <AppText variant="bodyStrong" numberOfLines={1}>{getProductDisplayName(product.product_name, t('catfish'))}</AppText>
                           <AppText variant="caption" color="muted">
-                          {product.package_weight_kg}kg · {Number(product.unit_price).toLocaleString()} FCFA/{t('bag')}
-                        </AppText>
+                            {displayDecimal(product.package_weight_kg)} kg · {displayDecimal(product.unit_price, 0)} FCFA/{t('bag')}
+                          </AppText>
                           {Math.max(0, quantity * Number(product.package_weight_kg) - Number(phase.shortfall_kg ?? 0)) > 0 ? (
                             <AppText variant="caption" color="muted">{t('feedPhaseSurplus', {
-                              surplus: Math.max(0, quantity * Number(product.package_weight_kg) - Number(phase.shortfall_kg ?? 0)).toFixed(2),
+                              surplus: displayDecimal(
+                                Math.max(0, quantity * Number(product.package_weight_kg) - Number(phase.shortfall_kg ?? 0)),
+                              ),
                             })}</AppText>
                           ) : null}
                         </View>

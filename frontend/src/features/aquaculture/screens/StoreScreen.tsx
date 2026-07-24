@@ -44,7 +44,7 @@ import { RootState } from '@/store/store';
 import { CycleStore, FarmFeedReference } from '@/types/aquaculture';
 import { Product } from '@/types/commerce';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
-import { parseLocalizedNumber } from '@/utils/localizedNumber';
+import { formatDecimalForDisplay, parseLocalizedNumber } from '@/utils/localizedNumber';
 import commerceApi from '@/features/commerce/services/commerceApi';
 import {
   canConfirmOrderReceipt,
@@ -151,6 +151,8 @@ export default function StoreScreen() {
   const serverStoreRef = useRef<CycleStore | null>(null);
   const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('store', cycleId);
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+  const displayDecimal = (value: string | number | null | undefined): string =>
+    formatDecimalForDisplay(value, locale);
   const storeNavigationParams = cycleId ? { cycleId, source: 'store' as const } : undefined;
 
   const applyPendingStockProjection = useCallback(async (serverStore: CycleStore): Promise<CycleStore> => {
@@ -532,15 +534,15 @@ export default function StoreScreen() {
                   <InlineAlert
                     tone="warning"
                     message={t('storeUnclassifiedStockMessage', {
-                      quantity: entry.quantity_available_kg,
+                      quantity: displayDecimal(entry.quantity_available_kg),
                       name: entry.label,
                     })}
                   />
                   <AppText variant="helper">
                     {t('storeUnclassifiedStockBreakdown', {
-                      added: entry.quantity_added_kg,
-                      consumed: entry.historical_consumption_kg,
-                      available: entry.quantity_available_kg,
+                      added: displayDecimal(entry.quantity_added_kg),
+                      consumed: displayDecimal(entry.historical_consumption_kg),
+                      available: displayDecimal(entry.quantity_available_kg),
                     })}
                   </AppText>
                   <Button
@@ -639,8 +641,8 @@ export default function StoreScreen() {
                       label={t('storeProductCard', {
                         brand: product.brand || product.name,
                         species: product.species === 'catfish' ? t('catfish') : t('tilapia'),
-                        size: product.pellet_size_mm,
-                        weight: product.package_weight_kg,
+                        size: displayDecimal(product.pellet_size_mm),
+                        weight: displayDecimal(product.package_weight_kg),
                       })}
                       variant={selectedProductId === product.id ? 'primary' : 'outline'}
                       onPress={() => {
@@ -658,7 +660,7 @@ export default function StoreScreen() {
                           key={reference.id}
                           label={t('storeExternalFeedOption', {
                             name: reference.name,
-                            size: reference.pellet_size_mm,
+                            size: displayDecimal(reference.pellet_size_mm),
                           })}
                           variant={selectedFeedReferenceId === reference.id ? 'primary' : 'outline'}
                           onPress={() => {
@@ -703,8 +705,8 @@ export default function StoreScreen() {
                               <View style={styles.sizeChips}>
                                 {store.available_pellet_sizes.map((size) => (
                                   <Button
-                                  key={size}
-                                    label={t('storePelletSizeChip', { size })}
+                                    key={size}
+                                    label={t('storePelletSizeChip', { size: displayDecimal(size) })}
                                     size="small"
                                     fullWidth={false}
                                     variant={feedSizeMm === size ? 'primary' : 'outline'}

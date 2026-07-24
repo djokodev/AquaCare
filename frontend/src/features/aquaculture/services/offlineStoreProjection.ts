@@ -169,7 +169,10 @@ export const projectOfflineStore = async (
   const pendingCost = pendingStocks.reduce((total, item) => total + numeric(item.payload.total_cost_fcfa), 0);
   let pendingConsumedKg = 0;
   let hasOfflineStockConflict = false;
-  pendingLogs.forEach((log) => {
+  [...pendingLogs].sort((left, right) => (
+    (left.logData.log_date ?? '').localeCompare(right.logData.log_date ?? '')
+    || left.timestamp - right.timestamp
+  )).forEach((log) => {
     const quantity = numeric(log.logData.feed_quantity);
     if (quantity <= 0) return;
     pendingConsumedKg += quantity;
@@ -181,25 +184,32 @@ export const projectOfflineStore = async (
       clientToServer,
       `orphan-log:${log.id}`,
     );
-    const group = groups.get(key)
-      ?? (log.logData.feed_size_mm
-        ? Array.from(groups.values()).find(
-          (candidate) => Number(candidate.item.feed_size_mm) === Number(log.logData.feed_size_mm),
-        )
-        : undefined);
-    if (!group) {
+    const directGroup = groups.get(key);
+    const sizeGroups = log.logData.feed_size_mm
+      ? Array.from(groups.values())
+        .filter((candidate) => Number(candidate.item.feed_size_mm) === Number(log.logData.feed_size_mm))
+        .sort((left, right) => left.key.localeCompare(right.key))
+      : [];
+    const groupsToConsume = directGroup ? [directGroup] : sizeGroups;
+    if (!groupsToConsume.length) {
       hasOfflineStockConflict = true;
       return;
     }
-    const available = numeric(group.item.quantity_available_kg) - quantity;
-    group.item = {
-      ...group.item,
-      quantity_consumed_kg: (
-        numeric(group.item.quantity_consumed_kg) + quantity
-      ).toFixed(2),
-      quantity_available_kg: available.toFixed(2),
-    };
-    if (available < 0) hasOfflineStockConflict = true;
+    let remainingQuantity = quantity;
+    groupsToConsume.forEach((group) => {
+      if (remainingQuantity <= 0) return;
+      const available = Math.max(0, numeric(group.item.quantity_available_kg));
+      const consumed = Math.min(available, remainingQuantity);
+      group.item = {
+        ...group.item,
+        quantity_consumed_kg: (
+          numeric(group.item.quantity_consumed_kg) + consumed
+        ).toFixed(2),
+        quantity_available_kg: (available - consumed).toFixed(2),
+      };
+      remainingQuantity -= consumed;
+    });
+    if (remainingQuantity > 0) hasOfflineStockConflict = true;
   });
   const projectedItems = Array.from(groups.values(), ({ item }) => item);
   const projectedBySize = new Map<string, NonNullable<CycleStore['stock_by_size']>[number]>();

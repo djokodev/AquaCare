@@ -1,4 +1,8 @@
-import { formatEditableNumber, parseLocalizedNumber } from '../localizedNumber';
+import {
+  formatDecimalForDisplay,
+  formatEditableNumber,
+  parseLocalizedNumber,
+} from '../localizedNumber';
 
 describe('localizedNumber', () => {
   it.each([
@@ -22,5 +26,15 @@ describe('localizedNumber', () => {
   it('formats an existing decimal for the active input locale', () => {
     expect(formatEditableNumber(16.8, true)).toBe('16,8');
     expect(formatEditableNumber(16.8, false)).toBe('16.8');
+  });
+
+  it.each([
+    ['2.00', 'fr-FR', '2'],
+    ['2.50', 'fr-FR', '2,5'],
+    ['145.00', 'fr-FR', '145'],
+    ['15.50', 'fr-FR', '15,5'],
+    ['2.50', 'en-US', '2.5'],
+  ])('formats %s for %s without insignificant zeroes', (value, locale, expected) => {
+    expect(formatDecimalForDisplay(value, locale)).toBe(expected);
   });
 });

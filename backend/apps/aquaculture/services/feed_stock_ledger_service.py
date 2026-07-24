@@ -8,11 +8,10 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from uuid import UUID
 
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from ..models import (
-    CycleFeedStockAdjustment,
     CycleFeedStockEntry,
     CycleLog,
     FarmFeedReference,
@@ -103,23 +102,65 @@ class FeedStockLedgerService:
         existing_log: CycleLog | None = None,
         reservations: Iterable[FeedStockReservation] = (),
     ) -> FeedStockLedgerState:
-        """Construit la timeline, entrées avant ajustements puis consommations.
+        """Compatibilité historique vers le ledger cycle/espèce/granulométrie."""
+        return cls.calculate_for_size(
+            cycle=cycle,
+            feed_size_mm=cls._decimal(feed_reference.pellet_size_mm),
+            at_date=at_date,
+            existing_log=existing_log,
+            reservations=reservations,
+        )
 
-        Une entrée est disponible au début de sa ``entry_date``. Les ajustements
-        historiques sont appliqués juste après l'entrée concernée, puis les
-        rations persistées et enfin les réservations du batch courant.
+    @classmethod
+    def compatible_references(
+        cls,
+        *,
+        cycle: ProductionCycle,
+        feed_size_mm: Decimal,
+    ) -> list[FarmFeedReference]:
+        """Retourne les références de ferme utilisables pour une granulométrie."""
+        return list(
+            FarmFeedReference.objects.filter(
+                farm_profile=cycle.farm_profile,
+                species=cycle.species,
+                pellet_size_mm=cls._decimal(feed_size_mm),
+                stock_entries__cycle=cycle,
+            )
+            .distinct()
+            .order_by('created_at', 'id')
+        )
+
+    @classmethod
+    def calculate_for_size(
+        cls,
+        *,
+        cycle: ProductionCycle,
+        feed_size_mm: Decimal,
+        at_date: date | None = None,
+        existing_log: CycleLog | None = None,
+        reservations: Iterable[FeedStockReservation] = (),
+    ) -> FeedStockLedgerState:
+        """Construit le ledger canonique cycle/espèce/granulométrie.
+
+        Toutes les références compatibles sont fusionnées dans une seule
+        timeline. Les entrées sont disponibles au début de leur journée, puis
+        les ajustements et consommations de la journée sont appliqués. Les
+        ajustements issus d'une classification legacy ne sont pas additionnés
+        aux mêmes journaux legacy : ils ne servent qu'à conserver leur
+        allocation par entrée dans l'affichage.
         """
-        reference_entries = list(
+        size = cls._decimal(feed_size_mm)
+        references = cls.compatible_references(cycle=cycle, feed_size_mm=size)
+        reference_ids = [reference.id for reference in references]
+        entries = list(
             CycleFeedStockEntry.objects.filter(
                 cycle=cycle,
-                feed_reference=feed_reference,
+                feed_reference_id__in=reference_ids,
             )
-            .select_related("historical_adjustment")
-            .order_by("entry_date", "created_at", "id")
+            .select_related('historical_adjustment')
+            .order_by('entry_date', 'created_at', 'id')
         )
-        tracking_started_at = (
-            reference_entries[0].entry_date if reference_entries else None
-        )
+        tracking_started_at = entries[0].entry_date if entries else None
         if tracking_started_at is None:
             return FeedStockLedgerState(
                 tracking_started_at=None,
@@ -129,70 +170,77 @@ class FeedStockLedgerService:
                 minimum_balance=ZERO_DECIMAL,
             )
 
-        events: list[_LedgerEvent] = []
-        for entry in reference_entries:
-            created_at = cls._event_datetime(entry.created_at, entry.entry_date)
-            events.append(
-                _LedgerEvent(
-                    event_date=entry.entry_date,
-                    order=cls.ENTRY_ORDER,
-                    created_at=created_at,
-                    event_id=str(entry.id),
-                    quantity_delta=cls._decimal(entry.quantity_kg),
-                )
-            )
-            try:
-                adjustment: CycleFeedStockAdjustment | None = (
-                    entry.historical_adjustment
-                )
-            except CycleFeedStockAdjustment.DoesNotExist:
-                adjustment = None
-            if adjustment is not None:
-                events.append(
-                    _LedgerEvent(
-                        event_date=entry.entry_date,
-                        order=cls.ADJUSTMENT_ORDER,
-                        created_at=cls._event_datetime(
-                            adjustment.created_at,
-                            entry.entry_date,
-                        ),
-                        event_id=str(adjustment.id),
-                        quantity_delta=-cls._decimal(adjustment.quantity_kg),
-                    )
-                )
-
-        logs = (
+        logs = list(
             cls.consumption_queryset(cycle)
             .filter(
-                feed_reference=feed_reference,
+                Q(feed_reference_id__in=reference_ids)
+                | Q(feed_reference__isnull=True, feed_size_mm=size),
                 feed_quantity__gt=0,
                 log_date__gte=tracking_started_at,
             )
-            .order_by("log_date", "created_at", "id")
+            .order_by('log_date', 'created_at', 'id')
         )
         if existing_log is not None:
-            logs = logs.exclude(pk=existing_log.pk)
+            logs = [log for log in logs if log.pk != existing_log.pk]
+
+        adjustments_by_entry = {
+            entry.id: cls._decimal(getattr(entry.historical_adjustment, 'quantity_kg', None))
+            for entry in entries
+            if hasattr(entry, 'historical_adjustment')
+        }
+        unclassified_log_total = sum(
+            (
+                cls._decimal(log.feed_quantity)
+                for log in logs
+                if log.feed_reference_id is None
+            ),
+            ZERO_DECIMAL,
+        )
+        duplicate_logs_remaining = unclassified_log_total
+        effective_adjustments: dict[object, Decimal] = {}
+        for entry in entries:
+            adjustment = adjustments_by_entry.get(entry.id, ZERO_DECIMAL)
+            duplicate = min(adjustment, duplicate_logs_remaining)
+            effective_adjustments[entry.id] = adjustment - duplicate
+            duplicate_logs_remaining -= duplicate
+
+        events: list[_LedgerEvent] = []
+        for entry in entries:
+            entry_created_at = cls._event_datetime(entry.created_at, entry.entry_date)
+            events.append(_LedgerEvent(
+                event_date=entry.entry_date,
+                order=cls.ENTRY_ORDER,
+                created_at=entry_created_at,
+                event_id=str(entry.id),
+                quantity_delta=cls._decimal(entry.quantity_kg),
+            ))
+            adjustment = effective_adjustments.get(entry.id, ZERO_DECIMAL)
+            if adjustment > ZERO_DECIMAL:
+                events.append(_LedgerEvent(
+                    event_date=entry.entry_date,
+                    order=cls.ADJUSTMENT_ORDER,
+                    created_at=entry_created_at,
+                    event_id=f'adjustment:{entry.id}',
+                    quantity_delta=-adjustment,
+                ))
+
         for log in logs:
-            events.append(
-                _LedgerEvent(
-                    event_date=log.log_date,
-                    order=cls.CONSUMPTION_ORDER,
-                    created_at=cls._event_datetime(log.created_at, log.log_date),
-                    event_id=str(log.id),
-                    quantity_delta=-cls._decimal(log.feed_quantity),
-                )
-            )
+            events.append(_LedgerEvent(
+                event_date=log.log_date,
+                order=cls.CONSUMPTION_ORDER,
+                created_at=cls._event_datetime(log.created_at, log.log_date),
+                event_id=f'log:{log.id}',
+                quantity_delta=-cls._decimal(log.feed_quantity),
+            ))
 
         for reservation in reservations:
-            events.append(
-                _LedgerEvent(
-                    event_date=reservation.log_date,
-                    order=cls.RESERVATION_ORDER,
-                    created_at=cls._event_datetime(None, reservation.log_date),
-                    event_id=reservation.event_id,
-                    quantity_delta=-cls._decimal(reservation.quantity_kg),
-                )
-            )
+            events.append(_LedgerEvent(
+                event_date=reservation.log_date,
+                order=cls.RESERVATION_ORDER,
+                created_at=cls._event_datetime(None, reservation.log_date),
+                event_id=f'reservation:{reservation.event_id}',
+                quantity_delta=-cls._decimal(reservation.quantity_kg),
+            ))
 
         effective_date = at_date or timezone.localdate()
         balance = ZERO_DECIMAL
@@ -201,34 +249,20 @@ class FeedStockLedgerService:
         future_headroom: Decimal | None = None
         for event in sorted(events, key=lambda item: item.sort_key):
             balance += event.quantity_delta
-            minimum_balance = (
-                balance if minimum_balance is None else min(minimum_balance, balance)
-            )
+            minimum_balance = balance if minimum_balance is None else min(minimum_balance, balance)
             if event.event_date <= effective_date:
                 balance_at_date = balance
-            # Les entrées d'une même journée sont toutes disponibles avant les
-            # consommations. Un solde intermédiaire entre deux entrées positives
-            # ne constitue donc pas une limite de ration.
-            if (
-                event.event_date >= effective_date
-                and event.quantity_delta < ZERO_DECIMAL
-            ):
-                future_headroom = (
-                    balance
-                    if future_headroom is None
-                    else min(future_headroom, balance)
-                )
+            if event.event_date >= effective_date and event.quantity_delta < ZERO_DECIMAL:
+                future_headroom = balance if future_headroom is None else min(future_headroom, balance)
 
         if future_headroom is None:
             future_headroom = balance_at_date
-        if minimum_balance is None:
-            minimum_balance = ZERO_DECIMAL
         return FeedStockLedgerState(
             tracking_started_at=tracking_started_at,
             balance_at_date=cls._quantize(balance_at_date),
             current_balance=cls._quantize(balance),
             future_headroom=cls._quantize(future_headroom),
-            minimum_balance=cls._quantize(minimum_balance),
+            minimum_balance=cls._quantize(minimum_balance or ZERO_DECIMAL),
         )
 
     @staticmethod

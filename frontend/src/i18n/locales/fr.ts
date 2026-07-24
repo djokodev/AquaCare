@@ -1747,7 +1747,7 @@ export const fr = {
   feedPhaseOrderAllBtn: 'Commander les produits disponibles',
   feedPhaseRecommended: '{{count}} sacs recommandés',
   feedPhaseProductUnavailable: 'Produit indisponible',
-  feedPhasePellet: 'Granulé {{size}}mm',
+  feedPhasePellet: 'Granulé {{size}} mm',
   feedPhasesLoadError: 'Impossible de charger les phases d\'alimentation.',
   feedPhasesEmpty: 'Aucune phase d\'alimentation disponible pour ce cycle.',
   feedPhaseAddedToCart: 'Ajouté au panier',

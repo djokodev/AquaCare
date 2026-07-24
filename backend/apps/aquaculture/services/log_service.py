@@ -320,10 +320,6 @@ class CycleLogService(BaseService):
 
         # Track UUIDs already processed in this batch to handle in-batch duplicates
         batch_uuid_map: dict[str, CycleLog] = {}
-        reserved_feed_by_reference: dict[
-            tuple[UUID, UUID],
-            list[FeedStockReservation],
-        ] = {}
         reserved_feed_by_size: dict[
             tuple[UUID, Decimal],
             list[FeedStockReservation],
@@ -440,16 +436,14 @@ class CycleLogService(BaseService):
                     clean_log_data['feed_size_mm'] = feed_reference.pellet_size_mm
                 reservation_key = None
                 reserved_feed_events: list[FeedStockReservation] = []
-                if feed_reference is not None:
-                    reservation_key = (cycle.id, feed_reference.id)
-                    reserved_feed_events = reserved_feed_by_reference.get(
-                        reservation_key,
-                        [],
-                    )
-                elif clean_log_data.get('feed_size_mm') is not None:
+                feed_size_mm = clean_log_data.get('feed_size_mm')
+                if feed_size_mm is None and feed_reference is not None:
+                    feed_size_mm = feed_reference.pellet_size_mm
+                    clean_log_data['feed_size_mm'] = feed_size_mm
+                if feed_size_mm is not None:
                     reservation_key = (
                         cycle.id,
-                        Decimal(str(clean_log_data['feed_size_mm'])),
+                        Decimal(str(feed_size_mm)),
                     )
                     reserved_feed_events = reserved_feed_by_size.get(
                         reservation_key,
@@ -497,12 +491,7 @@ class CycleLogService(BaseService):
                         ),
                         event_id=client_uuid or log.id,
                     )
-                    reservation_bucket = (
-                        reserved_feed_by_reference
-                        if feed_reference is not None
-                        else reserved_feed_by_size
-                    )
-                    reservation_bucket.setdefault(reservation_key, []).append(
+                    reserved_feed_by_size.setdefault(reservation_key, []).append(
                         reservation
                     )
                 result['cycles_affected'].add(cycle.id)

@@ -33,7 +33,7 @@ import {
 } from '@/features/aquaculture/services/aquacultureWorkflowService';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import FeedingTimesField from '@/features/aquaculture/components/FeedingTimesField';
-import { formatEditableNumber, parseLocalizedNumber } from '@/utils/localizedNumber';
+import { formatDecimalForDisplay, formatEditableNumber, parseLocalizedNumber } from '@/utils/localizedNumber';
 import { projectOfflineStore } from '@/features/aquaculture/services/offlineStoreProjection';
 import { OfflineCycleLog, offlineService } from '@/services/offlineService';
 
@@ -152,6 +152,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
   const unitName = routeParams?.productionUnitName || t('productionUnitsUnknownUnit');
   const selectedCycle = dashboardData?.active_cycles?.find((cycle) => cycle.id === cycleId) || null;
   const useComma = i18n.language?.startsWith('fr') ?? false;
+  const numberLocale = useComma ? 'fr-FR' : 'en-US';
 
   const [formData, setFormData] = useState<DailyLogData>(EMPTY_FORM);
   const [feedingStatus, setFeedingStatus] = useState<FeedingStatus>(null);
@@ -347,7 +348,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       } else if (!selectedStockBySize) {
         errors.feed_stock_item = t('feedStockItemRequired');
       } else if (availableFeedKg !== null && quantity.value > availableFeedKg) {
-        errors.feed_quantity = t('feedStockInsufficient', { available: availableFeedKg.toFixed(2) });
+        errors.feed_quantity = t('feedStockInsufficient', {
+          available: formatDecimalForDisplay(availableFeedKg, numberLocale),
+        });
       }
       if (feedingTimes.length === 0) {
         errors.feeding_times = t('feedingTimeRequired');
@@ -636,7 +639,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                 <InlineAlert
                   tone={stockTone}
                   message={store
-                    ? t('feedStockAvailable', { available: (availableFeedKg ?? totalAvailableFeedKg ?? 0).toFixed(2) })
+                    ? t('feedStockAvailable', {
+                      available: formatDecimalForDisplay(availableFeedKg ?? totalAvailableFeedKg ?? 0, numberLocale),
+                    })
                     : t('feedStockUnavailable')}
                 />
                 {store?.status === 'not_started' || (totalAvailableFeedKg ?? 0) <= 0 ? (
@@ -658,12 +663,13 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                     const sizeItem = store?.stock_items.find(
                       (item) => Number(item.feed_size_mm) === Number(size) && Number(item.quantity_available_kg) > 0,
                     );
+                    const displaySize = formatDecimalForDisplay(size, numberLocale);
                     const selected = numericFeedSize(formData.feed_size_mm) === Number(size);
                     const recommended = numericFeedSize(store?.recommended_pellet_size_mm) === Number(size);
                     const optionLabel = t('feedStockItemOption', {
                       label: '',
-                      size,
-                      available: group?.quantity_available_kg ?? '0',
+                      size: displaySize,
+                      available: formatDecimalForDisplay(group?.quantity_available_kg ?? '0', numberLocale),
                     });
                     const displayLabel = recommended
                       ? `${optionLabel} · ${t('recommendedPelletSizeChip')}`
@@ -690,7 +696,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                 </View>
                 {Number(store?.recommended_pellet_size_mm) > 0 ? (
                   <AppText variant="helper" color="link" style={{ marginBottom: spacing[2] }}>
-                    {t('recommendedPelletSize', { size: store?.recommended_pellet_size_mm })}
+                    {t('recommendedPelletSize', {
+                      size: formatDecimalForDisplay(store?.recommended_pellet_size_mm, numberLocale),
+                    })}
                   </AppText>
                 ) : null}
                 {visibleError('feed_stock_item') ? (
