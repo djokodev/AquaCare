@@ -137,4 +137,63 @@ describe('CycleFeedPhasesScreen', () => {
     fireEvent.press(getAllByLabelText('increaseQuantity')[1]);
     expect(mockDispatch).not.toHaveBeenCalled();
   });
+
+  it('affiche clairement une phase terminee sans chiffres techniques', async () => {
+    const coveredPhase = {
+      ...phase,
+      total_bags: 0,
+      shortfall_kg: '0.00',
+      remaining_need_kg: '0.00',
+      products: [],
+    };
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue(recommendation([coveredPhase]));
+
+    const { findByText, getByText, queryByText } = render(<CycleFeedPhasesScreen {...props} />);
+
+    expect(await findByText('feedPhaseCompleted')).toBeTruthy();
+    expect(getByText('feedPhaseCompletedShort')).toBeTruthy();
+    expect(queryByText('feedPhaseCoverage')).toBeNull();
+    expect(queryByText('feedPhaseDetailsShow')).toBeNull();
+    expect(queryByText('feedPhaseOrderBtn')).toBeNull();
+  });
+
+  it('signale une phase sans produit exact sans afficher une action de commande', async () => {
+    const unavailablePhase = {
+      ...phase,
+      product_available: false,
+      total_bags: 0,
+      shortfall_kg: '25.00',
+      products: [],
+    };
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue(recommendation([unavailablePhase]));
+
+    const { findByText, getByText, queryByText } = render(<CycleFeedPhasesScreen {...props} />);
+
+    expect(await findByText('feedPhaseUnavailable')).toBeTruthy();
+    expect(getByText('feedPhaseNoExactProduct')).toBeTruthy();
+    expect(queryByText('feedPhaseOrderBtn')).toBeNull();
+    expect(queryByText('feedTotalToOrderLabel')).toBeNull();
+  });
+
+  it('regroupe les etapes commerciales qui utilisent le meme aliment', async () => {
+    const secondStep = {
+      ...phase,
+      phase_id: 'phase-002',
+      days_range: [31, 60] as [number, number],
+      planned_days_range: [31, 60] as [number, number],
+      weight_range_g: ['50.00', '100.00'] as [string, string],
+      planned_weight_range_g: ['50.00', '100.00'] as [string, string],
+      total_bags: 1,
+      planned_consumption_kg: '20.00',
+      shortfall_kg: '20.00',
+      remaining_need_kg: '20.00',
+      products: [{ ...phase.products[0], quantity_bags: 1, total_kg: '20.00', total_price: '20000.00' }],
+    };
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue(recommendation([phase, secondStep]));
+
+    const { findByText, getAllByText } = render(<CycleFeedPhasesScreen {...props} />);
+
+    expect(await findByText('feedPhaseToOrder')).toBeTruthy();
+    expect(getAllByText('feedPhaseOrderBtn')).toHaveLength(1);
+  });
 });

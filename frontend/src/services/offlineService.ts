@@ -571,7 +571,9 @@ class OfflineService {
         fingerprint: '',
         timestamp: Date.now(),
         synced: false,
-        server_log_id: options?.serverLogId ?? existingLog?.server_log_id,
+        server_log_id: options && Object.prototype.hasOwnProperty.call(options, 'serverLogId')
+          ? options.serverLogId ?? undefined
+          : existingLog?.server_log_id,
       };
       offlineLog.fingerprint = cycleLogFingerprint(cycleId, offlineLog.logData);
 

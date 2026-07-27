@@ -113,7 +113,7 @@ export const createCycleLogWithOfflineFallback = async (
     if (options?.serverLogId) {
       await offlineService.saveCycleLogOffline(cycleId, logData, options);
     } else {
-      await offlineService.saveCycleLogOffline(cycleId, logData);
+      await offlineService.saveCycleLogOffline(cycleId, logData, { serverLogId: null });
     }
     return { mode: 'offline' };
   }
@@ -138,7 +138,7 @@ export const createCycleLogWithOfflineFallback = async (
       if (options?.serverLogId) {
         await offlineService.saveCycleLogOffline(cycleId, logData, options);
       } else {
-        await offlineService.saveCycleLogOffline(cycleId, logData);
+        await offlineService.saveCycleLogOffline(cycleId, logData, { serverLogId: null });
       }
       return { mode: 'offline' };
     }

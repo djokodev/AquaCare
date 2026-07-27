@@ -50,27 +50,115 @@ function buildProductForCart(product: FeedPhaseProduct): Product {
   };
 }
 
+type DisplayFeedPhase = FeedPhase & {
+  uncovered_shortfall_kg: string;
+  grouped_phase_count: number;
+};
+
 function phaseLabel(
   phase: FeedPhase,
-  phases: FeedPhase[],
+  translate: (key: string) => string,
+): string {
+  return translate(phase.phase_name);
+}
+
+function phaseWeightLabel(
+  phase: FeedPhase,
   translate: (key: string) => string,
   formatNumber: (value: string | number | null | undefined) => string,
 ): string {
-  const base = translate(phase.phase_name);
-  return phases.filter((item) => item.phase_name === phase.phase_name).length > 1
-    ? `${base} · ${formatNumber(phase.pellet_size_mm)} mm`
-    : base;
+  const weightRange = phase.planned_weight_range_g;
+  return translate('feedPhaseWeightRange')
+    .replace('{{min}}', formatNumber(weightRange[0]))
+    .replace('{{max}}', formatNumber(weightRange[1]));
+}
+
+function sumValues(...values: Array<string | number | null | undefined>): string {
+  return values.reduce<number>((total, value) => total + Number(value ?? 0), 0).toFixed(2);
+}
+
+function aggregateFeedPhases(phases: FeedPhase[]): DisplayFeedPhase[] {
+  const grouped = new Map<string, DisplayFeedPhase>();
+
+  phases.forEach((phase) => {
+    const key = `${phase.phase_name}:${phase.pellet_size_mm}`;
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, {
+        ...phase,
+        phase_id: `display-${key}`,
+        products: phase.products.map((product) => ({ ...product })),
+        uncovered_shortfall_kg: phase.products.length ? '0.00' : (phase.shortfall_kg ?? '0.00'),
+        grouped_phase_count: 1,
+      });
+      return;
+    }
+
+    const products = new Map(existing.products.map((product) => [product.product_id, { ...product }]));
+    phase.products.forEach((product) => {
+      const current = products.get(product.product_id);
+      if (!current) {
+        products.set(product.product_id, { ...product });
+        return;
+      }
+      current.quantity_bags += product.quantity_bags;
+      current.total_kg = sumValues(current.total_kg, product.total_kg);
+      current.total_price = sumValues(current.total_price, product.total_price);
+    });
+
+    existing.days_range = [
+      Math.min(existing.days_range[0], phase.days_range[0]),
+      Math.max(existing.days_range[1], phase.days_range[1]),
+    ];
+    existing.planned_days_range = [
+      Math.min(existing.planned_days_range[0], phase.planned_days_range[0]),
+      Math.max(existing.planned_days_range[1], phase.planned_days_range[1]),
+    ];
+    existing.weight_range_g = [
+      String(Math.min(Number(existing.weight_range_g[0]), Number(phase.weight_range_g[0]))),
+      String(Math.max(Number(existing.weight_range_g[1]), Number(phase.weight_range_g[1]))),
+    ];
+    existing.planned_weight_range_g = [...existing.weight_range_g];
+    existing.duration_days += phase.duration_days;
+    existing.planned_duration_days += phase.planned_duration_days;
+    existing.planned_consumption_kg = sumValues(existing.planned_consumption_kg, phase.planned_consumption_kg);
+    existing.actual_consumed_kg = sumValues(existing.actual_consumed_kg, phase.actual_consumed_kg);
+    existing.estimated_remaining_need_kg = sumValues(existing.estimated_remaining_need_kg, phase.estimated_remaining_need_kg);
+    existing.remaining_need_kg = sumValues(existing.remaining_need_kg, phase.remaining_need_kg);
+    existing.consumed_kg = sumValues(existing.consumed_kg, phase.consumed_kg);
+    existing.allocated_stock_kg = sumValues(existing.allocated_stock_kg, phase.allocated_stock_kg);
+    existing.allocated_pending_kg = sumValues(existing.allocated_pending_kg, phase.allocated_pending_kg);
+    existing.shortfall_kg = sumValues(existing.shortfall_kg, phase.shortfall_kg);
+    existing.surplus_kg = sumValues(existing.surplus_kg, phase.surplus_kg);
+    existing.total_bags = Number(existing.total_bags ?? 0) + Number(phase.total_bags ?? 0);
+    existing.total_price = sumValues(existing.total_price, phase.total_price);
+    existing.product_available = existing.product_available || phase.product_available;
+    existing.products = Array.from(products.values());
+    existing.uncovered_shortfall_kg = sumValues(
+      existing.uncovered_shortfall_kg,
+      phase.products.length ? '0.00' : phase.shortfall_kg,
+    );
+    existing.grouped_phase_count += 1;
+  });
+
+  return Array.from(grouped.values());
+}
+
+type PhasePresentationStatus = 'completed' | 'covered' | 'to_order' | 'unavailable';
+
+function getPhasePresentationStatus(phase: FeedPhase): PhasePresentationStatus {
+  const shortfall = Number(phase.shortfall_kg ?? 0);
+  const bags = Number(phase.total_bags ?? 0);
+  const remainingNeed = Number(phase.remaining_need_kg ?? phase.estimated_remaining_need_kg ?? 0);
+
+  if (shortfall <= 0 && remainingNeed <= 0) return 'completed';
+  if (shortfall <= 0) return 'covered';
+  if (phase.product_available && phase.products.length > 0 && bags > 0) return 'to_order';
+  return 'unavailable';
 }
 
 const quantityKey = (phase: FeedPhase, product: FeedPhaseProduct): string =>
   `${phase.phase_id}-${product.product_id}`;
-
-const calculationSourceKey = (source: string): string => {
-  if (source.startsWith('current_cycle_reforecast:')) return 'feedCalculationSource_current_cycle_reforecast';
-  if (source === 'cycle_progress') return 'feedCalculationSource_cycle_progress';
-  if (source === 'legacy_backfill') return 'feedCalculationSource_legacy_backfill';
-  return 'feedCalculationSource_cycle_launch';
-};
 
 export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
@@ -82,23 +170,23 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const cartItemsCount = useSelector((state: RootState) =>
     state.commerce.cart.items.reduce((sum, item) => sum + item.quantity, 0)
   );
-  const [phases, setPhases] = useState<FeedPhase[]>([]);
+  const [phases, setPhases] = useState<DisplayFeedPhase[]>([]);
   const [recommendation, setRecommendation] = useState<Awaited<ReturnType<typeof aquacultureService.getCycleFeedPhases>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [submittedScopes, setSubmittedScopes] = useState<Record<string, boolean>>({});
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
   const loadPhases = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const result = await aquacultureService.getCycleFeedPhases(cycleId);
+      const displayPhases = aggregateFeedPhases(result.feeding_phases);
       setRecommendation(result);
-      setPhases(result.feeding_phases);
+      setPhases(displayPhases);
       const initialQuantities: Record<string, number> = {};
-      result.feeding_phases.forEach((phase) =>
+      displayPhases.forEach((phase) =>
         phase.products.forEach((product) => {
           initialQuantities[quantityKey(phase, product)] = product.quantity_bags;
         })
@@ -133,7 +221,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
             product: buildProductForCart(product),
             quantity,
             recommendation: {
-              phase_name: phaseLabel(phase, phases, t, displayDecimal),
+              phase_name: phaseLabel(phase, t),
               pellet_size_mm: String(phase.pellet_size_mm),
               suggested_bags: quantity,
             },
@@ -156,7 +244,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
             product: buildProductForCart(product),
             quantity,
             recommendation: {
-              phase_name: phaseLabel(phase, phases, t, displayDecimal),
+              phase_name: phaseLabel(phase, t),
               pellet_size_mm: String(phase.pellet_size_mm),
               suggested_bags: quantity,
             },
@@ -178,8 +266,8 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
     ),
     [phases, quantities]
   );
-  const uncoveredPhases = phases.filter((phase) => !phase.product_available && Number(phase.shortfall_kg ?? 0) > 0);
-  const uncoveredKg = uncoveredPhases.reduce((sum, phase) => sum + Number(phase.shortfall_kg ?? 0), 0);
+  const uncoveredPhases = phases.filter((phase) => Number(phase.uncovered_shortfall_kg) > 0);
+  const uncoveredKg = uncoveredPhases.reduce((sum, phase) => sum + Number(phase.uncovered_shortfall_kg), 0);
 
   return (
     <View style={styles.screen}>
@@ -234,46 +322,46 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                 {recommendation.warnings.filter((warning) => warning !== 'exact_product_unavailable' && warning !== 'unclassified_consumption').map((warning) => (
                   <InlineAlert key={warning} compact tone="warning" message={t(`feedWarning_${warning}`)} />
                 ))}
-                <Button
-                  label={t('feedCalculationDetails')}
-                  variant="ghost"
-                  onPress={() => setShowTechnicalDetails((value) => !value)}
-                />
-                {showTechnicalDetails ? (
-                  <Card variant="outlined" style={styles.detailsCard}>
-                    <AppText variant="body" color="muted">{t('feedCalculationCurrentData')}</AppText>
-                    <AppText variant="caption" color="muted">
-                      {t('feedRecommendationCalculatedAt', { date: new Date(recommendation.calculated_at).toLocaleString() })}
-                    </AppText>
-                    <AppText variant="caption" color="muted">
-                      {t('feedRecommendationSource', { source: t(calculationSourceKey(recommendation.source)) })}
-                    </AppText>
-                  </Card>
-                ) : null}
               </>
             ) : null}
-            {phases.map((phase, phaseIndex) => (
+            {phases.map((phase, phaseIndex) => {
+              const presentationStatus = getPhasePresentationStatus(phase);
+              const hasUncoveredShortfall = Number(phase.uncovered_shortfall_kg) > 0;
+              return (
               <Card key={`${phase.phase_name}-${phaseIndex}`} variant="outlined" style={styles.phaseCard}>
-                <View style={styles.rowBetween}>
-                  <AppText variant="sectionTitle" style={styles.flex}>
-                    {phaseLabel(phase, phases, t, displayDecimal)}
+                <View style={styles.phaseHeader}>
+                  <AppText variant="sectionTitle" style={styles.phaseTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                    {phaseLabel(phase, t)}
                   </AppText>
-                  {phase.total_bags !== null ? <Badge label={`${phase.total_bags} ${t('bags')}`} tone="success" /> : null}
+                  {presentationStatus === 'to_order' ? (
+                    <Badge label={`${phase.total_bags} ${t('bags')}`} tone="success" />
+                  ) : presentationStatus === 'completed' ? (
+                    <Badge label={t('feedPhaseCompletedShort')} tone="neutral" />
+                  ) : presentationStatus === 'covered' ? (
+                    <Badge label={t('feedPhaseCoveredShort')} tone="success" />
+                  ) : (
+                    <Badge label={t('feedPhaseUnavailableShort')} tone="warning" />
+                  )}
                 </View>
-                <AppText color="muted" style={styles.phaseMeta}>
-                  {phase.duration_days} {t('days')} · {t('feedPhasePellet', { size: displayDecimal(phase.pellet_size_mm) })}
-                </AppText>
-                <AppText variant="body" color="muted">
-                  {t('feedPhaseCoverage', {
-                    need: displayDecimal(phase.remaining_need_kg),
-                    consumed: displayDecimal(phase.actual_consumed_kg),
-                    stock: displayDecimal(phase.allocated_stock_kg),
-                    pending: displayDecimal(phase.allocated_pending_kg),
-                    shortfall: displayDecimal(phase.shortfall_kg),
-                  })}
+                <View style={styles.phaseContextRow}>
+                  <AppText color="muted" style={styles.phaseContextText} numberOfLines={1}>{phaseWeightLabel(phase, t, displayDecimal)}</AppText>
+                  <AppText color="muted" style={styles.phaseContextText} numberOfLines={1}>{phase.duration_days} {t('days')}</AppText>
+                </View>
+                <AppText color="muted" style={styles.phaseMeta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                  {t('feedPhasePellet', { size: displayDecimal(phase.pellet_size_mm) })}
                 </AppText>
 
-                {!phase.product_available && Number(phase.shortfall_kg) > 0 ? (
+                <AppText variant="bodyStrong" color={presentationStatus === 'unavailable' ? 'warning' : 'success'}>
+                  {presentationStatus === 'to_order'
+                    ? t('feedPhaseToOrder', { count: phase.total_bags ?? 0 })
+                    : presentationStatus === 'completed'
+                      ? t('feedPhaseCompleted')
+                    : presentationStatus === 'covered'
+                      ? t('feedPhaseCovered')
+                      : t('feedPhaseUnavailable')}
+                </AppText>
+
+                {hasUncoveredShortfall ? (
                   <InlineAlert compact tone="warning" message={t('feedPhaseNoExactProduct', { size: displayDecimal(phase.pellet_size_mm) })} />
                 ) : null}
 
@@ -286,16 +374,9 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                       <View style={styles.productRow}>
                         <View style={styles.flex}>
                           <AppText variant="bodyStrong" numberOfLines={1}>{getProductDisplayName(product.product_name, t('catfish'))}</AppText>
-                          <AppText variant="caption" color="muted">
+                          <AppText variant="caption" color="muted" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
                             {displayDecimal(product.package_weight_kg)} kg · {displayDecimal(product.unit_price, 0)} FCFA/{t('bag')}
                           </AppText>
-                          {Math.max(0, quantity * Number(product.package_weight_kg) - Number(phase.shortfall_kg ?? 0)) > 0 ? (
-                            <AppText variant="caption" color="muted">{t('feedPhaseSurplus', {
-                              surplus: displayDecimal(
-                                Math.max(0, quantity * Number(product.package_weight_kg) - Number(phase.shortfall_kg ?? 0)),
-                              ),
-                            })}</AppText>
-                          ) : null}
                         </View>
                         <View style={styles.quantityRow}>
                           <IconButton
@@ -327,24 +408,35 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                   />
                 ) : null}
               </Card>
-            ))}
+              );
+            })}
           </ScrollView>
-          <View style={styles.footer}>
-            {uncoveredPhases.length > 0 ? (
-              <AppText variant="caption" color="warning" style={styles.uncoveredMessage}>
-                {t('feedAvailableProductsOnly', {
-                  phases: uncoveredPhases.length,
-                  quantity: formatDecimalForDisplay(uncoveredKg, numberLocale),
-                })}
-              </AppText>
-            ) : null}
-            <Button
-              label={`${t('feedPhaseOrderAllBtn')} · ${totalBags} ${t('bags')}`}
-              iconLeft="cart"
-              onPress={handleOrderAll}
-              disabled={totalBags <= 0 || Boolean(submittedScopes.all) || recommendation?.status === 'unavailable'}
-            />
-          </View>
+          {totalBags > 0 || uncoveredPhases.length > 0 ? (
+            <View style={styles.footer}>
+              {uncoveredPhases.length > 0 ? (
+                <AppText variant="caption" color="warning" style={styles.uncoveredMessage}>
+                  {t('feedAvailableProductsOnly', {
+                    phases: uncoveredPhases.length,
+                    quantity: formatDecimalForDisplay(uncoveredKg, numberLocale),
+                  })}
+                </AppText>
+              ) : null}
+              {totalBags > 0 ? (
+                <>
+                  <View style={styles.footerSummary}>
+                    <AppText variant="caption" color="muted">{t('feedTotalToOrderLabel')}</AppText>
+                    <AppText variant="bodyStrong">{totalBags} {t('bags')}</AppText>
+                  </View>
+                  <Button
+                    label={t('feedPhaseOrderAllBtn')}
+                    iconLeft="cart"
+                    onPress={handleOrderAll}
+                    disabled={Boolean(submittedScopes.all) || recommendation?.status === 'unavailable'}
+                  />
+                </>
+              ) : null}
+            </View>
+          ) : null}
         </>
       )}
     </View>
@@ -356,10 +448,13 @@ const styles = StyleSheet.create({
   content: { padding: spacing[4], paddingBottom: spacing[16], gap: spacing[3] },
   phaseCard: {},
   summaryCard: { gap: spacing[3] },
-  detailsCard: { gap: spacing[2] },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3] },
   uncoveredMessage: { marginBottom: spacing[2] },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  footerSummary: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing[2] },
+  phaseHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[2] },
+  phaseTitle: { flex: 1, flexShrink: 1 },
+  phaseContextRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: spacing[1] },
+  phaseContextText: { flexShrink: 1 },
   phaseMeta: { marginTop: spacing[1], marginBottom: spacing[3] },
   flex: { flex: 1 },
   productRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[3] },

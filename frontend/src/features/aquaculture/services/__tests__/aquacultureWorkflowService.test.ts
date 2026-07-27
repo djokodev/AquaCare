@@ -75,6 +75,7 @@ describe('createCycleLogWithOfflineFallback', () => {
       'cycle-1',
       expect.objectContaining({ created_offline: true }),
     );
+    expect(service.updateCycleLog).not.toHaveBeenCalled();
     expect(offline.markLogAsSynced).toHaveBeenCalledWith('offline-log-1');
   });
 
@@ -89,9 +90,11 @@ describe('createCycleLogWithOfflineFallback', () => {
     });
 
     expect(result).toEqual({ mode: 'offline' });
-    expect(offline.saveCycleLogOffline).toHaveBeenCalledWith('cycle-1', expect.objectContaining({
-      feed_reference: 'server-feed-1',
-    }));
+    expect(offline.saveCycleLogOffline).toHaveBeenCalledWith(
+      'cycle-1',
+      expect.objectContaining({ feed_reference: 'server-feed-1' }),
+      { serverLogId: null },
+    );
     expect(service.createCycleLog).not.toHaveBeenCalled();
   });
 

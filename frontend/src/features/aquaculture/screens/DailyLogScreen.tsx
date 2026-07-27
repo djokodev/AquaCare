@@ -235,7 +235,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         if (serverLog && !sameServerLog && serverLog.client_uuid !== localEditableLog.client_uuid) {
           setLocalLogConflict(true);
         } else {
-          todayLog = localEditableLog;
+          todayLog = localEditableLog.server_log_id && !sameServerLog
+            ? { ...localEditableLog, server_log_id: null }
+            : localEditableLog;
         }
       }
       setExistingLog(todayLog);
@@ -278,7 +280,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     if (store.stock_by_size?.length) return store.stock_by_size;
     const groups = new Map<string, NonNullable<CycleStore['stock_by_size']>[number]>();
     store.stock_items.forEach((item) => {
-      if (!item.feed_size_mm) return;
+      // Un stock legacy sans référence alimentaire reste visible dans le
+      // Magasin, mais ne peut pas être utilisé pour une ration journalière.
+      if ((!item.feed_reference_id && !item.feed_reference_client_uuid) || !item.feed_size_mm) return;
       const key = String(Number(item.feed_size_mm));
       const current = groups.get(key) ?? {
         feed_size_mm: item.feed_size_mm,
@@ -296,6 +300,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
 
   const selectedStockItem = useMemo(() => store?.stock_items?.find((item) => (
     Number(item.feed_size_mm) === numericFeedSize(formData.feed_size_mm)
+      && Boolean(item.feed_reference_id || item.feed_reference_client_uuid)
       && Number(item.quantity_available_kg) > 0
   )) ?? null, [formData.feed_size_mm, store?.stock_items]);
   const selectedStockBySize = stockBySize.find(
@@ -313,8 +318,11 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     return remaining + previous;
   }, [existingLog, formData.feed_size_mm, selectedStockBySize]);
   const totalAvailableFeedKg = store
-    ? Number(store.summary.estimated_feed_remaining_kg)
+    ? stockBySize.reduce((total, item) => total + Number(item.quantity_available_kg ?? 0), 0)
     : null;
+  const unclassifiedStockKg = store
+    ? Number(store.summary.unclassified_stock_kg ?? 0)
+    : 0;
 
   const validationErrors = useMemo<FormErrors>(() => {
     const errors: FormErrors = {};
@@ -345,6 +353,10 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         errors.feed_quantity = t('feedStockUnavailable');
       } else if (store.status === 'not_started') {
         errors.feed_quantity = t('feedStockRequired');
+      } else if (unclassifiedStockKg > 0 && stockBySize.length === 0) {
+        errors.feed_stock_item = t('feedStockRequiresClassification', {
+          available: formatDecimalForDisplay(unclassifiedStockKg, numberLocale),
+        });
       } else if (!selectedStockBySize) {
         errors.feed_stock_item = t('feedStockItemRequired');
       } else if (availableFeedKg !== null && quantity.value > availableFeedKg) {
@@ -391,7 +403,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     }
 
     return errors;
-  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, localLogConflict, selectedStockBySize, store, t]);
+  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, localLogConflict, numberLocale, selectedStockBySize, stockBySize.length, store, t, unclassifiedStockKg]);
 
   const visibleError = (field: DailyLogField): string | undefined =>
     submitted || touched[field] ? serverErrors[field] ?? validationErrors[field] : undefined;
@@ -498,7 +510,11 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
               minimum: String(rawError.minimum_balance_kg ?? '0'),
             })
           : parsedError.code === 'feed_stock_item_unavailable'
-            ? t('feedStockItemRequired')
+            ? unclassifiedStockKg > 0
+              ? t('feedStockRequiresClassification', {
+                available: formatDecimalForDisplay(unclassifiedStockKg, numberLocale),
+              })
+              : t('feedStockItemRequired')
           : parsedError.code === 'feed_log_before_stock_tracking'
             ? t('feedLogBeforeStockTracking')
             : t('feedStockRequired');
@@ -556,7 +572,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     );
   }
 
-  const stockTone = store?.status === 'ok' ? 'success' : store?.status === 'low' ? 'warning' : 'error';
+  const stockTone = unclassifiedStockKg > 0 && (totalAvailableFeedKg ?? 0) <= 0
+    ? 'warning'
+    : store?.status === 'ok' ? 'success' : store?.status === 'low' ? 'warning' : 'error';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.page }}>
@@ -639,14 +657,18 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                 <InlineAlert
                   tone={stockTone}
                   message={store
-                    ? t('feedStockAvailable', {
-                      available: formatDecimalForDisplay(availableFeedKg ?? totalAvailableFeedKg ?? 0, numberLocale),
-                    })
+                    ? (unclassifiedStockKg > 0 && (totalAvailableFeedKg ?? 0) <= 0
+                      ? t('feedStockRequiresClassification', {
+                        available: formatDecimalForDisplay(unclassifiedStockKg, numberLocale),
+                      })
+                      : t('feedStockAvailable', {
+                        available: formatDecimalForDisplay(availableFeedKg ?? totalAvailableFeedKg ?? 0, numberLocale),
+                      }))
                     : t('feedStockUnavailable')}
                 />
-                {store?.status === 'not_started' || (totalAvailableFeedKg ?? 0) <= 0 ? (
+                {store?.status === 'not_started' || (totalAvailableFeedKg ?? 0) <= 0 || unclassifiedStockKg > 0 ? (
                   <Button
-                    label={t('declareFeedStock')}
+                    label={unclassifiedStockKg > 0 ? t('identifyFeedStock') : t('declareFeedStock')}
                     onPress={() => navigation.navigate('Store', { cycleId })}
                     variant="outline"
                     size="small"

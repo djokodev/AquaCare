@@ -1384,7 +1384,7 @@ class TestAnnualSimulationView:
             'num_cycles': 2,
         }
 
-        with django_assert_num_queries(12):
+        with django_assert_num_queries(8):
             response = self.client.post(self.url, data, format='json')
 
         assert response.status_code == status.HTTP_200_OK
@@ -1400,7 +1400,7 @@ class TestAnnualSimulationView:
             'num_cycles': 2,
         }
 
-        with django_assert_num_queries(13):
+        with django_assert_num_queries(9):
             response = self.client.post(self.url, data, format='json')
 
         assert response.status_code == status.HTTP_200_OK

@@ -72,8 +72,9 @@ class TestCycleSimulationService:
         assert params['cycle_duration_days'] == 180  # Défaut tilapia
         assert params['survival_rate'] == 0.95  # Défaut
 
-        # Vérifier phases (tilapia = 3 phases)
-        assert len(result['feeding_phases']) == 3
+        # Vérifier phases (tilapia = 2 granulométries dans le guide DIBAQ
+        # pour une cible de 350 g : 2 mm puis 3,5 mm)
+        assert len(result['feeding_phases']) == 2
 
         # Vérifier summary
         summary = result['summary']
@@ -155,14 +156,13 @@ class TestCycleSimulationService:
 
         phases = result['feeding_phases']
 
-        # Tilapia : doit avoir 3 phases (2mm, 3mm, 4.5mm)
-        assert len(phases) == 3
+        # Tilapia : doit avoir 2 phases (2 mm, 3,5 mm) pour une cible de 350 g.
+        assert len(phases) == 2
 
         # Vérifier progression granulométrie
         pellet_sizes = [phase['pellet_size_mm'] for phase in phases]
         assert 2.0 in pellet_sizes  # Alevinage
-        assert 3.0 in pellet_sizes  # Pré-grossissement
-        assert 4.5 in pellet_sizes  # Grossissement
+        assert 3.5 in pellet_sizes  # Grossissement
 
         # Vérifier que chaque phase a des produits
         for phase in phases:

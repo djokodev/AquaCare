@@ -308,3 +308,39 @@ class TestCycleStoreViews:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'feed_size_mm' in response.data
+
+    def test_unclassified_stock_with_size_is_not_exposed_as_usable_stock(
+        self, auth_client, authenticated_user,
+    ):
+        cycle = _create_cycle(authenticated_user)
+        CycleFeedStockEntry.objects.create(
+            cycle=cycle,
+            source='order',
+            label='Ancien aliment',
+            feed_size_mm=Decimal('2.00'),
+            quantity_kg=Decimal('30.00'),
+            total_cost_fcfa=Decimal('45000.00'),
+            entry_date=timezone.localdate(),
+        )
+
+        store_response = auth_client.get(
+            reverse('aquaculture:production-cycle-store', kwargs={'pk': cycle.id}),
+        )
+        assert store_response.status_code == status.HTTP_200_OK
+        assert store_response.data['stock_by_size'] == []
+        assert store_response.data['summary']['unclassified_stock_kg'] == '30.00'
+
+        log_response = auth_client.post(
+            reverse('aquaculture:cycle-log-list'),
+            {
+                'cycle': str(cycle.id),
+                'log_date': timezone.localdate().isoformat(),
+                'feed_quantity': '5.00',
+                'feed_size_mm': '2.0',
+                'client_uuid': str(uuid4()),
+            },
+            format='json',
+        )
+
+        assert log_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert log_response.data['code'] == 'feed_stock_item_unavailable', log_response.data

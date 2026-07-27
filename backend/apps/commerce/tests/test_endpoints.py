@@ -165,7 +165,7 @@ class TestProductEndpoints:
         assert params['survival_rate'] == 0.95
 
         # Vérifier phases
-        assert len(data['feeding_phases']) == 3  # Tilapia = 3 phases
+        assert len(data['feeding_phases']) == 2  # Tilapia = 2 granulométries jusqu'à 350 g
 
         # Vérifier summary
         summary = data['summary']

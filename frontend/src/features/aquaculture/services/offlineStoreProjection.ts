@@ -216,7 +216,9 @@ export const projectOfflineStore = async (
   const exposePelletSizes = base.available_pellet_sizes !== undefined || !serverStore || localReferences.length > 0;
   const projectedSizes = new Set<string>(base.available_pellet_sizes ?? []);
   projectedItems.forEach((item) => {
-    if (!item.feed_size_mm) return;
+    // Les entrées legacy non classifiées restent dans stock_items pour être
+    // identifiées, mais ne doivent jamais alimenter les soldes utilisables.
+    if ((!item.feed_reference_id && !item.feed_reference_client_uuid) || !item.feed_size_mm) return;
     projectedSizes.add(String(Number(item.feed_size_mm)));
     const current = projectedBySize.get(item.feed_size_mm) ?? {
       feed_size_mm: item.feed_size_mm,

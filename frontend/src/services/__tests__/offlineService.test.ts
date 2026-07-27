@@ -272,6 +272,22 @@ describe('services/offlineService', () => {
     expect(saved.synced).toBe(true);
   });
 
+  it('supprime un server_log_id obsolète quand un brouillon revient en création', async () => {
+    await offlineService.saveCycleLogOffline(
+      'cycle-1',
+      { log_date: '2026-07-23', client_uuid: 'stable-client-uuid' } as any,
+      { serverLogId: 'missing-server-log' },
+    );
+    await offlineService.saveCycleLogOffline(
+      'cycle-1',
+      { log_date: '2026-07-23', client_uuid: 'stable-client-uuid', mortality_count: 0 } as any,
+      { serverLogId: null },
+    );
+
+    const [saved] = await offlineService.getOfflineCycleLogs();
+    expect(saved.server_log_id).toBeUndefined();
+  });
+
   it('bloque un journal lie par feed_reference_id tant que le stock pending ne passe pas', async () => {
     await offlineService.saveStockDeclarationOffline('cycle-1', {
       feed_reference_id: 'server-feed-1',

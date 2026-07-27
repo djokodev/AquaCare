@@ -235,18 +235,14 @@ describe('StoreScreen', () => {
     });
   });
 
-  it('présente les produits AquaCare comme des fiches sélectionnables structurées', async () => {
-    const { getByText, getAllByText } = render(<StoreScreen />);
+  it('affiche uniquement la saisie du nouvel aliment pour une déclaration normale', async () => {
+    const { getByText, queryByText } = render(<StoreScreen />);
 
     await waitFor(() => expect(getByText('storeManualSubmit')).toBeTruthy());
     fireEvent.press(getByText('storeManualSubmit'));
-    fireEvent.press(getByText('storeAquacareFeed'));
-
-    await waitFor(() => {
-      expect(getByText('storeProductTitle')).toBeTruthy();
-      expect(getByText('storeProductDetails')).toBeTruthy();
-    });
-    expect(getAllByText('storeProductTitle').length).toBeGreaterThan(0);
+    expect(getByText('storeManualLabel')).toBeTruthy();
+    expect(queryByText('storeAquacareFeed')).toBeNull();
+    expect(queryByText('storeUseExistingFeed')).toBeNull();
   });
 
   it('recommande un réapprovisionnement seulement avec un stock explicitement nul', async () => {

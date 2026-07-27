@@ -245,18 +245,18 @@ class PhaseDetector:
 
     # Règles de granulométrie par espèce et poids
     PHASE_RULES: Final[dict[str, list[PhaseRule]]] = {
+        # Fallback aligné sur les tables DIBAQ chargées dans NutritionalGuide.
+        # Les recommandations de cycle utilisent cette table uniquement quand
+        # le guide persistant n'est pas encore disponible.
         'tilapia': [
-            (0, 20, 'pre_grossissement', 2.0, 'TILAPIA 2MM'),
-            (20, 100, 'pre_grossissement', 3.0, 'TILAPIA 3MM'),
-            (100, 9999, 'grossissement', 4.5, 'TILAPIA 4.5MM')
+            (0, 100, 'pre_grossissement', 2.0, 'TILAPIA 2MM'),
+            (100, 500, 'grossissement', 3.5, 'TILAPIA 3.5MM'),
+            (500, 9999, 'grossissement', 5.0, 'TILAPIA 5MM')
         ],
         'catfish': [
-            (0, 5, 'pre_grossissement', 1.5, 'CATFISH 1.5MM'),
-            (5, 20, 'pre_grossissement', 2.0, 'CATFISH 2MM'),
-            (20, 100, 'pre_grossissement', 3.0, 'CATFISH 3MM'),
-            (100, 250, 'grossissement', 4.5, 'CATFISH 4.5MM'),
-            (250, 500, 'grossissement', 6.0, 'CATFISH 6MM'),
-            (500, 9999, 'grossissement', 8.0, 'CATFISH 8MM')
+            (0, 100, 'pre_grossissement', 2.0, 'CATFISH 2MM'),
+            (100, 500, 'grossissement', 4.0, 'CATFISH 4MM'),
+            (500, 9999, 'grossissement', 6.0, 'CATFISH 6MM')
         ]
     }
 
@@ -280,8 +280,8 @@ class PhaseDetector:
             >>> PhaseDetector.detect_phase('tilapia', 50)
             {
                 'phase': 'pre_grossissement',
-                'pellet_size_mm': 3.0,
-                'product_pattern': 'TILAPIA 3MM'
+                'pellet_size_mm': 2.0,
+                'product_pattern': 'TILAPIA 2MM'
             }
         """
         rules = PhaseDetector.PHASE_RULES.get(species.lower(), PhaseDetector.PHASE_RULES['tilapia'])
@@ -294,11 +294,11 @@ class PhaseDetector:
                     'product_pattern': product_pattern
                 }
 
-        # Fallback (grossissement)
+        # Fallback (pré-récolte), cohérent avec la dernière taille DIBAQ.
         return {
             'phase': 'grossissement',
-            'pellet_size_mm': 4.5,
-            'product_pattern': f'{species.upper()} 4.5MM'
+            'pellet_size_mm': 5.0,
+            'product_pattern': f'{species.upper()} 5MM'
         }
 
     @staticmethod

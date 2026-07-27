@@ -11,7 +11,7 @@ from commerce.services.cycle_simulation_service import CycleSimulationService
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from ..models import CycleFeedPlan, FarmFeedReference, ProductionCycle
+from ..models import CycleFeedPlan, FarmFeedReference, NutritionalGuide, ProductionCycle
 from .cycle_store_service import ZERO_DECIMAL, CycleStoreService
 from .feed_reference_service import FeedReferenceService
 
@@ -84,11 +84,65 @@ class CycleFeedRecommendationService:
         }
 
     @classmethod
-    def _normalized_plan_phases(cls, plan: CycleFeedPlan) -> list[dict[str, Any]]:
-        return [
+    def _apply_nutritional_guide_sizes(
+        cls,
+        cycle: ProductionCycle,
+        phases: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Applique la granulométrie du guide DIBAQ aux phases calculées.
+
+        Le simulateur Commerce conserve la progression de poids et les besoins
+        en kilogrammes, mais ses anciennes règles de granulométrie ne sont pas
+        une source de vérité produit. Les guides nutritionnels officiels sont
+        donc prioritaires lorsqu'ils existent. Les phases historiques restent
+        inchangées en base ; seule la recommandation exposée est recalée.
+        """
+        guides = list(
+            NutritionalGuide.objects.filter(
+                species=cycle.species,
+                source='DIBAQ',
+            ).order_by('min_weight')
+        )
+        if not guides:
+            return phases
+
+        adjusted: list[dict[str, Any]] = []
+        for phase in phases:
+            weight_range = phase.get('planned_weight_range_g') or phase.get('weight_range_g') or []
+            if not weight_range:
+                adjusted.append(phase)
+                continue
+            start_weight = cls._decimal(weight_range[0])
+            guide = next(
+                (
+                    candidate
+                    for candidate in guides
+                    if candidate.min_weight <= start_weight < candidate.max_weight
+                ),
+                None,
+            )
+            if guide is None:
+                adjusted.append(phase)
+                continue
+            adjusted.append({
+                **phase,
+                'pellet_size_mm': cls._kg(guide.feed_size_mm),
+                'nutritional_guide_source': guide.source,
+                'nutritional_guide_id': str(guide.id),
+            })
+        return adjusted
+
+    @classmethod
+    def _normalized_plan_phases(
+        cls,
+        plan: CycleFeedPlan,
+        cycle: ProductionCycle | None = None,
+    ) -> list[dict[str, Any]]:
+        phases = [
             cls._normalize_phase(raw_phase, sequence)
             for sequence, raw_phase in enumerate(plan.phases, start=1)
         ]
+        return cls._apply_nutritional_guide_sizes(cycle, phases) if cycle else phases
 
     @classmethod
     def _initial_simulation(cls, cycle: ProductionCycle) -> dict[str, Any]:
@@ -99,7 +153,7 @@ class CycleFeedRecommendationService:
             or cycle.initial_average_weight >= cycle.target_harvest_weight_g
         ):
             return {}
-        return CycleSimulationService.simulate_cycle(
+        simulation = CycleSimulationService.simulate_cycle(
             species=cycle.species,
             initial_fish_count=cycle.initial_count,
             initial_weight_g=float(cycle.initial_average_weight),
@@ -110,6 +164,11 @@ class CycleFeedRecommendationService:
             fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
             other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
         )
+        simulation['feeding_phases'] = cls._apply_nutritional_guide_sizes(
+            cycle,
+            simulation['feeding_phases'],
+        )
+        return simulation
 
     @classmethod
     @transaction.atomic
@@ -216,7 +275,7 @@ class CycleFeedRecommendationService:
         duration = (planned_end - timezone.localdate()).days - starts_after_integrated_ration
         if duration <= 0:
             return {}, ['planned_harvest_date_elapsed']
-        return CycleSimulationService.simulate_cycle(
+        simulation = CycleSimulationService.simulate_cycle(
             species=cycle.species,
             initial_fish_count=cycle.current_count,
             initial_weight_g=float(current_weight),
@@ -226,7 +285,12 @@ class CycleFeedRecommendationService:
             selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
             fingerlings_cost_fcfa=0.0,
             other_costs_fcfa=0.0,
-        ), []
+        )
+        simulation['feeding_phases'] = cls._apply_nutritional_guide_sizes(
+            cycle,
+            simulation['feeding_phases'],
+        )
+        return simulation, []
 
     @classmethod
     def _current_phase_index(
@@ -368,7 +432,7 @@ class CycleFeedRecommendationService:
         plan = cls.ensure_plan(cycle)
         if plan is None:
             return cls._unavailable_payload(cycle, [], None, ['feed_estimate_unavailable'])
-        phases = cls._normalized_plan_phases(plan)
+        phases = cls._normalized_plan_phases(plan, cycle)
         current_weight, weight_source = cls._resolve_current_weight(cycle, phases)
         if current_weight is None:
             return cls._unavailable_payload(cycle, phases, plan, ['current_weight_unavailable'])

@@ -54,6 +54,50 @@ describe('projectOfflineStore', () => {
     expect(result.store.calculation_warnings).toEqual(['offline_stock_pending', 'offline_log_pending']);
   });
 
+  it('conserve le stock non classifié sans le rendre utilisable par granulométrie', async () => {
+    const store: CycleStore = {
+      cycle_id: 'cycle-1',
+      calculation_status: 'incomplete',
+      calculation_source: 'server',
+      calculated_at: '2026-07-23T00:00:00Z',
+      calculation_warnings: [],
+      summary: {
+        manual_feed_kg: '0.00', received_order_feed_kg: '30.00', total_feed_added_kg: '30.00',
+        feed_consumed_kg: '0.00', estimated_feed_remaining_kg: '30.00', feed_expenses_fcfa: '45000.00',
+        pending_orders_count: 0, pending_order_amount_fcfa: '0.00', pending_order_feed_kg: '0.00',
+        total_feed_needed_kg: '100.00', feed_need_remaining_kg: '100.00', secured_feed_kg: '0.00',
+        feed_to_secure_kg: '100.00', stock_tracking_started_at: '2026-07-23', unclassified_stock_kg: '30.00',
+      },
+      status: 'check_stock',
+      stock_items: [{
+        feed_reference_id: null,
+        source: null,
+        species: null,
+        label: 'Ancien aliment',
+        feed_size_mm: '2.00',
+        quantity_added_kg: '30.00',
+        quantity_consumed_kg: '0.00',
+        quantity_available_kg: '30.00',
+      }],
+      stock_by_size: [],
+      available_pellet_sizes: ['2.00'],
+      pending_orders: [],
+      stock_tracking_started_at: '2026-07-23',
+      unclassified_entries: [],
+    };
+    (offlineService.getOfflineStockDeclarations as jest.Mock).mockResolvedValue([]);
+    (offlineService.getOfflineFeedReferences as jest.Mock).mockResolvedValue([]);
+    (offlineService.getPendingSyncLogs as jest.Mock).mockResolvedValue([]);
+
+    const result = await projectOfflineStore('cycle-1', store, 'Pending stock');
+
+    expect(result.store.stock_items).toHaveLength(1);
+    expect(result.store.stock_items[0].quantity_available_kg).toBe('30.00');
+    expect(result.store.stock_by_size).toEqual([]);
+    expect(result.store.summary.estimated_feed_remaining_kg).toBe('30.00');
+    expect(result.store.summary.unclassified_stock_kg).toBe('30.00');
+  });
+
   it('fusionne une declaration pending et un journal par feed_reference_id serveur', async () => {
     (offlineService.getOfflineStockDeclarations as jest.Mock).mockResolvedValue([{
       id: 'stock-server-id',

@@ -12,6 +12,7 @@ from aquaculture.models import (
     CycleFeedStockEntry,
     CycleLog,
     FarmFeedReference,
+    NutritionalGuide,
     ProductionCycle,
 )
 from aquaculture.services.cycle_feed_plan_progression_service import (
@@ -476,6 +477,100 @@ def test_recommendation_allocates_external_stock_and_pending_order(
     assert phase['shortfall_kg'] == '10.00'
     assert phase['total_bags'] == 1
     assert phase['surplus_kg'] == '5.00'
+
+
+@pytest.mark.django_db
+def test_recommendation_uses_dibaq_guide_size_before_catalog_lookup(authenticated_user):
+    """La taille biologique du guide prime sur une ancienne taille de plan."""
+    cycle = create_cycle(authenticated_user)
+    NutritionalGuide.objects.create(
+        species='tilapia',
+        growth_stage='croissance',
+        min_weight=Decimal('100'),
+        max_weight=Decimal('500'),
+        feeding_rate_percentage=Decimal('4.00'),
+        protein_requirement=35,
+        meals_per_day=3,
+        feed_size_mm=Decimal('3.5'),
+        recommended_products=['DIBAQ Tilapia 3.5mm'],
+        expected_fcr=Decimal('1.20'),
+        source='DIBAQ',
+    )
+    product = Product.objects.create(
+        brand='dibaq',
+        name='DIBAQ Tilapia 3.5mm',
+        species='tilapia',
+        pellet_size_mm=Decimal('3.5'),
+        package_weight_kg=15,
+        price_per_package=Decimal('28000'),
+    )
+    create_plan(cycle, {
+        'parameters': {'species': 'tilapia'},
+        'summary': {'total_feed_kg': Decimal('40')},
+        'feeding_phases': [{
+            'phase_name': 'grossissement',
+            'days_range': [1, 100],
+            'weight_range_g': [100, 400],
+            'pellet_size_mm': Decimal('4.5'),
+            'duration_days': 100,
+            'total_consumption_kg': Decimal('40'),
+        }],
+    })
+
+    result = CycleFeedRecommendationService.build(cycle)
+    phase = result['feeding_phases'][0]
+
+    assert phase['pellet_size_mm'] == '3.50'
+    assert phase['product_available'] is True
+    assert phase['products'][0]['product_id'] == str(product.id)
+    assert 'exact_product_unavailable' not in result['warnings']
+
+
+@pytest.mark.django_db
+def test_recommendation_does_not_substitute_another_catalogue_size(authenticated_user):
+    """Une granulométrie recommandée sans produit exact reste non achetable."""
+    cycle = create_cycle(authenticated_user)
+    NutritionalGuide.objects.create(
+        species='tilapia',
+        growth_stage='croissance',
+        min_weight=Decimal('100'),
+        max_weight=Decimal('500'),
+        feeding_rate_percentage=Decimal('4.00'),
+        protein_requirement=35,
+        meals_per_day=3,
+        feed_size_mm=Decimal('3.5'),
+        recommended_products=['DIBAQ Tilapia 3.5mm'],
+        expected_fcr=Decimal('1.20'),
+        source='DIBAQ',
+    )
+    Product.objects.create(
+        brand='dibaq',
+        name='DIBAQ Tilapia 4mm',
+        species='tilapia',
+        pellet_size_mm=Decimal('4.0'),
+        package_weight_kg=15,
+        price_per_package=Decimal('28000'),
+    )
+    create_plan(cycle, {
+        'parameters': {'species': 'tilapia'},
+        'summary': {'total_feed_kg': Decimal('40')},
+        'feeding_phases': [{
+            'phase_name': 'grossissement',
+            'days_range': [1, 100],
+            'weight_range_g': [100, 400],
+            'pellet_size_mm': Decimal('4.5'),
+            'duration_days': 100,
+            'total_consumption_kg': Decimal('40'),
+        }],
+    })
+
+    result = CycleFeedRecommendationService.build(cycle)
+    phase = result['feeding_phases'][0]
+
+    assert phase['pellet_size_mm'] == '3.50'
+    assert phase['product_available'] is False
+    assert phase['products'] == []
+    assert 'exact_product_unavailable' in result['warnings']
 
 
 @pytest.mark.django_db
