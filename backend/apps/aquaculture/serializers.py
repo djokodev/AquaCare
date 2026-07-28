@@ -17,7 +17,7 @@ Architecture offline-first avec sérialiseurs bulk pour synchronisation mobile.
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any, cast
 
@@ -1361,7 +1361,7 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
 
     def get_days_since_event(self, obj):
         """Calcule les jours depuis que l'événement s'est produit."""
-        return (date.today() - obj.event_date).days
+        return (timezone.localdate() - obj.event_date).days
 
     def get_production_unit(self, obj):
         allocation = getattr(obj, 'cycle_unit_allocation', None)
@@ -1439,14 +1439,14 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'event_date': _("La date de l'événement ne peut pas être avant le début du cycle")
                 })
-            if event_date > date.today():
+            if event_date > timezone.localdate():
                 raise serializers.ValidationError({
                     'event_date': _("La date de l'événement ne peut pas être dans le futur")
                 })
 
         # Validate resolution date
         if attrs.get('resolved') and not attrs.get('resolution_date'):
-            attrs['resolution_date'] = date.today()
+            attrs['resolution_date'] = timezone.localdate()
         
         if attrs.get('resolution_date') and event_date:
             if attrs['resolution_date'] < event_date:
@@ -1542,9 +1542,10 @@ class HarvestSerializer(serializers.Serializer):
     def validate_harvest_date(self, value):
         """Valide que la date de récolte est raisonnable."""
         from datetime import timedelta
-        if value < date.today() - timedelta(days=30):
+        today = timezone.localdate()
+        if value < today - timedelta(days=30):
             raise serializers.ValidationError(_("Date de récolte trop ancienne"))
-        if value > date.today():
+        if value > today:
             raise serializers.ValidationError(_("Date de récolte ne peut être dans le futur"))
         return value
 
@@ -1620,9 +1621,10 @@ class PartialHarvestSerializer(serializers.Serializer):
     )
 
     def validate_harvest_date(self, value):
-        if value < date.today() - timedelta(days=30):
+        today = timezone.localdate()
+        if value < today - timedelta(days=30):
             raise serializers.ValidationError(_("Date de récolte trop ancienne"))
-        if value > date.today() + timedelta(days=7):
+        if value > today + timedelta(days=7):
             raise serializers.ValidationError(_("Date de récolte trop éloignée dans le futur"))
         return value
 

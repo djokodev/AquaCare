@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { offlineService } from '../offlineService';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
@@ -48,7 +49,7 @@ describe('services/offlineService', () => {
     const logs = await offlineService.getOfflineCycleLogs();
     expect(logs).toHaveLength(1);
     expect(logs[0].cycleId).toBe('cycle-1');
-    expect(logs[0].logData.log_date).toBe(new Date().toISOString().split('T')[0]);
+    expect(logs[0].logData.log_date).toBe(getBusinessIsoDate());
     expect(logs[0].synced).toBe(false);
 
     const pending = await offlineService.getPendingSyncLogs();
@@ -309,6 +310,57 @@ describe('services/offlineService', () => {
     mockAquaculture.createCycleLog.mockResolvedValue({ id: 'server-log-1' } as any);
     const synced = await offlineService.syncAllOfflineData();
     expect(synced.success).toBe(2);
+    expect(mockAquaculture.createCycleLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('bloque un journal par granulometrie seulement pour le stock pending du meme cycle', async () => {
+    await offlineService.saveStockDeclarationOffline('cycle-1', {
+      external_feed: {
+        name: 'Aliment externe',
+        species: 'tilapia',
+        pellet_size_mm: '2.00',
+      },
+      quantity_kg: '20.00',
+      total_cost_fcfa: '20000.00',
+      entry_date: '2026-07-23',
+    });
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-23',
+      feed_size_mm: 2,
+      feed_quantity: 3,
+    });
+
+    const blocked = await offlineService.syncOfflineLogs();
+    expect(blocked).toEqual({ success: 0, failed: 1 });
+    expect(mockAquaculture.createCycleLog).not.toHaveBeenCalled();
+
+    mockAquaculture.declareCycleStoreManualStock.mockResolvedValue({ cycle_id: 'cycle-1' } as any);
+    mockAquaculture.createCycleLog.mockResolvedValue({ id: 'server-log-1' } as any);
+    const synced = await offlineService.syncAllOfflineData();
+    expect(synced.success).toBe(2);
+    expect(mockAquaculture.createCycleLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne bloque pas une autre granulometrie dans le meme cycle', async () => {
+    await offlineService.saveStockDeclarationOffline('cycle-1', {
+      external_feed: {
+        name: 'Aliment externe',
+        species: 'tilapia',
+        pellet_size_mm: '3.00',
+      },
+      quantity_kg: '20.00',
+      total_cost_fcfa: '20000.00',
+      entry_date: '2026-07-23',
+    });
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-23',
+      feed_size_mm: 2,
+      feed_quantity: 3,
+    });
+    mockAquaculture.createCycleLog.mockResolvedValue({ id: 'server-log-1' } as any);
+
+    const result = await offlineService.syncOfflineLogs();
+    expect(result).toEqual({ success: 1, failed: 0 });
     expect(mockAquaculture.createCycleLog).toHaveBeenCalledTimes(1);
   });
 

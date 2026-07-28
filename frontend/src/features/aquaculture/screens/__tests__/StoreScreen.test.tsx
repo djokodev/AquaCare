@@ -210,6 +210,8 @@ describe('StoreScreen', () => {
     });
 
     fireEvent.press(getByText('storeManualSubmit'));
+    expect(getByText('storeManualCycleContext')).toBeTruthy();
+    expect(getByText('storeManualSpeciesContext')).toBeTruthy();
 
     fireEvent.changeText(getByPlaceholderText('storeManualLabelPlaceholder'), 'Aliment starter 20kg');
     fireEvent.changeText(getByPlaceholderText('storeManualFeedSizePlaceholder'), '2,5');

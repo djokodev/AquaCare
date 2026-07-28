@@ -20,6 +20,7 @@ import type {
 } from '@/features/aquaculture/types/farmSetup';
 import type { CycleLaunchCalibrationUnitInput } from '@/types/aquaculture';
 import { INPUT_LIMITS } from '@/domain/aquaculture/constants';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
 export type FarmSetupSpecies = 'tilapia' | 'clarias' | 'autre';
 export type FarmSetupInfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | 'bac_en_sol';
@@ -112,7 +113,7 @@ const isValidISODate = (value: string): boolean => {
   return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
 };
 
-export const todayISO = (): string => new Date().toISOString().split('T')[0];
+export const todayISO = (): string => getBusinessIsoDate();
 
 export const getSimulationSpecies = (species: FarmSetupFormState['species']): 'tilapia' | 'clarias' =>
   species === 'clarias' ? 'clarias' : 'tilapia';

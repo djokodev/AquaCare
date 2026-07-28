@@ -284,7 +284,20 @@ class PhaseDetector:
                 'product_pattern': 'TILAPIA 2MM'
             }
         """
-        rules = PhaseDetector.PHASE_RULES.get(species.lower(), PhaseDetector.PHASE_RULES['tilapia'])
+        normalized_species = (species or '').strip().lower()
+        if normalized_species == 'clarias':
+            normalized_species = 'catfish'
+        rules = PhaseDetector.PHASE_RULES.get(normalized_species)
+
+        # Une espèce inconnue ne doit pas réutiliser silencieusement les règles
+        # tilapia : on renvoie une phase marquée pour que l'appelant puisse
+        # décider d'un comportement sécurisé.
+        if not rules:
+            return {
+                'phase': 'unknown',
+                'pellet_size_mm': 0.0,
+                'product_pattern': f'{normalized_species.upper() or "UNKNOWN"} UNKNOWN'
+            }
 
         for min_weight, max_weight, phase, pellet_size, product_pattern in rules:
             if min_weight <= avg_weight_g < max_weight:
@@ -294,11 +307,14 @@ class PhaseDetector:
                     'product_pattern': product_pattern
                 }
 
-        # Fallback (pré-récolte), cohérent avec la dernière taille DIBAQ.
+        # Fallback pré-récolte : on conserve la dernière granulométrie définie
+        # pour l'espèce (6 mm pour catfish, 5 mm pour tilapia) au lieu d'un 5 mm
+        # générique qui masquerait l'espèce réelle.
+        _last_min, _last_max, last_phase, last_pellet, last_pattern = rules[-1]
         return {
-            'phase': 'grossissement',
-            'pellet_size_mm': 5.0,
-            'product_pattern': f'{species.upper()} 5MM'
+            'phase': last_phase,
+            'pellet_size_mm': last_pellet,
+            'product_pattern': last_pattern,
         }
 
     @staticmethod

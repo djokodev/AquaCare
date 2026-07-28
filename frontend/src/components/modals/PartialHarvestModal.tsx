@@ -17,6 +17,7 @@ import { CycleUnitAllocation, PartialHarvestData, ProductionCycle } from '@/type
 import { getApiErrorMessage } from '@/utils/errorParser';
 import { AppText, Button, IconButton, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
 type HarvestScope = 'cycle' | 'unit';
 
@@ -71,7 +72,7 @@ export default function PartialHarvestModal({
   const isUnitScope = scope === 'unit';
   const unitName = productionUnitContext?.productionUnitName ?? unitAllocation?.production_unit_name ?? t('productionUnit');
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getBusinessIsoDate();
   const availableFishCount = isUnitScope
     ? unitAllocation?.current_fish_count ?? 0
     : cycle?.current_count ?? 0;

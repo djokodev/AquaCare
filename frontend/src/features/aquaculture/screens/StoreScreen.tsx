@@ -46,6 +46,7 @@ import { CycleStore, FarmFeedReference } from '@/types/aquaculture';
 import { Product } from '@/types/commerce';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import { formatDecimalForDisplay, parseLocalizedNumber } from '@/utils/localizedNumber';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 import commerceApi from '@/features/commerce/services/commerceApi';
 import {
   canConfirmOrderReceipt,
@@ -100,7 +101,7 @@ const extractErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
-const todayIsoDate = () => new Date().toISOString().slice(0, 10);
+const todayIsoDate = () => getBusinessIsoDate();
 
 type StoreLoadResult = 'success' | 'error' | 'stale';
 
@@ -640,6 +641,18 @@ export default function StoreScreen() {
               </View>
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <View style={styles.form}>
+                  {selectedCycle ? (
+                    <View style={styles.modalContext}>
+                      <AppText variant="bodyStrong">
+                        {t('storeManualCycleContext', { cycle: selectedCycle.cycle_name })}
+                      </AppText>
+                      <AppText variant="helper" color="muted">
+                        {t('storeManualSpeciesContext', {
+                          species: selectedCycle.species === 'clarias' ? t('catfish') : t('tilapia'),
+                        })}
+                      </AppText>
+                    </View>
+                  ) : null}
                   {creatingExternalFeed ? (
                     <>
                       <TextField
@@ -819,6 +832,7 @@ const styles = StyleSheet.create({
   modalCard: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: spacing[5], maxHeight: '100%' },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3], marginBottom: spacing[4] },
   form: { gap: spacing[3], paddingBottom: spacing[2] },
+  modalContext: { gap: spacing[1], padding: spacing[3], borderRadius: 12, backgroundColor: colors.brand.subtle },
   formRow: { flexDirection: 'row', gap: spacing[3] },
   formActions: { gap: spacing[2] },
   sizeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },

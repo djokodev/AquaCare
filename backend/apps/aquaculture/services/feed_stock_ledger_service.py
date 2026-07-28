@@ -122,7 +122,7 @@ class FeedStockLedgerService:
         return list(
             FarmFeedReference.objects.filter(
                 farm_profile=cycle.farm_profile,
-                species=cycle.species,
+                species='clarias' if cycle.species == 'catfish' else cycle.species,
                 pellet_size_mm=cls._decimal(feed_size_mm),
                 stock_entries__cycle=cycle,
             )

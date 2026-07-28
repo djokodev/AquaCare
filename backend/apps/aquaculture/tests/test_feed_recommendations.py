@@ -574,6 +574,237 @@ def test_recommendation_does_not_substitute_another_catalogue_size(authenticated
 
 
 @pytest.mark.django_db
+def test_nutritional_guide_splits_crossing_phase_without_losing_need(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    for minimum, maximum, size in ((0, 100, '2.0'), (100, 200, '3.0'), (200, 400, '4.0')):
+        NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='croissance',
+            min_weight=Decimal(minimum),
+            max_weight=Decimal(maximum),
+            feeding_rate_percentage=Decimal('4.00'),
+            protein_requirement=35,
+            meals_per_day=3,
+            feed_size_mm=Decimal(size),
+            recommended_products=[],
+            expected_fcr=Decimal('1.20'),
+            source='DIBAQ',
+        )
+
+    phases = CycleFeedRecommendationService._apply_nutritional_guide_sizes(
+        cycle,
+        [
+            {
+                'phase_id': 'phase-001',
+                'sequence': 1,
+                'original_sequence': 1,
+                'phase_name': 'grossissement',
+                'planned_days_range': [1, 24],
+                'planned_weight_range_g': ['80', '320'],
+                'pellet_size_mm': '4.50',
+                'planned_consumption_kg': '120.00',
+                'planned_duration_days': 24,
+            },
+        ],
+    )
+
+    assert [phase['pellet_size_mm'] for phase in phases] == ['2.00', '3.00', '4.00']
+    assert sum(Decimal(phase['planned_consumption_kg']) for phase in phases) == Decimal('120.00')
+    assert sum(phase['planned_duration_days'] for phase in phases) == 24
+    assert [Decimal(value) for value in phases[0]['planned_weight_range_g']] == [Decimal('80'), Decimal('100')]
+    assert [Decimal(value) for value in phases[-1]['planned_weight_range_g']] == [Decimal('200'), Decimal('320')]
+
+
+def test_future_need_reconciliation_preserves_simulation_total_after_split():
+    phases = [
+        {'planned_weight_range_g': ['80', '100'], 'pellet_size_mm': '2.00'},
+        {'planned_weight_range_g': ['100', '200'], 'pellet_size_mm': '3.00'},
+        {'planned_weight_range_g': ['200', '320'], 'pellet_size_mm': '4.00'},
+    ]
+    needs = CycleFeedRecommendationService._future_need_by_phase(
+        phases,
+        0,
+        {
+            'feeding_phases': [{
+                'weight_range_g': [80, 320],
+                'pellet_size_mm': 4.5,
+                'total_consumption_kg': Decimal('120.00'),
+            }],
+        },
+    )
+
+    assert sum(needs) == Decimal('120.00')
+    assert needs == [Decimal('10.00'), Decimal('50.00'), Decimal('60.00')]
+
+
+@pytest.mark.django_db
+def test_nutritional_guide_split_accepts_raw_simulation_phase_shape(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    for minimum, maximum, size in ((0, 100, '2.0'), (100, 200, '3.0')):
+        NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='croissance',
+            min_weight=Decimal(minimum),
+            max_weight=Decimal(maximum),
+            feeding_rate_percentage=Decimal('4.00'),
+            protein_requirement=35,
+            meals_per_day=3,
+            feed_size_mm=Decimal(size),
+            recommended_products=[],
+            expected_fcr=Decimal('1.20'),
+            source='DIBAQ',
+        )
+
+    phases = CycleFeedRecommendationService._apply_nutritional_guide_sizes(
+        cycle,
+        [{
+            'phase_name': 'grossissement',
+            'days_range': [1, 10],
+            'weight_range_g': [80, 180],
+            'pellet_size_mm': 4.5,
+            'duration_days': 10,
+            'total_consumption_kg': Decimal('50.00'),
+        }],
+    )
+
+    assert [phase['pellet_size_mm'] for phase in phases] == ['2.00', '3.00']
+    assert sum(Decimal(phase['total_consumption_kg']) for phase in phases) == Decimal('50.00')
+
+
+@pytest.mark.django_db
+def test_nutritional_guide_gap_stays_unresolved_and_keeps_need(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    for minimum, maximum, size in ((0, 100, '2.0'), (200, 400, '4.0')):
+        NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='croissance',
+            min_weight=Decimal(minimum),
+            max_weight=Decimal(maximum),
+            feeding_rate_percentage=Decimal('4.00'),
+            protein_requirement=35,
+            meals_per_day=3,
+            feed_size_mm=Decimal(size),
+            recommended_products=[],
+            expected_fcr=Decimal('1.20'),
+            source='DIBAQ',
+        )
+
+    phases = CycleFeedRecommendationService._apply_nutritional_guide_sizes(
+        cycle,
+        [{
+            'phase_id': 'phase-001',
+            'sequence': 1,
+            'original_sequence': 1,
+            'phase_name': 'grossissement',
+            'planned_days_range': [1, 20],
+            'planned_weight_range_g': ['80', '250'],
+            'pellet_size_mm': '4.50',
+            'planned_consumption_kg': '100.00',
+            'planned_duration_days': 20,
+        }],
+    )
+
+    unresolved = [phase for phase in phases if phase['pellet_size_mm'] is None]
+    assert len(unresolved) == 1
+    assert unresolved[0]['nutritional_guide_warning'] == 'nutritional_guide_gap'
+    assert sum(Decimal(phase['planned_consumption_kg']) for phase in phases) == Decimal('100.00')
+
+
+@pytest.mark.django_db
+def test_overlapping_nutritional_guides_use_deterministic_rule_and_warning(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    for minimum, maximum, size in ((0, 200, '2.0'), (100, 300, '3.0')):
+        NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='croissance',
+            min_weight=Decimal(minimum),
+            max_weight=Decimal(maximum),
+            feeding_rate_percentage=Decimal('4.00'),
+            protein_requirement=35,
+            meals_per_day=3,
+            feed_size_mm=Decimal(size),
+            recommended_products=[],
+            expected_fcr=Decimal('1.20'),
+            source='DIBAQ',
+        )
+
+    phases = CycleFeedRecommendationService._apply_nutritional_guide_sizes(
+        cycle,
+        [{
+            'phase_id': 'phase-001',
+            'sequence': 1,
+            'original_sequence': 1,
+            'phase_name': 'grossissement',
+            'planned_days_range': [1, 10],
+            'planned_weight_range_g': ['120', '180'],
+            'pellet_size_mm': '4.50',
+            'planned_consumption_kg': '50.00',
+            'planned_duration_days': 10,
+        }],
+    )
+
+    assert phases[0]['pellet_size_mm'] == '2.00'
+    assert phases[0]['nutritional_guide_warning'] == 'nutritional_guide_overlap'
+
+
+@pytest.mark.django_db
+def test_legacy_consumption_is_not_classified_from_another_cycle_reference(authenticated_user):
+    cycle_a = create_cycle(authenticated_user)
+    cycle_b = ProductionCycle.objects.create(
+        farm_profile=cycle_a.farm_profile,
+        cycle_name='Cycle B',
+        species=cycle_a.species,
+        pond_identifier='B2',
+        start_date=cycle_a.start_date,
+        initial_count=cycle_a.initial_count,
+        initial_average_weight=cycle_a.initial_average_weight,
+        initial_biomass=cycle_a.initial_biomass,
+        current_count=cycle_a.current_count,
+        current_average_weight=cycle_a.current_average_weight,
+        current_biomass=cycle_a.current_biomass,
+        target_harvest_weight_g=cycle_a.target_harvest_weight_g,
+        planned_cycle_duration_days=cycle_a.planned_cycle_duration_days,
+        planned_harvest_date=cycle_a.planned_harvest_date,
+        status='active',
+    )
+    reference = FarmFeedReference.objects.create(
+        farm_profile=cycle_a.farm_profile,
+        source='external',
+        name='Référence cycle B',
+        species='tilapia',
+        pellet_size_mm=Decimal('2.00'),
+    )
+    CycleFeedStockEntry.objects.create(
+        cycle=cycle_b,
+        feed_reference=reference,
+        label=reference.name,
+        quantity_kg=Decimal('100.00'),
+        entry_date=cycle_b.start_date,
+        source='manual',
+    )
+    CycleLog.objects.create(
+        cycle=cycle_a,
+        log_date=cycle_a.start_date + timedelta(days=1),
+        feed_quantity=Decimal('7.00'),
+        feed_type='Aliment historique',
+        feed_size_mm=Decimal('2.00'),
+    )
+
+    actual, unclassified = CycleFeedRecommendationService._actual_consumption_by_phase(
+        cycle_a,
+        [{
+            'planned_days_range': [1, 30],
+            'planned_weight_range_g': ['10', '100'],
+            'pellet_size_mm': '2.00',
+        }],
+        0,
+    )
+
+    assert actual == [Decimal('0')]
+    assert unclassified == Decimal('7.00')
+
+
+@pytest.mark.django_db
 def test_unclassified_stock_is_not_allocated(authenticated_user, monkeypatch):
     cycle = create_cycle(authenticated_user)
     CycleFeedStockEntry.objects.create(

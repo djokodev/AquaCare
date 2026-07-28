@@ -34,6 +34,7 @@ import {
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import FeedingTimesField from '@/features/aquaculture/components/FeedingTimesField';
 import { formatDecimalForDisplay, formatEditableNumber, parseLocalizedNumber } from '@/utils/localizedNumber';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 import { projectOfflineStore } from '@/features/aquaculture/services/offlineStoreProjection';
 import { OfflineCycleLog, offlineService } from '@/services/offlineService';
 
@@ -89,11 +90,7 @@ const EMPTY_FORM: DailyLogData = {
   observations: '',
 };
 
-const getLocalIsoDate = (): string => {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
-};
+const getLocalIsoDate = (): string => getBusinessIsoDate();
 
 const parseOptionalDecimal = (value: string): number | null => {
   const result = parseLocalizedNumber(value);

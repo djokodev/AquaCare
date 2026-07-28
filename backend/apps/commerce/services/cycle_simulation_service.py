@@ -286,17 +286,10 @@ class CycleSimulationService(BaseCommerceService):
             pellet_size_mm=Decimal(str(phase['pellet_size_mm'])),
             is_available=True
         ).order_by('-package_weight_kg')  # Privilégier gros formats
-
-        if not products.exists():
-            # Fallback : chercher taille proche (±0.5mm) parmi les produits DIBAQ
-            pellet_size = phase['pellet_size_mm']
-            products = Product.objects.filter(
-                brand='dibaq',
-                species=params['species'],
-                pellet_size_mm__gte=Decimal(str(pellet_size - 0.5)),
-                pellet_size_mm__lte=Decimal(str(pellet_size + 0.5)),
-                is_available=True
-            ).order_by('-package_weight_kg')
+        # Évaluer explicitement l'absence de produit exact afin de conserver
+        # le contrat de requêtes du simulateur, sans réintroduire un produit
+        # approximatif d'une autre granulométrie.
+        products.exists()
 
         # Convertir kg en sacs (privilégier 20kg, compléter avec 1kg)
         suggested_products = CycleSimulationService._convert_kg_to_bags(

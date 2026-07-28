@@ -962,7 +962,7 @@ export interface FeedPhase {
   planned_days_range: [number, number];
   weight_range_g: [string, string];
   planned_weight_range_g: [string, string];
-  pellet_size_mm: string;
+  pellet_size_mm: string | null;
   duration_days: number;
   planned_duration_days: number;
   planned_consumption_kg: string;

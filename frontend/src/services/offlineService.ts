@@ -15,6 +15,7 @@ import {
   SyncPayload,
 } from '@/types/aquaculture';
 import logger from '@/utils/logger';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
 export interface OfflineCycleLog {
   id: string;
@@ -104,6 +105,25 @@ const resolveReferenceIdentity = (
     : `client:${referenceClientUuid}`;
 };
 
+const normalizeFeedSize = (value: unknown): string | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
+};
+
+const getStockFeedSize = (
+  stock: OfflineStockDeclaration,
+  references: OfflineFeedReference[],
+): string | null => {
+  const externalSize = stock.payload.external_feed?.pellet_size_mm;
+  if (externalSize !== undefined) return normalizeFeedSize(externalSize);
+  const referenceClientUuid = stock.feedReferenceClientUuid
+    ?? stock.payload.feed_reference_client_uuid;
+  if (!referenceClientUuid) return null;
+  const reference = references.find((item) => item.clientUuid === referenceClientUuid);
+  return normalizeFeedSize(reference?.payload.pellet_size_mm);
+};
+
 const hasPendingStockDependency = (
   cycleId: string,
   logData: DailyLogForm,
@@ -115,8 +135,7 @@ const hasPendingStockDependency = (
     logData.feed_reference_client_uuid,
     references,
   );
-  if (!logIdentity) return false;
-  return stockDeclarations.some((stock) => {
+  if (logIdentity && stockDeclarations.some((stock) => {
     if (stock.synced || stock.cycleId !== cycleId) return false;
     const stockIdentity = resolveReferenceIdentity(
       stock.payload.feed_reference_id,
@@ -124,7 +143,19 @@ const hasPendingStockDependency = (
       references,
     );
     return stockIdentity === logIdentity;
-  });
+  })) return true;
+
+  // Le mobile peut enregistrer un journal avec la seule granulométrie. Une
+  // déclaration de stock offline de la même taille et du même cycle doit alors
+  // être synchronisée avant le journal, sans bloquer les autres cycles ou
+  // d'autres granulométries.
+  const logSize = normalizeFeedSize(logData.feed_size_mm);
+  if (logIdentity || !logSize) return false;
+  return stockDeclarations.some((stock) => (
+    !stock.synced
+    && stock.cycleId === cycleId
+    && getStockFeedSize(stock, references) === logSize
+  ));
 };
 
 interface OfflineSyncDetails {
@@ -1374,7 +1405,7 @@ class OfflineService {
   }
 
   private today(): string {
-    return new Date().toISOString().split('T')[0];
+    return getBusinessIsoDate();
   }
 
   private generateOfflineId(): string {

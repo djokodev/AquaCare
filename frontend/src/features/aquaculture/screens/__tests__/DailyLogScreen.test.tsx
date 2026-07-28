@@ -6,6 +6,7 @@ import DailyLogScreen from '../DailyLogScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { CycleStore, ProductionCycle } from '@/types/aquaculture';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
@@ -292,9 +293,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
   });
 
   it('préremplit puis remplace la saisie existante du jour', async () => {
-    const today = new Date();
-    const offset = today.getTimezoneOffset() * 60_000;
-    const localDate = new Date(today.getTime() - offset).toISOString().slice(0, 10);
+    const localDate = getBusinessIsoDate();
     mockService.getCycleLogs.mockResolvedValue([{
       id: 'existing-log',
       cycle: 'cycle-1',
@@ -324,9 +323,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
   });
 
   it('crée un journal quand le brouillon local référence un journal serveur disparu', async () => {
-    const today = new Date();
-    const offset = today.getTimezoneOffset() * 60_000;
-    const localDate = new Date(today.getTime() - offset).toISOString().slice(0, 10);
+    const localDate = getBusinessIsoDate();
     const staleLocalLog = {
       id: 'offline-log-stale',
       cycleId: 'cycle-1',
@@ -366,9 +363,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
   });
 
   it('rouvre et modifie la saisie locale du jour sans accès serveur', async () => {
-    const today = new Date();
-    const offset = today.getTimezoneOffset() * 60_000;
-    const localDate = new Date(today.getTime() - offset).toISOString().slice(0, 10);
+    const localDate = getBusinessIsoDate();
     const localLog = {
       id: 'offline-log-1',
       cycleId: 'cycle-1',
