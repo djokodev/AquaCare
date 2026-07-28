@@ -9,7 +9,12 @@ from uuid import uuid4
 
 import pytest
 from accounts.models import FarmProfile, User
-from aquaculture.models import CycleFeedStockEntry, CycleLog, ProductionCycle
+from aquaculture.models import (
+    CycleFeedStockEntry,
+    CycleLog,
+    NutritionalGuide,
+    ProductionCycle,
+)
 from aquaculture.services.cycle_store_application_service import CycleStoreApplicationService
 from commerce.domain.exceptions import (
     DeliveryAddressIncompleteError,
@@ -29,9 +34,19 @@ from commerce.services import (
     ProductService,
     RecommendedProductQuery,
 )
+from commerce.services.feeding_context_gateway import FeedingContextGateway
+from commerce.services.nutritional_guide_gateway import NutritionalGuideGateway
 from commerce.services.pdf_service import OrderDocumentService
 from django.contrib.auth.models import Group
+from django.core.management import call_command
 from django.utils import timezone
+
+
+@pytest.fixture
+def nutritional_guides():
+    """Charge le référentiel persistant absent des migrations SQLite de test."""
+    call_command('load_nutritional_data', verbosity=0)
+    return NutritionalGuide.objects.order_by('species', 'min_weight')
 
 
 @pytest.mark.django_db
@@ -41,11 +56,11 @@ class TestProductService:
     @pytest.fixture
     def tilapia_products(self):
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 1MM 20KG",
+            name="ALLER AQUA TILAPIA 2MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="alevinage",
-            pellet_size_mm=Decimal("1.0"),
+            pellet_size_mm=Decimal("2.0"),
             protein_percentage=Decimal("45.0"),
             lipid_percentage=10,
             package_weight_kg=Decimal("20.0"),
@@ -71,10 +86,21 @@ class TestProductService:
         products = ProductService.filter_by_species("tilapia")
         assert products.count() == 2
 
-    def test_get_recommended_product(self, tilapia_products):
-        product = ProductService.get_recommended_product("tilapia", 2.0)
+    def test_get_recommended_product(self, nutritional_guides):
+        Product.objects.create(
+            name="DIBAQ TILAPIA 2MM 15KG",
+            brand="dibaq",
+            species="tilapia",
+            phase="alevinage",
+            pellet_size_mm=Decimal("2.0"),
+            package_weight_kg=15,
+            price_per_package=Decimal("23500.00"),
+        )
+
+        product = ProductService.get_recommended_product("tilapia", 5.0)
+
         assert product is not None
-        assert product.pellet_size_mm == Decimal("1.0")
+        assert product.pellet_size_mm == Decimal("2.0")
 
     def test_get_products_by_ids_uses_single_query(self, tilapia_products, django_assert_num_queries):
         products = list(Product.objects.all())
@@ -155,11 +181,101 @@ class TestProductService:
         assert ProductService.search_products("aller").count() == 2
         assert ProductService.search_products("3MM").count() == 1
 
-    def test_get_recommended_product_falls_back_to_nearest_pellet_size(self, tilapia_products):
-        fallback_product = ProductService.get_recommended_product("tilapia", 20.0)
+    def test_get_recommended_product_does_not_use_nearest_size(
+        self,
+        nutritional_guides,
+    ):
+        Product.objects.create(
+            name="DIBAQ TILAPIA 4MM 15KG",
+            brand="dibaq",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("4.0"),
+            package_weight_kg=15,
+            price_per_package=Decimal("20000.00"),
+        )
 
-        assert fallback_product is not None
-        assert fallback_product.pellet_size_mm == Decimal("3.0")
+        assert ProductService.get_recommended_product("tilapia", 100.0) is None
+
+    @pytest.mark.parametrize(
+        ("weight_g", "expected_size"),
+        [
+            (Decimal("9.99"), Decimal("2.0")),
+            (Decimal("10.00"), Decimal("2.0")),
+            (Decimal("49.99"), Decimal("2.0")),
+            (Decimal("50.00"), Decimal("2.0")),
+            (Decimal("99.99"), Decimal("2.0")),
+            (Decimal("100.00"), Decimal("3.5")),
+        ],
+    )
+    def test_get_recommended_product_uses_persistent_guide_boundaries(
+        self,
+        nutritional_guides,
+        weight_g,
+        expected_size,
+    ):
+        for pellet_size in (Decimal("2.0"), Decimal("3.5")):
+            Product.objects.create(
+                name=f"DIBAQ TILAPIA {pellet_size}MM 15KG",
+                brand="dibaq",
+                species="tilapia",
+                phase="grossissement",
+                pellet_size_mm=pellet_size,
+                package_weight_kg=15,
+                price_per_package=Decimal("20000.00"),
+            )
+
+        product = ProductService.get_recommended_product("tilapia", weight_g)
+
+        assert product is not None
+        assert product.pellet_size_mm == expected_size
+
+    def test_get_recommended_product_maps_clarias_to_catfish_catalog(
+        self,
+        nutritional_guides,
+    ):
+        product = Product.objects.create(
+            name="DIBAQ CATFISH 2MM 15KG",
+            brand="dibaq",
+            species="catfish",
+            phase="alevinage",
+            pellet_size_mm=Decimal("2.0"),
+            package_weight_kg=15,
+            price_per_package=Decimal("23500.00"),
+        )
+
+        assert ProductService.get_recommended_product("clarias", 5) == product
+
+    def test_get_recommended_product_ignores_unavailable_exact_product(
+        self,
+        nutritional_guides,
+    ):
+        Product.objects.create(
+            name="DIBAQ TILAPIA 2MM 15KG",
+            brand="dibaq",
+            species="tilapia",
+            phase="alevinage",
+            pellet_size_mm=Decimal("2.0"),
+            package_weight_kg=15,
+            price_per_package=Decimal("23500.00"),
+            is_available=False,
+        )
+
+        assert ProductService.get_recommended_product("tilapia", 5) is None
+
+    def test_get_recommended_product_without_guide_returns_none(self):
+        NutritionalGuide.objects.all().delete()
+        Product.objects.create(
+            name="DIBAQ TILAPIA 2MM 15KG",
+            brand="dibaq",
+            species="tilapia",
+            phase="alevinage",
+            pellet_size_mm=Decimal("2.0"),
+            package_weight_kg=15,
+            price_per_package=Decimal("23500.00"),
+        )
+
+        assert ProductService.get_recommended_product("tilapia", 5) is None
 
     def test_get_products_for_cycle_returns_species_scope(self, tilapia_products):
         cycle = type("CycleStub", (), {"species": "tilapia"})()
@@ -228,11 +344,11 @@ class TestCatalogApplicationService:
     @pytest.fixture
     def tilapia_products(self):
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 1MM 20KG",
+            name="ALLER AQUA TILAPIA 2MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="alevinage",
-            pellet_size_mm=Decimal("1.0"),
+            pellet_size_mm=Decimal("2.0"),
             protein_percentage=Decimal("45.0"),
             lipid_percentage=10,
             package_weight_kg=Decimal("20.0"),
@@ -255,13 +371,13 @@ class TestCatalogApplicationService:
 
         assert products.count() == 2
 
-    def test_get_recommended_product(self, tilapia_products):
+    def test_get_recommended_product(self, tilapia_products, nutritional_guides):
         product = CatalogApplicationService.get_recommended_product(
             RecommendedProductQuery(species="tilapia", weight_g=2.0),
         )
 
         assert product is not None
-        assert product.pellet_size_mm == Decimal("1.0")
+        assert product.pellet_size_mm == Decimal("2.0")
 
     def test_get_feeding_suggestions_without_cycles(self, test_user):
         suggestions = CatalogApplicationService.get_feeding_suggestions(
@@ -630,6 +746,106 @@ class TestOrderService:
             current_biomass=Decimal("47.5"),
             status="active",
         )
+
+    def test_order_statistics_count_multi_product_order_once(
+        self,
+        test_user,
+        test_farm,
+        test_product,
+    ):
+        cycle_a = self._create_cycle(test_farm)
+        cycle_b = self._create_cycle(test_farm)
+        second_product = Product.objects.create(
+            name="Product 2",
+            brand="dibaq",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("4.0"),
+            package_weight_kg=20,
+            price_per_package=Decimal("20000.00"),
+        )
+        cycle_a_order = OrderService.create_order(
+            user=test_user,
+            items_data=[
+                {"product_id": str(test_product.id), "quantity": 2},
+                {"product_id": str(second_product.id), "quantity": 3},
+            ],
+            delivery_method="home",
+            production_cycle_id=str(cycle_a.id),
+        )
+        OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 4}],
+            delivery_method="home",
+            production_cycle_id=str(cycle_b.id),
+        )
+        OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 5}],
+            delivery_method="home",
+        )
+
+        stats = OrderService.get_order_statistics(
+            test_user,
+            production_cycle_id=str(cycle_a.id),
+        )
+
+        assert stats["total_orders"] == 1
+        assert stats["total_spent"] == cycle_a_order.total == Decimal("123000.00")
+        assert stats["total_bags_ordered"] == 5
+        assert stats["average_order_value"] == cycle_a_order.total
+        assert stats["last_order_number"] == cycle_a_order.order_number
+
+    def test_order_statistics_sum_two_orders_with_same_total(
+        self,
+        test_user,
+        test_farm,
+        test_product,
+    ):
+        cycle = self._create_cycle(test_farm)
+        first = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+            production_cycle_id=str(cycle.id),
+        )
+        second = OrderService.create_order(
+            user=test_user,
+            items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+            delivery_method="home",
+            production_cycle_id=str(cycle.id),
+        )
+
+        stats = OrderService.get_order_statistics(
+            test_user,
+            production_cycle_id=str(cycle.id),
+        )
+
+        assert first.total == second.total
+        assert stats["total_orders"] == 2
+        assert stats["total_spent"] == first.total * 2
+        assert stats["average_order_value"] == first.total
+
+    def test_order_statistics_empty_cycle_keeps_zero_contract(
+        self,
+        test_user,
+        test_farm,
+    ):
+        cycle = self._create_cycle(test_farm)
+
+        stats = OrderService.get_order_statistics(
+            test_user,
+            production_cycle_id=str(cycle.id),
+        )
+
+        assert stats == {
+            "total_orders": 0,
+            "total_spent": Decimal("0"),
+            "total_bags_ordered": 0,
+            "average_order_value": Decimal("0"),
+            "last_order_date": None,
+            "last_order_number": None,
+        }
 
     def test_operator_transition_home_is_audited_and_idempotent(
         self,
@@ -1042,7 +1258,7 @@ class TestFeedingSuggestionService:
         assert confidence >= 90
 
     def test_feeding_suggestions_include_cycle_name(self, test_user, test_cycle, monkeypatch):
-        def _fake_analysis(cycle):
+        def _fake_analysis(cycle, **_kwargs):
             return {
                 "has_data": True,
                 "cycle_id": str(cycle.id),
@@ -1071,18 +1287,19 @@ class TestFeedingSuggestionService:
         assert result["has_suggestions"] is True
         assert result["suggestions"][0]["cycle_name"] == test_cycle.cycle_name
 
-    def test_get_feeding_suggestions_uses_three_queries(
+    def test_get_feeding_suggestions_uses_four_queries(
         self,
         test_user,
         test_cycle,
+        nutritional_guides,
         django_assert_num_queries,
     ):
         Product.objects.create(
-            name="TILAPIA 3MM TEST 20KG",
+            name="TILAPIA 2MM TEST 20KG",
             brand="dibaq",
             species="tilapia",
             phase="pre_grossissement",
-            pellet_size_mm=Decimal("3.0"),
+            pellet_size_mm=Decimal("2.0"),
             protein_percentage=Decimal("35.0"),
             lipid_percentage=10,
             package_weight_kg=Decimal("20.0"),
@@ -1098,12 +1315,52 @@ class TestFeedingSuggestionService:
                 average_weight=Decimal("80.0"),
             )
 
-        with django_assert_num_queries(3):
+        with django_assert_num_queries(4):
             result = FeedingSuggestionService.get_feeding_suggestions(test_user.id)
 
         assert result["has_suggestions"] is True
 
-    def test_analyze_cycle_handles_clarias_and_planned_harvest_date(self, test_farm):
+    def test_get_feeding_suggestions_loads_guides_once_per_species(
+        self,
+        test_user,
+        test_cycle,
+        monkeypatch,
+    ):
+        guide_calls = []
+
+        monkeypatch.setattr(
+            FeedingContextGateway,
+            "get_active_cycles",
+            staticmethod(lambda **_kwargs: [test_cycle, test_cycle]),
+        )
+
+        def _fake_for_species(species):
+            guide_calls.append(species)
+            return []
+
+        monkeypatch.setattr(
+            NutritionalGuideGateway,
+            "for_species",
+            staticmethod(_fake_for_species),
+        )
+        monkeypatch.setattr(
+            FeedingSuggestionService,
+            "_analyze_cycle_with_phases",
+            staticmethod(lambda _cycle, **_kwargs: {
+                "has_data": False,
+                "reason": "Guide nutritionnel indisponible pour le poids actuel",
+            }),
+        )
+
+        FeedingSuggestionService.get_feeding_suggestions(test_user.id)
+
+        assert guide_calls == ["tilapia"]
+
+    def test_analyze_cycle_handles_clarias_and_planned_harvest_date(
+        self,
+        test_farm,
+        nutritional_guides,
+    ):
         cycle = ProductionCycle.objects.create(
             farm_profile=test_farm,
             cycle_name="Cycle Clarias",
@@ -1148,3 +1405,168 @@ class TestFeedingSuggestionService:
         assert analysis["has_data"] is True
         assert analysis["days_remaining"] == 20
         assert analysis["cycle_id"] == str(cycle.id)
+
+    def test_clarias_starter_phase_comes_from_persistent_guide(
+        self,
+        test_farm,
+        nutritional_guides,
+    ):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Starter Clarias",
+            species="clarias",
+            pond_identifier="Pond Starter",
+            pond_surface_m2=Decimal("150.0"),
+            start_date=timezone.now().date() - timedelta(days=7),
+            initial_count=2000,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("10.0"),
+            current_count=2000,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("10.0"),
+            status="active",
+            planned_harvest_date=timezone.now().date() + timedelta(days=30),
+            target_harvest_weight_g=Decimal("40.0"),
+        )
+        Product.objects.create(
+            name="CATFISH 2MM TEST 20KG",
+            brand="dibaq",
+            species="catfish",
+            phase="alevinage",
+            pellet_size_mm=Decimal("2.0"),
+            package_weight_kg=20,
+            price_per_package=Decimal("30000.0"),
+        )
+        today = timezone.now().date()
+        for offset in range(7):
+            CycleLog.objects.create(
+                cycle=cycle,
+                log_date=today - timedelta(days=offset),
+                feed_quantity=Decimal("2.0"),
+                average_weight=Decimal("5.0"),
+            )
+
+        analysis = FeedingSuggestionService._analyze_cycle_with_phases(cycle)
+
+        assert analysis["has_data"] is True
+        assert analysis["current_phase"] == "alevin"
+        assert analysis["phases"][0]["pellet_size_mm"] == 2.0
+
+    def test_nutritional_boundaries_distinguish_starter_and_dibaq(
+        self,
+        nutritional_guides,
+    ):
+        rules = list(nutritional_guides.filter(species="clarias").values(
+            "id",
+            "min_weight",
+            "max_weight",
+            "growth_stage",
+            "feed_size_mm",
+            "source",
+        ))
+        normalized_rules = [
+            {**rule, "id": str(rule["id"])}
+            for rule in rules
+        ]
+
+        starter = FeedingSuggestionService._resolve_nutritional_phase(
+            normalized_rules,
+            Decimal("9.99"),
+        )
+        production = FeedingSuggestionService._resolve_nutritional_phase(
+            normalized_rules,
+            Decimal("10.00"),
+        )
+
+        assert starter is not None
+        assert starter["source"] == "AquaCare"
+        assert production is not None
+        assert production["source"] == "DIBAQ"
+        assert starter["id"] != production["id"]
+
+    @pytest.mark.parametrize(
+        ("species", "target_weight", "expected_sizes"),
+        [
+            ("tilapia", 1000.0, [2.0, 3.5, 5.0]),
+            ("catfish", 2000.0, [2.0, 4.0, 6.0]),
+        ],
+    )
+    def test_future_phases_use_persistent_guide_transitions(
+        self,
+        nutritional_guides,
+        species,
+        target_weight,
+        expected_sizes,
+    ):
+        from commerce.services.nutritional_guide_gateway import (
+            NutritionalGuideGateway,
+        )
+
+        phases = FeedingSuggestionService._predict_future_phases(
+            species,
+            5.0,
+            target_weight,
+            120,
+            NutritionalGuideGateway.for_species(species),
+        )
+
+        assert list(dict.fromkeys(
+            phase["pellet_size_mm"] for phase in phases
+        )) == expected_sizes
+
+    def test_feeding_suggestion_without_guide_returns_no_data(
+        self,
+        test_cycle,
+    ):
+        today = timezone.now().date()
+        for offset in range(7):
+            CycleLog.objects.create(
+                cycle=test_cycle,
+                log_date=today - timedelta(days=offset),
+                feed_quantity=Decimal("2.0"),
+                average_weight=Decimal("80.0"),
+            )
+
+        analysis = FeedingSuggestionService._analyze_cycle_with_phases(
+            test_cycle,
+            nutritional_guide_rules=[],
+        )
+
+        assert analysis["has_data"] is False
+        assert analysis["reason"] == "Guide nutritionnel indisponible pour le poids actuel"
+
+    def test_feeding_suggestion_does_not_use_approximate_product(
+        self,
+        test_cycle,
+        nutritional_guides,
+    ):
+        test_cycle.current_average_weight = Decimal("100.0")
+        test_cycle.target_harvest_weight_g = Decimal("200.0")
+        test_cycle.planned_harvest_date = timezone.now().date() + timedelta(days=30)
+        test_cycle.save(update_fields=[
+            "current_average_weight",
+            "target_harvest_weight_g",
+            "planned_harvest_date",
+        ])
+        Product.objects.create(
+            name="TILAPIA 4MM TEST 20KG",
+            brand="dibaq",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("4.0"),
+            package_weight_kg=20,
+            price_per_package=Decimal("30000.0"),
+        )
+        today = timezone.now().date()
+        for offset in range(7):
+            CycleLog.objects.create(
+                cycle=test_cycle,
+                log_date=today - timedelta(days=offset),
+                feed_quantity=Decimal("2.0"),
+                average_weight=Decimal("100.0"),
+            )
+
+        analysis = FeedingSuggestionService._analyze_cycle_with_phases(test_cycle)
+
+        assert analysis["has_data"] is True
+        assert analysis["phases"] == []

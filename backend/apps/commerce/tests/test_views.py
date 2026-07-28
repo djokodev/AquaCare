@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import pytest
 from accounts.models import FarmProfile, User
-from aquaculture.models import ProductionCycle
+from aquaculture.models import NutritionalGuide, ProductionCycle
 from commerce.models import Order, Product
 from commerce.serializers import OrderSerializer
 from rest_framework import status
@@ -93,12 +93,26 @@ class TestProductViewSet:
         assert len(response.data['results']) == 1
 
     def test_recommended_product_success(self, authenticated_client, test_products):
+        NutritionalGuide.objects.update_or_create(
+            species="tilapia",
+            min_weight=Decimal("0.00"),
+            source="AquaCare",
+            defaults={
+                "growth_stage": "alevin",
+                "max_weight": Decimal("10.00"),
+                "feed_size_mm": Decimal("2.0"),
+                "feeding_rate_percentage": Decimal("5.00"),
+                "protein_requirement": 45,
+                "meals_per_day": 3,
+                "expected_fcr": Decimal("1.05"),
+            },
+        )
         Product.objects.create(
-            name="TILAPIA 1MM 20KG",
+            name="TILAPIA 2MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="alevinage",
-            pellet_size_mm=Decimal("1.0"),
+            pellet_size_mm=Decimal("2.0"),
             protein_percentage=Decimal("45.0"),
             lipid_percentage=10,
             package_weight_kg=Decimal("20.0"),
@@ -113,6 +127,43 @@ class TestProductViewSet:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["species"] == "tilapia"
+        assert Decimal(response.data["pellet_size_mm"]) == Decimal("2.0")
+
+    def test_recommended_product_returns_404_without_exact_product(
+        self,
+        authenticated_client,
+    ):
+        NutritionalGuide.objects.update_or_create(
+            species="tilapia",
+            min_weight=Decimal("100.00"),
+            source="DIBAQ",
+            defaults={
+                "growth_stage": "grossissement",
+                "max_weight": Decimal("250.00"),
+                "feed_size_mm": Decimal("3.5"),
+                "feeding_rate_percentage": Decimal("4.00"),
+                "protein_requirement": 35,
+                "meals_per_day": 3,
+                "expected_fcr": Decimal("1.20"),
+            },
+        )
+        Product.objects.create(
+            name="TILAPIA 4MM 20KG",
+            brand="dibaq",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("4.0"),
+            package_weight_kg=20,
+            price_per_package=Decimal("30000.00"),
+        )
+
+        response = authenticated_client.get(
+            "/api/commerce/products/recommended/",
+            {"species": "tilapia", "weight_g": "100"},
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.data["error"] == "Aucun produit recommandé trouvé"
 
     def test_recommended_product_requires_query_params(self, authenticated_client, test_products):
         response = authenticated_client.get("/api/commerce/products/recommended/")

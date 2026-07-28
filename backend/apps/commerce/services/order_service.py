@@ -759,21 +759,25 @@ class OrderService(BaseCommerceService):
             production_cycle_id=production_cycle_id,
         )
 
-        aggregates = orders.aggregate(
+        order_aggregates = orders.aggregate(
             total_orders=Count('id'),
             total_spent=Sum('total'),
-            total_bags=Sum('items__quantity')
+        )
+        item_aggregates = OrderItem.objects.filter(
+            order__in=orders,
+        ).aggregate(
+            total_bags=Sum('quantity'),
         )
 
         last_order = orders.order_by('-created_at').first()
 
-        total_orders = aggregates['total_orders'] or 0
-        total_spent = aggregates['total_spent'] or Decimal('0')
+        total_orders = order_aggregates['total_orders'] or 0
+        total_spent = order_aggregates['total_spent'] or Decimal('0')
 
         return {
             'total_orders': total_orders,
             'total_spent': total_spent,
-            'total_bags_ordered': aggregates['total_bags'] or 0,
+            'total_bags_ordered': item_aggregates['total_bags'] or 0,
             'average_order_value': total_spent / total_orders if total_orders > 0 else Decimal('0'),
             'last_order_date': last_order.created_at if last_order else None,
             'last_order_number': last_order.order_number if last_order else None

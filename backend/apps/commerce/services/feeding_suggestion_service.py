@@ -18,9 +18,15 @@ from commerce.models import Product
 from django.utils import timezone
 
 from ..constants import TARGET_WEIGHT_CATFISH_DEFAULT, TARGET_WEIGHT_TILAPIA_DEFAULT
-from ..domain.growth_calculator import GrowthCalculator, PhaseDetector
+from ..domain.growth_calculator import (
+    GrowthCalculator,
+    NutritionalGuideResolver,
+    NutritionalGuideRule,
+    PhaseDetector,
+)
 from .contracts import CycleLogReadModel, ProductionCycleReadModel
 from .feeding_context_gateway import FeedingContextGateway
+from .nutritional_guide_gateway import NutritionalGuideGateway
 
 
 class SuggestedProduct(TypedDict):
@@ -156,9 +162,18 @@ class FeedingSuggestionService:
         suggestions_by_cycle: list[CycleSuggestion] = []
         total_cycles_analyzed = 0
         cycles_with_data = 0
+        rules_by_species: dict[str, list[NutritionalGuideRule]] = {}
 
         for cycle in active_cycles:
-            cycle_analysis = FeedingSuggestionService._analyze_cycle_with_phases(cycle)
+            normalized_species = FeedingSuggestionService._normalize_species(cycle.species)
+            if normalized_species not in rules_by_species:
+                rules_by_species[normalized_species] = NutritionalGuideGateway.for_species(
+                    normalized_species
+                )
+            cycle_analysis = FeedingSuggestionService._analyze_cycle_with_phases(
+                cycle,
+                nutritional_guide_rules=rules_by_species[normalized_species],
+            )
 
             if cycle_analysis['has_data']:
                 suggestions_by_cycle.append(cycle_analysis)
@@ -189,6 +204,8 @@ class FeedingSuggestionService:
     @staticmethod
     def _analyze_cycle_with_phases(
         cycle: ProductionCycleReadModel,
+        *,
+        nutritional_guide_rules: list[NutritionalGuideRule] | None = None,
     ) -> CycleSuggestion | CycleSuggestionNoData:
         """
         Analyse un cycle avec détection automatique de phase actuelle.
@@ -202,6 +219,11 @@ class FeedingSuggestionService:
             Dict avec suggestions multi-phases
         """
         normalized_species = FeedingSuggestionService._normalize_species(cycle.species)
+        guide_rules = (
+            NutritionalGuideGateway.for_species(normalized_species)
+            if nutritional_guide_rules is None
+            else nutritional_guide_rules
+        )
 
         # 1. Récupérer historique consommation
         end_date = timezone.now()
@@ -239,8 +261,16 @@ class FeedingSuggestionService:
                 days_since_start
             )
 
-        # 3. NOUVEAU : Détecter phase actuelle
-        current_phase = PhaseDetector.detect_phase(normalized_species, current_avg_weight)
+        # 3. Détecter la phase actuelle depuis le référentiel persistant.
+        current_phase = FeedingSuggestionService._resolve_nutritional_phase(
+            guide_rules,
+            current_avg_weight,
+        )
+        if current_phase is None:
+            return {
+                'has_data': False,
+                'reason': 'Guide nutritionnel indisponible pour le poids actuel',
+            }
 
         # 4. Calculer consommation moyenne
         total_feed_quantity = sum(log.feed_quantity for log in logs if log.feed_quantity is not None)
@@ -270,7 +300,8 @@ class FeedingSuggestionService:
             normalized_species,
             current_avg_weight,
             target_weight,
-            days_remaining
+            days_remaining,
+            guide_rules,
         )
 
         # 7. Suggérer produits pour chaque phase future
@@ -322,7 +353,7 @@ class FeedingSuggestionService:
             'cycle_id': str(cycle.id),
             'cycle_name': cycle.cycle_name,
             'species': cycle.species,
-            'current_phase': current_phase['phase'],
+            'current_phase': current_phase['growth_stage'],
             'current_avg_weight_g': round(current_avg_weight, 1),
             'days_remaining': days_remaining,
             'avg_daily_consumption_kg': float(avg_daily_consumption),
@@ -380,6 +411,7 @@ class FeedingSuggestionService:
         current_weight_g: float,
         target_weight_g: float,
         days_remaining: int,
+        nutritional_guide_rules: list[NutritionalGuideRule],
     ) -> list[PredictedPhase]:
         """
         Prévoit les phases de croissance futures avec changements de granulés.
@@ -404,11 +436,17 @@ class FeedingSuggestionService:
         )
 
         # Regrouper par phases
-        future_phases_grouped = PhaseDetector.group_by_phases(species, future_progression)
+        future_phases_grouped = PhaseDetector.group_by_phases(
+            species,
+            future_progression,
+            nutritional_guide_rules=nutritional_guide_rules,
+        )
 
         # Formater pour sortie
         result: list[PredictedPhase] = []
         for phase in future_phases_grouped:
+            if phase['pellet_size_mm'] is None:
+                continue
             days_start, days_end = phase['days_range']
             result.append({
                 'phase_name': phase['phase_name'],
@@ -418,6 +456,18 @@ class FeedingSuggestionService:
             })
 
         return result
+
+    @staticmethod
+    def _resolve_nutritional_phase(
+        nutritional_guide_rules: list[NutritionalGuideRule],
+        weight_g: float | Decimal,
+    ) -> NutritionalGuideRule | None:
+        """Résout la phase actuelle avec les mêmes frontières que la simulation."""
+        guide, _warning = NutritionalGuideResolver.resolve(
+            nutritional_guide_rules,
+            weight_g,
+        )
+        return guide
 
     @staticmethod
     def _convert_kg_to_bags(
@@ -485,20 +535,11 @@ class FeedingSuggestionService:
         available_products: list[Product],
         pellet_size_mm: float,
     ) -> list[Product]:
-        """Retourne les produits les plus adaptes a une granulometrie cible."""
+        """Retourne uniquement les produits de granulométrie exacte."""
         target_size = Decimal(str(pellet_size_mm))
-        exact_matches = [
-            product for product in available_products
-            if product.pellet_size_mm == target_size
-        ]
-        if exact_matches:
-            return exact_matches
-
-        min_size = Decimal(str(pellet_size_mm - 0.5))
-        max_size = Decimal(str(pellet_size_mm + 0.5))
         return [
             product for product in available_products
-            if min_size <= product.pellet_size_mm <= max_size
+            if product.pellet_size_mm == target_size
         ]
 
     @staticmethod
