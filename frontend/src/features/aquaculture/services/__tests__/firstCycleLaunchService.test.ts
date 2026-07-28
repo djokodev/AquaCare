@@ -130,6 +130,42 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
     ).toBe(formData.launchRequestId);
   });
 
+  it("lance un setup initial ongoing depuis la baseline sans poids historique inventé", async () => {
+    const ongoingForm = {
+      ...formData,
+      onboardingMode: "ongoing",
+      historicalInitialCount: "2200",
+      historicalInitialWeight: "",
+      trackingStartDate: "2026-06-20",
+      trackingStartAverageWeight: "75.00",
+      trackingStartBiomass: "",
+      fingerlingsCount: "2100",
+    };
+
+    await launchFirstCycle({
+      formData: ongoingForm,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launch_kind: "initial_setup",
+        cycle: expect.objectContaining({
+          onboarding_mode: "ongoing",
+          initial_count: 2200,
+          initial_average_weight: null,
+        }),
+        tracking_baseline: {
+          tracking_start_date: "2026-06-20",
+          fish_count: 2100,
+          average_weight_g: "75.00",
+          biomass_kg: null,
+        },
+      }),
+    );
+  });
+
   it("transmet le lancement de trois bacs de 200 m³ totalisant 180 000 alevins", async () => {
     const largeFarmUnits = [1, 2, 3].map((index) => ({
       local_id: `unit-${index}`,

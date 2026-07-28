@@ -47,13 +47,19 @@ import {
   buildSimulatorPrefill,
 } from "@/features/aquaculture/utils/newCycleForm";
 import { runSilentOfflineSync } from "@/features/aquaculture/services/aquacultureWorkflowService";
+import { offlineService } from "@/services/offlineService";
 import {
   getProductionUnitCapacity,
   getProductionUnitDensityUnit,
   getProductionUnitDisplayDimension,
 } from "@/features/aquaculture/utils/productionUnits";
 import { createClientUuid } from "@/utils/clientUuid";
-import type { CycleLaunchCalibrationUnitInput, ProductionUnit } from "@/types/aquaculture";
+import type {
+  CycleLaunchCalibrationUnitInput,
+  CycleLaunchOpeningStockInput,
+  FarmFeedReference,
+  ProductionUnit,
+} from "@/types/aquaculture";
 
 const SPECIES_OPTIONS = [
   { value: "clarias", labelKey: "clarias", durationDays: 120 },
@@ -64,6 +70,15 @@ const TRANSACTIONAL_LAUNCH_ERROR_KEYS: Record<string, string> = {
   cycle_launch_unit_already_allocated: "cycleLaunchUnitAlreadyAllocated",
   cycle_launch_unit_capacity_exceeded: "cycleLaunchUnitCapacityExceeded",
   cycle_launch_unit_capacity_unavailable: "cycleLaunchUnitCapacityUnavailable",
+  ongoing_cycle_tracking_baseline_required: "ongoingCycleTrackingDateInvalid",
+  ongoing_cycle_tracking_date_before_start: "ongoingCycleTrackingDateInvalid",
+  ongoing_cycle_tracking_date_in_future: "ongoingCycleTrackingDateInvalid",
+  ongoing_cycle_current_count_required: "ongoingCycleCurrentCountInvalid",
+  ongoing_cycle_current_count_exceeds_initial: "ongoingCycleCurrentCountInvalid",
+  ongoing_cycle_current_weight_required: "ongoingCycleCurrentWeightRequired",
+  ongoing_cycle_biomass_inconsistent: "ongoingCycleBiomassInconsistent",
+  ongoing_cycle_planned_harvest_elapsed: "plannedHarvestElapsed",
+  event_before_tracking_start: "eventBeforeTrackingStartForbidden",
 };
 
 type NewCycleScreenNavigationProp = StackNavigationProp<
@@ -81,6 +96,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   const dispatch = useDispatch<AppDispatch>();
 
   const [formData, setFormData] = useState<NewCycleData>({
+    onboarding_mode: "new",
     cycle_name: "",
     species: "",
     pond_identifier: "",
@@ -96,6 +112,11 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     planned_selling_price_per_kg_fcfa: "",
     fingerlings_cost_fcfa: "0",
     other_operational_costs_fcfa: "0",
+    tracking_start_date: getBusinessIsoDate(),
+    tracking_start_count: "",
+    tracking_start_average_weight: "",
+    tracking_start_biomass: "",
+    initial_feed_stocks: [],
   });
   const [saving, setSaving] = useState(false);
   const [availableUnits, setAvailableUnits] = useState<ProductionUnit[]>([]);
@@ -109,6 +130,15 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   const [calibrationUnits, setCalibrationUnits] = useState<CycleLaunchCalibrationUnitInput[]>([]);
   const [calibrationName, setCalibrationName] = useState("");
   const [calibrationVolume, setCalibrationVolume] = useState("");
+  const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>([]);
+  const [stockReferenceMode, setStockReferenceMode] = useState<"existing" | "external">("external");
+  const [stockReferenceId, setStockReferenceId] = useState("");
+  const [stockName, setStockName] = useState("");
+  const [stockPelletSize, setStockPelletSize] = useState("");
+  const [stockQuantity, setStockQuantity] = useState("");
+  const [stockCostStatus, setStockCostStatus] = useState<"known" | "unknown">("unknown");
+  const [stockCost, setStockCost] = useState("");
+  const [stockNote, setStockNote] = useState("");
 
   const handleGoBack = () => {
     if (navigation.canGoBack?.()) {
@@ -183,6 +213,11 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
         setAvailableUnits(
           await aquacultureService.getProductionUnits({ status: "active", purpose: "production" }),
         );
+        if (farmProfile?.id) {
+          setFeedReferences(
+            await aquacultureService.getFarmFeedReferences(farmProfile.id),
+          );
+        }
         setUnitsLoadError(false);
       } catch {
         setUnitsLoadError(true);
@@ -191,7 +226,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
       }
     };
     void bootstrap();
-  }, [dispatch]);
+  }, [dispatch, farmProfile?.id]);
 
   const selectedUnits = availableUnits.filter((unit) =>
     selectedUnitIds.includes(unit.id),
@@ -231,27 +266,74 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     }
 
     setSaving(true);
+    const payload = buildAdditionalCycleLaunchRequest({
+      formData,
+      selectedUnits,
+      allocationsByUnitId,
+      launchUuid: launchRequestId,
+      calibrationUnits,
+    });
     try {
-      const launchResult = await aquacultureService.launchProductionCycle(
-        buildAdditionalCycleLaunchRequest({
-          formData,
-          selectedUnits,
-          allocationsByUnitId,
-          launchUuid: launchRequestId,
-          calibrationUnits,
-        }),
-      );
+      if (!(await offlineService.isOnline())) {
+        await offlineService.saveCycleLaunchOffline({
+          ...payload,
+          cycle: { ...payload.cycle, created_offline: true },
+        });
+        Alert.alert(t("saved"), t("cycleLaunchPendingSync"));
+        handleGoBack();
+        return;
+      }
+      const launchResult = await aquacultureService.launchProductionCycle(payload);
       dispatch(fetchDashboardData({ lightweight: true }));
 
       const backendSellingPrice =
         launchResult.productionCycle.planned_selling_price_per_kg_fcfa;
-      const prefill = buildSimulatorPrefill({
-        ...buildCyclePayload(formData),
-        planned_selling_price_per_kg_fcfa:
-          backendSellingPrice === undefined
-            ? undefined
-            : Number(backendSellingPrice),
-      });
+      const prefill = formData.onboarding_mode === "ongoing"
+        ? {
+            species: launchResult.productionCycle.species === "clarias"
+              ? ("catfish" as const)
+              : ("tilapia" as const),
+            initial_fish_count:
+              launchResult.productionCycle.tracking_start_count
+              ?? launchResult.productionCycle.current_count,
+            initial_weight_g: Number(
+              launchResult.productionCycle.tracking_start_average_weight,
+            ),
+            target_weight_g: Number(
+              launchResult.productionCycle.target_harvest_weight_g ?? 0,
+            ),
+            cycle_duration_days: Math.max(
+              0,
+              Math.ceil(
+                (
+                  new Date(
+                    launchResult.productionCycle.planned_harvest_date ?? "",
+                  ).getTime()
+                  - new Date(
+                    launchResult.productionCycle.tracking_start_date
+                      ?? launchResult.productionCycle.start_date,
+                  ).getTime()
+                ) / 86_400_000,
+              ),
+            ),
+            survival_rate: Number(
+              launchResult.productionCycle.expected_survival_rate_pct ?? 95,
+            ) / 100,
+            selling_price_per_kg_fcfa: Number(backendSellingPrice ?? 0),
+            fingerlings_cost_fcfa: Number(
+              launchResult.productionCycle.fingerlings_cost_fcfa ?? 0,
+            ),
+            other_costs_fcfa: Number(
+              launchResult.productionCycle.other_operational_costs_fcfa ?? 0,
+            ),
+          }
+        : buildSimulatorPrefill({
+            ...buildCyclePayload(formData),
+            planned_selling_price_per_kg_fcfa:
+              backendSellingPrice === undefined
+                ? undefined
+                : Number(backendSellingPrice),
+          });
       Alert.alert(t("success"), t("cycleCreatedSuccess"), [
         {
           text: t("ok"),
@@ -268,7 +350,10 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
         return;
       }
       if (isNetworkError(error)) {
-        Alert.alert(t("error"), t("cycleLaunchNetworkRetry"));
+        await offlineService.saveCycleLaunchOffline(payload, {
+          attempted: true,
+        });
+        Alert.alert(t("saved"), t("cycleLaunchPendingAfterAttempt"));
         return;
       }
       const parsedError = parseApiError(error);
@@ -284,6 +369,48 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const addOpeningStock = () => {
+    const localId = createClientUuid();
+    const common = {
+      local_id: localId,
+      quantity_kg: stockQuantity.replace(",", "."),
+      cost_status: stockCostStatus,
+      total_cost_fcfa:
+        stockCostStatus === "known" ? stockCost.replace(",", ".") : null,
+      note: stockNote.trim(),
+    } satisfies Omit<
+      CycleLaunchOpeningStockInput,
+      "feed_reference_id" | "external_feed"
+    >;
+    const stock: CycleLaunchOpeningStockInput =
+      stockReferenceMode === "existing"
+        ? { ...common, feed_reference_id: stockReferenceId }
+        : {
+            ...common,
+            external_feed: {
+              client_uuid: createClientUuid(),
+              name: stockName.trim(),
+              pellet_size_mm: stockPelletSize.replace(",", "."),
+              brand: "",
+            },
+          };
+    if (
+      !(Number(stock.quantity_kg) > 0) ||
+      (stockCostStatus === "known" && !(Number(stock.total_cost_fcfa) >= 0)) ||
+      (stockReferenceMode === "existing" ? !stockReferenceId : !stockName.trim() || !(Number(stockPelletSize) > 0))
+    ) {
+      Alert.alert(t("error"), t("openingStockInvalid"));
+      return;
+    }
+    setFormData((current) => ({
+      ...current,
+      initial_feed_stocks: [...current.initial_feed_stocks, stock],
+    }));
+    setStockQuantity("");
+    setStockCost("");
+    setStockNote("");
   };
 
   const numberSuffix = (label: string) => (
@@ -317,6 +444,19 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
       <Screen scroll scrollProps={{ contentContainerStyle: { padding: spacing[4] } }}>
         <View style={{ gap: spacing[5] }}>
           <Card variant="outlined"><AppText variant="cardTitle">{farmProfile?.farm_name || t("farmNotDefined")}</AppText></Card>
+          <View style={{ gap: spacing[3] }}>
+            <AppText variant="sectionTitle">{t("cycleOnboardingMode")}</AppText>
+            <SegmentedControl
+              value={formData.onboarding_mode}
+              options={[
+                { value: "new", label: t("newCycleMode") },
+                { value: "ongoing", label: t("ongoingCycleMode") },
+              ]}
+              onChange={(onboarding_mode) =>
+                setFormData((current) => ({ ...current, onboarding_mode }))
+              }
+            />
+          </View>
           <View style={{ gap: spacing[3] }}>
             <AppText variant="sectionTitle">{t("speciesSelection")}</AppText>
             <SegmentedControl
@@ -371,12 +511,131 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             }) : null}
           </View>
           <View style={{ gap: spacing[3] }}>
-            <AppText variant="sectionTitle">{t("initialStocking")}</AppText>
+            <AppText variant="sectionTitle">
+              {t(formData.onboarding_mode === "ongoing" ? "declaredHistory" : "initialStocking")}
+            </AppText>
             <TextField testID="newCycleInitialCount" label={t("initialCount")} required value={formData.initial_count} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_count: value }))} placeholder={t("exampleValuePlaceholder", { value: 1000 })} keyboardType="numeric" />
-            <TextField testID="newCycleInitialWeight" label={t("initialWeight")} required value={formData.initial_average_weight} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_average_weight: value }))} placeholder={t("exampleValuePlaceholder", { value: 10 })} keyboardType="numeric" suffix={numberSuffix("g")} />
+            <TextField testID="newCycleInitialWeight" label={t(formData.onboarding_mode === "ongoing" ? "historicalInitialWeightOptional" : "initialWeight")} required={formData.onboarding_mode === "new"} value={formData.initial_average_weight} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_average_weight: value }))} placeholder={t("exampleValuePlaceholder", { value: 10 })} keyboardType="numeric" suffix={numberSuffix("g")} />
             <TextField label={t("startDate")} required value={formData.start_date} onChangeText={(value) => setFormData((prev) => ({ ...prev, start_date: value }))} placeholder={t("dateFormatPlaceholder")} />
             <TextField testID="newCycleName" label={t("cycleName")} value={formData.cycle_name} onChangeText={(value) => setFormData((prev) => ({ ...prev, cycle_name: value }))} placeholder={t("cycleNamePlaceholder")} />
           </View>
+          {formData.onboarding_mode === "ongoing" ? (
+            <View style={{ gap: spacing[3] }}>
+              <AppText variant="sectionTitle">{t("trackingStartSituation")}</AppText>
+              <TextField
+                testID="newCycleTrackingDate"
+                label={t("trackingStartDate")}
+                required
+                value={formData.tracking_start_date}
+                onChangeText={(value) => setFormData((current) => ({ ...current, tracking_start_date: value }))}
+                placeholder={t("dateFormatPlaceholder")}
+              />
+              <TextField
+                testID="newCycleTrackingCount"
+                label={t("fishPresentAtTrackingStart")}
+                required
+                value={formData.tracking_start_count}
+                onChangeText={(value) => setFormData((current) => ({ ...current, tracking_start_count: value }))}
+                keyboardType="numeric"
+              />
+              <TextField
+                testID="newCycleTrackingWeight"
+                label={t("observedAverageWeight")}
+                required
+                value={formData.tracking_start_average_weight}
+                onChangeText={(value) => setFormData((current) => ({ ...current, tracking_start_average_weight: value }))}
+                keyboardType="decimal-pad"
+                suffix={numberSuffix("g")}
+              />
+              <TextField
+                testID="newCycleTrackingBiomass"
+                label={t("measuredBiomassOptional")}
+                value={formData.tracking_start_biomass}
+                onChangeText={(value) => setFormData((current) => ({ ...current, tracking_start_biomass: value }))}
+                keyboardType="decimal-pad"
+                suffix={numberSuffix("kg")}
+              />
+              {formData.tracking_start_count && formData.tracking_start_average_weight ? (
+                <AppText color="muted">
+                  {t("calculatedBiomass")}:{" "}
+                  {(
+                    Number(formData.tracking_start_count)
+                    * Number(formData.tracking_start_average_weight)
+                    / 1000
+                  ).toFixed(2)} kg
+                </AppText>
+              ) : null}
+              <InlineAlert tone="info" message={t("preTrackingEventsNotReconstructed")} />
+            </View>
+          ) : null}
+          {formData.onboarding_mode === "ongoing" ? (
+            <View style={{ gap: spacing[3] }}>
+              <AppText variant="sectionTitle">{t("openingFeedStock")}</AppText>
+              <AppText color="muted">{t("openingFeedStockDescription")}</AppText>
+              <SegmentedControl
+                value={stockReferenceMode}
+                options={[
+                  { value: "existing", label: t("existingFeedReference") },
+                  { value: "external", label: t("externalFeed") },
+                ]}
+                onChange={setStockReferenceMode}
+              />
+              {stockReferenceMode === "existing" ? (
+                <View style={{ gap: spacing[2] }}>
+                  {feedReferences
+                    .filter((reference) => reference.species === formData.species)
+                    .map((reference) => (
+                      <SelectableCard
+                        key={reference.id}
+                        selected={stockReferenceId === reference.id}
+                        onPress={() => setStockReferenceId(reference.id)}
+                        accessibilityLabel={reference.name}
+                      >
+                        <AppText variant="bodyStrong">{reference.name}</AppText>
+                        <AppText color="muted">{reference.pellet_size_mm} mm</AppText>
+                      </SelectableCard>
+                    ))}
+                </View>
+              ) : (
+                <>
+                  <TextField label={t("feedName")} value={stockName} onChangeText={setStockName} />
+                  <TextField label={t("pelletSize")} value={stockPelletSize} onChangeText={setStockPelletSize} keyboardType="decimal-pad" suffix={numberSuffix("mm")} />
+                </>
+              )}
+              <TextField label={t("quantityKg")} value={stockQuantity} onChangeText={setStockQuantity} keyboardType="decimal-pad" suffix={numberSuffix("kg")} />
+              <SegmentedControl
+                value={stockCostStatus}
+                options={[
+                  { value: "known", label: t("knownCost") },
+                  { value: "unknown", label: t("unknownCost") },
+                ]}
+                onChange={setStockCostStatus}
+              />
+              {stockCostStatus === "known" ? (
+                <TextField label={t("totalCostFcfa")} value={stockCost} onChangeText={setStockCost} keyboardType="decimal-pad" suffix={numberSuffix("FCFA")} />
+              ) : null}
+              <TextField label={t("notes")} value={stockNote} onChangeText={setStockNote} />
+              <Button label={t("addOpeningStock")} variant="outline" onPress={addOpeningStock} />
+              {formData.initial_feed_stocks.map((stock) => (
+                <Card key={stock.local_id} variant="outlined">
+                  <AppText variant="bodyStrong">
+                    {stock.external_feed?.name
+                      ?? feedReferences.find((reference) => reference.id === stock.feed_reference_id)?.name
+                      ?? t("feed")}
+                  </AppText>
+                  <AppText>{stock.quantity_kg} kg · {t(stock.cost_status === "known" ? "knownCost" : "unknownCost")}</AppText>
+                  <Button
+                    label={t("remove")}
+                    variant="outline"
+                    onPress={() => setFormData((current) => ({
+                      ...current,
+                      initial_feed_stocks: current.initial_feed_stocks.filter((item) => item.local_id !== stock.local_id),
+                    }))}
+                  />
+                </Card>
+              ))}
+            </View>
+          ) : null}
           <View style={{ gap: spacing[3] }}>
             <AppText variant="sectionTitle">{t("economicProjectionTitle")}</AppText>
             <TextField testID="newCycleTargetWeight" label={t("targetWeight")} required value={formData.target_harvest_weight_g} onChangeText={(value) => setFormData((prev) => ({ ...prev, target_harvest_weight_g: value }))} placeholder={t("exampleValuePlaceholder", { value: formData.species === "clarias" ? 400 : 300 })} keyboardType="numeric" suffix={numberSuffix("g")} />
@@ -397,7 +656,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             </Card>;
           })() : null}
           {!isFormValid ? <InlineAlert tone="info" message={validationErrorKey ? t(validationErrorKey) : undefined} /> : null}
-          <Button testID="newCycleSubmit" label={t("createCycle")} onPress={handleSave} disabled={!isFormValid} loading={saving} iconLeft="checkmark" />
+          <Button testID="newCycleSubmit" label={t(formData.onboarding_mode === "ongoing" ? "startTracking" : "createCycle")} onPress={handleSave} disabled={!isFormValid} loading={saving} iconLeft="checkmark" />
         </View>
       </Screen>
     </View>

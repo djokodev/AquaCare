@@ -43,6 +43,7 @@ import {
   CycleUnitAllocationCreatePayload,
   CycleLaunchRequest,
   CycleLaunchResponse,
+  CycleLaunchOpeningStockEntry,
   ReportScopeType,
   CalibrationTank,
   CalibrationOperation,
@@ -439,6 +440,9 @@ class AquacultureService {
         production_units: ProductionUnit[];
         cycle_unit_allocations: CycleUnitAllocation[];
         production_unit_id_by_local_id: Record<string, string>;
+        opening_feed_references: FarmFeedReference[];
+        opening_stock_entries: CycleLaunchOpeningStockEntry[];
+        opening_stock_entry_id_by_local_id: Record<string, string>;
       }>(API_ENDPOINTS.AQUACULTURE.CYCLE_LAUNCH, payload);
 
       return {
@@ -449,6 +453,10 @@ class AquacultureService {
         productionUnits: response.data.production_units,
         cycleUnitAllocations: response.data.cycle_unit_allocations,
         productionUnitIdByLocalId: response.data.production_unit_id_by_local_id,
+        openingFeedReferences: response.data.opening_feed_references ?? [],
+        openingStockEntries: response.data.opening_stock_entries ?? [],
+        openingStockEntryIdByLocalId:
+          response.data.opening_stock_entry_id_by_local_id ?? {},
       };
     } catch (error) {
       logger.error('Erreur lors du lancement transactionnel du cycle:', error);

@@ -35,7 +35,7 @@ export interface FirstCycleLaunchResult extends CycleLaunchResponse {
   idempotentReplay: boolean;
 }
 
-interface LaunchFirstCycleParams {
+export interface LaunchFirstCycleParams {
   formData: FarmSetupFormState;
   simulationResult: CycleSimulationResult;
   defaultPondIdentifier: string;
@@ -141,9 +141,9 @@ const buildLaunchUnit = (
   return input;
 };
 
-export const launchFirstCycle = async (
+export const buildFirstCycleLaunchRequest = (
   params: LaunchFirstCycleParams,
-): Promise<FirstCycleLaunchResult> => {
+): CycleLaunchRequest => {
   const { formData, simulationResult, launchKind = "initial_setup" } = params;
   const firstCycle = simulationResult.cycles_breakdown[0];
   if (!firstCycle) {
@@ -179,6 +179,7 @@ export const launchFirstCycle = async (
   const sellingPrice = toFiniteNumber(formData.sellingPrice);
   const fingerlingsPrice = toFiniteNumber(formData.fingerlingsPrice) ?? 0;
   const initialCount = toPositiveInteger(firstCycle.initial_fish_count);
+  const ongoing = formData.onboardingMode === "ongoing";
   if (
     !initialCount ||
     initialCount !== toPositiveInteger(formData.fingerlingsCount)
@@ -204,9 +205,20 @@ export const launchFirstCycle = async (
         }
       : {}),
     cycle: {
+      onboarding_mode: ongoing ? "ongoing" : "new",
       species: formData.species === "clarias" ? "clarias" : "tilapia",
       start_date: firstCycle.start_date_estimate,
-      initial_count: initialCount,
+      initial_count: ongoing
+        ? toPositiveInteger(formData.historicalInitialCount) ?? initialCount
+        : initialCount,
+      ...(ongoing
+        ? {
+            initial_average_weight:
+              toFiniteNumber(formData.historicalInitialWeight) === undefined
+                ? null
+                : formData.historicalInitialWeight,
+          }
+        : {}),
       target_harvest_weight_g: toFiniteNumber(formData.harvestWeight),
       planned_cycle_duration_days: configuredDuration,
       expected_survival_rate_pct: toFiniteNumber(formData.survivalRate) ?? 95,
@@ -224,6 +236,18 @@ export const launchFirstCycle = async (
         undefined,
       created_offline: false,
     },
+    ...(ongoing
+      ? {
+          tracking_baseline: {
+            tracking_start_date:
+              formData.trackingStartDate ?? firstCycle.start_date_estimate,
+            fish_count: initialCount,
+            average_weight_g:
+              formData.trackingStartAverageWeight ?? "",
+            biomass_kg: formData.trackingStartBiomass || null,
+          },
+        }
+      : {}),
     production_units: productionUnits.map(buildLaunchUnit),
     allocations: productionUnitAllocations.map((allocation) => {
       const fishCount = toPositiveInteger(allocation.fish_count);
@@ -240,7 +264,18 @@ export const launchFirstCycle = async (
     ...(formData.calibrationUnits?.length
       ? { calibration_units: formData.calibrationUnits }
       : {}),
+    ...(formData.initialFeedStocks?.length
+      ? { initial_feed_stocks: formData.initialFeedStocks }
+      : {}),
   };
 
-  return aquacultureService.launchProductionCycle(payload);
+  return payload;
+};
+
+export const launchFirstCycle = async (
+  params: LaunchFirstCycleParams,
+): Promise<FirstCycleLaunchResult> => {
+  return aquacultureService.launchProductionCycle(
+    buildFirstCycleLaunchRequest(params),
+  );
 };

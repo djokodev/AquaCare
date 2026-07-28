@@ -50,9 +50,11 @@ import {
 import { groupProductionUnitAllocationSummaries } from '@/features/aquaculture/utils/allocationSummary';
 import {
   FirstCycleLaunchError,
+  buildFirstCycleLaunchRequest,
   launchFirstCycle,
 } from '@/features/aquaculture/services/firstCycleLaunchService';
-import { parseApiError } from '@/utils/errorParser';
+import { isNetworkError, parseApiError } from '@/utils/errorParser';
+import { offlineService } from '@/services/offlineService';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 import { spacing } from '@/theme';
 
@@ -186,14 +188,15 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     if (!currentResult) return;
 
     setLaunching(true);
+    const launchParams = {
+      formData,
+      simulationResult: currentResult,
+      defaultPondIdentifier: t('simulationDefaultPondIdentifier'),
+      launchKind: requiresAdditionalCycleFlow ? 'additional_cycle' as const : 'initial_setup' as const,
+    };
 
     try {
-      const launchResult = await launchFirstCycle({
-        formData,
-        simulationResult: currentResult,
-        defaultPondIdentifier: t('simulationDefaultPondIdentifier'),
-        launchKind: requiresAdditionalCycleFlow ? 'additional_cycle' : 'initial_setup',
-      });
+      const launchResult = await launchFirstCycle(launchParams);
       dispatch(addCreatedProductionCycle(launchResult.productionCycle));
       dispatch(setFarmProfile(launchResult.farmProfile));
       await dispatch(fetchDashboardData({ forceAllCycles: true })).unwrap();
@@ -211,6 +214,15 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     } catch (err: unknown) {
       if (err instanceof FirstCycleLaunchError) {
         Alert.alert(t('error'), t(err.translationKey));
+        return;
+      }
+      if (isNetworkError(err)) {
+        await offlineService.saveCycleLaunchOffline(
+          buildFirstCycleLaunchRequest(launchParams),
+          { attempted: true },
+        );
+        Alert.alert(t('saved'), t('cycleLaunchPendingAfterAttempt'));
+        navigation.navigate('MainTabs', { screen: 'Dashboard' });
         return;
       }
 

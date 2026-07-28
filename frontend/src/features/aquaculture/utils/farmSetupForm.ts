@@ -18,7 +18,11 @@ import type {
   CycleSimulationInput,
   FarmSetupData,
 } from '@/features/aquaculture/types/farmSetup';
-import type { CycleLaunchCalibrationUnitInput } from '@/types/aquaculture';
+import type {
+  CycleLaunchCalibrationUnitInput,
+  CycleLaunchOpeningStockInput,
+  CycleOnboardingMode,
+} from '@/types/aquaculture';
 import { INPUT_LIMITS } from '@/domain/aquaculture/constants';
 import { getBusinessIsoDate } from '@/utils/businessDate';
 
@@ -27,6 +31,7 @@ export type FarmSetupInfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | '
 
 export interface FarmSetupFormState {
   launchRequestId: string;
+  onboardingMode?: CycleOnboardingMode;
   species: FarmSetupSpecies | '';
   infraType: FarmSetupInfraType | '';
   unitCount: string;
@@ -44,6 +49,12 @@ export interface FarmSetupFormState {
   productionUnits: ProductionUnitDraft[];
   productionUnitAllocations: ProductionUnitFishAllocationDraft[];
   calibrationUnits?: CycleLaunchCalibrationUnitInput[];
+  historicalInitialCount?: string;
+  historicalInitialWeight?: string;
+  trackingStartDate?: string;
+  trackingStartAverageWeight?: string;
+  trackingStartBiomass?: string;
+  initialFeedStocks?: CycleLaunchOpeningStockInput[];
 }
 
 export type FarmSetupFormErrors = Partial<Record<keyof FarmSetupFormState, string>>;
@@ -348,8 +359,37 @@ export const validateFarmSetupForm = (
   const unitCount = parseStrictInteger(form.unitCount);
   const fingerlingsCount = parseStrictInteger(form.fingerlingsCount);
   const hasProductionUnits = form.productionUnits.length > 0;
+  const ongoing = form.onboardingMode === 'ongoing';
 
   if (!form.species) errors.species = 'required';
+  if (ongoing) {
+    const historicalCount = parseStrictInteger(form.historicalInitialCount ?? '');
+    const trackingWeight = parseStrictNumber(form.trackingStartAverageWeight ?? '');
+    if (!historicalCount || historicalCount < (fingerlingsCount ?? 0)) {
+      errors.historicalInitialCount = 'ongoingCycleCurrentCountInvalid';
+    }
+    if (
+      !form.trackingStartDate ||
+      !isValidISODate(form.trackingStartDate) ||
+      form.trackingStartDate < form.startDate ||
+      form.trackingStartDate > todayISO()
+    ) {
+      errors.trackingStartDate = 'ongoingCycleTrackingDateInvalid';
+    }
+    if (trackingWeight === null || trackingWeight <= 0) {
+      errors.trackingStartAverageWeight = 'ongoingCycleCurrentWeightRequired';
+    }
+    const measured = parseStrictNumber(form.trackingStartBiomass ?? '');
+    if (measured !== null && fingerlingsCount && trackingWeight) {
+      const calculated = fingerlingsCount * trackingWeight / 1000;
+      if (
+        measured <= 0 ||
+        Math.abs(measured - calculated) / calculated > 0.1
+      ) {
+        errors.trackingStartBiomass = 'ongoingCycleBiomassInconsistent';
+      }
+    }
+  }
 
   if (!hasProductionUnits) {
     errors.productionUnits = 'createFarmAtLeastOneUnitError';

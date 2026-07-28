@@ -69,6 +69,7 @@ import type {
   ProductionUnitFishAllocationDraft,
   ProductionUnitType,
 } from '@/features/aquaculture/types/productionUnits';
+import type { CycleLaunchOpeningStockInput } from '@/types/aquaculture';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CreateFarm'>;
 
@@ -176,6 +177,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
   const [form, setForm] = useState<FarmSetupFormState>({
     launchRequestId: createClientUuid(),
+    onboardingMode: 'new',
     species: '',
     infraType: '',
     unitCount: '',
@@ -193,9 +195,21 @@ export default function CreateFarmScreen({ navigation }: Props) {
     productionUnits: [],
     productionUnitAllocations: [],
     calibrationUnits: [],
+    historicalInitialCount: '',
+    historicalInitialWeight: '',
+    trackingStartDate: todayISO(),
+    trackingStartAverageWeight: '',
+    trackingStartBiomass: '',
+    initialFeedStocks: [],
   });
   const [calibrationName, setCalibrationName] = useState('');
   const [calibrationVolume, setCalibrationVolume] = useState('');
+  const [openingStockName, setOpeningStockName] = useState('');
+  const [openingStockPelletSize, setOpeningStockPelletSize] = useState('');
+  const [openingStockQuantity, setOpeningStockQuantity] = useState('');
+  const [openingStockCostStatus, setOpeningStockCostStatus] =
+    useState<'known' | 'unknown'>('unknown');
+  const [openingStockCost, setOpeningStockCost] = useState('');
   const [singleUnitDraft, setSingleUnitDraft] = useState<UnitDraftState>(getDefaultSingleDraft());
   const [bulkUnitDraft, setBulkUnitDraft] = useState<BulkUnitDraftState>(getDefaultBulkDraft());
   const [singleUnitErrors, setSingleUnitErrors] = useState<ProductionUnitDraftErrors>({});
@@ -374,6 +388,7 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const getFieldLabel = (field: keyof FarmSetupFormState): string => {
     const labelByField: Record<keyof FarmSetupFormState, string> = {
       launchRequestId: '',
+      onboardingMode: t('cycleOnboardingMode'),
       species: t('createFarmSpeciesLabel'),
       infraType: t('createFarmInfraLabel'),
       unitCount: t('createFarmUnitCountLabel'),
@@ -391,6 +406,12 @@ export default function CreateFarmScreen({ navigation }: Props) {
       productionUnits: t('createFarmProductionUnitsSectionTitle'),
       productionUnitAllocations: t('createFarmProductionUnitAllocationSectionTitle'),
       calibrationUnits: t('prepareCalibrationTanks'),
+      historicalInitialCount: t('initialCount'),
+      historicalInitialWeight: t('historicalInitialWeightOptional'),
+      trackingStartDate: t('trackingStartDate'),
+      trackingStartAverageWeight: t('observedAverageWeight'),
+      trackingStartBiomass: t('measuredBiomassOptional'),
+      initialFeedStocks: t('openingFeedStock'),
     };
 
     return labelByField[field];
@@ -793,6 +814,40 @@ export default function CreateFarmScreen({ navigation }: Props) {
     setCalibrationVolume('');
   };
 
+  const addOpeningStock = () => {
+    const quantity = Number(openingStockQuantity.replace(',', '.'));
+    const pelletSize = Number(openingStockPelletSize.replace(',', '.'));
+    const cost = Number(openingStockCost.replace(',', '.'));
+    if (
+      !openingStockName.trim()
+      || !(quantity > 0)
+      || !(pelletSize > 0)
+      || (openingStockCostStatus === 'known' && !(cost >= 0))
+    ) {
+      Alert.alert(t('error'), t('openingStockInvalid'));
+      return;
+    }
+    const stock: CycleLaunchOpeningStockInput = {
+      local_id: createClientUuid(),
+      external_feed: {
+        client_uuid: createClientUuid(),
+        name: openingStockName.trim(),
+        pellet_size_mm: String(pelletSize),
+      },
+      quantity_kg: String(quantity),
+      cost_status: openingStockCostStatus,
+      total_cost_fcfa: openingStockCostStatus === 'known' ? String(cost) : null,
+    };
+    setForm((current) => ({
+      ...current,
+      initialFeedStocks: [...(current.initialFeedStocks ?? []), stock],
+    }));
+    setOpeningStockName('');
+    setOpeningStockPelletSize('');
+    setOpeningStockQuantity('');
+    setOpeningStockCost('');
+  };
+
   const singleDraftUsesSurface = singleUnitDraft.unit_type === 'pond';
   const bulkDraftUsesSurface = bulkUnitDraft.unit_type === 'pond';
 
@@ -813,6 +868,20 @@ export default function CreateFarmScreen({ navigation }: Props) {
         <AppText variant="caption" color="muted">{t('currentFarm')}</AppText>
         <AppText variant="cardTitle">{farmProfile?.farm_name || t('farmNotDefined')}</AppText>
       </Card>
+
+      <FieldLabel label={t('cycleOnboardingMode')} required />
+      <View style={styles.chipRow}>
+        <Chip
+          label={t('newCycleMode')}
+          selected={form.onboardingMode !== 'ongoing'}
+          onPress={() => setField('onboardingMode', 'new')}
+        />
+        <Chip
+          label={t('ongoingCycleMode')}
+          selected={form.onboardingMode === 'ongoing'}
+          onPress={() => setField('onboardingMode', 'ongoing')}
+        />
+      </View>
 
       <FieldLabel label={t('createFarmSpeciesLabel')} required />
       <View style={styles.chipRow}>
@@ -1061,7 +1130,81 @@ export default function CreateFarmScreen({ navigation }: Props) {
         onChangeText={v => setField('fingerlingsPrice', v)}
       />
 
-      <FieldLabel label={t('createFarmFingerlingsCountLabel')} required />
+      {form.onboardingMode === 'ongoing' ? (
+        <>
+          <AppText variant="sectionTitle">{t('declaredHistory')}</AppText>
+          <FieldLabel label={t('initialCount')} required />
+          <TextField
+            value={form.historicalInitialCount ?? ''}
+            onChangeText={v => setField('historicalInitialCount', sanitizePositiveIntegerInput(v))}
+            keyboardType="numeric"
+            error={formErrors.historicalInitialCount ? t(formErrors.historicalInitialCount) : undefined}
+          />
+          <FieldLabel label={t('historicalInitialWeightOptional')} />
+          <TextField
+            value={form.historicalInitialWeight ?? ''}
+            onChangeText={v => setField('historicalInitialWeight', v)}
+            keyboardType="decimal-pad"
+          />
+          <AppText variant="sectionTitle">{t('trackingStartSituation')}</AppText>
+          <FieldLabel label={t('trackingStartDate')} required />
+          <TextField
+            value={form.trackingStartDate ?? ''}
+            onChangeText={v => setField('trackingStartDate', v)}
+            error={formErrors.trackingStartDate ? t(formErrors.trackingStartDate) : undefined}
+          />
+          <FieldLabel label={t('observedAverageWeight')} required />
+          <TextField
+            value={form.trackingStartAverageWeight ?? ''}
+            onChangeText={v => setField('trackingStartAverageWeight', v)}
+            keyboardType="decimal-pad"
+            error={formErrors.trackingStartAverageWeight ? t(formErrors.trackingStartAverageWeight) : undefined}
+          />
+          <FieldLabel label={t('measuredBiomassOptional')} />
+          <TextField
+            value={form.trackingStartBiomass ?? ''}
+            onChangeText={v => setField('trackingStartBiomass', v)}
+            keyboardType="decimal-pad"
+            error={formErrors.trackingStartBiomass ? t(formErrors.trackingStartBiomass) : undefined}
+          />
+          <AppText variant="helper" color="muted">{t('preTrackingEventsNotReconstructed')}</AppText>
+          <AppText variant="sectionTitle">{t('openingFeedStock')}</AppText>
+          <AppText variant="helper" color="muted">{t('openingFeedStockDescription')}</AppText>
+          <FieldLabel label={t('feedName')} />
+          <TextField value={openingStockName} onChangeText={setOpeningStockName} />
+          <FieldLabel label={t('pelletSize')} />
+          <TextField value={openingStockPelletSize} onChangeText={setOpeningStockPelletSize} keyboardType="decimal-pad" />
+          <FieldLabel label={t('quantityKg')} />
+          <TextField value={openingStockQuantity} onChangeText={setOpeningStockQuantity} keyboardType="decimal-pad" />
+          <View style={styles.chipRow}>
+            <Chip label={t('knownCost')} selected={openingStockCostStatus === 'known'} onPress={() => setOpeningStockCostStatus('known')} />
+            <Chip label={t('unknownCost')} selected={openingStockCostStatus === 'unknown'} onPress={() => setOpeningStockCostStatus('unknown')} />
+          </View>
+          {openingStockCostStatus === 'known' ? (
+            <>
+              <FieldLabel label={t('totalCostFcfa')} />
+              <TextField value={openingStockCost} onChangeText={setOpeningStockCost} keyboardType="decimal-pad" />
+            </>
+          ) : null}
+          <Button label={t('addOpeningStock')} variant="outline" onPress={addOpeningStock} />
+          {(form.initialFeedStocks ?? []).map((stock) => (
+            <Card key={stock.local_id} variant="outlined">
+              <AppText variant="bodyStrong">{stock.external_feed?.name}</AppText>
+              <AppText>{stock.quantity_kg} kg · {t(stock.cost_status === 'known' ? 'knownCost' : 'unknownCost')}</AppText>
+              <Button
+                label={t('remove')}
+                variant="outline"
+                onPress={() => setForm((current) => ({
+                  ...current,
+                  initialFeedStocks: (current.initialFeedStocks ?? []).filter((item) => item.local_id !== stock.local_id),
+                }))}
+              />
+            </Card>
+          ))}
+        </>
+      ) : null}
+
+      <FieldLabel label={t(form.onboardingMode === 'ongoing' ? 'fishPresentAtTrackingStart' : 'createFarmFingerlingsCountLabel')} required />
       <TextField
         error={
           fingerlingsCountLimitError ??

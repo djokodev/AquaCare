@@ -36,6 +36,8 @@ jest.mock("@/services/offlineService", () => ({
   offlineService: {
     hasAnyPendingSync: jest.fn(),
     syncAllOfflineData: jest.fn(),
+    isOnline: jest.fn(),
+    saveCycleLaunchOffline: jest.fn(),
     saveNewCycleOffline: jest.fn(),
   },
 }));
@@ -109,6 +111,8 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
       success: 0,
       failed: 0,
     } as any);
+    mockOffline.isOnline.mockResolvedValue(true);
+    mockOffline.saveCycleLaunchOffline.mockResolvedValue(undefined as any);
     mockService.getProductionUnits.mockResolvedValue(units);
     mockIsNetworkError.mockReturnValue(false);
     mockService.launchProductionCycle.mockResolvedValue({
@@ -206,7 +210,7 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
   });
 
-  it("conserve le formulaire et ne crée pas de cycle offline sur erreur réseau", async () => {
+  it("conserve exactement le lancement agrégé après une réponse réseau incertaine", async () => {
     const alertSpy = jest
       .spyOn(Alert, "alert")
       .mockImplementation(() => undefined);
@@ -225,7 +229,11 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     fireEvent.press(getByText("createCycle"));
 
     await waitFor(() =>
-      expect(alertSpy).toHaveBeenCalledWith("error", "cycleLaunchNetworkRetry"),
+      expect(alertSpy).toHaveBeenCalledWith("saved", "cycleLaunchPendingAfterAttempt"),
+    );
+    expect(mockOffline.saveCycleLaunchOffline).toHaveBeenCalledWith(
+      mockService.launchProductionCycle.mock.calls[0][0],
+      { attempted: true },
     );
     expect(mockOffline.saveNewCycleOffline).not.toHaveBeenCalled();
     expect(getByTestId("newCycleInitialCount").props.value).toBe("1500");
