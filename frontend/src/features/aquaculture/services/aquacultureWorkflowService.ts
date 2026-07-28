@@ -160,10 +160,11 @@ export const declareManualStockWithOfflineFallback = async (
         ...feedReferencePayload,
         created_offline: false,
       });
+      const onlineStockPayload = { ...resolvedStockPayload };
+      delete onlineStockPayload.feed_reference_client_uuid;
       resolvedStockPayload = {
-        ...resolvedStockPayload,
+        ...onlineStockPayload,
         feed_reference_id: reference.id,
-        feed_reference_client_uuid: feedReferencePayload.client_uuid,
       };
     } catch (error: unknown) {
       if (!isNetworkError(error)) throw error;

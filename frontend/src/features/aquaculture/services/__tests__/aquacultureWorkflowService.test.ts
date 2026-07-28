@@ -1,4 +1,7 @@
-import { createCycleLogWithOfflineFallback } from '../aquacultureWorkflowService';
+import {
+  createCycleLogWithOfflineFallback,
+  declareManualStockWithOfflineFallback,
+} from '../aquacultureWorkflowService';
 import { aquacultureService } from '../aquacultureService';
 import { offlineService } from '@/services/offlineService';
 
@@ -6,6 +9,8 @@ jest.mock('../aquacultureService', () => ({
   aquacultureService: {
     createCycleLog: jest.fn(),
     updateCycleLog: jest.fn(),
+    createFarmFeedReference: jest.fn(),
+    declareCycleStoreManualStock: jest.fn(),
   },
 }));
 
@@ -16,6 +21,8 @@ jest.mock('@/services/offlineService', () => ({
     saveCycleLogOffline: jest.fn(),
     findPendingCycleLogForScope: jest.fn(),
     markLogAsSynced: jest.fn(),
+    saveFeedReferenceOffline: jest.fn(),
+    saveStockDeclarationOffline: jest.fn(),
   },
 }));
 
@@ -127,5 +134,78 @@ describe('createCycleLogWithOfflineFallback', () => {
     expect(result.mode).toBe('online');
     expect(service.createCycleLog).toHaveBeenCalled();
     expect(offline.saveCycleLogOffline).not.toHaveBeenCalled();
+  });
+});
+
+describe('declareManualStockWithOfflineFallback', () => {
+  const service = aquacultureService as jest.Mocked<typeof aquacultureService>;
+  const offline = offlineService as jest.Mocked<typeof offlineService>;
+  const stockPayload = {
+    feed_reference_client_uuid: 'new-client-uuid',
+    quantity_kg: '5.00',
+    total_cost_fcfa: '7500.00',
+    entry_date: '2026-07-28',
+    client_uuid: 'stock-client-uuid',
+  };
+  const referencePayload = {
+    farm_profile: 'farm-1',
+    source: 'external' as const,
+    name: 'Aliment marché QA',
+    species: 'clarias' as const,
+    pellet_size_mm: '2.00',
+    client_uuid: 'new-client-uuid',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('utilise uniquement l’identifiant de la référence canonique retournée en ligne', async () => {
+    service.createFarmFeedReference.mockResolvedValue({
+      id: 'server-reference-1',
+      client_uuid: 'original-client-uuid',
+    } as any);
+    service.declareCycleStoreManualStock.mockResolvedValue({ cycle_id: 'cycle-1' } as any);
+
+    const result = await declareManualStockWithOfflineFallback(
+      'cycle-1',
+      stockPayload,
+      referencePayload,
+    );
+
+    expect(result.mode).toBe('online');
+    const sentPayload = service.declareCycleStoreManualStock.mock.calls[0][1];
+    expect(sentPayload).toEqual(expect.objectContaining({
+      feed_reference_id: 'server-reference-1',
+      quantity_kg: '5.00',
+      created_offline: false,
+    }));
+    expect(sentPayload).not.toHaveProperty('feed_reference_client_uuid');
+    expect(offline.saveFeedReferenceOffline).not.toHaveBeenCalled();
+  });
+
+  it('conserve le client_uuid local lorsque la référence est créée hors ligne', async () => {
+    service.createFarmFeedReference.mockRejectedValue({
+      message: 'Network Error',
+      request: {},
+    });
+
+    const result = await declareManualStockWithOfflineFallback(
+      'cycle-1',
+      stockPayload,
+      referencePayload,
+    );
+
+    expect(result).toEqual({ mode: 'offline' });
+    expect(offline.saveFeedReferenceOffline).toHaveBeenCalledWith(referencePayload);
+    expect(offline.saveStockDeclarationOffline).toHaveBeenCalledWith(
+      'cycle-1',
+      expect.objectContaining({
+        feed_reference_client_uuid: 'new-client-uuid',
+        client_uuid: 'stock-client-uuid',
+      }),
+      undefined,
+    );
+    expect(service.declareCycleStoreManualStock).not.toHaveBeenCalled();
   });
 });
