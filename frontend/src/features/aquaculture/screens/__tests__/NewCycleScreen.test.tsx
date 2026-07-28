@@ -7,6 +7,7 @@ import { offlineService } from "@/services/offlineService";
 import { useDispatch } from "react-redux";
 import { useAuth } from "@/hooks/useAuth";
 import { isNetworkError, parseApiError } from "@/utils/errorParser";
+import { getBusinessIsoDate } from "@/utils/businessDate";
 
 jest.mock("react-redux", () => ({
   useDispatch: jest.fn(),
@@ -208,6 +209,53 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     fireEvent.press(getByText("createCycle"));
 
     expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
+  });
+
+  it("affiche les champs ongoing et accepte un poids historique absent", async () => {
+    const trackingDate = getBusinessIsoDate();
+    const startDate = new Date(`${trackingDate}T12:00:00Z`);
+    startDate.setUTCDate(startDate.getUTCDate() - 30);
+    const historicalStartDate = startDate.toISOString().slice(0, 10);
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
+    );
+
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    expect(() => getByTestId("newCycleTrackingDate")).toThrow();
+
+    fireEvent.press(getByText("ongoingCycleMode"));
+    fireEvent.press(getByText("tilapia"));
+    fireEvent.press(getByTestId("newCycleUnit-unit-1"));
+    fireEvent.changeText(getByTestId("newCycleInitialCount"), "2000");
+    fireEvent.changeText(getByTestId("newCycleStartDate"), historicalStartDate);
+    fireEvent.changeText(getByTestId("newCycleTrackingDate"), trackingDate);
+    fireEvent.changeText(getByTestId("newCycleTrackingCount"), "1850");
+    fireEvent.changeText(getByTestId("newCycleTrackingWeight"), "75");
+    fireEvent.changeText(getByTestId("newCycleTargetWeight"), "350");
+    fireEvent.changeText(getByTestId("newCycleDuration"), "150");
+    fireEvent.changeText(getByTestId("newCycleSurvival"), "95");
+    fireEvent.changeText(getByTestId("newCycleSellingPrice"), "2800");
+    fireEvent.changeText(getByTestId("newCycleAllocation-unit-1"), "1850");
+    fireEvent.press(getByText("startTracking"));
+
+    await waitFor(() =>
+      expect(mockService.launchProductionCycle).toHaveBeenCalledTimes(1),
+    );
+    const payload = mockService.launchProductionCycle.mock.calls[0][0];
+    expect(payload.cycle).toMatchObject({
+      onboarding_mode: "ongoing",
+      initial_count: 2000,
+      initial_average_weight: null,
+    });
+    expect(payload.tracking_baseline).toEqual({
+      tracking_start_date: trackingDate,
+      fish_count: 1850,
+      average_weight_g: "75",
+      biomass_kg: null,
+    });
+    expect(payload.allocations[0].fish_count).toBe(1850);
   });
 
   it("conserve exactement le lancement agrégé après une réponse réseau incertaine", async () => {

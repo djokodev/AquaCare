@@ -61,7 +61,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
     });
 
     expect(payload.cycle.onboarding_mode).toBe("ongoing");
-    expect(payload.cycle.initial_average_weight).toBeUndefined();
+    expect(payload.cycle.initial_average_weight).toBeNull();
     expect(payload.tracking_baseline).toEqual({
       tracking_start_date: "2026-07-20",
       fish_count: 1850,

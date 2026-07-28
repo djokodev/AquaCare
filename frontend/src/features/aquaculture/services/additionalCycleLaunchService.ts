@@ -193,7 +193,9 @@ export const buildAdditionalCycleLaunchRequest = (
       ? { cycle_name: formData.cycle_name.trim() }
       : {}),
     ...(toFiniteNumber(formData.initial_average_weight) === undefined
-      ? {}
+      ? formData.onboarding_mode === "ongoing"
+        ? { initial_average_weight: null }
+        : {}
       : {
           initial_average_weight: formData.initial_average_weight,
         }),

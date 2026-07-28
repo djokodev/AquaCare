@@ -516,7 +516,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             </AppText>
             <TextField testID="newCycleInitialCount" label={t("initialCount")} required value={formData.initial_count} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_count: value }))} placeholder={t("exampleValuePlaceholder", { value: 1000 })} keyboardType="numeric" />
             <TextField testID="newCycleInitialWeight" label={t(formData.onboarding_mode === "ongoing" ? "historicalInitialWeightOptional" : "initialWeight")} required={formData.onboarding_mode === "new"} value={formData.initial_average_weight} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_average_weight: value }))} placeholder={t("exampleValuePlaceholder", { value: 10 })} keyboardType="numeric" suffix={numberSuffix("g")} />
-            <TextField label={t("startDate")} required value={formData.start_date} onChangeText={(value) => setFormData((prev) => ({ ...prev, start_date: value }))} placeholder={t("dateFormatPlaceholder")} />
+            <TextField testID="newCycleStartDate" label={t("startDate")} required value={formData.start_date} onChangeText={(value) => setFormData((prev) => ({ ...prev, start_date: value }))} placeholder={t("dateFormatPlaceholder")} />
             <TextField testID="newCycleName" label={t("cycleName")} value={formData.cycle_name} onChangeText={(value) => setFormData((prev) => ({ ...prev, cycle_name: value }))} placeholder={t("cycleNamePlaceholder")} />
           </View>
           {formData.onboarding_mode === "ongoing" ? (
