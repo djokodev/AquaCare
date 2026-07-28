@@ -47,6 +47,10 @@ def canonicalize_cycle_launch_payload(payload: dict[str, Any]) -> dict[str, Any]
         canonical.get("allocations", []),
         key=lambda allocation: allocation.get("production_unit_local_id", ""),
     )
+    canonical["initial_feed_stocks"] = sorted(
+        canonical.get("initial_feed_stocks", []),
+        key=lambda stock: stock.get("local_id", ""),
+    )
     return canonical
 
 
@@ -67,3 +71,7 @@ def derive_unit_client_uuid(launch_uuid: uuid.UUID, local_id: str) -> uuid.UUID:
 
 def derive_allocation_client_uuid(launch_uuid: uuid.UUID, local_id: str) -> uuid.UUID:
     return uuid.uuid5(launch_uuid, f"allocation:{local_id}")
+
+
+def derive_opening_stock_client_uuid(launch_uuid: uuid.UUID, local_id: str) -> uuid.UUID:
+    return uuid.uuid5(launch_uuid, f"opening-stock:{local_id}")

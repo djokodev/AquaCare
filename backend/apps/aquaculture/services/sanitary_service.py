@@ -21,6 +21,7 @@ from notifications.services import NotificationService
 
 from ..domain.exceptions import (
     CycleNotFoundException,
+    EventBeforeTrackingStartError,
     InvalidSanitaryDataException,
     OfflineSyncConflictError,
     SanitaryLogNotFoundException,
@@ -114,14 +115,14 @@ class SanitaryService(BaseService):
                 "La description des symptômes doit contenir au moins 10 caractères"
             )
 
-        if event_date > date.today():
+        if event_date > timezone.localdate():
             raise InvalidSanitaryDataException(
                 "La date de l'événement ne peut pas être dans le futur"
             )
 
-        if event_date < cycle.start_date:
-            raise InvalidSanitaryDataException(
-                f"La date de l'événement doit être après le début du cycle ({cycle.start_date})"
+        if event_date < cycle.analysis_start_date:
+            raise EventBeforeTrackingStartError(
+                tracking_start_date=cycle.analysis_start_date,
             )
 
         if affected_count is not None:
@@ -320,14 +321,14 @@ class SanitaryService(BaseService):
                     "Le format de la date de résolution est invalide (YYYY-MM-DD attendu)"
                 ) from exc
 
-        resolution_date = resolution_date or date.today()
+        resolution_date = resolution_date or timezone.localdate()
 
         if resolution_date < sanitary_log.event_date:
             raise InvalidSanitaryDataException(
                 "La date de résolution ne peut pas être avant la date de l'événement"
             )
 
-        if resolution_date > date.today():
+        if resolution_date > timezone.localdate():
             raise InvalidSanitaryDataException(
                 "La date de résolution ne peut pas être dans le futur"
             )
@@ -471,7 +472,7 @@ class SanitaryService(BaseService):
         # Timeline des événements
         timeline = []
         for log in logs:
-            days_since_start = (log.event_date - cycle.start_date).days
+            days_since_start = (log.event_date - cycle.analysis_start_date).days
             timeline.append({
                 'day': days_since_start,
                 'date': log.event_date.isoformat(),
@@ -741,7 +742,7 @@ class SanitaryService(BaseService):
         recent_events = []
         recent_logs = SanitaryLog.objects.filter(
             cycle__farm_profile__user=user,
-            event_date__gte=date.today() - timedelta(days=7)
+            event_date__gte=timezone.localdate() - timedelta(days=7)
         ).select_related('cycle').order_by('-event_date')[:5]
 
         for log in recent_logs:

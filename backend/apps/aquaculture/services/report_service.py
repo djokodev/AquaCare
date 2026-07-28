@@ -1456,7 +1456,7 @@ class ReportService(BaseService):
             total_mortality = sum(int(log.mortality_count or 0) for log in cumulative_logs)
             total_log_count = len(cycle_logs)
             total_sanitary_count = len(sanitary_logs)
-            total_initial = cycle.initial_count or 0
+            total_initial = cycle.analysis_start_count or 0
             harvested_fish_count = sum(int(item.count_harvested or 0) for item in partial_harvests)
             has_completed_final_harvest = (
                 cycle.status == "harvested"
@@ -1513,12 +1513,16 @@ class ReportService(BaseService):
                 if legacy_reconstructed and total_initial
                 else None
             )
-            fcr_data_reliable = feed_resolution["history_complete"] and (
-                legacy_reconstructed or not cumulative_logs
+            fcr_data_reliable = (
+                cycle.history_scope == ProductionCycle.HISTORY_SCOPE_FULL_CYCLE
+                and feed_resolution["history_complete"]
+                and (legacy_reconstructed or not cumulative_logs)
             )
             legacy_fcr = ReportFcrService.calculate(
                 feed_consumed_kg=total_feed,
-                initial_biomass_kg=ReportService._to_float(cycle.initial_biomass),
+                initial_biomass_kg=ReportService._to_float(
+                    cycle.analysis_start_biomass
+                ),
                 current_biomass_kg=current_biomass_val,
                 harvested_biomass_kg=harvested_biomass_kg,
                 harvest_data_complete=fcr_data_reliable
@@ -2239,7 +2243,10 @@ class ReportService(BaseService):
             cumulative_feed = sum(float(log.feed_quantity or 0) for log in cumulative_logs)
             cumulative_mortality = sum(int(log.mortality_count or 0) for log in cumulative_logs)
             current_count_snapshot = (
-                max(0, int(cycle.initial_count or 0) - cumulative_mortality)
+                max(
+                    0,
+                    int(cycle.analysis_start_count or 0) - cumulative_mortality,
+                )
                 if cumulative_logs
                 else int(cycle.current_count or 0)
             )

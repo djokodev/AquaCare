@@ -14,7 +14,11 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from ..domain.exceptions import FeedStockValidationError, StockEntryIdempotencyConflict
+from ..domain.exceptions import (
+    EventBeforeTrackingStartError,
+    FeedStockValidationError,
+    StockEntryIdempotencyConflict,
+)
 from ..models import (
     CycleFeedStockAdjustment,
     CycleFeedStockEntry,
@@ -50,6 +54,11 @@ class CycleStoreSummary(TypedDict):
     feed_consumed_kg: str
     estimated_feed_remaining_kg: str
     feed_expenses_fcfa: str
+    known_feed_expenses_fcfa: str
+    known_opening_stock_cost_fcfa: str
+    tracked_feed_expenses_fcfa: str
+    unknown_cost_entries_count: int
+    cost_history_complete: bool
     pending_orders_count: int
     pending_order_amount_fcfa: str
     pending_order_feed_kg: str
@@ -610,7 +619,42 @@ class CycleStoreService(BaseService):
         manual_feed_kg = sum((entry.quantity_kg for entry in manual_entries), ZERO_DECIMAL)
         received_order_feed_kg = sum((entry.quantity_kg for entry in received_entries), ZERO_DECIMAL)
         total_feed_added_kg = manual_feed_kg + received_order_feed_kg
-        feed_expenses_fcfa = sum((entry.total_cost_fcfa for entry in entries), ZERO_DECIMAL)
+        known_entries = [
+            entry
+            for entry in entries
+            if entry.cost_status == CycleFeedStockEntry.COST_STATUS_KNOWN
+            and entry.total_cost_fcfa is not None
+        ]
+        opening_entries = [
+            entry
+            for entry in known_entries
+            if entry.entry_kind == CycleFeedStockEntry.ENTRY_KIND_OPENING_BALANCE
+        ]
+        tracked_entries = [
+            entry
+            for entry in known_entries
+            if entry.entry_kind != CycleFeedStockEntry.ENTRY_KIND_OPENING_BALANCE
+        ]
+        known_feed_expenses_fcfa = sum(
+            (entry.total_cost_fcfa for entry in known_entries),
+            ZERO_DECIMAL,
+        )
+        known_opening_stock_cost_fcfa = sum(
+            (entry.total_cost_fcfa for entry in opening_entries),
+            ZERO_DECIMAL,
+        )
+        tracked_feed_expenses_fcfa = sum(
+            (entry.total_cost_fcfa for entry in tracked_entries),
+            ZERO_DECIMAL,
+        )
+        unknown_cost_entries_count = sum(
+            entry.cost_status == CycleFeedStockEntry.COST_STATUS_UNKNOWN
+            for entry in entries
+        )
+        cost_history_complete = (
+            cycle.history_scope == ProductionCycle.HISTORY_SCOPE_FULL_CYCLE
+            and unknown_cost_entries_count == 0
+        )
         pending_order_amount_fcfa = sum((order.total for order in pending_orders), ZERO_DECIMAL)
         pending_order_feed_kg = sum(
             (CycleStoreService._calculate_pending_order_feed_kg(order) for order in pending_orders),
@@ -727,7 +771,19 @@ class CycleStoreService(BaseService):
                 'total_feed_added_kg': str(CycleStoreService._quantize(total_feed_added_kg)),
                 'feed_consumed_kg': str(CycleStoreService._quantize(total_cycle_feed_consumed_kg)),
                 'estimated_feed_remaining_kg': str(CycleStoreService._quantize(estimated_feed_remaining_kg)),
-                'feed_expenses_fcfa': str(CycleStoreService._quantize(feed_expenses_fcfa)),
+                # Compatibility field: this is a sum of known feed expenses only.
+                'feed_expenses_fcfa': str(CycleStoreService._quantize(known_feed_expenses_fcfa)),
+                'known_feed_expenses_fcfa': str(
+                    CycleStoreService._quantize(known_feed_expenses_fcfa)
+                ),
+                'known_opening_stock_cost_fcfa': str(
+                    CycleStoreService._quantize(known_opening_stock_cost_fcfa)
+                ),
+                'tracked_feed_expenses_fcfa': str(
+                    CycleStoreService._quantize(tracked_feed_expenses_fcfa)
+                ),
+                'unknown_cost_entries_count': unknown_cost_entries_count,
+                'cost_history_complete': cost_history_complete,
                 'pending_orders_count': pending_orders_count,
                 'pending_order_amount_fcfa': str(CycleStoreService._quantize(pending_order_amount_fcfa)),
                 'pending_order_feed_kg': str(CycleStoreService._quantize(pending_order_feed_kg)),
@@ -961,6 +1017,12 @@ class CycleStoreService(BaseService):
     ) -> CycleFeedStockEntry:
         """Enregistre une déclaration manuelle de stock."""
         CycleStoreService._ensure_cycle_owner(cycle, user)
+        if isinstance(entry_date, str):
+            entry_date = date.fromisoformat(entry_date)
+        if entry_date < cycle.analysis_start_date:
+            raise EventBeforeTrackingStartError(
+                tracking_start_date=cycle.analysis_start_date,
+            )
 
         if quantity_kg <= ZERO_DECIMAL:
             raise ValueError(_("La quantité doit être strictement positive."))
@@ -998,10 +1060,12 @@ class CycleStoreService(BaseService):
             cycle=cycle,
             feed_reference=feed_reference,
             source=CycleFeedStockEntry.SOURCE_MANUAL,
+            entry_kind=CycleFeedStockEntry.ENTRY_KIND_MANUAL_SUPPLY,
             label=feed_reference.name,
             feed_size_mm=feed_reference.pellet_size_mm,
             quantity_kg=CycleStoreService._to_decimal(quantity_kg),
             total_cost_fcfa=CycleStoreService._to_decimal(total_cost_fcfa),
+            cost_status=CycleFeedStockEntry.COST_STATUS_KNOWN,
             entry_date=entry_date,
             note=note.strip(),
             product=feed_reference.catalog_product,
@@ -1018,6 +1082,81 @@ class CycleStoreService(BaseService):
             },
         )
         return entry
+
+    @staticmethod
+    @transaction.atomic
+    def declare_opening_stock(
+        *,
+        user: User,
+        cycle: ProductionCycle,
+        feed_reference: FarmFeedReference,
+        quantity_kg: Decimal,
+        cost_status: str,
+        total_cost_fcfa: Decimal | None,
+        note: str = '',
+        client_uuid=None,
+        created_offline: bool = False,
+    ) -> CycleFeedStockEntry:
+        """Record the physical feed remainder observed at the tracking baseline."""
+        CycleStoreService._ensure_cycle_owner(cycle, user)
+        quantity = CycleStoreService._to_decimal(quantity_kg)
+        if quantity <= ZERO_DECIMAL:
+            raise ValueError(_("La quantité doit être strictement positive."))
+        if cost_status == CycleFeedStockEntry.COST_STATUS_KNOWN:
+            if total_cost_fcfa is None:
+                raise ValueError(_("Le montant est obligatoire lorsque le coût est connu."))
+            normalized_cost = CycleStoreService._to_decimal(total_cost_fcfa)
+            if normalized_cost < ZERO_DECIMAL:
+                raise ValueError(_("Le montant doit être positif ou nul."))
+        elif cost_status == CycleFeedStockEntry.COST_STATUS_UNKNOWN:
+            if total_cost_fcfa is not None:
+                raise ValueError(_("Un coût inconnu ne doit pas contenir de montant."))
+            normalized_cost = None
+        else:
+            raise ValueError(_("Le statut du coût est invalide."))
+        if feed_reference.farm_profile_id != cycle.farm_profile_id:
+            raise PermissionError(_('Cet aliment appartient à une autre ferme.'))
+        if feed_reference.species != cycle.species:
+            raise ValueError(_('Cet aliment ne correspond pas à l’espèce du cycle.'))
+
+        cycle = ProductionCycle.objects.select_for_update().get(id=cycle.id)
+        existing_entry = None
+        if client_uuid:
+            existing_entry = CycleFeedStockEntry.objects.select_for_update().filter(
+                client_uuid=client_uuid
+            ).first()
+        if existing_entry:
+            same_payload = all((
+                existing_entry.cycle_id == cycle.id,
+                existing_entry.feed_reference_id == feed_reference.id,
+                existing_entry.quantity_kg == quantity,
+                existing_entry.cost_status == cost_status,
+                existing_entry.total_cost_fcfa == normalized_cost,
+                existing_entry.entry_date == cycle.tracking_start_date,
+                existing_entry.note == note.strip(),
+                existing_entry.entry_kind == CycleFeedStockEntry.ENTRY_KIND_OPENING_BALANCE,
+            ))
+            if not same_payload:
+                raise StockEntryIdempotencyConflict()
+            return existing_entry
+
+        return CycleFeedStockEntry.objects.create(
+            cycle=cycle,
+            feed_reference=feed_reference,
+            source=CycleFeedStockEntry.SOURCE_MANUAL,
+            entry_kind=CycleFeedStockEntry.ENTRY_KIND_OPENING_BALANCE,
+            label=feed_reference.name,
+            feed_size_mm=feed_reference.pellet_size_mm,
+            quantity_kg=quantity,
+            cost_status=cost_status,
+            total_cost_fcfa=normalized_cost,
+            entry_date=cycle.tracking_start_date,
+            note=note.strip(),
+            product=feed_reference.catalog_product,
+            client_uuid=client_uuid,
+            created_offline=created_offline,
+            synced_at=None if created_offline else timezone.now(),
+        )
 
     @staticmethod
     @transaction.atomic
@@ -1145,6 +1284,7 @@ class CycleStoreService(BaseService):
                 cycle=cycle,
                 feed_reference=feed_reference,
                 source=CycleFeedStockEntry.SOURCE_ORDER,
+                entry_kind=CycleFeedStockEntry.ENTRY_KIND_ORDER_RECEIPT,
                 label=order_item.product_name or order_item.product.name,
                 feed_size_mm=(
                     order_item.product_pellet_size_mm_snapshot
@@ -1153,6 +1293,7 @@ class CycleStoreService(BaseService):
                 ),
                 quantity_kg=CycleStoreService._calculate_order_item_feed_kg(order_item),
                 total_cost_fcfa=CycleStoreService._to_decimal(order_item.line_total),
+                cost_status=CycleFeedStockEntry.COST_STATUS_KNOWN,
                 entry_date=timezone.localdate(),
                 note=f"Import automatique depuis la commande {order.order_number}",
                 product=order_item.product,

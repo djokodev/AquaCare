@@ -13,20 +13,38 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from ..constants import ECONOMIC_DEFAULTS_BY_SPECIES
-from ..domain.calculators import AquacultureCalculator
+from ..constants import (
+    DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES,
+    ECONOMIC_DEFAULTS_BY_SPECIES,
+)
 from ..domain.cycle_launch_idempotency import (
     calculate_cycle_launch_payload_hash,
     derive_allocation_client_uuid,
+    derive_opening_stock_client_uuid,
     derive_unit_client_uuid,
+)
+from ..domain.cycle_onboarding import (
+    CycleOnboardingRuleViolation,
+    distribute_biomass_by_allocation,
+    resolve_tracking_baseline,
 )
 from ..domain.exceptions import AquacultureBusinessException, BusinessRuleViolation, DataIntegrityError
 from ..domain.production_units import (
     normalize_production_unit_type,
     validate_production_unit_capacity,
 )
-from ..models import CycleUnitAllocation, ProductionCycle, ProductionUnit
+from ..models import (
+    CycleFeedStockEntry,
+    CycleUnitAllocation,
+    FarmFeedReference,
+    ProductionCycle,
+    ProductionUnit,
+)
 from .cycle_service import ProductionCycleService
+from .cycle_store_application_service import (
+    CycleStoreApplicationService,
+    DeclareOpeningStockCommand,
+)
 from .farm_production_plan_service import FarmProductionPlanService
 from .production_unit_service import ProductionUnitLifecycleService
 
@@ -94,6 +112,9 @@ class CycleLaunchResult:
     production_units: list[ProductionUnit]
     cycle_unit_allocations: list[CycleUnitAllocation]
     production_unit_id_by_local_id: dict[str, uuid.UUID]
+    opening_feed_references: list[FarmFeedReference]
+    opening_stock_entries: list[CycleFeedStockEntry]
+    opening_stock_entry_id_by_local_id: dict[str, uuid.UUID]
 
 
 class CycleLaunchApplicationService:
@@ -160,6 +181,28 @@ class CycleLaunchApplicationService:
         unit_specs: list[dict[str, Any]],
     ) -> dict[str, Any]:
         cycle = payload["cycle"]
+        try:
+            baseline = resolve_tracking_baseline(
+                onboarding_mode=cycle.get('onboarding_mode', 'new'),
+                start_date=cycle['start_date'],
+                initial_count=cycle['initial_count'],
+                initial_average_weight=(
+                    cycle.get('initial_average_weight')
+                    if cycle.get('onboarding_mode', 'new') == 'ongoing'
+                    else (
+                        cycle.get('initial_average_weight')
+                        or DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES[cycle['species']]
+                    )
+                ),
+                tracking_baseline=payload.get('tracking_baseline'),
+                today=timezone.localdate(),
+            )
+        except CycleOnboardingRuleViolation as exc:
+            raise BusinessRuleViolation({
+                'code': exc.code,
+                'detail': exc.detail,
+                **(exc.context or {}),
+            }) from exc
         dimensions = cls._build_legacy_cycle_dimensions(unit_specs)
         cycle_data = {
             "client_uuid": payload["launch_uuid"],
@@ -169,8 +212,14 @@ class CycleLaunchApplicationService:
             "pond_identifier": unit_specs[0]["name"],
             "infrastructure_type": sorted({unit["unit_type"] for unit in unit_specs}),
             "start_date": cycle["start_date"],
+            "onboarding_mode": cycle.get("onboarding_mode", "new"),
             "initial_count": cycle["initial_count"],
             "initial_average_weight": cycle.get("initial_average_weight"),
+            "tracking_start_date": baseline.tracking_start_date,
+            "tracking_start_count": baseline.fish_count,
+            "tracking_start_average_weight": baseline.average_weight_g,
+            "tracking_start_biomass": baseline.biomass_kg,
+            "tracking_start_biomass_source": baseline.biomass_source,
             "target_harvest_weight_g": cycle.get("target_harvest_weight_g"),
             "planned_cycle_duration_days": cycle["planned_cycle_duration_days"],
             "expected_survival_rate_pct": cycle["expected_survival_rate_pct"],
@@ -338,6 +387,38 @@ class CycleLaunchApplicationService:
                 production_units,
             )
         }
+        stock_specs = payload.get('initial_feed_stocks', [])
+        stock_entries_by_uuid = {
+            entry.client_uuid: entry
+            for entry in CycleFeedStockEntry.objects.select_related('feed_reference').filter(
+                cycle=cycle,
+                client_uuid__in=[
+                    derive_opening_stock_client_uuid(
+                        payload['launch_uuid'],
+                        item['local_id'],
+                    )
+                    for item in stock_specs
+                ],
+            )
+        }
+        ordered_stock_entries: list[CycleFeedStockEntry] = []
+        stock_mapping: dict[str, uuid.UUID] = {}
+        for item in stock_specs:
+            client_uuid = derive_opening_stock_client_uuid(
+                payload['launch_uuid'],
+                item['local_id'],
+            )
+            entry = stock_entries_by_uuid.get(client_uuid)
+            if entry is None:
+                raise CycleLaunchIdempotencyConflict()
+            ordered_stock_entries.append(entry)
+            stock_mapping[item['local_id']] = entry.id
+        opening_references: list[FarmFeedReference] = []
+        seen_reference_ids: set[uuid.UUID] = set()
+        for entry in ordered_stock_entries:
+            if entry.feed_reference_id not in seen_reference_ids:
+                opening_references.append(entry.feed_reference)
+                seen_reference_ids.add(entry.feed_reference_id)
         return CycleLaunchResult(
             launch_uuid=payload["launch_uuid"],
             idempotent_replay=idempotent_replay,
@@ -346,6 +427,9 @@ class CycleLaunchApplicationService:
             production_units=production_units,
             cycle_unit_allocations=ordered_allocations,
             production_unit_id_by_local_id=mapping,
+            opening_feed_references=opening_references,
+            opening_stock_entries=ordered_stock_entries,
+            opening_stock_entry_id_by_local_id=stock_mapping,
         )
 
     @classmethod
@@ -521,12 +605,13 @@ class CycleLaunchApplicationService:
             allocation["production_unit_local_id"]: allocation
             for allocation in payload["allocations"]
         }
+        allocation_biomass_by_local_id = distribute_biomass_by_allocation(
+            total_biomass_kg=cycle.tracking_start_biomass,
+            allocations=payload['allocations'],
+        )
         for local_id, unit in units_by_local_id.items():
             fish_count = allocations_by_local_id[local_id]["fish_count"]
-            biomass = AquacultureCalculator.calculate_biomass(
-                fish_count,
-                cycle.initial_average_weight,
-            )
+            biomass = allocation_biomass_by_local_id[local_id]
             CycleUnitAllocation.objects.create(
                 client_uuid=derive_allocation_client_uuid(
                     payload["launch_uuid"], local_id
@@ -546,6 +631,28 @@ class CycleLaunchApplicationService:
         ):
             raise DataIntegrityError(
                 _("L'effectif courant du cycle ne correspond pas aux allocations.")
+            )
+
+        for stock_data in payload.get('initial_feed_stocks', []):
+            CycleStoreApplicationService.declare_opening_stock(
+                user=user,
+                cycle=cycle,
+                command=DeclareOpeningStockCommand(
+                    feed_reference_id=stock_data.get('feed_reference_id'),
+                    feed_reference_client_uuid=stock_data.get(
+                        'feed_reference_client_uuid'
+                    ),
+                    external_feed=stock_data.get('external_feed'),
+                    quantity_kg=stock_data['quantity_kg'],
+                    cost_status=stock_data['cost_status'],
+                    total_cost_fcfa=stock_data.get('total_cost_fcfa'),
+                    note=stock_data.get('note', ''),
+                    client_uuid=derive_opening_stock_client_uuid(
+                        payload['launch_uuid'],
+                        stock_data['local_id'],
+                    ),
+                    created_offline=payload['cycle'].get('created_offline', False),
+                ),
             )
 
         result_farm = FarmProfile.objects.select_related(

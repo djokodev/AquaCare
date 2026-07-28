@@ -6,18 +6,29 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from .constants import MAX_INITIAL_FISH_COUNT
-from .domain.cycle_duration import MAX_CYCLE_DURATION_DAYS, MIN_CYCLE_DURATION_DAYS
+from .constants import DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES, MAX_INITIAL_FISH_COUNT
+from .domain.cycle_duration import MAX_CYCLE_DURATION_DAYS, MIN_CYCLE_DURATION_DAYS, calculate_planned_harvest_date
+from .domain.cycle_onboarding import (
+    CycleOnboardingRuleViolation,
+    resolve_tracking_baseline,
+)
 from .domain.production_units import (
     normalize_production_unit_type,
     validate_production_unit_capacity,
     validate_production_unit_dimensions,
 )
+from .models import CycleFeedStockEntry
 from .production_plan_serializers import ProductionPlanFarmProfileSerializer
-from .serializers import CycleUnitAllocationSerializer, ProductionCycleSerializer, ProductionUnitSerializer
+from .serializers import (
+    CycleUnitAllocationSerializer,
+    FarmFeedReferenceSerializer,
+    ProductionCycleSerializer,
+    ProductionUnitSerializer,
+)
 
 
 class CycleLaunchProductionPlanSerializer(serializers.Serializer):
@@ -47,6 +58,11 @@ class CycleLaunchProductionPlanSerializer(serializers.Serializer):
 class CycleLaunchCycleSerializer(serializers.Serializer):
     """Client-controlled cycle inputs; server-derived fields are intentionally absent."""
 
+    onboarding_mode = serializers.ChoiceField(
+        choices=['new', 'ongoing'],
+        required=False,
+        default='new',
+    )
     cycle_name = serializers.CharField(
         max_length=100,
         required=False,
@@ -64,6 +80,7 @@ class CycleLaunchCycleSerializer(serializers.Serializer):
         decimal_places=2,
         min_value=Decimal("0.1"),
         required=False,
+        allow_null=True,
     )
     target_harvest_weight_g = serializers.DecimalField(
         max_digits=6,
@@ -187,6 +204,81 @@ class CycleLaunchCalibrationUnitSerializer(serializers.Serializer):
     volume_m3 = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal('0.01'))
 
 
+class CycleLaunchTrackingBaselineSerializer(serializers.Serializer):
+    tracking_start_date = serializers.DateField()
+    fish_count = serializers.IntegerField(min_value=1, max_value=MAX_INITIAL_FISH_COUNT)
+    average_weight_g = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        min_value=Decimal('0.1'),
+    )
+    biomass_kg = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        required=False,
+        allow_null=True,
+    )
+
+
+class CycleLaunchExternalFeedSerializer(serializers.Serializer):
+    client_uuid = serializers.UUIDField(required=False, allow_null=True)
+    name = serializers.CharField(max_length=200, trim_whitespace=True)
+    species = serializers.ChoiceField(choices=['tilapia', 'clarias'], required=False)
+    pellet_size_mm = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        min_value=Decimal('0.1'),
+        max_value=Decimal('20'),
+    )
+    brand = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
+
+
+class CycleLaunchInitialFeedStockSerializer(serializers.Serializer):
+    local_id = serializers.CharField(max_length=120, trim_whitespace=True)
+    feed_reference_id = serializers.UUIDField(required=False)
+    feed_reference_client_uuid = serializers.UUIDField(required=False)
+    external_feed = CycleLaunchExternalFeedSerializer(required=False)
+    quantity_kg = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+    )
+    cost_status = serializers.ChoiceField(choices=['known', 'unknown'])
+    total_cost_fcfa = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        allow_null=True,
+    )
+    note = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        selectors = [
+            bool(attrs.get('feed_reference_id')),
+            bool(attrs.get('feed_reference_client_uuid')),
+            bool(attrs.get('external_feed')),
+        ]
+        if sum(selectors) != 1:
+            raise serializers.ValidationError(
+                _('Chaque stock doit désigner exactement une référence alimentaire.')
+            )
+        if attrs['cost_status'] == 'known' and attrs.get('total_cost_fcfa') is None:
+            raise serializers.ValidationError({
+                'total_cost_fcfa': _('Le coût total est obligatoire lorsque le coût est connu.'),
+            })
+        if attrs['cost_status'] == 'unknown' and attrs.get('total_cost_fcfa') is not None:
+            raise serializers.ValidationError({
+                'total_cost_fcfa': _('Un coût inconnu ne doit pas contenir de montant.'),
+            })
+        local_id = attrs['local_id'].strip()
+        if not local_id:
+            raise serializers.ValidationError({'local_id': _("L'identifiant local est obligatoire.")})
+        attrs['local_id'] = local_id
+        return attrs
+
+
 class CycleLaunchRequestSerializer(serializers.Serializer):
     """Validates every structural launch invariant before any database write."""
 
@@ -194,9 +286,15 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
     launch_kind = serializers.ChoiceField(choices=["initial_setup", "additional_cycle"])
     production_plan = CycleLaunchProductionPlanSerializer(required=False, allow_null=True)
     cycle = CycleLaunchCycleSerializer()
+    tracking_baseline = CycleLaunchTrackingBaselineSerializer(required=False, allow_null=True)
     production_units = CycleLaunchUnitSerializer(many=True, allow_empty=False)
     allocations = CycleLaunchAllocationSerializer(many=True, allow_empty=False)
     calibration_units = CycleLaunchCalibrationUnitSerializer(many=True, required=False, default=list)
+    initial_feed_stocks = CycleLaunchInitialFeedStockSerializer(
+        many=True,
+        required=False,
+        default=list,
+    )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         units = attrs["production_units"]
@@ -205,6 +303,7 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
         plan = attrs.get("production_plan")
         launch_kind = attrs["launch_kind"]
         calibration_units = attrs.get('calibration_units', [])
+        initial_feed_stocks = attrs.get('initial_feed_stocks', [])
 
         calibration_names = [item['name'].casefold() for item in calibration_units]
         if len(calibration_names) != len(set(calibration_names)):
@@ -259,11 +358,71 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
                 {"production_plan": {"species": _("L'espèce du plan doit correspondre à celle du cycle.")}}
             )
 
-        total_allocated = sum(allocation["fish_count"] for allocation in allocations)
-        if total_allocated != cycle["initial_count"]:
-            raise serializers.ValidationError(
-                {"allocations": _("La somme des allocations doit correspondre à l'effectif initial du cycle.")}
+        try:
+            baseline = resolve_tracking_baseline(
+                onboarding_mode=cycle['onboarding_mode'],
+                start_date=cycle['start_date'],
+                initial_count=cycle['initial_count'],
+                initial_average_weight=(
+                    cycle.get('initial_average_weight')
+                    if cycle['onboarding_mode'] == 'ongoing'
+                    else (
+                        cycle.get('initial_average_weight')
+                        or DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES[cycle['species']]
+                    )
+                ),
+                tracking_baseline=attrs.get('tracking_baseline'),
+                today=timezone.localdate(),
             )
+        except CycleOnboardingRuleViolation as exc:
+            raise serializers.ValidationError({
+                'code': exc.code,
+                'detail': exc.detail,
+                **(exc.context or {}),
+            }) from exc
+
+        planned_harvest_date = calculate_planned_harvest_date(
+            cycle['start_date'],
+            cycle['planned_cycle_duration_days'],
+        )
+        if cycle['onboarding_mode'] == 'ongoing' and (
+            planned_harvest_date <= baseline.tracking_start_date
+            or planned_harvest_date < timezone.localdate()
+        ):
+            raise serializers.ValidationError({
+                'code': 'ongoing_cycle_planned_harvest_elapsed',
+                'detail': _('La récolte planifiée est déjà dépassée pour cette reprise.'),
+            })
+
+        total_allocated = sum(allocation["fish_count"] for allocation in allocations)
+        expected_allocated = baseline.fish_count
+        if total_allocated != expected_allocated:
+            raise serializers.ValidationError(
+                {
+                    "allocations": _(
+                        "La somme des allocations doit correspondre à l'effectif "
+                        "au démarrage du suivi."
+                    )
+                }
+            )
+
+        stock_local_ids = [stock['local_id'] for stock in initial_feed_stocks]
+        if len(stock_local_ids) != len(set(stock_local_ids)):
+            raise serializers.ValidationError({
+                'initial_feed_stocks': _('Chaque stock doit avoir un identifiant local unique.'),
+            })
+        for index, stock in enumerate(initial_feed_stocks):
+            external_feed = stock.get('external_feed')
+            if external_feed and external_feed.get('species') not in (None, cycle['species']):
+                raise serializers.ValidationError({
+                    'initial_feed_stocks': {
+                        index: {
+                            'external_feed': {
+                                'species': _("L'espèce de l'aliment doit correspondre à celle du cycle."),
+                            },
+                        },
+                    },
+                })
 
         units_by_id = {unit["local_id"]: unit for unit in units}
         existing_unit_ids = [unit.get("production_unit_id") for unit in units if unit["source"] == "existing"]
@@ -293,6 +452,18 @@ class CycleLaunchRequestSerializer(serializers.Serializer):
         return attrs
 
 
+class CycleLaunchOpeningStockEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CycleFeedStockEntry
+        fields = [
+            'id', 'client_uuid', 'cycle', 'feed_reference', 'source', 'entry_kind',
+            'label', 'feed_size_mm', 'quantity_kg', 'cost_status',
+            'total_cost_fcfa', 'entry_date', 'note', 'created_offline',
+            'synced_at', 'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+
 class CycleLaunchResponseSerializer(serializers.Serializer):
     """Response contract composed from the existing read serializers."""
 
@@ -303,3 +474,6 @@ class CycleLaunchResponseSerializer(serializers.Serializer):
     production_units = ProductionUnitSerializer(many=True)
     cycle_unit_allocations = CycleUnitAllocationSerializer(many=True)
     production_unit_id_by_local_id = serializers.DictField(child=serializers.UUIDField())
+    opening_feed_references = FarmFeedReferenceSerializer(many=True)
+    opening_stock_entries = CycleLaunchOpeningStockEntrySerializer(many=True)
+    opening_stock_entry_id_by_local_id = serializers.DictField(child=serializers.UUIDField())

@@ -349,6 +349,7 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
     """
     # Champs calculés depuis modèle ProductionCycle
     days_active = serializers.SerializerMethodField()
+    days_tracked = serializers.SerializerMethodField()
     current_density_kg_m3 = serializers.SerializerMethodField()
 
     # Champs calculés depuis CycleMetrics (métriques avancées)
@@ -395,17 +396,22 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'client_uuid', 'farm_profile', 'cycle_name', 'species', 'species_display',
             'cycle_kind', 'cycle_kind_display', 'is_calibration_unit',
+            'onboarding_mode',
             'total_stocked_count', 'total_stocked_biomass', 'total_transferred_out_count',
             'total_transferred_out_biomass',
             'pond_identifier', 'pond_surface_m2', 'pond_volume_m3', 'infrastructure_type',
             'start_date', 'initial_count', 'initial_average_weight', 'initial_biomass',
+            'tracking_start_date', 'tracking_start_count',
+            'tracking_start_average_weight', 'tracking_start_biomass',
+            'tracking_start_biomass_source', 'historical_count_gap',
+            'history_scope', 'has_partial_history',
             'target_harvest_weight_g', 'planned_cycle_duration_days', 'planned_harvest_date', 'planned_feed_bags',
             'expected_survival_rate_pct', 'planned_selling_price_per_kg_fcfa',
             'fingerlings_cost_fcfa', 'other_operational_costs_fcfa',
             'current_count', 'current_average_weight', 'current_biomass',
             'total_feed_consumed', 'end_date', 'final_count', 'final_average_weight',
             'final_biomass', 'survival_rate', 'fcr', 'status', 'status_display',
-            'days_active', 'current_density_kg_m3', 'farm_name',
+            'days_active', 'days_tracked', 'current_density_kg_m3', 'farm_name',
             # Métriques CycleMetrics exposées
             'daily_growth_rate', 'specific_growth_rate', 'average_daily_feed', 'performance_score',
             # Coûts calculés
@@ -417,7 +423,10 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'farm_profile', 'initial_biomass', 'current_count', 'current_average_weight',
             'current_biomass', 'total_feed_consumed', 'survival_rate', 'fcr',
-            'cycle_kind', 'status', 'end_date', 'final_count', 'final_average_weight',
+            'cycle_kind', 'onboarding_mode', 'tracking_start_date',
+            'tracking_start_count', 'tracking_start_average_weight',
+            'tracking_start_biomass', 'tracking_start_biomass_source',
+            'status', 'end_date', 'final_count', 'final_average_weight',
             'final_biomass', 'synced_at', 'created_at', 'updated_at'
         ]
         extra_kwargs = {
@@ -430,13 +439,20 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         """Calcule les jours depuis le début du cycle."""
         return obj.days_active()
 
+    def get_days_tracked(self, obj):
+        return obj.days_tracked()
+
     def get_total_stocked_count(self, obj):
         incoming = self._calibration_totals(obj)['in_count']
-        return incoming if obj.cycle_kind == 'calibration' else obj.initial_count + incoming
+        return incoming if obj.cycle_kind == 'calibration' else obj.analysis_start_count + incoming
 
     def get_total_stocked_biomass(self, obj):
         incoming = self._calibration_totals(obj)['in_biomass']
-        return incoming if obj.cycle_kind == 'calibration' else obj.initial_biomass + incoming
+        return (
+            incoming
+            if obj.cycle_kind == 'calibration'
+            else (obj.analysis_start_biomass or Decimal('0')) + incoming
+        )
 
     def get_total_transferred_out_count(self, obj):
         return self._calibration_totals(obj)['out_count']

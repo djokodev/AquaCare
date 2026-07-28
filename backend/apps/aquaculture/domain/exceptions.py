@@ -42,6 +42,24 @@ class BusinessRuleViolation(AquacultureBusinessException):
     default_code = 'business_rule_violation'
 
 
+class EventBeforeTrackingStartError(BusinessRuleViolation):
+    """An observed operation cannot predate the AquaCare baseline."""
+
+    default_detail = _(
+        'Un événement suivi ne peut pas précéder le démarrage du suivi AquaCare.'
+    )
+    default_code = 'event_before_tracking_start'
+
+    def __init__(self, *, tracking_start_date=None):
+        detail = {
+            'code': self.default_code,
+            'detail': self.default_detail,
+        }
+        if tracking_start_date is not None:
+            detail['tracking_start_date'] = tracking_start_date
+        super().__init__(detail)
+
+
 class CycleLogCycleImmutableError(BusinessRuleViolation):
     """Un journal existant reste attaché à son cycle d'origine."""
 

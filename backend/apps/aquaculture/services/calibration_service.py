@@ -12,7 +12,7 @@ from notifications.services import NotificationService
 
 from ..constants import OPTIMAL_PARAMETERS, SAMPLING_TOLERANCE
 from ..domain.calibration import WEIGHT_DIFFERENCE_WARNING_THRESHOLD, biomass_for
-from ..domain.exceptions import BusinessRuleViolation
+from ..domain.exceptions import BusinessRuleViolation, EventBeforeTrackingStartError
 from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from ..tasks import invalidate_dashboard_cache
 from .allocation_ledger_service import AllocationLedgerService
@@ -365,7 +365,11 @@ class CalibrationService:
             raise BusinessRuleViolation(_('Le nombre de poissons transférés doit être positif.'))
         if transferred_average_weight_g <= 0:
             raise BusinessRuleViolation(_('Le poids moyen transféré doit être positif.'))
-        if calibrated_at.date() < source.cycle.start_date or calibrated_at > timezone.now() + timedelta(minutes=10):
+        if calibrated_at.date() < source.cycle.analysis_start_date:
+            raise EventBeforeTrackingStartError(
+                tracking_start_date=source.cycle.analysis_start_date,
+            )
+        if calibrated_at > timezone.now() + timedelta(minutes=10):
             raise BusinessRuleViolation(_('La date du calibrage est invalide.'))
 
     @staticmethod

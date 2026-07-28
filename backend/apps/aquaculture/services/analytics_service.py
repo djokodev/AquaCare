@@ -14,7 +14,7 @@ Author: AquaCare Team
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
 from typing import TypedDict
 
@@ -259,7 +259,7 @@ class AnalyticsService(BaseService):
 
             causes: dict[str | None, int] = {}
             for log in mortality_logs:
-                week = (log.log_date - cycle.start_date).days // 7 + 1
+                week = (log.log_date - cycle.analysis_start_date).days // 7 + 1
                 weekly_mortality[week] = weekly_mortality.get(week, 0) + int(log.mortality_count)
                 cause_key = log.mortality_reason or None
                 causes[cause_key] = causes.get(cause_key, 0) + int(log.mortality_count)
@@ -273,18 +273,23 @@ class AnalyticsService(BaseService):
             total_mortality = logs.aggregate(Sum('mortality_count'))['mortality_count__sum'] or 0
 
             for log in logs:
-                week = (log.log_date - cycle.start_date).days // 7 + 1
+                week = (log.log_date - cycle.analysis_start_date).days // 7 + 1
                 weekly_mortality[week] = weekly_mortality.get(week, 0) + log.mortality_count
 
             main_causes = list(
                 logs.values('mortality_reason').annotate(count=Sum('mortality_count')).order_by('-count')[:5]
             )
 
-        mortality_percentage = (total_mortality / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
+        analysis_start_count = cycle.analysis_start_count
+        mortality_percentage = (
+            total_mortality / analysis_start_count * 100
+            if analysis_start_count > 0
+            else 0
+        )
 
         # Calculate daily average
-        days_active = cycle.days_active() if cycle.days_active() > 0 else 1
-        daily_average = total_mortality / days_active
+        days_tracked = cycle.days_tracked() if cycle.days_tracked() > 0 else 1
+        daily_average = total_mortality / days_tracked
 
         # Identify peak week
         peak_week = max(weekly_mortality.items(), key=lambda x: x[1])[0] if weekly_mortality else None
@@ -342,13 +347,13 @@ class AnalyticsService(BaseService):
 
         growth_data = []
         for log in logs:
-            days_elapsed = (log.log_date - cycle.start_date).days
+            days_elapsed = (log.log_date - cycle.analysis_start_date).days
             daily_gain = (
-                float(log.average_weight - cycle.initial_average_weight) / days_elapsed
+                float(log.average_weight - cycle.analysis_start_average_weight) / days_elapsed
                 if days_elapsed > 0
                 else 0
             )
-            cumulative_gain = float(log.average_weight - cycle.initial_average_weight)
+            cumulative_gain = float(log.average_weight - cycle.analysis_start_average_weight)
 
             growth_data.append({
                 'day': days_elapsed,
@@ -513,26 +518,27 @@ class AnalyticsService(BaseService):
             >>> print(f"FCR: {stats['current_metrics']['fcr']}")
         """
         # Calculate cycle duration
-        end_date = cycle.end_date or date.today()
+        end_date = cycle.end_date or timezone.localdate()
         days_active = (end_date - cycle.start_date).days
+        days_tracked = (end_date - cycle.analysis_start_date).days
 
         # Current metrics
         current_metrics = {
             'survival_rate': float(cycle.survival_rate or AquacultureCalculator.calculate_survival_rate(
-                cycle.initial_count, cycle.current_count
+                cycle.analysis_start_count, cycle.current_count
             )),
             'biomass': float(cycle.current_biomass),
             'average_weight': float(cycle.current_average_weight),
             'fcr': float(cycle.fcr or 0),
             'daily_growth_rate': float(AquacultureCalculator.calculate_daily_growth_rate(
-                cycle.initial_average_weight,
+                cycle.analysis_start_average_weight,
                 cycle.current_average_weight,
-                days_active
+                days_tracked
             )),
             'specific_growth_rate': float(AquacultureCalculator.calculate_specific_growth_rate(
-                cycle.initial_average_weight,
+                cycle.analysis_start_average_weight,
                 cycle.current_average_weight,
-                days_active
+                days_tracked
             )),
             'stocking_density': float(cycle.current_density_kg_m3() or 0)
         }
@@ -540,7 +546,11 @@ class AnalyticsService(BaseService):
         # Feed metrics
         feed_metrics = {
             'total_consumed': float(cycle.total_feed_consumed),
-            'average_daily': float(cycle.total_feed_consumed / days_active) if days_active > 0 else 0,
+            'average_daily': (
+                float(cycle.total_feed_consumed / days_tracked)
+                if days_tracked > 0
+                else 0
+            ),
             'cost_estimate': float(cycle.total_feed_consumed) * float(DEFAULT_FEED_PRICE_PER_KG),
             'feed_efficiency': float(cycle.fcr) if cycle.fcr else None
         }
@@ -865,9 +875,13 @@ class AnalyticsService(BaseService):
                     metrics.survival_curve_data = AnalyticsService._build_allocation_survival_curve(cycle)
                 elif new_log.mortality_count and new_log.mortality_count > 0:
                     existing = list(metrics.survival_curve_data or [])
-                    prev_count = existing[-1]['count'] if existing else cycle.initial_count
+                    prev_count = existing[-1]['count'] if existing else cycle.analysis_start_count
                     current_count = max(0, prev_count - new_log.mortality_count)
-                    rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
+                    rate = (
+                        current_count / cycle.analysis_start_count * 100
+                        if cycle.analysis_start_count > 0
+                        else 0
+                    )
                     existing.append({
                         'date': new_log.log_date.isoformat(),
                         'count': current_count,
@@ -888,14 +902,14 @@ class AnalyticsService(BaseService):
                 # Recalcul des taux depuis les champs cycle (déjà mis à jour) — 0 DB
                 growth_data = metrics.growth_curve_data or []
                 if len(growth_data) >= 2:
-                    days_active = cycle.days_active()
+                    days_active = cycle.days_tracked()
                     metrics.daily_growth_rate = AquacultureCalculator.calculate_daily_growth_rate(
-                        cycle.initial_average_weight,
+                        cycle.analysis_start_average_weight,
                         cycle.current_average_weight,
                         days_active
                     )
                     metrics.specific_growth_rate = AquacultureCalculator.calculate_specific_growth_rate(
-                        cycle.initial_average_weight,
+                        cycle.analysis_start_average_weight,
                         cycle.current_average_weight,
                         days_active
                     )
@@ -940,7 +954,7 @@ class AnalyticsService(BaseService):
                     survival_data = AnalyticsService._build_allocation_survival_curve(cycle)
                 else:
                     survival_data = []
-                    current_count = cycle.initial_count
+                    current_count = cycle.analysis_start_count
                     mortality_logs = (
                         prefetched_buckets.mortality_logs
                         if prefetched_buckets is not None
@@ -948,7 +962,11 @@ class AnalyticsService(BaseService):
                     )
                     for log in mortality_logs:
                         current_count = max(0, current_count - log.mortality_count)
-                        survival_rate = (current_count / cycle.initial_count * 100) if cycle.initial_count > 0 else 0
+                        survival_rate = (
+                            current_count / cycle.analysis_start_count * 100
+                            if cycle.analysis_start_count > 0
+                            else 0
+                        )
                         survival_data.append({
                             'date': log.log_date.isoformat(),
                             'count': current_count,
@@ -973,14 +991,14 @@ class AnalyticsService(BaseService):
                 metrics.cumulative_feed_data = feed_data
 
                 if len(growth_data) >= 2:
-                    days_active = cycle.days_active()
+                    days_active = cycle.days_tracked()
                     metrics.daily_growth_rate = AquacultureCalculator.calculate_daily_growth_rate(
-                        cycle.initial_average_weight,
+                        cycle.analysis_start_average_weight,
                         cycle.current_average_weight,
                         days_active
                     )
                     metrics.specific_growth_rate = AquacultureCalculator.calculate_specific_growth_rate(
-                        cycle.initial_average_weight,
+                        cycle.analysis_start_average_weight,
                         cycle.current_average_weight,
                         days_active
                     )

@@ -205,6 +205,10 @@ class CycleDashboardService:
         return {
             'cycle': cycle,
             'summary': {
+                'days_active': cycle.days_active(),
+                'days_tracked': cycle.days_tracked(),
+                'historical_count_gap': cycle.historical_count_gap,
+                'history_scope': cycle.history_scope,
                 'total_allocations': len(unit_allocations),
                 'total_initial_fish_count': total_initial_fish_count,
                 'total_estimated_current_fish_count': total_estimated_current_fish_count,
@@ -244,7 +248,7 @@ class CycleDashboardService:
         )
 
         total_mortality_count = sum((log.mortality_count or 0) for log in daily_logs)
-        total_initial_fish_count = cycle.initial_count or 0
+        total_initial_fish_count = cycle.analysis_start_count or 0
         mortality_rate_pct = CycleDashboardService.ZERO_DECIMAL
         if total_initial_fish_count > 0:
             mortality_rate_pct = (
@@ -256,7 +260,11 @@ class CycleDashboardService:
         ).quantize(CycleDashboardService.BIOMASS_QUANTIZE)
         active_sanitary_issues_count = sum(1 for log in sanitary_logs if not log.resolved)
 
-        estimated_biomass = cycle.current_biomass if cycle.current_biomass is not None else cycle.initial_biomass
+        estimated_biomass = (
+            cycle.current_biomass
+            if cycle.current_biomass is not None
+            else cycle.analysis_start_biomass
+        )
         business_metrics = CycleDashboardService._build_business_metrics(
             cycle,
             biomass_kg=estimated_biomass,
@@ -265,6 +273,10 @@ class CycleDashboardService:
         return {
             'cycle': cycle,
             'summary': {
+                'days_active': cycle.days_active(),
+                'days_tracked': cycle.days_tracked(),
+                'historical_count_gap': cycle.historical_count_gap,
+                'history_scope': cycle.history_scope,
                 'total_allocations': 0,
                 'total_initial_fish_count': total_initial_fish_count,
                 'total_estimated_current_fish_count': cycle.current_count,

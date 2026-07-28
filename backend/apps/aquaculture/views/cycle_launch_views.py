@@ -157,6 +157,11 @@ class CycleLaunchView(APIView):
                 "production_units": result.production_units,
                 "cycle_unit_allocations": result.cycle_unit_allocations,
                 "production_unit_id_by_local_id": result.production_unit_id_by_local_id,
+                "opening_feed_references": result.opening_feed_references,
+                "opening_stock_entries": result.opening_stock_entries,
+                "opening_stock_entry_id_by_local_id": (
+                    result.opening_stock_entry_id_by_local_id
+                ),
             },
             context={"request": request},
         )

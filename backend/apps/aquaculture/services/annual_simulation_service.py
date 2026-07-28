@@ -14,6 +14,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, TypedDict
 
+from django.utils import timezone
+
 from ..constants import (
     AQUACARE_FEE_PER_KG,
     DEFAULT_EXPECTED_SURVIVAL_RATE_PCT,
@@ -162,7 +164,7 @@ class AnnualSimulationService:
             expected_survival_rate_pct=expected_survival_rate_pct,
             cycle_duration_days=cycle_duration_days,
         )
-        effective_start = start_date or date.today()
+        effective_start = start_date or timezone.localdate()
         cycles_per_year_derived = AnnualSimulationService._calculate_cycles_per_year(
             resolved_inputs.duration_days,
             TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,

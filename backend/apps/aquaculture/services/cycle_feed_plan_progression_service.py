@@ -67,7 +67,7 @@ class CycleFeedPlanProgressionService:
         cycle: ProductionCycle,
     ) -> CycleFeedPlan | None:
         observations = [
-            cls._decimal(cycle.initial_average_weight),
+            cls._decimal(cycle.analysis_start_average_weight),
             cls._decimal(cycle.current_average_weight),
         ]
         observations.extend(

@@ -44,11 +44,13 @@ from ..domain.cycle_duration import (
     calculate_planned_harvest_date,
     validate_cycle_duration_days,
 )
+from ..domain.cycle_onboarding import CycleOnboardingRuleViolation, resolve_tracking_baseline
 from ..domain.exceptions import (
     AllocationAlreadyFinallyHarvested,
     BusinessRuleViolation,
     CycleAlreadyHarvestedError,
     CycleNotActiveError,
+    EventBeforeTrackingStartError,
     FinalHarvestIdempotencyConflict,
     FinalHarvestRequiresAllocationBreakdown,
     InsufficientFishCountError,
@@ -86,8 +88,14 @@ class CycleCreatePayload(TypedDict, total=False):
     pond_volume_m3: Decimal
     infrastructure_type: str
     start_date: date | str
+    onboarding_mode: str
     initial_count: int
-    initial_average_weight: Decimal
+    initial_average_weight: Decimal | None
+    tracking_start_date: date | str
+    tracking_start_count: int
+    tracking_start_average_weight: Decimal
+    tracking_start_biomass: Decimal
+    tracking_start_biomass_source: str
     target_harvest_weight_g: Decimal
     planned_cycle_duration_days: int
     planned_harvest_date: date | str
@@ -196,20 +204,69 @@ class ProductionCycleService(BaseService):
         # 1. Validation métier approfondie
         ProductionCycleService._validate_cycle_business_rules(cycle_data)
 
-        # 2. Calcul biomasse initiale
-        initial_biomass = AquacultureCalculator.calculate_biomass(
-            cycle_data['initial_count'],
-            cycle_data['initial_average_weight']
+        # 2. L'historique et la baseline sont deux sources distinctes.
+        initial_weight = cycle_data.get('initial_average_weight')
+        initial_biomass = (
+            AquacultureCalculator.calculate_biomass(
+                cycle_data['initial_count'],
+                initial_weight,
+            )
+            if initial_weight is not None
+            else None
         )
+        cycle_start_date = cycle_data['start_date']
+        if isinstance(cycle_start_date, str):
+            cycle_start_date = date.fromisoformat(cycle_start_date)
+        tracking_start_date = cycle_data.get('tracking_start_date')
+        if isinstance(tracking_start_date, str):
+            tracking_start_date = date.fromisoformat(tracking_start_date)
+        try:
+            baseline = resolve_tracking_baseline(
+                onboarding_mode=cycle_data.get(
+                    'onboarding_mode',
+                    ProductionCycle.ONBOARDING_MODE_NEW,
+                ),
+                start_date=cycle_start_date,
+                initial_count=cycle_data['initial_count'],
+                initial_average_weight=initial_weight,
+                tracking_baseline=(
+                    {
+                        'tracking_start_date': tracking_start_date,
+                        'fish_count': cycle_data['tracking_start_count'],
+                        'average_weight_g': cycle_data['tracking_start_average_weight'],
+                        'biomass_kg': (
+                            cycle_data['tracking_start_biomass']
+                            if cycle_data.get('tracking_start_biomass_source')
+                            == ProductionCycle.BIOMASS_SOURCE_DECLARED
+                            else None
+                        ),
+                    }
+                    if cycle_data.get('onboarding_mode')
+                    == ProductionCycle.ONBOARDING_MODE_ONGOING
+                    else None
+                ),
+                today=timezone.localdate(),
+            )
+        except CycleOnboardingRuleViolation as exc:
+            raise BusinessRuleViolation({
+                'code': exc.code,
+                'detail': exc.detail,
+                **(exc.context or {}),
+            }) from exc
 
         # 3. Préparation données complètes
         cycle_data_complete = {
             **cycle_data,
             'farm_profile': farm_profile,
             'initial_biomass': initial_biomass,
-            'current_count': cycle_data['initial_count'],
-            'current_average_weight': cycle_data['initial_average_weight'],
-            'current_biomass': initial_biomass,
+            'tracking_start_date': baseline.tracking_start_date,
+            'tracking_start_count': baseline.fish_count,
+            'tracking_start_average_weight': baseline.average_weight_g,
+            'tracking_start_biomass': baseline.biomass_kg,
+            'tracking_start_biomass_source': baseline.biomass_source,
+            'current_count': baseline.fish_count,
+            'current_average_weight': baseline.average_weight_g,
+            'current_biomass': baseline.biomass_kg,
             'total_feed_consumed': Decimal('0'),
             'status': 'active',
         }
@@ -225,7 +282,13 @@ class ProductionCycleService(BaseService):
 
         ProductionCycleService.log_operation(
             "cycle_created",
-            {"cycle_id": str(cycle.id), "initial_biomass": float(initial_biomass)},
+            {
+                "cycle_id": str(cycle.id),
+                "initial_biomass": (
+                    float(initial_biomass) if initial_biomass is not None else None
+                ),
+                "tracking_start_biomass": float(baseline.biomass_kg),
+            },
             level='info'
         )
 
@@ -369,12 +432,12 @@ class ProductionCycleService(BaseService):
 
         # 4. Calcul métriques finales
         survival_rate = AquacultureCalculator.calculate_survival_rate(
-            cycle.initial_count,
+            cycle.analysis_start_count,
             final_count
         )
 
         # 5. Calcul FCR si données disponibles
-        weight_gain = final_biomass - cycle.initial_biomass
+        weight_gain = final_biomass - cycle.analysis_start_biomass
         fcr = None
         if weight_gain > 0 and cycle.total_feed_consumed > 0:
             fcr = AquacultureCalculator.calculate_fcr(
@@ -565,12 +628,16 @@ class ProductionCycleService(BaseService):
 
         # Les sessions de calibrage rejouent leurs entrées depuis zéro afin de ne
         # jamais compter deux fois le premier mouvement.
-        cycle.current_count = 0 if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION else cycle.initial_count
-        cycle.current_average_weight = cycle.initial_average_weight
+        cycle.current_count = (
+            0
+            if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION
+            else cycle.analysis_start_count
+        )
+        cycle.current_average_weight = cycle.analysis_start_average_weight
         cycle.current_biomass = (
             Decimal('0')
             if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION
-            else cycle.initial_biomass
+            else cycle.analysis_start_biomass
         )
         cycle.total_feed_consumed = Decimal('0')
 
@@ -623,12 +690,12 @@ class ProductionCycleService(BaseService):
         total_stocked_count = (
             total_in_count
             if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION
-            else cycle.initial_count + total_in_count
+            else cycle.analysis_start_count + total_in_count
         )
         total_stocked_biomass = (
             total_in_biomass
             if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_CALIBRATION
-            else cycle.initial_biomass + total_in_biomass
+            else (cycle.analysis_start_biomass or Decimal('0')) + total_in_biomass
         )
         cycle.survival_rate = (
             (
@@ -715,12 +782,12 @@ class ProductionCycleService(BaseService):
         )
 
         cycle.survival_rate = AquacultureCalculator.calculate_survival_rate(
-            cycle.initial_count,
+            cycle.analysis_start_count,
             cycle.current_count
         )
 
         # Recalcul FCR
-        weight_gain = cycle.current_biomass - cycle.initial_biomass
+        weight_gain = cycle.current_biomass - cycle.analysis_start_biomass
         if weight_gain > 0 and cycle.total_feed_consumed > 0:
             cycle.fcr = AquacultureCalculator.calculate_fcr(
                 cycle.total_feed_consumed,
@@ -1027,13 +1094,20 @@ class ProductionCycleService(BaseService):
                 _("Cette unité de production doit être active pour être récoltée.")
             )
 
-        if harvest_date < locked_cycle.start_date:
+        if harvest_date < locked_cycle.analysis_start_date:
+            if locked_cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING:
+                raise EventBeforeTrackingStartError(
+                    tracking_start_date=locked_cycle.analysis_start_date,
+                )
             raise InvalidHarvestDataError(
                 _("Date de récolte (%(harvest)s) ne peut être avant le début du cycle (%(start)s)")
-                % {'harvest': harvest_date, 'start': locked_cycle.start_date}
+                % {
+                    'harvest': harvest_date,
+                    'start': locked_cycle.analysis_start_date,
+                }
             )
 
-        future_limit = date.today() + timedelta(days=7)
+        future_limit = timezone.localdate() + timedelta(days=7)
         if harvest_date > future_limit:
             raise InvalidHarvestDataError(
                 _("Date de récolte ne peut être dans le futur")
@@ -1508,6 +1582,10 @@ class ProductionCycleService(BaseService):
         normalized_infrastructure_types = ProductionCycleService._normalize_infrastructure_types(
             infrastructure_types
         )
+        onboarding_mode = cycle_data.get(
+            'onboarding_mode',
+            ProductionCycle.ONBOARDING_MODE_NEW,
+        )
 
         # Validation densité maximale (règle unifiée par infrastructure).
         # Source de vérité: backend/constants.py.
@@ -1543,7 +1621,7 @@ class ProductionCycleService(BaseService):
                         % {'density': density, 'max_allowed': max_allowed}
                     )
 
-        # Validation poids initial minimum
+        # Validation poids initial minimum uniquement lorsqu'il est déclaré.
         if species and initial_weight:
             min_weight = ProductionCycleService.MIN_WEIGHT_BY_SPECIES.get(species, 0.5)
             if float(initial_weight) < min_weight:
@@ -1558,7 +1636,7 @@ class ProductionCycleService(BaseService):
                 start_date = date.fromisoformat(start_date)
 
             # Tolérance : cycle peut commencer jusqu'à 30 jours dans le futur
-            future_limit = date.today() + timedelta(days=30)
+            future_limit = timezone.localdate() + timedelta(days=30)
             if start_date > future_limit:
                 raise InvalidDateRangeError(
                     _("La date de début ne peut pas être plus de 30 jours dans le futur")
@@ -1604,6 +1682,21 @@ class ProductionCycleService(BaseService):
                 raise InvalidDateRangeError(
                     _("La date prévisionnelle de récolte doit être après la date de début")
                 )
+            if onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING:
+                tracking_start_date = cycle_data.get('tracking_start_date')
+                if isinstance(tracking_start_date, str):
+                    tracking_start_date = date.fromisoformat(tracking_start_date)
+                if (
+                    tracking_start_date is None
+                    or planned_harvest_date <= tracking_start_date
+                    or planned_harvest_date < timezone.localdate()
+                ):
+                    raise BusinessRuleViolation({
+                        'code': 'ongoing_cycle_planned_harvest_elapsed',
+                        'detail': _(
+                            'La récolte planifiée est déjà dépassée pour cette reprise.'
+                        ),
+                    })
 
     @staticmethod
     def _apply_economic_defaults(cycle_data: CycleCreatePayload) -> None:
@@ -1616,7 +1709,10 @@ class ProductionCycleService(BaseService):
         if cycle_data.get('cycle_name') is None and start_date_value:
             cycle_data['cycle_name'] = f"Cycle {species.capitalize()} {start_date_value.isoformat()}"
 
-        if cycle_data.get('initial_average_weight') is None:
+        if (
+            cycle_data.get('initial_average_weight') is None
+            and cycle_data.get('onboarding_mode') != ProductionCycle.ONBOARDING_MODE_ONGOING
+        ):
             cycle_data['initial_average_weight'] = DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES.get(
                 species,
                 DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES['tilapia'],
@@ -1677,14 +1773,21 @@ class ProductionCycleService(BaseService):
         errors = []
 
         # Date récolte >= date début
-        if harvest_date < cycle.start_date:
+        if harvest_date < cycle.analysis_start_date:
+            if cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING:
+                raise EventBeforeTrackingStartError(
+                    tracking_start_date=cycle.analysis_start_date,
+                )
             errors.append(
                 _("Date de récolte (%(harvest)s) ne peut être avant le début du cycle (%(start)s)")
-                % {'harvest': harvest_date, 'start': cycle.start_date}
+                % {
+                    'harvest': harvest_date,
+                    'start': cycle.analysis_start_date,
+                }
             )
 
         # Date récolte pas trop dans le futur (tolérance 7 jours)
-        future_limit = date.today() + timedelta(days=7)
+        future_limit = timezone.localdate() + timedelta(days=7)
         if harvest_date > future_limit:
             errors.append(
                 _("Date de récolte ne peut être plus de 7 jours dans le futur")
@@ -1772,13 +1875,17 @@ class ProductionCycleService(BaseService):
             )
 
         # Date cohérente
-        if harvest_date < cycle.start_date:
+        if harvest_date < cycle.analysis_start_date:
+            if cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING:
+                raise EventBeforeTrackingStartError(
+                    tracking_start_date=cycle.analysis_start_date,
+                )
             raise InvalidHarvestDataError(
                 _("Date de récolte (%(h)s) antérieure au début du cycle (%(s)s)")
-                % {'h': harvest_date, 's': cycle.start_date}
+                % {'h': harvest_date, 's': cycle.analysis_start_date}
             )
 
-        future_limit = date.today() + timedelta(days=7)
+        future_limit = timezone.localdate() + timedelta(days=7)
         if harvest_date > future_limit:
             raise InvalidHarvestDataError(
                 _("Date de récolte ne peut être plus de 7 jours dans le futur")

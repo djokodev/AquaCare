@@ -19,6 +19,8 @@ import math
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from django.utils import timezone
+
 from ..constants import FEED_RECOMMENDATIONS, MEALS_PER_DAY, OPTIMAL_PARAMETERS
 
 
@@ -699,7 +701,7 @@ class AquacultureCalculator:
         days_needed = float(weight_to_gain) / float(current_growth_rate)
         
         # Add current cycle progress
-        days_elapsed = (date.today() - start_date).days
+        days_elapsed = (timezone.localdate() - start_date).days
         total_days = days_elapsed + int(days_needed)
         
         return start_date + timedelta(days=total_days)
