@@ -763,6 +763,7 @@ export const fr = {
   alevinage: 'Alevinage',
   pre_grossissement: 'Pré-grossissement',
   grossissement: 'Grossissement',
+  pre_recolte: 'Pré-récolte',
   larvae: 'Alevinage',
   juvenilePhase: 'Pré-grossissement',
   growing: 'Grossissement',

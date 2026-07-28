@@ -225,9 +225,9 @@ class ProductService(BaseCommerceService):
         Examples:
             >>> product = ProductService.get_recommended_product('catfish', 150)
             >>> product.pellet_size_mm
-            Decimal('4.5')
+            Decimal('4.0')
             >>> product.name
-            'CLARIAS FLOAT 4.5MM'
+            'DIBAQ CATFISH 4MM'
         """
         ProductService.log_operation('get_recommended_product', {
             'species': species,

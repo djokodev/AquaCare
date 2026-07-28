@@ -853,6 +853,7 @@
   alevinage: 'Starter',
   pre_grossissement: 'Pre-Growing',
   grossissement: 'Growing',
+  pre_recolte: 'Pre-harvest',
   larvae: 'Larvae Stage',
   juvenilePhase: 'Pre-Growing',
   growing: 'Growing',
