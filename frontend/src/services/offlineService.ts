@@ -42,6 +42,7 @@ export interface OfflineStockDeclaration {
   cycleId: string;
   clientUuid: string;
   feedReferenceClientUuid?: string;
+  feedSizeMmSnapshot?: string;
   payload: CycleStoreManualStockPayload;
   fingerprint: string;
   timestamp: number;
@@ -107,7 +108,7 @@ const resolveReferenceIdentity = (
 
 const normalizeFeedSize = (value: unknown): string | null => {
   if (value === null || value === undefined || value === '') return null;
-  const parsed = Number(value);
+  const parsed = Number(String(value).trim().replace(',', '.'));
   return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
 };
 
@@ -115,6 +116,7 @@ const getStockFeedSize = (
   stock: OfflineStockDeclaration,
   references: OfflineFeedReference[],
 ): string | null => {
+  if (stock.feedSizeMmSnapshot) return normalizeFeedSize(stock.feedSizeMmSnapshot);
   const externalSize = stock.payload.external_feed?.pellet_size_mm;
   if (externalSize !== undefined) return normalizeFeedSize(externalSize);
   const referenceClientUuid = stock.feedReferenceClientUuid
@@ -274,14 +276,33 @@ class OfflineService {
   async saveStockDeclarationOffline(
     cycleId: string,
     payload: CycleStoreManualStockPayload,
+    options?: { feedSizeMmSnapshot?: string | number | null },
   ): Promise<OfflineStockDeclaration> {
     const clientUuid = payload.client_uuid ?? this.generateClientUUID();
     const normalizedPayload = { ...payload, client_uuid: clientUuid, created_offline: true };
     const fingerprint = stockDeclarationFingerprint(cycleId, normalizedPayload);
     const current = await this.getOfflineStockDeclarations();
+    const references = await this.getOfflineFeedReferences();
+    const localReferenceClientUuid = normalizedPayload.feed_reference_client_uuid;
+    const localReference = localReferenceClientUuid
+      ? references.find((reference) => reference.clientUuid === localReferenceClientUuid)
+      : undefined;
+    const feedSizeMmSnapshot = normalizeFeedSize(
+      options?.feedSizeMmSnapshot
+      ?? normalizedPayload.external_feed?.pellet_size_mm
+      ?? localReference?.payload.pellet_size_mm,
+    ) ?? undefined;
     const existing = current.find((item) => item.clientUuid === clientUuid);
     if (existing) {
       if (existing.fingerprint !== fingerprint) throw new Error('stock_entry_idempotency_conflict');
+      if (!existing.feedSizeMmSnapshot && feedSizeMmSnapshot) {
+        const updated = { ...existing, feedSizeMmSnapshot };
+        await this.persist(
+          STORAGE_KEYS.OFFLINE_STOCK_DECLARATIONS,
+          current.map((candidate) => candidate.id === existing.id ? updated : candidate),
+        );
+        return updated;
+      }
       return existing;
     }
     const item: OfflineStockDeclaration = {
@@ -289,6 +310,7 @@ class OfflineService {
       cycleId,
       clientUuid,
       feedReferenceClientUuid: normalizedPayload.feed_reference_client_uuid,
+      feedSizeMmSnapshot,
       payload: normalizedPayload,
       fingerprint,
       timestamp: Date.now(),

@@ -15,6 +15,12 @@ class WeightProgressionEntry(TypedDict):
     weight_g: float
 
 
+class DailyFeedingEntry(TypedDict):
+    day: int
+    weight_g: float
+    feed_kg: Decimal
+
+
 class DetectedPhase(TypedDict):
     phase: str
     pellet_size_mm: float
@@ -221,19 +227,38 @@ class FeedingCalculator:
             >>> FeedingCalculator.calculate_period_consumption(1000, progression, 1, 30, 0.85)
             Decimal('145.50')  # 145.5 kg sur 30 jours
         """
-        total_kg = Decimal('0')
+        return sum(
+            (
+                entry['feed_kg']
+                for entry in FeedingCalculator.calculate_daily_feed_progression(
+                    fish_count,
+                    weight_progression,
+                    survival_rate,
+                )
+                if start_day <= entry['day'] <= end_day
+            ),
+            Decimal('0'),
+        )
 
-        for day_data in weight_progression:
-            day = day_data['day']
-            if start_day <= day <= end_day:
-                daily_feed = FeedingCalculator.calculate_daily_feed_kg(
+    @staticmethod
+    def calculate_daily_feed_progression(
+        fish_count: int,
+        weight_progression: list[WeightProgressionEntry],
+        survival_rate: float = 0.95,
+    ) -> list[DailyFeedingEntry]:
+        """Retourne la ration biologique calculée pour chaque jour du cycle."""
+        return [
+            {
+                'day': int(day_data['day']),
+                'weight_g': float(day_data['weight_g']),
+                'feed_kg': FeedingCalculator.calculate_daily_feed_kg(
                     fish_count,
                     day_data['weight_g'],
-                    survival_rate
-                )
-                total_kg += daily_feed
-
-        return total_kg
+                    survival_rate,
+                ),
+            }
+            for day_data in weight_progression
+        ]
 
 
 class PhaseDetector:

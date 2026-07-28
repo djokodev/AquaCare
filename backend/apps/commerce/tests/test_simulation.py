@@ -113,6 +113,27 @@ class TestCycleSimulationService:
         summary = result['summary']
         assert summary['estimated_final_count'] == 450  # 500 × 0.90
 
+    def test_daily_feeding_schedule_is_internal_and_reconciles_total(self, tilapia_products):
+        public_result = CycleSimulationService.simulate_cycle(
+            species='tilapia',
+            initial_fish_count=500,
+            cycle_duration_days=90,
+        )
+        internal_result = CycleSimulationService.simulate_cycle(
+            species='tilapia',
+            initial_fish_count=500,
+            cycle_duration_days=90,
+            include_daily_feeding_schedule=True,
+        )
+
+        assert '_daily_feeding_schedule' not in public_result
+        schedule = internal_result['_daily_feeding_schedule']
+        assert len(schedule) == 90
+        assert [entry['day'] for entry in schedule] == list(range(1, 91))
+        assert sum(entry['feed_kg'] for entry in schedule) == Decimal(
+            str(internal_result['summary']['total_feed_kg'])
+        )
+
     def test_simulate_cycle_with_selling_price_override(self, tilapia_products):
         """Test prise en compte du prix de vente surchargé."""
         result = CycleSimulationService.simulate_cycle(

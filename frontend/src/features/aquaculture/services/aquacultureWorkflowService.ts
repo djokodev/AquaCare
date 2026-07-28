@@ -100,6 +100,7 @@ export const createCycleLogWithOfflineFallback = async (
       ? references.find((candidate) => candidate.clientUuid === item.feedReferenceClientUuid)
       : undefined;
     const pendingFeedSize = reference?.payload.pellet_size_mm
+      ?? item.feedSizeMmSnapshot
       ?? item.payload.external_feed?.pellet_size_mm;
     const sameSize = requestedFeedSize !== null
       && pendingFeedSize !== undefined
@@ -150,6 +151,7 @@ export const declareManualStockWithOfflineFallback = async (
   cycleId: string,
   stockPayload: CycleStoreManualStockPayload,
   feedReferencePayload?: FarmFeedReferenceCreatePayload,
+  options?: { feedSizeMmSnapshot?: string | number | null },
 ): Promise<OnlineOrOffline<CycleStore>> => {
   let resolvedStockPayload = { ...stockPayload };
   if (feedReferencePayload) {
@@ -169,7 +171,7 @@ export const declareManualStockWithOfflineFallback = async (
       await offlineService.saveStockDeclarationOffline(cycleId, {
         ...resolvedStockPayload,
         feed_reference_client_uuid: feedReferencePayload.client_uuid,
-      });
+      }, options);
       return { mode: 'offline' };
     }
   }
@@ -182,7 +184,7 @@ export const declareManualStockWithOfflineFallback = async (
     return { mode: 'online', data: store };
   } catch (error: unknown) {
     if (!isNetworkError(error)) throw error;
-    await offlineService.saveStockDeclarationOffline(cycleId, resolvedStockPayload);
+    await offlineService.saveStockDeclarationOffline(cycleId, resolvedStockPayload, options);
     return { mode: 'offline' };
   }
 };

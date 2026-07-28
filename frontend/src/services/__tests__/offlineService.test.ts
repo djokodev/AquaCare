@@ -341,6 +341,59 @@ describe('services/offlineService', () => {
     expect(mockAquaculture.createCycleLog).toHaveBeenCalledTimes(1);
   });
 
+  it('conserve la granulometrie d une reference serveur et synchronise stock puis journal au retry', async () => {
+    const calls: string[] = [];
+    await offlineService.saveStockDeclarationOffline('cycle-1', {
+      feed_reference_id: 'server-feed-1',
+      quantity_kg: '20.00',
+      total_cost_fcfa: '30000.00',
+      entry_date: '2026-07-29',
+      note: 'Achat fournisseur',
+      client_uuid: '44444444-4444-4444-8444-444444444444',
+    }, {
+      feedSizeMmSnapshot: '2,00',
+    });
+    await offlineService.saveCycleLogOffline('cycle-1', {
+      log_date: '2026-07-29',
+      feed_size_mm: 2,
+      feed_quantity: 3,
+    });
+    mockAquaculture.declareCycleStoreManualStock.mockImplementationOnce(async () => {
+      calls.push('stock-failed');
+      throw new Error('temporary');
+    });
+
+    const first = await offlineService.syncAllOfflineData();
+
+    expect(first.failed).toBeGreaterThanOrEqual(1);
+    expect(mockAquaculture.createCycleLog).not.toHaveBeenCalled();
+    const [pendingStock] = await offlineService.getOfflineStockDeclarations();
+    expect(pendingStock.feedSizeMmSnapshot).toBe('2.00');
+    expect(pendingStock.payload).toEqual(expect.objectContaining({
+      feed_reference_id: 'server-feed-1',
+      quantity_kg: '20.00',
+      total_cost_fcfa: '30000.00',
+      entry_date: '2026-07-29',
+      note: 'Achat fournisseur',
+      client_uuid: '44444444-4444-4444-8444-444444444444',
+    }));
+
+    mockAquaculture.declareCycleStoreManualStock.mockImplementationOnce(async () => {
+      calls.push('stock');
+      return { cycle_id: 'cycle-1' } as any;
+    });
+    mockAquaculture.createCycleLog.mockImplementationOnce(async () => {
+      calls.push('log');
+      return { id: 'server-log-1' } as any;
+    });
+
+    const retry = await offlineService.syncAllOfflineData();
+
+    expect(retry.success).toBe(2);
+    expect(calls).toEqual(['stock-failed', 'stock', 'log']);
+    expect(mockAquaculture.createCycleLog).toHaveBeenCalledTimes(1);
+  });
+
   it('ne bloque pas une autre granulometrie dans le meme cycle', async () => {
     await offlineService.saveStockDeclarationOffline('cycle-1', {
       external_feed: {

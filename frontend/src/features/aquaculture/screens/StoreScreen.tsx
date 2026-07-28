@@ -371,7 +371,12 @@ export default function StoreScreen() {
           note: note.trim(),
           client_uuid: stockClientUuid,
           created_offline: false,
-        }, feedReferencePayload);
+        }, feedReferencePayload, {
+          feedSizeMmSnapshot: (
+            selectedReference?.pellet_size_mm
+            ?? (parsedFeedSize.kind === 'valid' ? parsedFeedSize.value : null)
+          ),
+        });
         if (result.mode === 'online') {
           serverStoreRef.current = result.data;
           setStore(result.data);

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from decimal import ROUND_CEILING, ROUND_DOWN, Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 from commerce.models import OrderItem, Product
@@ -14,6 +14,7 @@ from django.utils import timezone
 from ..models import CycleFeedPlan, FarmFeedReference, NutritionalGuide, ProductionCycle
 from .cycle_store_service import ZERO_DECIMAL, CycleStoreService
 from .feed_reference_service import FeedReferenceService
+from .feed_stock_ledger_service import FeedStockLedgerService
 
 QUANTIZE_KG = Decimal('0.01')
 PLAN_VERSION = 2
@@ -94,14 +95,15 @@ class CycleFeedRecommendationService:
         cycle: ProductionCycle,
         phases: list[dict[str, Any]],
         *,
+        daily_feeding_schedule: list[dict[str, Any]] | None = None,
         recalibrate_from_sequence: int | None = None,
     ) -> list[dict[str, Any]]:
         """Recalibre les phases actuelles/futures sur les intervalles du guide.
 
-        Une phase issue de la simulation peut traverser plusieurs intervalles
-        nutritionnels. Elle est alors découpée sur les frontières du guide et
-        le besoin ainsi que la durée sont répartis proportionnellement. Les
-        phases déjà parcourues restent le snapshot historique du plan.
+        Chaque journée conserve son poids et sa ration biologique calculés par
+        le simulateur. Les journées consécutives qui relèvent du même guide
+        deviennent un segment ; aucune quantité n'est répartie selon une simple
+        largeur d'intervalle de poids. Les phases passées restent inchangées.
         """
         if not phases:
             return phases
@@ -114,6 +116,10 @@ class CycleFeedRecommendationService:
         if not guides:
             return phases
 
+        schedule = sorted(
+            daily_feeding_schedule or [],
+            key=lambda entry: int(entry['day']),
+        )
         adjusted: list[dict[str, Any]] = []
         for phase in phases:
             if (
@@ -123,108 +129,123 @@ class CycleFeedRecommendationService:
             ):
                 adjusted.append(phase)
                 continue
-            weight_range = phase.get('planned_weight_range_g') or phase.get('weight_range_g') or []
-            if len(weight_range) < 2:
-                adjusted.append(phase)
-                continue
-            start_weight, end_weight = map(cls._decimal, weight_range[:2])
-            if end_weight <= start_weight:
-                adjusted.append(cls._apply_guide_to_segment(phase, guides, start_weight, end_weight))
-                continue
-
-            boundaries = {start_weight, end_weight}
-            for guide in guides:
-                if start_weight < guide.min_weight < end_weight:
-                    boundaries.add(guide.min_weight)
-                if start_weight < guide.max_weight < end_weight:
-                    boundaries.add(guide.max_weight)
-            ordered_boundaries = sorted(boundaries)
-            segments = [
-                (left, right)
-                for left, right in zip(ordered_boundaries, ordered_boundaries[1:])
-                if right > left
+            days_range = phase.get('planned_days_range') or phase.get('days_range') or [1, 1]
+            phase_days = [
+                entry
+                for entry in schedule
+                if int(days_range[0]) <= int(entry['day']) <= int(days_range[-1])
             ]
-            if len(segments) <= 1:
+            if not phase_days:
+                weight_range = (
+                    phase.get('planned_weight_range_g')
+                    or phase.get('weight_range_g')
+                    or []
+                )
+                if len(weight_range) < 2:
+                    adjusted.append(phase)
+                    continue
                 adjusted.append(cls._apply_guide_to_segment(
                     phase,
                     guides,
-                    start_weight,
-                    end_weight,
+                    cls._decimal(weight_range[0]),
+                    cls._decimal(weight_range[-1]),
                 ))
                 continue
 
-            total_span = end_weight - start_weight
-            total_consumption = cls._decimal(
-                phase.get('planned_consumption_kg', phase.get('total_consumption_kg', 0))
+            groups: list[dict[str, Any]] = []
+            for entry in phase_days:
+                selected, warning = cls._guide_for_weight(
+                    guides,
+                    cls._decimal(entry['weight_g']),
+                )
+                group_key = (str(selected.id) if selected else None, warning)
+                if (
+                    not groups
+                    or groups[-1]['key'] != group_key
+                    or int(entry['day']) != int(groups[-1]['entries'][-1]['day']) + 1
+                ):
+                    groups.append({'key': group_key, 'guide': selected, 'warning': warning, 'entries': []})
+                groups[-1]['entries'].append(entry)
+
+            base_phase_id = (
+                phase.get('phase_id')
+                or f"{phase.get('phase_name', 'phase')}-{days_range[0]}"
             )
-            days_range = phase.get('planned_days_range') or phase.get('days_range') or [1, 1]
-            base_phase_id = phase.get('phase_id') or f"{phase.get('phase_name', 'phase')}-{days_range[0]}"
-            total_duration = int(
-                phase.get('planned_duration_days')
-                or phase.get('duration_days')
-                or max(int(days_range[-1]) - int(days_range[0]) + 1, 1)
-            )
-            durations = cls._allocate_integer_total(
-                total_duration,
-                [right - left for left, right in segments],
-            )
-            day_start = int(days_range[0])
-            consumption_allocated = ZERO_DECIMAL
-            for index, ((left, right), duration) in enumerate(zip(segments, durations), start=1):
-                is_last = index == len(segments)
-                if is_last:
-                    segment_consumption = total_consumption - consumption_allocated
-                else:
-                    segment_consumption = (
-                        total_consumption * (right - left) / total_span
-                    ).quantize(QUANTIZE_KG)
-                consumption_allocated += segment_consumption
+            segment_count = len(groups)
+            for index, group in enumerate(groups, start=1):
+                entries = group['entries']
+                selected = group['guide']
+                segment_consumption = sum(
+                    (cls._decimal(entry['feed_kg']) for entry in entries),
+                    ZERO_DECIMAL,
+                ).quantize(QUANTIZE_KG)
+                first_entry = entries[0]
+                last_entry = entries[-1]
                 segment = {
                     **phase,
-                    'phase_id': f"{base_phase_id}:segment-{index}",
+                    'phase_id': (
+                        base_phase_id
+                        if segment_count == 1
+                        else f'{base_phase_id}:segment-{index}'
+                    ),
                     'sequence': phase.get('sequence', index),
-                    'planned_days_range': [day_start, day_start + max(duration - 1, 0)],
-                    'days_range': [day_start, day_start + max(duration - 1, 0)],
-                    'planned_weight_range_g': [str(left), str(right)],
-                    'weight_range_g': [str(left), str(right)],
+                    'planned_days_range': [int(first_entry['day']), int(last_entry['day'])],
+                    'days_range': [int(first_entry['day']), int(last_entry['day'])],
+                    'planned_weight_range_g': [
+                        str(first_entry['weight_g']),
+                        str(last_entry['weight_g']),
+                    ],
+                    'weight_range_g': [
+                        str(first_entry['weight_g']),
+                        str(last_entry['weight_g']),
+                    ],
                     'planned_consumption_kg': cls._kg(segment_consumption),
                     'total_consumption_kg': cls._kg(segment_consumption),
-                    'planned_duration_days': duration,
-                    'duration_days': duration,
+                    'planned_duration_days': len(entries),
+                    'duration_days': len(entries),
                     'segment_index': index,
-                    'segment_count': len(segments),
+                    'segment_count': segment_count,
+                    'pellet_size_mm': cls._kg(selected.feed_size_mm) if selected else None,
+                    'nutritional_guide_source': selected.source if selected else None,
+                    'nutritional_guide_id': str(selected.id) if selected else None,
+                    'nutritional_guide_warning': group['warning'],
                 }
-                day_start += duration
-                adjusted.append(cls._apply_guide_to_segment(segment, guides, left, right))
+                adjusted.append(segment)
         return adjusted
 
     @staticmethod
-    def _allocate_integer_total(total: int, weights: list[Decimal]) -> list[int]:
-        """Répartit une durée entière sans perdre de jour."""
-        if not weights:
-            return []
-        if total <= 0:
-            return [0 for _ in weights]
-        raw = [Decimal(total) * weight / sum(weights) for weight in weights]
-        values = [int(value.to_integral_value(rounding=ROUND_DOWN)) for value in raw]
-        if total >= len(values):
-            for index, value in enumerate(values):
-                if value == 0:
-                    values[index] = 1
-        remaining = total - sum(values)
-        order = sorted(
-            range(len(values)),
-            key=lambda index: (raw[index] - int(raw[index]), -index),
-            reverse=True,
+    def _guide_for_weight(
+        guides: list[NutritionalGuide],
+        weight: Decimal,
+    ) -> tuple[NutritionalGuide | None, str | None]:
+        """Résout un guide une fois par jour, avec priorité déterministe."""
+        candidates = [
+            guide
+            for guide in guides
+            if guide.min_weight <= weight < guide.max_weight
+        ]
+        if not candidates:
+            maximum = max((guide.max_weight for guide in guides), default=None)
+            candidates = [
+                guide
+                for guide in guides
+                if maximum is not None
+                and guide.max_weight == maximum
+                and guide.min_weight <= weight <= guide.max_weight
+            ]
+        candidates.sort(
+            key=lambda guide: (
+                guide.max_weight - guide.min_weight,
+                guide.min_weight,
+                str(guide.id),
+            )
         )
-        for index in order[:max(remaining, 0)]:
-            values[index] += 1
-        while sum(values) > total:
-            index = max(range(len(values)), key=lambda candidate: values[candidate])
-            if values[index] <= 0:
-                break
-            values[index] -= 1
-        return values
+        if not candidates:
+            return None, 'nutritional_guide_gap'
+        return (
+            candidates[0],
+            'nutritional_guide_overlap' if len(candidates) > 1 else None,
+        )
 
     @classmethod
     def _apply_guide_to_segment(
@@ -268,13 +289,31 @@ class CycleFeedRecommendationService:
             cls._normalize_phase(raw_phase, sequence)
             for sequence, raw_phase in enumerate(plan.phases, start=1)
         ]
+        daily_feeding_schedule = cls._daily_schedule_from_parameters(plan.parameters)
         return cls._apply_nutritional_guide_sizes(
             cycle,
             phases,
+            daily_feeding_schedule=daily_feeding_schedule,
             recalibrate_from_sequence=(
                 plan.highest_reached_phase_sequence if plan else None
             ),
         ) if cycle else phases
+
+    @staticmethod
+    def _daily_schedule_from_parameters(
+        parameters: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        required = {
+            'initial_fish_count',
+            'initial_weight_g',
+            'target_weight_g',
+            'cycle_duration_days',
+            'survival_rate',
+        }
+        if not required.issubset(parameters):
+            return []
+        _, schedule = CycleSimulationService.build_daily_feeding_schedule(parameters)
+        return schedule
 
     @classmethod
     def _initial_simulation(cls, cycle: ProductionCycle) -> dict[str, Any]:
@@ -295,10 +334,12 @@ class CycleFeedRecommendationService:
             selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
             fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
             other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
+            include_daily_feeding_schedule=True,
         )
         simulation['feeding_phases'] = cls._apply_nutritional_guide_sizes(
             cycle,
             simulation['feeding_phases'],
+            daily_feeding_schedule=simulation.get('_daily_feeding_schedule'),
         )
         return simulation
 
@@ -417,10 +458,12 @@ class CycleFeedRecommendationService:
             selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
             fingerlings_cost_fcfa=0.0,
             other_costs_fcfa=0.0,
+            include_daily_feeding_schedule=True,
         )
         simulation['feeding_phases'] = cls._apply_nutritional_guide_sizes(
             cycle,
             simulation['feeding_phases'],
+            daily_feeding_schedule=simulation.get('_daily_feeding_schedule'),
         )
         return simulation, []
 
@@ -485,6 +528,15 @@ class CycleFeedRecommendationService:
                 if first_entry_date is None or log.log_date < first_entry_date:
                     unclassified += quantity
                     continue
+                ledger = FeedStockLedgerService.calculate_for_size(
+                    cycle=cycle,
+                    feed_size_mm=feed_size,
+                    at_date=log.log_date,
+                    existing_log=log,
+                )
+                if ledger.balance_at_date < quantity:
+                    unclassified += quantity
+                    continue
             day = max((log.log_date - cycle.start_date).days + 1, 1)
             candidates = [
                 index
@@ -527,41 +579,89 @@ class CycleFeedRecommendationService:
         if not simulation_phases:
             return needs
 
-        # Les phases reforecastées peuvent commencer au milieu d'une phase du
-        # plan. Le rapprochement se fait par recouvrement de poids, jamais par
-        # granulométrie seule : deux phases distinctes peuvent utiliser le même
-        # aliment.
+        daily_schedule = list(simulation.get('_daily_feeding_schedule') or [])
+        if daily_schedule:
+            for entry in daily_schedule:
+                day = int(entry['day'])
+                raw_phase = next(
+                    (
+                        phase
+                        for phase in simulation_phases
+                        if int(phase['days_range'][0]) <= day <= int(phase['days_range'][-1])
+                    ),
+                    None,
+                )
+                if raw_phase is None:
+                    continue
+                raw_size = (
+                    cls._decimal(raw_phase['pellet_size_mm'])
+                    if raw_phase.get('pellet_size_mm') is not None
+                    else None
+                )
+                weight = cls._decimal(entry['weight_g'])
+                candidates: list[tuple[int, Decimal]] = []
+                for index in range(current_index, len(phases)):
+                    phase_size = (
+                        cls._decimal(phases[index]['pellet_size_mm'])
+                        if phases[index].get('pellet_size_mm') is not None
+                        else None
+                    )
+                    if phase_size != raw_size:
+                        continue
+                    phase_range = phases[index].get('planned_weight_range_g') or []
+                    if len(phase_range) < 2:
+                        continue
+                    phase_start, phase_end = map(cls._decimal, phase_range[:2])
+                    distance = (
+                        ZERO_DECIMAL
+                        if phase_start <= weight <= phase_end
+                        else min(abs(weight - phase_start), abs(weight - phase_end))
+                    )
+                    candidates.append((index, distance))
+                if candidates:
+                    selected_index = min(candidates, key=lambda item: (item[1], item[0]))[0]
+                    needs[selected_index] += cls._decimal(entry['feed_kg'])
+            return [value.quantize(QUANTIZE_KG) for value in needs]
+
+        # Compatibilité des anciens snapshots de tests ou de plans qui ne
+        # possèdent pas encore la progression journalière interne : une phase
+        # reforecastée est affectée une seule fois à la phase la plus proche,
+        # sans répartir ses kilogrammes selon une largeur de poids.
         for raw_phase in simulation_phases:
             raw_range = raw_phase.get('weight_range_g') or raw_phase.get('planned_weight_range_g') or []
             if len(raw_range) < 2:
                 continue
             raw_start, raw_end = map(cls._decimal, raw_range[:2])
             raw_need = cls._decimal(raw_phase.get('total_consumption_kg'))
-            raw_span = raw_end - raw_start
+            raw_size = (
+                cls._decimal(raw_phase['pellet_size_mm'])
+                if raw_phase.get('pellet_size_mm') is not None
+                else None
+            )
             candidates: list[tuple[int, Decimal]] = []
             for index in range(current_index, len(phases)):
+                phase_size = (
+                    cls._decimal(phases[index]['pellet_size_mm'])
+                    if phases[index].get('pellet_size_mm') is not None
+                    else None
+                )
+                if phase_size != raw_size:
+                    continue
                 phase_range = phases[index].get('planned_weight_range_g') or []
                 if len(phase_range) < 2:
                     continue
                 phase_start, phase_end = map(cls._decimal, phase_range[:2])
                 overlap = min(raw_end, phase_end) - max(raw_start, phase_start)
-                if overlap > ZERO_DECIMAL:
-                    candidates.append((index, overlap))
+                distance = (
+                    ZERO_DECIMAL
+                    if overlap > ZERO_DECIMAL
+                    else min(abs(raw_start - phase_end), abs(phase_start - raw_end))
+                )
+                candidates.append((index, distance))
             if not candidates:
                 continue
-            denominator = raw_span if raw_span > ZERO_DECIMAL else sum(
-                (overlap for _, overlap in candidates),
-                ZERO_DECIMAL,
-            )
-            allocated = ZERO_DECIMAL
-            for position, (index, overlap) in enumerate(candidates, start=1):
-                share = (
-                    raw_need - allocated
-                    if position == len(candidates)
-                    else raw_need * overlap / denominator
-                )
-                needs[index] += share
-                allocated += share
+            selected_index = min(candidates, key=lambda item: (item[1], item[0]))[0]
+            needs[selected_index] += raw_need
 
         rounded = [value.quantize(QUANTIZE_KG) for value in needs]
         expected_total = sum(

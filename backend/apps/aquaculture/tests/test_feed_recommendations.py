@@ -599,23 +599,35 @@ def test_nutritional_guide_splits_crossing_phase_without_losing_need(authenticat
                 'sequence': 1,
                 'original_sequence': 1,
                 'phase_name': 'grossissement',
-                'planned_days_range': [1, 24],
+                'planned_days_range': [1, 5],
                 'planned_weight_range_g': ['80', '320'],
                 'pellet_size_mm': '4.50',
-                'planned_consumption_kg': '120.00',
-                'planned_duration_days': 24,
+                'planned_consumption_kg': '18.00',
+                'planned_duration_days': 5,
             },
+        ],
+        daily_feeding_schedule=[
+            {'day': day, 'weight_g': weight, 'feed_kg': feed}
+            for day, weight, feed in (
+                (1, 90, '1.00'),
+                (2, 110, '2.00'),
+                (3, 150, '3.00'),
+                (4, 210, '5.00'),
+                (5, 250, '7.00'),
+            )
         ],
     )
 
     assert [phase['pellet_size_mm'] for phase in phases] == ['2.00', '3.00', '4.00']
-    assert sum(Decimal(phase['planned_consumption_kg']) for phase in phases) == Decimal('120.00')
-    assert sum(phase['planned_duration_days'] for phase in phases) == 24
-    assert [Decimal(value) for value in phases[0]['planned_weight_range_g']] == [Decimal('80'), Decimal('100')]
-    assert [Decimal(value) for value in phases[-1]['planned_weight_range_g']] == [Decimal('200'), Decimal('320')]
+    assert [phase['planned_consumption_kg'] for phase in phases] == ['1.00', '5.00', '12.00']
+    assert sum(Decimal(phase['planned_consumption_kg']) for phase in phases) == Decimal('18.00')
+    assert sum(phase['planned_duration_days'] for phase in phases) == 5
+    assert [phase['planned_days_range'] for phase in phases] == [[1, 1], [2, 3], [4, 5]]
+    assert [Decimal(value) for value in phases[0]['planned_weight_range_g']] == [Decimal('90'), Decimal('90')]
+    assert [Decimal(value) for value in phases[-1]['planned_weight_range_g']] == [Decimal('210'), Decimal('250')]
 
 
-def test_future_need_reconciliation_preserves_simulation_total_after_split():
+def test_future_need_reconciliation_uses_daily_rations_after_split():
     phases = [
         {'planned_weight_range_g': ['80', '100'], 'pellet_size_mm': '2.00'},
         {'planned_weight_range_g': ['100', '200'], 'pellet_size_mm': '3.00'},
@@ -625,16 +637,79 @@ def test_future_need_reconciliation_preserves_simulation_total_after_split():
         phases,
         0,
         {
-            'feeding_phases': [{
-                'weight_range_g': [80, 320],
-                'pellet_size_mm': 4.5,
-                'total_consumption_kg': Decimal('120.00'),
-            }],
+            'feeding_phases': [
+                {
+                    'days_range': [1, 1],
+                    'weight_range_g': [90, 90],
+                    'pellet_size_mm': 2,
+                    'total_consumption_kg': Decimal('1.00'),
+                },
+                {
+                    'days_range': [2, 2],
+                    'weight_range_g': [150, 150],
+                    'pellet_size_mm': 3,
+                    'total_consumption_kg': Decimal('4.00'),
+                },
+                {
+                    'days_range': [3, 3],
+                    'weight_range_g': [250, 250],
+                    'pellet_size_mm': 4,
+                    'total_consumption_kg': Decimal('9.00'),
+                },
+            ],
+            '_daily_feeding_schedule': [
+                {'day': 1, 'weight_g': 90, 'feed_kg': Decimal('1.00')},
+                {'day': 2, 'weight_g': 150, 'feed_kg': Decimal('4.00')},
+                {'day': 3, 'weight_g': 250, 'feed_kg': Decimal('9.00')},
+            ],
         },
     )
 
-    assert sum(needs) == Decimal('120.00')
-    assert needs == [Decimal('10.00'), Decimal('50.00'), Decimal('60.00')]
+    assert sum(needs) == Decimal('14.00')
+    assert needs == [Decimal('1.00'), Decimal('4.00'), Decimal('9.00')]
+
+
+@pytest.mark.django_db
+def test_nutritional_guide_short_phase_has_no_zero_day_segment(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    for minimum, maximum, size in ((0, 100, '2.0'), (100, 200, '3.0'), (200, 400, '4.0')):
+        NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='croissance',
+            min_weight=Decimal(minimum),
+            max_weight=Decimal(maximum),
+            feeding_rate_percentage=Decimal('4.00'),
+            protein_requirement=35,
+            meals_per_day=3,
+            feed_size_mm=Decimal(size),
+            recommended_products=[],
+            expected_fcr=Decimal('1.20'),
+            source='DIBAQ',
+        )
+
+    phases = CycleFeedRecommendationService._apply_nutritional_guide_sizes(
+        cycle,
+        [{
+            'phase_id': 'short-phase',
+            'sequence': 1,
+            'original_sequence': 1,
+            'phase_name': 'grossissement',
+            'planned_days_range': [1, 2],
+            'planned_weight_range_g': ['80', '320'],
+            'pellet_size_mm': '4.50',
+            'planned_consumption_kg': '10.00',
+            'planned_duration_days': 2,
+        }],
+        daily_feeding_schedule=[
+            {'day': 1, 'weight_g': 90, 'feed_kg': Decimal('2.00')},
+            {'day': 2, 'weight_g': 250, 'feed_kg': Decimal('8.00')},
+        ],
+    )
+
+    assert len(phases) == 2
+    assert [phase['planned_days_range'] for phase in phases] == [[1, 1], [2, 2]]
+    assert all(phase['planned_duration_days'] == 1 for phase in phases)
+    assert sum(Decimal(phase['planned_consumption_kg']) for phase in phases) == Decimal('10.00')
 
 
 @pytest.mark.django_db
@@ -665,6 +740,10 @@ def test_nutritional_guide_split_accepts_raw_simulation_phase_shape(authenticate
             'duration_days': 10,
             'total_consumption_kg': Decimal('50.00'),
         }],
+        daily_feeding_schedule=[
+            {'day': 1, 'weight_g': 90, 'feed_kg': Decimal('10.00')},
+            {'day': 2, 'weight_g': 120, 'feed_kg': Decimal('40.00')},
+        ],
     )
 
     assert [phase['pellet_size_mm'] for phase in phases] == ['2.00', '3.00']
@@ -702,6 +781,11 @@ def test_nutritional_guide_gap_stays_unresolved_and_keeps_need(authenticated_use
             'planned_consumption_kg': '100.00',
             'planned_duration_days': 20,
         }],
+        daily_feeding_schedule=[
+            {'day': 1, 'weight_g': 90, 'feed_kg': Decimal('20.00')},
+            {'day': 2, 'weight_g': 150, 'feed_kg': Decimal('30.00')},
+            {'day': 3, 'weight_g': 220, 'feed_kg': Decimal('50.00')},
+        ],
     )
 
     unresolved = [phase for phase in phases if phase['pellet_size_mm'] is None]
@@ -741,6 +825,10 @@ def test_overlapping_nutritional_guides_use_deterministic_rule_and_warning(authe
             'planned_consumption_kg': '50.00',
             'planned_duration_days': 10,
         }],
+        daily_feeding_schedule=[
+            {'day': 1, 'weight_g': 120, 'feed_kg': Decimal('20.00')},
+            {'day': 2, 'weight_g': 180, 'feed_kg': Decimal('30.00')},
+        ],
     )
 
     assert phases[0]['pellet_size_mm'] == '2.00'
@@ -802,6 +890,108 @@ def test_legacy_consumption_is_not_classified_from_another_cycle_reference(authe
 
     assert actual == [Decimal('0')]
     assert unclassified == Decimal('7.00')
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('stock_quantity', 'expected_actual', 'expected_unclassified'),
+    [
+        ('1.00', '0.00', '5.00'),
+        ('5.00', '5.00', '0.00'),
+        ('10.00', '5.00', '0.00'),
+    ],
+)
+def test_legacy_consumption_requires_full_stock_at_log_date(
+    authenticated_user,
+    stock_quantity,
+    expected_actual,
+    expected_unclassified,
+):
+    cycle = create_cycle(authenticated_user)
+    reference = FarmFeedReference.objects.create(
+        farm_profile=cycle.farm_profile,
+        source='external',
+        name='Feed 2 mm',
+        species=cycle.species,
+        pellet_size_mm=Decimal('2.00'),
+    )
+    CycleFeedStockEntry.objects.create(
+        cycle=cycle,
+        feed_reference=reference,
+        label=reference.name,
+        quantity_kg=Decimal(stock_quantity),
+        entry_date=cycle.start_date,
+        source='manual',
+    )
+    log = CycleLog.objects.create(
+        cycle=cycle,
+        log_date=cycle.start_date + timedelta(days=1),
+        feed_quantity=Decimal('5.00'),
+        feed_type='Legacy 2 mm',
+        feed_size_mm=Decimal('2.00'),
+    )
+    CycleFeedStockEntry.objects.create(
+        cycle=cycle,
+        feed_reference=reference,
+        label=reference.name,
+        quantity_kg=Decimal('10.00'),
+        entry_date=log.log_date + timedelta(days=1),
+        source='manual',
+    )
+
+    actual, unclassified = CycleFeedRecommendationService._actual_consumption_by_phase(
+        cycle,
+        [{
+            'planned_days_range': [1, 30],
+            'planned_weight_range_g': ['10', '100'],
+            'pellet_size_mm': '2.00',
+        }],
+        0,
+    )
+
+    assert actual == [Decimal(expected_actual)]
+    assert unclassified == Decimal(expected_unclassified)
+
+
+@pytest.mark.django_db
+def test_successive_legacy_consumptions_use_only_remaining_stock(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    reference = FarmFeedReference.objects.create(
+        farm_profile=cycle.farm_profile,
+        source='external',
+        name='Feed 2 mm',
+        species=cycle.species,
+        pellet_size_mm=Decimal('2.00'),
+    )
+    CycleFeedStockEntry.objects.create(
+        cycle=cycle,
+        feed_reference=reference,
+        label=reference.name,
+        quantity_kg=Decimal('10.00'),
+        entry_date=cycle.start_date,
+        source='manual',
+    )
+    for offset in (1, 2):
+        CycleLog.objects.create(
+            cycle=cycle,
+            log_date=cycle.start_date + timedelta(days=offset),
+            feed_quantity=Decimal('6.00'),
+            feed_type='Legacy 2 mm',
+            feed_size_mm=Decimal('2.00'),
+        )
+
+    actual, unclassified = CycleFeedRecommendationService._actual_consumption_by_phase(
+        cycle,
+        [{
+            'planned_days_range': [1, 30],
+            'planned_weight_range_g': ['10', '100'],
+            'pellet_size_mm': '2.00',
+        }],
+        0,
+    )
+
+    assert actual == [Decimal('6.00')]
+    assert unclassified == Decimal('6.00')
 
 
 @pytest.mark.django_db
