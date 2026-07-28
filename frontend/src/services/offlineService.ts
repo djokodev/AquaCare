@@ -6,6 +6,8 @@ import {
   CalibrationRequest,
   CreateCalibrationTankForm,
   CreateCycleForm,
+  CycleLaunchRequest,
+  CycleLaunchResponse,
   CycleStoreManualStockPayload,
   DailyLogForm,
   FarmFeedReferenceCreatePayload,
@@ -54,6 +56,16 @@ interface OfflineNewCycle {
   cycleData: CreateCycleForm;
   timestamp: number;
   synced: boolean;
+}
+
+export interface OfflineCycleLaunch {
+  id: string;
+  payload: CycleLaunchRequest;
+  fingerprint: string;
+  timestamp: number;
+  sync_status: "pending" | "syncing" | "failed" | "synced";
+  attempted: boolean;
+  response?: CycleLaunchResponse;
 }
 
 interface OfflineSanitaryLog {
@@ -161,6 +173,7 @@ const hasPendingStockDependency = (
 };
 
 interface OfflineSyncDetails {
+  cycleLaunches?: SyncCounter;
   feedReferences?: SyncCounter;
   stockDeclarations?: SyncCounter;
   cycleLogs: SyncCounter;
@@ -180,11 +193,39 @@ const STORAGE_KEYS = {
   OFFLINE_STOCK_DECLARATIONS: 'aquacare_offline_stock_declarations',
   OFFLINE_CYCLE_LOGS: 'aquacare_offline_cycle_logs',
   OFFLINE_NEW_CYCLES: 'aquacare_offline_new_cycles',
+  OFFLINE_CYCLE_LAUNCHES: 'aquacare_offline_cycle_launches_v1',
   OFFLINE_SANITARY_LOGS: 'aquacare_offline_sanitary_logs',
   OFFLINE_CALIBRATION_TANKS: 'aquacare_offline_calibration_tanks',
   OFFLINE_CALIBRATION_OPERATIONS: 'aquacare_offline_calibration_operations',
   OFFLINE_FINAL_HARVESTS: 'aquacare_offline_final_harvests',
   LAST_SYNC: 'aquacare_last_sync',
+};
+
+const canonicalizeLaunchValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeLaunchValue);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, canonicalizeLaunchValue(nested)]),
+    );
+  }
+  return value;
+};
+
+const cycleLaunchFingerprint = (payload: CycleLaunchRequest): string => {
+  const canonicalPayload: CycleLaunchRequest = {
+    ...payload,
+    production_units: [...payload.production_units].sort((a, b) =>
+      a.local_id.localeCompare(b.local_id)),
+    allocations: [...payload.allocations].sort((a, b) =>
+      a.production_unit_local_id.localeCompare(b.production_unit_local_id)),
+    initial_feed_stocks: [...(payload.initial_feed_stocks ?? [])].sort((a, b) =>
+      a.local_id.localeCompare(b.local_id)),
+  };
+  return JSON.stringify(canonicalizeLaunchValue(canonicalPayload));
 };
 
 const feedReferenceFingerprint = (payload: FarmFeedReferenceCreatePayload): string => JSON.stringify({
@@ -813,6 +854,130 @@ class OfflineService {
     return this.readList<OfflineNewCycle>(STORAGE_KEYS.OFFLINE_NEW_CYCLES, 'Erreur lecture cycles offline');
   }
 
+  async saveCycleLaunchOffline(
+    payload: CycleLaunchRequest,
+    options: { attempted?: boolean } = {},
+  ): Promise<string> {
+    const launches = await this.getOfflineCycleLaunches();
+    const fingerprint = cycleLaunchFingerprint(payload);
+    const existing = launches.find(
+      (launch) => launch.payload.launch_uuid === payload.launch_uuid,
+    );
+    if (existing) {
+      if (existing.fingerprint !== fingerprint) {
+        throw new Error('cycle_launch_idempotency_conflict');
+      }
+      const attempted = existing.attempted || options.attempted === true;
+      await this.persist(
+        STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+        launches.map((launch) =>
+          launch.id === existing.id
+            ? {
+                ...launch,
+                attempted,
+                sync_status: attempted ? 'failed' : launch.sync_status,
+              }
+            : launch),
+      );
+      return existing.id;
+    }
+    const id = payload.launch_uuid;
+    await this.persist(STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES, [
+      ...launches,
+      {
+        id,
+        payload,
+        fingerprint,
+        timestamp: Date.now(),
+        sync_status: options.attempted ? 'failed' : 'pending',
+        attempted: options.attempted === true,
+      },
+    ]);
+    return id;
+  }
+
+  async getOfflineCycleLaunches(): Promise<OfflineCycleLaunch[]> {
+    return this.readList<OfflineCycleLaunch>(
+      STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+      'Erreur lecture lancements de cycle offline',
+    );
+  }
+
+  async updatePendingCycleLaunch(
+    id: string,
+    payload: CycleLaunchRequest,
+  ): Promise<void> {
+    const launches = await this.getOfflineCycleLaunches();
+    const existing = launches.find((launch) => launch.id === id);
+    if (!existing) throw new Error('cycle_launch_not_found');
+    if (existing.attempted) throw new Error('cycle_launch_locked_after_attempt');
+    if (payload.launch_uuid !== existing.payload.launch_uuid) {
+      throw new Error('cycle_launch_uuid_immutable');
+    }
+    await this.persist(
+      STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+      launches.map((launch) =>
+        launch.id === id
+          ? {
+              ...launch,
+              payload,
+              fingerprint: cycleLaunchFingerprint(payload),
+              timestamp: Date.now(),
+            }
+          : launch),
+    );
+  }
+
+  async deletePendingCycleLaunch(id: string): Promise<void> {
+    const launches = await this.getOfflineCycleLaunches();
+    await this.persist(
+      STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+      launches.filter((launch) => launch.id !== id),
+    );
+  }
+
+  async syncOfflineCycleLaunches(): Promise<SyncCounter> {
+    const launches = (await this.getOfflineCycleLaunches()).filter(
+      (launch) => launch.sync_status !== 'synced',
+    );
+    let success = 0;
+    let failed = 0;
+    for (const launch of launches) {
+      const current = await this.getOfflineCycleLaunches();
+      await this.persist(
+        STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+        current.map((item) =>
+          item.id === launch.id
+            ? { ...item, attempted: true, sync_status: 'syncing' }
+            : item),
+      );
+      try {
+        const response = await aquacultureService.launchProductionCycle(
+          launch.payload,
+        );
+        const afterResponse = await this.getOfflineCycleLaunches();
+        await this.persist(
+          STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+          afterResponse.map((item) =>
+            item.id === launch.id
+              ? { ...item, sync_status: 'synced', response }
+              : item),
+        );
+        success += 1;
+      } catch (error) {
+        const afterError = await this.getOfflineCycleLaunches();
+        await this.persist(
+          STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+          afterError.map((item) =>
+            item.id === launch.id ? { ...item, sync_status: 'failed' } : item),
+        );
+        logger.error(`Erreur sync lancement ${launch.id}:`, error);
+        failed += 1;
+      }
+    }
+    return { success, failed };
+  }
+
   async saveSanitaryLogOffline(cycleId: string, sanitaryData: SanitaryLogForm): Promise<string> {
     try {
       const logId = this.generateOfflineId();
@@ -860,6 +1025,9 @@ class OfflineService {
   }
 
   private async performSyncAllOfflineData(): Promise<OfflineSyncResult> {
+    const pendingCycleLaunches = (await this.getOfflineCycleLaunches()).filter(
+      (launch) => launch.sync_status !== 'synced',
+    );
     const pendingFeedReferences = (await this.getOfflineFeedReferences()).filter((item) => !item.synced);
     const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).filter((item) => !item.synced);
     const pendingCycleLogs = await this.getPendingSyncLogs();
@@ -870,6 +1038,7 @@ class OfflineService {
     const pendingFinalHarvests = await this.getPendingFinalHarvests();
 
     if (
+      pendingCycleLaunches.length === 0 &&
       pendingFeedReferences.length === 0 && pendingStockDeclarations.length === 0 &&
       pendingCycleLogs.length === 0 &&
       pendingNewCycles.length === 0 &&
@@ -880,6 +1049,7 @@ class OfflineService {
         success: 0,
         failed: 0,
         details: {
+          cycleLaunches: { success: 0, failed: 0 },
           cycleLogs: { success: 0, failed: 0 },
           feedReferences: { success: 0, failed: 0 },
           stockDeclarations: { success: 0, failed: 0 },
@@ -892,7 +1062,11 @@ class OfflineService {
       };
     }
 
-    if (pendingFeedReferences.length === 0 && pendingStockDeclarations.length === 0) {
+    if (
+      pendingCycleLaunches.length === 0 &&
+      pendingFeedReferences.length === 0 &&
+      pendingStockDeclarations.length === 0
+    ) {
       const bulkResult = await this.tryBulkSync(
         pendingCycleLogs,
         pendingNewCycles,
@@ -907,6 +1081,7 @@ class OfflineService {
       success: 0,
       failed: 0,
       details: {
+        cycleLaunches: { success: 0, failed: 0 },
         cycleLogs: { success: 0, failed: 0 },
         feedReferences: { success: 0, failed: 0 },
         stockDeclarations: { success: 0, failed: 0 },
@@ -918,6 +1093,7 @@ class OfflineService {
       },
     };
 
+    results.details.cycleLaunches = await this.syncOfflineCycleLaunches();
     results.details.newCycles = await this.syncOfflineNewCycles();
     results.details.feedReferences = await this.syncOfflineFeedReferences();
     results.details.stockDeclarations = await this.syncOfflineStockDeclarations();
@@ -929,6 +1105,7 @@ class OfflineService {
     results.details.finalHarvests = businessOperations.finalHarvests;
 
     results.success =
+      (results.details.cycleLaunches?.success ?? 0) +
       (results.details.feedReferences?.success ?? 0) +
       (results.details.stockDeclarations?.success ?? 0) +
       results.details.cycleLogs.success +
@@ -938,6 +1115,7 @@ class OfflineService {
       (results.details.calibrationOperations?.success ?? 0) +
       (results.details.finalHarvests?.success ?? 0);
     results.failed =
+      (results.details.cycleLaunches?.failed ?? 0) +
       (results.details.feedReferences?.failed ?? 0) +
       (results.details.stockDeclarations?.failed ?? 0) +
       results.details.cycleLogs.failed +
@@ -1368,6 +1546,9 @@ class OfflineService {
   }
 
   async hasAnyPendingSync(): Promise<boolean> {
+    const pendingCycleLaunches = (await this.getOfflineCycleLaunches()).some(
+      (launch) => launch.sync_status !== 'synced',
+    );
     const pendingFeedReferences = (await this.getOfflineFeedReferences()).some((item) => !item.synced);
     const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).some((item) => !item.synced);
     const pendingCycleLogs = await this.hasPendingSync();
@@ -1377,11 +1558,14 @@ class OfflineService {
     const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).some((item) => !item.synced);
     const pendingFinalHarvests = (await this.getOfflineFinalHarvests()).some((item) => !item.synced);
 
-    return pendingFeedReferences || pendingStockDeclarations || pendingCycleLogs || pendingNewCycles || pendingSanitaryLogs || pendingCalibrationTanks ||
+    return pendingCycleLaunches || pendingFeedReferences || pendingStockDeclarations || pendingCycleLogs || pendingNewCycles || pendingSanitaryLogs || pendingCalibrationTanks ||
       pendingCalibrationOperations || pendingFinalHarvests;
   }
 
   async getTotalPendingCount(): Promise<number> {
+    const pendingCycleLaunches = (await this.getOfflineCycleLaunches()).filter(
+      (launch) => launch.sync_status !== 'synced',
+    ).length;
     const pendingFeedReferences = (await this.getOfflineFeedReferences()).filter((item) => !item.synced).length;
     const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).filter((item) => !item.synced).length;
     const pendingCycleLogs = await this.getPendingCount();
@@ -1391,7 +1575,7 @@ class OfflineService {
     const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).filter((item) => !item.synced).length;
     const pendingFinalHarvests = (await this.getOfflineFinalHarvests()).filter((item) => !item.synced).length;
 
-    return pendingFeedReferences + pendingStockDeclarations + pendingCycleLogs + pendingNewCycles + pendingSanitaryLogs + pendingCalibrationTanks +
+    return pendingCycleLaunches + pendingFeedReferences + pendingStockDeclarations + pendingCycleLogs + pendingNewCycles + pendingSanitaryLogs + pendingCalibrationTanks +
       pendingCalibrationOperations + pendingFinalHarvests;
   }
 
@@ -1400,6 +1584,7 @@ class OfflineService {
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_STOCK_DECLARATIONS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CYCLE_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_NEW_CYCLES);
+    await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_SANITARY_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS);

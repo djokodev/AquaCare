@@ -25,7 +25,10 @@ import {
   fetchOrderStatistics,
   fetchOrders,
 } from "@/features/commerce/store/commerceSlice";
-import { offlineService } from "@/services/offlineService";
+import {
+  offlineService,
+  type OfflineCycleLaunch,
+} from "@/services/offlineService";
 import HarvestModal from "@/components/modals/HarvestModal";
 import PartialHarvestModal from "@/components/modals/PartialHarvestModal";
 import PartialHarvestHistoryModal from "@/components/modals/PartialHarvestHistoryModal";
@@ -126,6 +129,20 @@ export default function DashboardScreen({ navigation }: any) {
   const [cycleDashboardError, setCycleDashboardError] = useState<string | null>(null);
   const cycleDashboardRequestRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingCycleLaunches, setPendingCycleLaunches] = useState<
+    OfflineCycleLaunch[]
+  >([]);
+
+  const loadPendingCycleLaunches = useCallback(async () => {
+    if (typeof offlineService.getOfflineCycleLaunches !== "function") {
+      setPendingCycleLaunches([]);
+      return;
+    }
+    const launches = await offlineService.getOfflineCycleLaunches();
+    setPendingCycleLaunches(
+      launches.filter((launch) => launch.sync_status !== "synced"),
+    );
+  }, []);
 
   const { dashboardData, cycles, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture,
@@ -142,10 +159,11 @@ export default function DashboardScreen({ navigation }: any) {
       tryGlobalOfflineSync();
       dispatch(fetchDashboardData(undefined));
       dispatch(fetchProductionCycles());
+      await loadPendingCycleLaunches();
     };
 
     initializeDashboard();
-  }, [dispatch]);
+  }, [dispatch, loadPendingCycleLaunches]);
 
   useEffect(() => {
     dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
@@ -270,6 +288,7 @@ export default function DashboardScreen({ navigation }: any) {
       dispatch(fetchDashboardData(undefined)),
       loadCurrentCycleDashboard("refresh"),
       dispatch(fetchProductionCycles()),
+      loadPendingCycleLaunches(),
       dispatch(fetchNotifications({ cycleId: currentCycle?.id })),
       currentCycle?.id
         ? dispatch(fetchOrders({ productionCycleId: currentCycle.id }))
@@ -277,7 +296,7 @@ export default function DashboardScreen({ navigation }: any) {
     ]).finally(() => {
       setRefreshing(false);
     });
-  }, [currentCycle?.id, dispatch, loadCurrentCycleDashboard, loadFarmProfile]);
+  }, [currentCycle?.id, dispatch, loadCurrentCycleDashboard, loadFarmProfile, loadPendingCycleLaunches]);
 
   const cycleSummary = currentCycleDashboard?.summary;
   const cycleDashboardInitialLoading = Boolean(
@@ -485,6 +504,12 @@ export default function DashboardScreen({ navigation }: any) {
                 {cycleDashboardError ? (
                   <InlineAlert tone="error" message={t(cycleDashboardError)} />
                 ) : null}
+                {cycleSummary?.history_scope === "since_tracking_start" ? (
+                  <InlineAlert
+                    tone="info"
+                    message={`${t("untrackedPeriod")} · ${t("unclassifiedHistoricalGap")}: ${cycleSummary.historical_count_gap ?? 0}`}
+                  />
+                ) : null}
                 <DashboardHeroCard
                   label={t("dashboardEstimatedMarketValue")}
                   value={formatDashboardCurrency(
@@ -517,6 +542,28 @@ export default function DashboardScreen({ navigation }: any) {
                     unavailableLabel={t("dashboardDataUnavailable")}
                   />
                   <DashboardMetricCard
+                    label={t("cycleRealAge")}
+                    value={formatDashboardNumber(
+                      cycleSummary?.days_active,
+                      locale,
+                      { maximumFractionDigits: 0 },
+                    )}
+                    unit={t("days")}
+                    tone="slate"
+                    unavailableLabel={t("dashboardDataUnavailable")}
+                  />
+                  <DashboardMetricCard
+                    label={t("daysTrackedByAquaCare")}
+                    value={formatDashboardNumber(
+                      cycleSummary?.days_tracked,
+                      locale,
+                      { maximumFractionDigits: 0 },
+                    )}
+                    unit={t("days")}
+                    tone="info"
+                    unavailableLabel={t("dashboardDataUnavailable")}
+                  />
+                  <DashboardMetricCard
                     label={t("currentFish")}
                     value={formatDashboardNumber(
                       cycleSummary?.total_estimated_current_fish_count,
@@ -543,6 +590,54 @@ export default function DashboardScreen({ navigation }: any) {
             )}
           </DashboardSection>
         </View>
+
+        {pendingCycleLaunches.length > 0 ? (
+          <View style={styles.dashboardSectionContainer}>
+            <DashboardSection
+              title={t("pendingCycleLaunches")}
+              lastSyncedAt={lastSyncedAt}
+            >
+              <InlineAlert
+                tone="info"
+                message={t("pendingCycleOperationsBlocked")}
+              />
+              {pendingCycleLaunches.map((launch) => (
+                <Card key={launch.id} variant="outlined">
+                  <AppText variant="bodyStrong">
+                    {launch.payload.cycle.cycle_name ?? t("newCycleTitle")}
+                  </AppText>
+                  <AppText color="muted">
+                    {t(launch.attempted ? "cycleLaunchLockedAfterAttempt" : "cycleLaunchEditableBeforeAttempt")}
+                  </AppText>
+                  <View style={{ flexDirection: "row", gap: spacing[2], marginTop: spacing[2] }}>
+                    <Button
+                      label={t("retry")}
+                      variant="outline"
+                      size="small"
+                      fullWidth={false}
+                      onPress={() => {
+                        void offlineService.syncOfflineCycleLaunches().then(
+                          loadPendingCycleLaunches,
+                        );
+                      }}
+                    />
+                    <Button
+                      label={t("delete")}
+                      variant="danger"
+                      size="small"
+                      fullWidth={false}
+                      onPress={() => {
+                        void offlineService.deletePendingCycleLaunch(launch.id).then(
+                          loadPendingCycleLaunches,
+                        );
+                      }}
+                    />
+                  </View>
+                </Card>
+              ))}
+            </DashboardSection>
+          </View>
+        ) : null}
 
         {sessionCycle ? (
           <View className="px-5 pb-1">

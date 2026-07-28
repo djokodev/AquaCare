@@ -16,6 +16,7 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
     synchronize: jest.fn(),
     createFarmFeedReference: jest.fn(),
     declareCycleStoreManualStock: jest.fn(),
+    launchProductionCycle: jest.fn(),
   },
 }));
 
@@ -39,6 +40,90 @@ describe('services/offlineService', () => {
 
   afterEach(() => {
     global.fetch = realFetch;
+  });
+
+  const cycleLaunchPayload = {
+    launch_uuid: '11111111-1111-4111-8111-111111111111',
+    launch_kind: 'additional_cycle',
+    cycle: {
+      onboarding_mode: 'ongoing',
+      species: 'clarias',
+      start_date: '2026-06-01',
+      initial_count: 2000,
+      initial_average_weight: null,
+      planned_cycle_duration_days: 150,
+      expected_survival_rate_pct: 95,
+      fingerlings_cost_fcfa: 0,
+      other_operational_costs_fcfa: 0,
+      created_offline: true,
+    },
+    tracking_baseline: {
+      tracking_start_date: '2026-07-20',
+      fish_count: 1850,
+      average_weight_g: '75.00',
+      biomass_kg: null,
+    },
+    production_units: [],
+    allocations: [],
+    initial_feed_stocks: [],
+  } as any;
+
+  it('persists and synchronizes the complete transactional launch unchanged', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    mockAquaculture.launchProductionCycle.mockResolvedValue({
+      launchUuid: cycleLaunchPayload.launch_uuid,
+      productionCycle: { id: 'cycle-server-1' },
+    } as any);
+
+    const result = await offlineService.syncOfflineCycleLaunches();
+    const [saved] = await offlineService.getOfflineCycleLaunches();
+
+    expect(result).toEqual({ success: 1, failed: 0 });
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      cycleLaunchPayload,
+    );
+    expect(saved.attempted).toBe(true);
+    expect(saved.sync_status).toBe('synced');
+    expect(saved.response?.productionCycle.id).toBe('cycle-server-1');
+  });
+
+  it('locks content after an uncertain attempt and retries the exact payload', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, {
+      attempted: true,
+    });
+    await expect(offlineService.updatePendingCycleLaunch(
+      cycleLaunchPayload.launch_uuid,
+      {
+        ...cycleLaunchPayload,
+        cycle: { ...cycleLaunchPayload.cycle, initial_count: 1999 },
+      },
+    )).rejects.toThrow('cycle_launch_locked_after_attempt');
+
+    mockAquaculture.launchProductionCycle.mockResolvedValue({} as any);
+    await offlineService.syncOfflineCycleLaunches();
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      cycleLaunchPayload,
+    );
+  });
+
+  it('allows editing before an attempt and deleting a pending launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    const edited = {
+      ...cycleLaunchPayload,
+      cycle: { ...cycleLaunchPayload.cycle, cycle_name: 'Cycle modifié' },
+    };
+    await offlineService.updatePendingCycleLaunch(
+      cycleLaunchPayload.launch_uuid,
+      edited,
+    );
+    expect((await offlineService.getOfflineCycleLaunches())[0].payload).toEqual(
+      edited,
+    );
+
+    await offlineService.deletePendingCycleLaunch(
+      cycleLaunchPayload.launch_uuid,
+    );
+    expect(await offlineService.getOfflineCycleLaunches()).toEqual([]);
   });
 
   it('sauvegarde et relit un cycle log offline avec date par defaut', async () => {
