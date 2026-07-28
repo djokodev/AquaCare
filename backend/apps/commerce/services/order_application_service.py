@@ -37,9 +37,12 @@ class OrderApplicationService:
     """Use cases applicatifs du bounded context commande."""
 
     @staticmethod
-    def get_user_orders(user: User):
+    def get_user_orders(user: User, production_cycle_id: str | None = None):
         """Retourne les commandes visibles pour l'utilisateur."""
-        return OrderService.get_user_orders(user)
+        return OrderService.get_user_orders(
+            user,
+            production_cycle_id=production_cycle_id,
+        )
 
     @staticmethod
     def create_order(user: User, command: CreateOrderCommand) -> Order:
@@ -55,9 +58,12 @@ class OrderApplicationService:
         )
 
     @staticmethod
-    def get_order_statistics(user: User):
+    def get_order_statistics(user: User, production_cycle_id: str | None = None):
         """Retourne les statistiques agregees de commande."""
-        return OrderService.get_order_statistics(user)
+        return OrderService.get_order_statistics(
+            user,
+            production_cycle_id=production_cycle_id,
+        )
 
     @staticmethod
     def confirm_order_receipt(order: Order, user: User) -> Order:

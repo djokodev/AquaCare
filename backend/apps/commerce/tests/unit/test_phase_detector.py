@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from apps.commerce.domain.growth_calculator import PhaseDetector
+from decimal import Decimal
+
+from apps.commerce.domain.growth_calculator import (
+    NutritionalGuideResolver,
+    PhaseDetector,
+)
 
 
 class TestPhaseDetectorFallback:
@@ -67,3 +72,42 @@ class TestPhaseDetectorBornes:
         phase = PhaseDetector.detect_phase('catfish', 500)
         assert phase['pellet_size_mm'] == 6.0
         assert phase['phase'] == 'grossissement'
+
+
+def test_persistent_guide_boundaries_are_half_open():
+    rules = [
+        {
+            'id': guide_id,
+            'min_weight': Decimal(minimum),
+            'max_weight': Decimal(maximum),
+            'growth_stage': stage,
+            'feed_size_mm': Decimal(pellet),
+            'source': source,
+        }
+        for guide_id, minimum, maximum, stage, pellet, source in (
+            ('starter', '0', '10', 'alevin', '2', 'AquaCare'),
+            ('dibaq-10', '10', '50', 'alevin', '2', 'DIBAQ'),
+            ('dibaq-50', '50', '100', 'juvenile', '2', 'DIBAQ'),
+            ('dibaq-100', '100', '250', 'croissance', '4', 'DIBAQ'),
+            ('dibaq-250', '250', '500', 'finition', '4', 'DIBAQ'),
+            ('dibaq-500', '500', '2000', 'pre_recolte', '6', 'DIBAQ'),
+        )
+    ]
+    expected = {
+        '9.99': ('starter', Decimal('2')),
+        '10.00': ('dibaq-10', Decimal('2')),
+        '49.99': ('dibaq-10', Decimal('2')),
+        '50.00': ('dibaq-50', Decimal('2')),
+        '99.99': ('dibaq-50', Decimal('2')),
+        '100.00': ('dibaq-100', Decimal('4')),
+        '249.99': ('dibaq-100', Decimal('4')),
+        '250.00': ('dibaq-250', Decimal('4')),
+        '499.99': ('dibaq-250', Decimal('4')),
+        '500.00': ('dibaq-500', Decimal('6')),
+    }
+    for weight, (guide_id, pellet) in expected.items():
+        selected, warning = NutritionalGuideResolver.resolve(rules, Decimal(weight))
+        assert selected is not None
+        assert selected['id'] == guide_id
+        assert selected['feed_size_mm'] == pellet
+        assert warning is None

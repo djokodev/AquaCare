@@ -391,8 +391,9 @@ export default function QuickActionsSheet({
   /**
    * Configuration des actions Commerce
    */
-  const commerceActions = useMemo((): ActionItem[] => [
-    {
+  const commerceActions = useMemo((): ActionItem[] => {
+    const actions: ActionItem[] = [
+      {
       id: 'productCatalog',
       labelKey: 'productCatalog',
       icon: 'storefront-outline',
@@ -400,7 +401,7 @@ export default function QuickActionsSheet({
       route: 'ProductCatalog',
       category: 'commerce',
     },
-    {
+      {
       id: 'cart',
       labelKey: 'cart',
       icon: 'cart-outline',
@@ -408,15 +409,20 @@ export default function QuickActionsSheet({
       route: 'Cart',
       category: 'commerce',
     },
-    {
-      id: 'ordersHistory',
-      labelKey: 'ordersHistory',
-      icon: 'receipt-outline',
-      iconColor: AQUACARE_COLORS.INFO,
-      route: 'OrdersHistory',
-      category: 'commerce',
-    },
-  ], []);
+    ];
+    if (hasValidCycleContext(cycleContext)) {
+      actions.push({
+        id: 'ordersHistory',
+        labelKey: 'cycleOrders',
+        icon: 'receipt-outline',
+        iconColor: AQUACARE_COLORS.INFO,
+        route: 'OrdersHistory',
+        category: 'commerce',
+        params: { cycleId: cycleContext.cycleId },
+      });
+    }
+    return actions;
+  }, [cycleContext]);
   const showCommerceSection = scope !== 'unit';
 
   /**

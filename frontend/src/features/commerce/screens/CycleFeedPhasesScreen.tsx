@@ -53,6 +53,7 @@ function buildProductForCart(product: FeedPhaseProduct): Product {
 type DisplayFeedPhase = FeedPhase & {
   uncovered_shortfall_kg: string;
   grouped_phase_count: number;
+  nutritional_guide_warning?: string | null;
 };
 
 function phaseLabel(
@@ -327,6 +328,8 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
             {phases.map((phase, phaseIndex) => {
               const presentationStatus = getPhasePresentationStatus(phase);
               const hasUncoveredShortfall = Number(phase.uncovered_shortfall_kg) > 0;
+              const hasNutritionalGuideGap = phase.nutritional_guide_warning === 'nutritional_guide_gap'
+                || phase.pellet_size_mm == null;
               return (
               <Card key={`${phase.phase_name}-${phaseIndex}`} variant="outlined" style={styles.phaseCard}>
                 <View style={styles.phaseHeader}>
@@ -347,9 +350,11 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                   <AppText color="muted" style={styles.phaseContextText} numberOfLines={1}>{phaseWeightLabel(phase, t, displayDecimal)}</AppText>
                   <AppText color="muted" style={styles.phaseContextText} numberOfLines={1}>{phase.duration_days} {t('days')}</AppText>
                 </View>
-                <AppText color="muted" style={styles.phaseMeta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
-                  {t('feedPhasePellet', { size: displayDecimal(phase.pellet_size_mm) })}
-                </AppText>
+                {!hasNutritionalGuideGap ? (
+                  <AppText color="muted" style={styles.phaseMeta} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                    {t('feedPhasePellet', { size: displayDecimal(phase.pellet_size_mm) })}
+                  </AppText>
+                ) : null}
 
                 <AppText variant="bodyStrong" color={presentationStatus === 'unavailable' ? 'warning' : 'success'}>
                   {presentationStatus === 'to_order'
@@ -358,11 +363,22 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                       ? t('feedPhaseCompleted')
                     : presentationStatus === 'covered'
                       ? t('feedPhaseCovered')
-                      : t('feedPhaseUnavailable')}
+                      : t(hasNutritionalGuideGap
+                        ? 'feedPhaseNutritionalGuideUnavailable'
+                        : 'feedPhaseUnavailable')}
                 </AppText>
 
                 {hasUncoveredShortfall ? (
-                  <InlineAlert compact tone="warning" message={t('feedPhaseNoExactProduct', { size: displayDecimal(phase.pellet_size_mm) })} />
+                  <InlineAlert
+                    compact
+                    tone="warning"
+                    message={t(
+                      hasNutritionalGuideGap
+                        ? 'feedPhaseNutritionalGuideGap'
+                        : 'feedPhaseNoExactProduct',
+                      { size: displayDecimal(phase.pellet_size_mm) },
+                    )}
+                  />
                 ) : null}
 
                 {phase.products.map((product) => {

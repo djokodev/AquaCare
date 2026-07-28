@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from ..models import Product
 from .cycle_simulation_service import CycleSimulationService
 from .feeding_suggestion_service import FeedingSuggestionService
+from .nutritional_guide_gateway import NutritionalGuideGateway
 from .product_service import ProductService
 from .production_cycle_gateway import ProductionCycleGateway
 
@@ -98,4 +99,5 @@ class CatalogApplicationService:
             selling_price_per_kg_fcfa=command.selling_price_per_kg_fcfa,
             fingerlings_cost_fcfa=command.fingerlings_cost_fcfa,
             other_costs_fcfa=command.other_costs_fcfa,
+            nutritional_guide_rules=NutritionalGuideGateway.for_species(command.species),
         )

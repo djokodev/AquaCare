@@ -7,6 +7,11 @@ from decimal import Decimal
 import pytest
 from commerce.models import Product
 from commerce.services import CycleSimulationService
+from commerce.services.catalog_application_service import (
+    CatalogApplicationService,
+    CycleSimulationCommand,
+)
+from django.core.management import call_command
 
 
 @pytest.mark.django_db
@@ -228,3 +233,35 @@ class TestCycleSimulationService:
         # Note : La simulation peut donner des FCR très optimistes car basée sur formules théoriques
         assert fcr > 0
         assert fcr < 3.0
+
+
+@pytest.mark.django_db
+def test_application_simulation_uses_persistent_starter_without_losing_days_or_feed():
+    call_command('load_nutritional_data', species='clarias', verbosity=0)
+    Product.objects.create(
+        name='DIBAQ Catfish 2mm',
+        brand='dibaq',
+        species='catfish',
+        pellet_size_mm=Decimal('2.0'),
+        package_weight_kg=Decimal('15.0'),
+        price_per_package=Decimal('23500.00'),
+    )
+
+    result = CatalogApplicationService.simulate_cycle(CycleSimulationCommand(
+        species='clarias',
+        initial_fish_count=3000,
+        initial_weight_g=5.0,
+        target_weight_g=400.0,
+        cycle_duration_days=120,
+        survival_rate=0.95,
+    ))
+
+    phases = result['feeding_phases']
+    assert phases[0]['pellet_size_mm'] == 2.0
+    assert phases[0]['weight_range_g'][0] < 10
+    assert all(phase['pellet_size_mm'] is not None for phase in phases)
+    assert sum(phase['duration_days'] for phase in phases) == 120
+    assert sum(
+        (phase['total_consumption_kg'] for phase in phases),
+        Decimal('0'),
+    ) == Decimal(str(result['summary']['total_feed_kg']))

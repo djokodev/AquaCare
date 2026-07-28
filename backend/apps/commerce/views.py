@@ -11,10 +11,17 @@ from typing import Any, cast
 
 from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    OpenApiTypes,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.fields import UUIDField
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -415,6 +422,14 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         summary="Lister mes commandes",
+        parameters=[
+            OpenApiParameter(
+                name='production_cycle',
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description='Limite les commandes au cycle de production indiqué.',
+            ),
+        ],
         responses={200: OrderSerializer(many=True)},
     ),
     retrieve=extend_schema(
@@ -431,6 +446,14 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     ),
     statistics=extend_schema(
         summary="Recuperer mes statistiques de commande",
+        parameters=[
+            OpenApiParameter(
+                name='production_cycle',
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description='Calcule les statistiques pour ce cycle uniquement.',
+            ),
+        ],
         responses={200: OrderStatisticsSerializer},
     ),
     confirm_receipt=extend_schema(
@@ -520,7 +543,17 @@ class OrderViewSet(
 
     def get_queryset(self) -> QuerySet[Order]:
         """Retourne uniquement les commandes de l'utilisateur."""
-        return OrderApplicationService.get_user_orders(self.request.user)
+        return OrderApplicationService.get_user_orders(
+            self.request.user,
+            production_cycle_id=self._production_cycle_id(),
+        )
+
+    def _production_cycle_id(self) -> str | None:
+        """Valide le filtre UUID partagé par la liste et les statistiques."""
+        raw_cycle_id = self.request.query_params.get('production_cycle')
+        if not raw_cycle_id:
+            return None
+        return str(UUIDField().run_validation(raw_cycle_id))
 
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """
@@ -598,7 +631,10 @@ class OrderViewSet(
             "last_order_number": "ORD-20250110-0001"
         }
         """
-        stats = OrderApplicationService.get_order_statistics(request.user)
+        stats = OrderApplicationService.get_order_statistics(
+            request.user,
+            production_cycle_id=self._production_cycle_id(),
+        )
         serializer = OrderStatisticsSerializer(stats)
         return Response(serializer.data)
 

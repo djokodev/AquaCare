@@ -278,6 +278,7 @@ export interface CommerceState {
   orders: {
     items: Order[];
     statistics: OrderStatistics | null;
+    contextCycleId: string | null;
     loading: boolean;
     error: string | null;
   };

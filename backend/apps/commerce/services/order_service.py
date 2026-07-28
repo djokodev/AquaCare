@@ -663,6 +663,7 @@ class OrderService(BaseCommerceService):
         user: User,
         status: str | None = None,
         limit: int | None = None,
+        production_cycle_id: str | None = None,
     ) -> QuerySet[Order]:
         """
         Récupère les commandes d'un utilisateur.
@@ -680,7 +681,10 @@ class OrderService(BaseCommerceService):
             >>> orders.count()
             5
         """
-        queryset = Order.objects.with_details().filter(user=user)
+        queryset = OrderService._user_orders_queryset(
+            user=user,
+            production_cycle_id=production_cycle_id,
+        ).with_details()
 
         if status:
             queryset = queryset.filter(status=status)
@@ -690,6 +694,17 @@ class OrderService(BaseCommerceService):
         if limit:
             queryset = queryset[:limit]
 
+        return queryset
+
+    @staticmethod
+    def _user_orders_queryset(
+        user: User,
+        production_cycle_id: str | None = None,
+    ) -> QuerySet[Order]:
+        """Construit le périmètre commun de la liste et des statistiques."""
+        queryset = Order.objects.filter(user=user)
+        if production_cycle_id:
+            queryset = queryset.filter(production_cycle_id=production_cycle_id)
         return queryset
 
     @staticmethod
@@ -715,7 +730,10 @@ class OrderService(BaseCommerceService):
         return Order.objects.with_details().get(id=order_id, user=user)
 
     @staticmethod
-    def get_order_statistics(user: User) -> OrderStatistics:
+    def get_order_statistics(
+        user: User,
+        production_cycle_id: str | None = None,
+    ) -> OrderStatistics:
         """
         Calcule statistiques commandes pour un utilisateur.
 
@@ -736,7 +754,10 @@ class OrderService(BaseCommerceService):
                 'last_order_date': datetime(...)
             }
         """
-        orders = Order.objects.filter(user=user)
+        orders = OrderService._user_orders_queryset(
+            user=user,
+            production_cycle_id=production_cycle_id,
+        )
 
         aggregates = orders.aggregate(
             total_orders=Count('id'),

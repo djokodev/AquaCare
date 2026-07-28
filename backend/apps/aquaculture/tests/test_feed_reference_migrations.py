@@ -308,6 +308,65 @@ def test_0038_only_classifies_certain_order_snapshots_and_preserves_source_ident
 
 @pytest.mark.skipif(MIGRATIONS_DISABLED, reason='Nécessite le profil PostgreSQL avec migrations activées.')
 @pytest.mark.django_db(transaction=True)
+def test_0046_adds_and_reverses_only_managed_aquacare_starters():
+    executor = MigrationExecutor(connection)
+    previous_target = [('aquaculture', '0045_backfill_compatible_order_feed_references')]
+    final_targets = executor.loader.graph.leaf_nodes()
+    executor.migrate(previous_target)
+    apps = executor.loader.project_state(previous_target).apps
+    Guide = apps.get_model('aquaculture', 'NutritionalGuide')
+    Guide.objects.create(
+        species='clarias',
+        growth_stage='alevin',
+        min_weight=Decimal('10.00'),
+        max_weight=Decimal('50.00'),
+        feeding_rate_percentage=Decimal('5.30'),
+        protein_requirement=45,
+        meals_per_day=3,
+        feed_size_mm=Decimal('2.0'),
+        recommended_products=['DIBAQ Catfish 2mm'],
+        expected_fcr=Decimal('1.10'),
+        source='DIBAQ',
+    )
+    custom = Guide.objects.create(
+        species='tilapia',
+        growth_stage='alevin',
+        min_weight=Decimal('1.00'),
+        max_weight=Decimal('9.00'),
+        feeding_rate_percentage=Decimal('4.00'),
+        protein_requirement=40,
+        meals_per_day=2,
+        feed_size_mm=Decimal('1.0'),
+        recommended_products=[],
+        expected_fcr=Decimal('1.20'),
+        source='AquaCare',
+        feeding_notes='Guide Admin non géré',
+    )
+
+    try:
+        target = [('aquaculture', '0046_add_aquacare_starter_nutritional_guides')]
+        executor = MigrationExecutor(connection)
+        executor.migrate(target)
+        apps = executor.loader.project_state(target).apps
+        Guide = apps.get_model('aquaculture', 'NutritionalGuide')
+        starters = Guide.objects.filter(source='AquaCare', min_weight=Decimal('0.00'))
+        assert starters.count() == 2
+        assert set(starters.values_list('species', flat=True)) == {'clarias', 'tilapia'}
+        assert Guide.objects.filter(source='DIBAQ', min_weight=Decimal('10.00')).count() == 1
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(previous_target)
+        apps = executor.loader.project_state(previous_target).apps
+        Guide = apps.get_model('aquaculture', 'NutritionalGuide')
+        assert not Guide.objects.filter(source='AquaCare', min_weight=Decimal('0.00')).exists()
+        assert Guide.objects.filter(pk=custom.pk, feeding_notes='Guide Admin non géré').exists()
+        assert Guide.objects.filter(source='DIBAQ', min_weight=Decimal('10.00')).exists()
+    finally:
+        MigrationExecutor(connection).migrate(final_targets)
+
+
+@pytest.mark.skipif(MIGRATIONS_DISABLED, reason='Nécessite le profil PostgreSQL avec migrations activées.')
+@pytest.mark.django_db(transaction=True)
 def test_0043_restores_reference_created_online_by_the_real_service():
     """Reproduit les valeurs online réelles, sans client_uuid ni synced_at."""
     from tests.fixtures.factories import ProductionCycleFactory

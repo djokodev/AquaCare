@@ -268,20 +268,28 @@ class TestFeedingPlanServiceWithDibaq:
 class TestLoadNutritionalDataCommand:
     """Tests d'idempotence de la commande de chargement DIBAQ."""
 
-    def test_loads_10_guides_total(self):
-        """La commande crée 10 entrées (5 catfish + 5 tilapia)."""
+    def test_loads_guides_and_managed_starters(self):
+        """La commande crée 10 lignes DIBAQ et 2 starters AquaCare."""
         from django.core.management import call_command
         call_command('load_nutritional_data', verbosity=0)
-        assert NutritionalGuide.objects.count() == 10
-        assert NutritionalGuide.objects.filter(species='clarias').count() == 5
-        assert NutritionalGuide.objects.filter(species='tilapia').count() == 5
+        assert NutritionalGuide.objects.count() == 12
+        assert NutritionalGuide.objects.filter(species='clarias').count() == 6
+        assert NutritionalGuide.objects.filter(species='tilapia').count() == 6
+        starters = NutritionalGuide.objects.filter(
+            source='AquaCare',
+            min_weight=Decimal('0.00'),
+            max_weight=Decimal('10.00'),
+            feed_size_mm=Decimal('2.0'),
+        )
+        assert starters.count() == 2
+        assert all('pas une ligne officielle DIBAQ' in guide.feeding_notes for guide in starters)
 
     def test_is_idempotent(self):
         """Appeler la commande deux fois → même nombre d'entrées (pas de doublons)."""
         from django.core.management import call_command
         call_command('load_nutritional_data', verbosity=0)
         call_command('load_nutritional_data', verbosity=0)
-        assert NutritionalGuide.objects.count() == 10
+        assert NutritionalGuide.objects.count() == 12
 
     def test_source_is_dibaq(self):
         """Toutes les entrées chargées ont source='DIBAQ'."""
@@ -293,7 +301,10 @@ class TestLoadNutritionalDataCommand:
         """temperature_rates non vide pour toutes les entrées."""
         from django.core.management import call_command
         call_command('load_nutritional_data', verbosity=0)
-        guides_without_rates = NutritionalGuide.objects.filter(temperature_rates={})
+        guides_without_rates = NutritionalGuide.objects.filter(
+            source='DIBAQ',
+            temperature_rates={},
+        )
         assert guides_without_rates.count() == 0
 
     def test_catfish_500g_band_exists(self):
@@ -321,8 +332,30 @@ class TestLoadNutritionalDataCommand:
         assert guide.feed_size_mm == Decimal('5.0')
 
     def test_species_filter_loads_only_one_species(self):
-        """--species clarias → uniquement 5 entrées clarias."""
+        """--species clarias → 5 lignes DIBAQ et son starter."""
         from django.core.management import call_command
         call_command('load_nutritional_data', species='clarias', verbosity=0)
-        assert NutritionalGuide.objects.filter(species='clarias').count() == 5
+        assert NutritionalGuide.objects.filter(species='clarias').count() == 6
         assert NutritionalGuide.objects.filter(species='tilapia').count() == 0
+
+    def test_command_preserves_unmanaged_aquacare_guide(self):
+        from django.core.management import call_command
+
+        custom = NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='alevin',
+            min_weight=Decimal('1.00'),
+            max_weight=Decimal('9.00'),
+            feeding_rate_percentage=Decimal('4.00'),
+            protein_requirement=40,
+            meals_per_day=2,
+            feed_size_mm=Decimal('1.0'),
+            recommended_products=[],
+            expected_fcr=Decimal('1.20'),
+            source='AquaCare',
+            feeding_notes='Guide Admin',
+        )
+
+        call_command('load_nutritional_data', verbosity=0)
+
+        assert NutritionalGuide.objects.filter(pk=custom.pk).exists()

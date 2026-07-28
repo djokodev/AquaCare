@@ -100,6 +100,7 @@ const initialState: CommerceState = {
   orders: {
     items: [],
     statistics: null,
+    contextCycleId: null,
     loading: false,
     error: null,
   },
@@ -178,9 +179,12 @@ export const fetchCycleSimulation = createAsyncThunk(
 
 export const fetchOrders = createAsyncThunk(
   'commerce/fetchOrders',
-  async (_, { rejectWithValue }) => {
+  async (
+    options: { productionCycleId: string },
+    { rejectWithValue },
+  ) => {
     try {
-      return await commerceApi.getOrders();
+      return await commerceApi.getOrders(options);
     } catch (error) {
       return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération commandes'));
     }
@@ -226,9 +230,12 @@ export const confirmOrderReceipt = createAsyncThunk(
 
 export const fetchOrderStatistics = createAsyncThunk(
   'commerce/fetchOrderStatistics',
-  async (_, { rejectWithValue }) => {
+  async (
+    options: { productionCycleId: string },
+    { rejectWithValue },
+  ) => {
     try {
-      return await commerceApi.getOrderStatistics();
+      return await commerceApi.getOrderStatistics(options);
     } catch (error) {
       return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération statistiques'));
     }
@@ -328,6 +335,13 @@ const commerceSlice = createSlice({
       state.simulation.result = null;
       state.simulation.error = null;
     },
+    clearOrderContext: (state) => {
+      state.orders.items = [];
+      state.orders.statistics = null;
+      state.orders.contextCycleId = null;
+      state.orders.loading = false;
+      state.orders.error = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -373,15 +387,22 @@ const commerceSlice = createSlice({
       });
 
     builder
-      .addCase(fetchOrders.pending, (state) => {
+      .addCase(fetchOrders.pending, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) {
+          state.orders.items = [];
+          state.orders.statistics = null;
+        }
+        state.orders.contextCycleId = action.meta.arg.productionCycleId;
         state.orders.loading = true;
         state.orders.error = null;
       })
       .addCase(fetchOrders.fulfilled, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) return;
         state.orders.loading = false;
         state.orders.items = action.payload;
       })
       .addCase(fetchOrders.rejected, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) return;
         state.orders.loading = false;
         state.orders.error = action.payload as string;
       });
@@ -441,15 +462,22 @@ const commerceSlice = createSlice({
       });
 
     builder
-      .addCase(fetchOrderStatistics.pending, (state) => {
+      .addCase(fetchOrderStatistics.pending, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) {
+          state.orders.items = [];
+          state.orders.statistics = null;
+        }
+        state.orders.contextCycleId = action.meta.arg.productionCycleId;
         state.orders.loading = true;
         state.orders.error = null;
       })
       .addCase(fetchOrderStatistics.fulfilled, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) return;
         state.orders.loading = false;
         state.orders.statistics = action.payload;
       })
       .addCase(fetchOrderStatistics.rejected, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) return;
         state.orders.loading = false;
         state.orders.error = action.payload as string;
       });
@@ -480,6 +508,7 @@ export const {
   setPickupLocation,
   resetSuggestions,
   resetSimulation,
+  clearOrderContext,
 } = commerceSlice.actions;
 
 export default commerceSlice.reducer;

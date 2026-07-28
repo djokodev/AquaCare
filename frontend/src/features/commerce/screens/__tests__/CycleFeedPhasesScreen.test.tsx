@@ -175,6 +175,30 @@ describe('CycleFeedPhasesScreen', () => {
     expect(queryByText('feedTotalToOrderLabel')).toBeNull();
   });
 
+  it('distingue un vrai trou nutritionnel d un produit exact absent', async () => {
+    const guideGapPhase = {
+      ...phase,
+      pellet_size_mm: null,
+      nutritional_guide_warning: 'nutritional_guide_gap',
+      product_available: false,
+      total_bags: 0,
+      shortfall_kg: '25.00',
+      products: [],
+    };
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue(
+      recommendation([guideGapPhase as unknown as typeof phase]),
+    );
+
+    const { findByText, getByText, queryByText } = render(
+      <CycleFeedPhasesScreen {...props} />,
+    );
+
+    expect(await findByText('feedPhaseNutritionalGuideUnavailable')).toBeTruthy();
+    expect(getByText('feedPhaseNutritionalGuideGap')).toBeTruthy();
+    expect(queryByText('feedPhaseNoExactProduct')).toBeNull();
+    expect(queryByText(/— mm/)).toBeNull();
+  });
+
   it('regroupe les etapes commerciales qui utilisent le meme aliment', async () => {
     const secondStep = {
       ...phase,

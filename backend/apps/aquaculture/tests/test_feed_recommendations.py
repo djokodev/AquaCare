@@ -627,6 +627,46 @@ def test_nutritional_guide_splits_crossing_phase_without_losing_need(authenticat
     assert [Decimal(value) for value in phases[-1]['planned_weight_range_g']] == [Decimal('210'), Decimal('250')]
 
 
+@pytest.mark.django_db
+def test_historical_phase_keeps_adjacent_guides_with_same_pellet(authenticated_user):
+    cycle = create_cycle(authenticated_user)
+    for source, minimum, maximum in (
+        ('AquaCare', '0.00', '10.00'),
+        ('DIBAQ', '10.00', '50.00'),
+    ):
+        NutritionalGuide.objects.create(
+            species='tilapia',
+            growth_stage='alevin',
+            min_weight=Decimal(minimum),
+            max_weight=Decimal(maximum),
+            feeding_rate_percentage=Decimal('5.00'),
+            protein_requirement=45,
+            meals_per_day=3,
+            feed_size_mm=Decimal('2.0'),
+            recommended_products=[],
+            expected_fcr=Decimal('1.10'),
+            source=source,
+        )
+
+    phases = CycleFeedRecommendationService._apply_nutritional_guide_sizes(
+        cycle,
+        [{
+            'phase_id': 'legacy-phase',
+            'sequence': 1,
+            'phase_name': 'alevin',
+            'planned_days_range': [1, 10],
+            'planned_weight_range_g': ['5.00', '25.00'],
+            'pellet_size_mm': '2.00',
+            'planned_consumption_kg': '8.00',
+            'planned_duration_days': 10,
+        }],
+    )
+
+    assert phases[0]['pellet_size_mm'] == '2.00'
+    assert phases[0]['nutritional_guide_source'] == 'mixed'
+    assert phases[0]['nutritional_guide_id'] is None
+
+
 def test_future_need_reconciliation_uses_daily_rations_after_split():
     phases = [
         {'planned_weight_range_g': ['80', '100'], 'pellet_size_mm': '2.00'},

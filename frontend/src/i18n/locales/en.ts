@@ -1133,6 +1133,8 @@
 
   // Commerce - Orders History
   ordersHistory: 'My orders',
+  cycleOrders: 'Cycle orders',
+  ordersRequireCycle: 'Select a cycle to view its orders.',
   orderStatistics: 'Order statistics',
   ordersDashboardLoadError: 'Unable to synchronize orders.',
   totalOrders: 'Total orders',
@@ -1793,6 +1795,7 @@
   feedRecommendationBreakdown: 'Initial recommendation by phase: {{phases}} bag(s)',
   feedPhaseWeightRange: '{{min}}–{{max}} g',
   feedPhaseNoExactProduct: '{{size}} mm product unavailable in the AquaCare catalogue.',
+  feedPhaseNutritionalGuideGap: 'No nutritional recommendation is available for this weight range. The feed requirement is preserved but cannot be ordered yet.',
   feedPhaseCoveredShort: 'Covered',
   feedPhaseCompletedShort: 'Completed',
   feedPhaseUnavailableShort: 'Unavailable',
@@ -1800,6 +1803,7 @@
   feedPhaseCovered: 'Need covered, no order needed.',
   feedPhaseCompleted: 'Phase completed, no order needed.',
   feedPhaseUnavailable: 'No exact product can be ordered for this phase.',
+  feedPhaseNutritionalGuideUnavailable: 'No nutritional recommendation for this weight range.',
   feedTotalToOrderLabel: 'Total to add to cart',
   appName: 'AquaCare',
   validationRequiredMessage: 'This field is required.',

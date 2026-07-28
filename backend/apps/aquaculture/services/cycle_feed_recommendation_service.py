@@ -6,8 +6,10 @@ from datetime import timedelta
 from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
+from commerce.domain.growth_calculator import NutritionalGuideResolver
 from commerce.models import OrderItem, Product
 from commerce.services.cycle_simulation_service import CycleSimulationService
+from commerce.services.nutritional_guide_gateway import NutritionalGuideGateway
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -110,7 +112,6 @@ class CycleFeedRecommendationService:
         guides = list(
             NutritionalGuide.objects.filter(
                 species=FeedReferenceService.normalize_species(cycle.species),
-                source='DIBAQ',
             ).order_by('min_weight', 'max_weight', 'id')
         )
         if not guides:
@@ -158,13 +159,26 @@ class CycleFeedRecommendationService:
                     guides,
                     cls._decimal(entry['weight_g']),
                 )
-                group_key = (str(selected.id) if selected else None, warning)
+                group_key = (
+                    str(selected.feed_size_mm) if selected else None,
+                    warning,
+                )
                 if (
                     not groups
                     or groups[-1]['key'] != group_key
                     or int(entry['day']) != int(groups[-1]['entries'][-1]['day']) + 1
                 ):
-                    groups.append({'key': group_key, 'guide': selected, 'warning': warning, 'entries': []})
+                    groups.append({
+                        'key': group_key,
+                        'guide': selected,
+                        'guide_ids': set(),
+                        'guide_sources': set(),
+                        'warning': warning,
+                        'entries': [],
+                    })
+                if selected is not None:
+                    groups[-1]['guide_ids'].add(str(selected.id))
+                    groups[-1]['guide_sources'].add(selected.source)
                 groups[-1]['entries'].append(entry)
 
             base_phase_id = (
@@ -206,8 +220,16 @@ class CycleFeedRecommendationService:
                     'segment_index': index,
                     'segment_count': segment_count,
                     'pellet_size_mm': cls._kg(selected.feed_size_mm) if selected else None,
-                    'nutritional_guide_source': selected.source if selected else None,
-                    'nutritional_guide_id': str(selected.id) if selected else None,
+                    'nutritional_guide_source': (
+                        next(iter(group['guide_sources']))
+                        if len(group['guide_sources']) == 1
+                        else 'mixed'
+                    ) if selected else None,
+                    'nutritional_guide_id': (
+                        next(iter(group['guide_ids']))
+                        if len(group['guide_ids']) == 1
+                        else None
+                    ) if selected else None,
                     'nutritional_guide_warning': group['warning'],
                 }
                 adjusted.append(segment)
@@ -218,34 +240,23 @@ class CycleFeedRecommendationService:
         guides: list[NutritionalGuide],
         weight: Decimal,
     ) -> tuple[NutritionalGuide | None, str | None]:
-        """Résout un guide une fois par jour, avec priorité déterministe."""
-        candidates = [
-            guide
+        """Réutilise le résolveur de frontières de la simulation."""
+        rules = [
+            {
+                'id': str(guide.id),
+                'min_weight': guide.min_weight,
+                'max_weight': guide.max_weight,
+                'growth_stage': guide.growth_stage,
+                'feed_size_mm': guide.feed_size_mm,
+                'source': guide.source,
+            }
             for guide in guides
-            if guide.min_weight <= weight < guide.max_weight
         ]
-        if not candidates:
-            maximum = max((guide.max_weight for guide in guides), default=None)
-            candidates = [
-                guide
-                for guide in guides
-                if maximum is not None
-                and guide.max_weight == maximum
-                and guide.min_weight <= weight <= guide.max_weight
-            ]
-        candidates.sort(
-            key=lambda guide: (
-                guide.max_weight - guide.min_weight,
-                guide.min_weight,
-                str(guide.id),
-            )
-        )
-        if not candidates:
-            return None, 'nutritional_guide_gap'
-        return (
-            candidates[0],
-            'nutritional_guide_overlap' if len(candidates) > 1 else None,
-        )
+        selected, warning = NutritionalGuideResolver.resolve(rules, weight)
+        if selected is None:
+            return None, warning
+        guides_by_id = {str(guide.id): guide for guide in guides}
+        return guides_by_id[selected['id']], warning
 
     @classmethod
     def _apply_guide_to_segment(
@@ -255,27 +266,31 @@ class CycleFeedRecommendationService:
         start_weight: Decimal,
         end_weight: Decimal,
     ) -> dict[str, Any]:
-        candidates = [
-            guide for guide in guides
-            if guide.min_weight <= start_weight and end_weight <= guide.max_weight
-        ]
-        if not candidates and start_weight == end_weight:
-            candidates = [
-                guide for guide in guides
-                if guide.min_weight <= start_weight <= guide.max_weight
-            ]
-        candidates.sort(key=lambda guide: (guide.min_weight, guide.max_weight, str(guide.id)))
-        selected = candidates[0] if candidates else None
-        warning = None
-        if len(candidates) > 1:
-            warning = 'nutritional_guide_overlap'
-        elif selected is None:
-            warning = 'nutritional_guide_gap'
+        selected, warning = cls._guide_for_weight(guides, start_weight)
+        end_selected, end_warning = cls._guide_for_weight(guides, end_weight)
+        same_pellet = (
+            selected is not None
+            and end_selected is not None
+            and selected.feed_size_mm == end_selected.feed_size_mm
+        )
+        if not same_pellet:
+            selected = None
+            warning = warning or end_warning or 'nutritional_guide_gap'
+        guide_source = None
+        guide_id = None
+        if selected is not None and end_selected is not None:
+            guide_source = (
+                selected.source
+                if selected.source == end_selected.source
+                else 'mixed'
+            )
+            if selected.id == end_selected.id:
+                guide_id = str(selected.id)
         return {
             **phase,
             'pellet_size_mm': cls._kg(selected.feed_size_mm) if selected else None,
-            'nutritional_guide_source': selected.source if selected else None,
-            'nutritional_guide_id': str(selected.id) if selected else None,
+            'nutritional_guide_source': guide_source,
+            'nutritional_guide_id': guide_id,
             'nutritional_guide_warning': warning,
         }
 
@@ -335,6 +350,7 @@ class CycleFeedRecommendationService:
             fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
             other_costs_fcfa=float(cycle.other_operational_costs_fcfa or 0),
             include_daily_feeding_schedule=True,
+            nutritional_guide_rules=NutritionalGuideGateway.for_species(cycle.species),
         )
         simulation['feeding_phases'] = cls._apply_nutritional_guide_sizes(
             cycle,
@@ -459,6 +475,7 @@ class CycleFeedRecommendationService:
             fingerlings_cost_fcfa=0.0,
             other_costs_fcfa=0.0,
             include_daily_feeding_schedule=True,
+            nutritional_guide_rules=NutritionalGuideGateway.for_species(cycle.species),
         )
         simulation['feeding_phases'] = cls._apply_nutritional_guide_sizes(
             cycle,

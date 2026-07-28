@@ -379,6 +379,136 @@ class TestOrderViewSet:
         assert response.status_code == status.HTTP_200_OK
         assert "total_orders" in response.data
 
+    def test_cycle_filter_scopes_list_and_statistics(
+        self,
+        authenticated_client,
+        test_farm,
+        test_product,
+    ):
+        def create_cycle(name):
+            return ProductionCycle.objects.create(
+                farm_profile=test_farm,
+                cycle_name=name,
+                species="tilapia",
+                pond_identifier=name,
+                pond_surface_m2=Decimal("120.0"),
+                start_date=date.today(),
+                initial_count=1200,
+                initial_average_weight=Decimal("5.0"),
+                initial_biomass=Decimal("6.0"),
+                current_count=1200,
+                current_average_weight=Decimal("5.0"),
+                current_biomass=Decimal("6.0"),
+                status="active",
+            )
+
+        cycle_a = create_cycle("Cycle A")
+        cycle_b = create_cycle("Cycle B")
+        created_numbers = {}
+        for key, cycle, quantity in (
+            ("a1", cycle_a, 1),
+            ("a2", cycle_a, 2),
+            ("b1", cycle_b, 3),
+            ("n1", None, 4),
+        ):
+            payload = {
+                "items": [{"product_id": str(test_product.id), "quantity": quantity}],
+                "delivery_method": "home",
+            }
+            if cycle is not None:
+                payload["production_cycle_id"] = str(cycle.id)
+            response = authenticated_client.post(
+                "/api/commerce/orders/",
+                payload,
+                format="json",
+            )
+            assert response.status_code == status.HTTP_201_CREATED
+            created_numbers[key] = response.data["order_number"]
+
+        response_a = authenticated_client.get(
+            "/api/commerce/orders/",
+            {"production_cycle": str(cycle_a.id)},
+        )
+        numbers_a = {row["order_number"] for row in response_a.data["results"]}
+        assert numbers_a == {created_numbers["a1"], created_numbers["a2"]}
+
+        response_b = authenticated_client.get(
+            "/api/commerce/orders/",
+            {"production_cycle": str(cycle_b.id)},
+        )
+        assert [row["order_number"] for row in response_b.data["results"]] == [
+            created_numbers["b1"]
+        ]
+
+        stats_a = authenticated_client.get(
+            "/api/commerce/orders/statistics/",
+            {"production_cycle": str(cycle_a.id)},
+        ).data
+        stats_b = authenticated_client.get(
+            "/api/commerce/orders/statistics/",
+            {"production_cycle": str(cycle_b.id)},
+        ).data
+        assert stats_a["total_orders"] == len(numbers_a) == 2
+        assert stats_a["total_bags_ordered"] == 3
+        assert stats_b["total_orders"] == 1
+        assert stats_b["total_bags_ordered"] == 3
+
+    def test_cycle_filter_does_not_expose_foreign_cycle(
+        self,
+        authenticated_client,
+        test_product,
+    ):
+        foreign_user = User.objects.create_user(
+            phone_number="+237655000777",
+            password="testpass123",
+            first_name="Foreign",
+            last_name="Owner",
+            age_group="26_35",
+        )
+        foreign_farm = foreign_user.farm_profile
+        foreign_farm.farm_name = "Foreign Farm"
+        foreign_farm.save(update_fields=["farm_name"])
+        foreign_cycle = ProductionCycle.objects.create(
+            farm_profile=foreign_farm,
+            cycle_name="Foreign Cycle",
+            species="tilapia",
+            pond_identifier="Foreign Pond",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=date.today(),
+            initial_count=1200,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("6.0"),
+            current_count=1200,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("6.0"),
+            status="active",
+        )
+
+        response = authenticated_client.get(
+            "/api/commerce/orders/",
+            {"production_cycle": str(foreign_cycle.id)},
+        )
+        stats = authenticated_client.get(
+            "/api/commerce/orders/statistics/",
+            {"production_cycle": str(foreign_cycle.id)},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["results"] == []
+        assert stats.data["total_orders"] == 0
+
+    def test_cycle_filter_rejects_malformed_uuid(self, authenticated_client):
+        list_response = authenticated_client.get(
+            "/api/commerce/orders/",
+            {"production_cycle": "not-a-uuid"},
+        )
+        stats_response = authenticated_client.get(
+            "/api/commerce/orders/statistics/",
+            {"production_cycle": "not-a-uuid"},
+        )
+
+        assert list_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert stats_response.status_code == status.HTTP_400_BAD_REQUEST
+
     def test_confirm_receipt_success_when_delivered(self, authenticated_client, test_farm, test_product):
         create_response = authenticated_client.post("/api/commerce/orders/", {
             "items": [{"product_id": str(test_product.id), "quantity": 1}],

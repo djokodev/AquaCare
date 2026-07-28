@@ -1132,6 +1132,8 @@ export const fr = {
 
   // Commerce - Orders History
   ordersHistory: 'Mes commandes',
+  cycleOrders: 'Commandes du cycle',
+  ordersRequireCycle: 'Sélectionnez un cycle pour consulter ses commandes.',
   orderStatistics: 'Statistiques des commandes',
   ordersDashboardLoadError: 'Impossible de synchroniser les commandes.',
   totalOrders: 'Total des commandes',
@@ -1794,6 +1796,7 @@ export const fr = {
   feedRecommendationBreakdown: 'Recommandation initiale par phase : {{phases}} sac(s)',
   feedPhaseWeightRange: '{{min}}–{{max}} g',
   feedPhaseNoExactProduct: 'Produit {{size}} mm indisponible dans le catalogue AquaCare.',
+  feedPhaseNutritionalGuideGap: 'Aucune recommandation nutritionnelle n’est disponible pour cette plage de poids. Le besoin est conservé mais ne peut pas encore être commandé.',
   feedPhaseCoveredShort: 'Couvert',
   feedPhaseCompletedShort: 'Terminée',
   feedPhaseUnavailableShort: 'Indisponible',
@@ -1801,6 +1804,7 @@ export const fr = {
   feedPhaseCovered: 'Besoin couvert, aucune commande nécessaire.',
   feedPhaseCompleted: 'Phase terminée, aucune commande nécessaire.',
   feedPhaseUnavailable: 'Aucun produit exact ne peut être commandé pour cette phase.',
+  feedPhaseNutritionalGuideUnavailable: 'Aucune recommandation nutritionnelle pour cette plage de poids.',
   feedTotalToOrderLabel: 'Total à ajouter au panier',
   appName: 'AquaCare',
   validationRequiredMessage: 'Ce champ est obligatoire.',

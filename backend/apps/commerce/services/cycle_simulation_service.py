@@ -27,6 +27,7 @@ from ..domain.growth_calculator import (
     FeedingCalculator,
     FeedingPhase,
     GrowthCalculator,
+    NutritionalGuideRule,
     PhaseDetector,
     ROICalculator,
 )
@@ -61,7 +62,7 @@ class SimulationPhaseDetails(TypedDict):
     phase_name: str
     days_range: list[int]
     weight_range_g: list[float]
-    pellet_size_mm: float
+    pellet_size_mm: float | None
     duration_days: int
     total_consumption_kg: Decimal
     daily_avg_kg: float
@@ -117,6 +118,7 @@ class CycleSimulationService(BaseCommerceService):
         fingerlings_cost_fcfa: float | None = None,
         other_costs_fcfa: float | None = None,
         include_daily_feeding_schedule: bool = False,
+        nutritional_guide_rules: list[NutritionalGuideRule] | None = None,
     ) -> CycleSimulationResult:
         """
         Simule un cycle complet avec estimation détaillée des besoins.
@@ -169,7 +171,8 @@ class CycleSimulationService(BaseCommerceService):
         # 3. Regrouper par phases d'alimentation (changements de granulé)
         feeding_phases = PhaseDetector.group_by_phases(
             params['species'],
-            weight_progression
+            weight_progression,
+            nutritional_guide_rules=nutritional_guide_rules,
         )
 
         # 4. Calculer consommation et produits pour chaque phase
@@ -301,12 +304,14 @@ class CycleSimulationService(BaseCommerceService):
         )
 
         # Trouver produits DIBAQ disponibles pour cette granulométrie
-        products = Product.objects.filter(
-            brand='dibaq',
-            species=params['species'],
-            pellet_size_mm=Decimal(str(phase['pellet_size_mm'])),
-            is_available=True
-        ).order_by('-package_weight_kg')  # Privilégier gros formats
+        products = Product.objects.none()
+        if phase['pellet_size_mm'] is not None:
+            products = Product.objects.filter(
+                brand='dibaq',
+                species=params['species'],
+                pellet_size_mm=Decimal(str(phase['pellet_size_mm'])),
+                is_available=True
+            ).order_by('-package_weight_kg')  # Privilégier gros formats
         # Évaluer explicitement l'absence de produit exact afin de conserver
         # le contrat de requêtes du simulateur, sans réintroduire un produit
         # approximatif d'une autre granulométrie.
