@@ -234,7 +234,7 @@ describe('features/commerce/store/commerceSlice', () => {
     const store = createStore();
 
     mockApi.getOrders.mockResolvedValueOnce([orderA] as any);
-    await store.dispatch(fetchOrders() as any);
+    await store.dispatch(fetchOrders({ productionCycleId: 'cycle-1' }) as any);
 
     let state = store.getState().commerce;
     expect(state.orders.items).toHaveLength(1);
@@ -260,7 +260,7 @@ describe('features/commerce/store/commerceSlice', () => {
     expect(state.orders.items[0].status).toBe('received');
 
     mockApi.getOrderStatistics.mockResolvedValueOnce({ total_orders: 2, total_spent: 100000 } as any);
-    await store.dispatch(fetchOrderStatistics() as any);
+    await store.dispatch(fetchOrderStatistics({ productionCycleId: 'cycle-1' }) as any);
 
     state = store.getState().commerce;
     expect(state.orders.statistics?.total_orders).toBe(2);
@@ -301,16 +301,42 @@ describe('features/commerce/store/commerceSlice', () => {
     expect(state.cart.previewLoading).toBe(false);
   });
 
+  it('ignore une réponse tardive du cycle précédent', () => {
+    const cycleA = { productionCycleId: 'cycle-a' };
+    const cycleB = { productionCycleId: 'cycle-b' };
+    let state = commerceReducer(undefined, fetchOrders.pending('request-a', cycleA));
+    state = commerceReducer(state, fetchOrders.pending('request-b', cycleB));
+    state = commerceReducer(
+      state,
+      fetchOrders.fulfilled(
+        [{ ...orderA, id: 'order-b', order_number: 'ORDER-B' }],
+        'request-b',
+        cycleB,
+      ),
+    );
+    state = commerceReducer(
+      state,
+      fetchOrders.fulfilled(
+        [{ ...orderA, id: 'order-a', order_number: 'ORDER-A' }],
+        'request-a',
+        cycleA,
+      ),
+    );
+
+    expect(state.orders.contextCycleId).toBe('cycle-b');
+    expect(state.orders.items.map((order) => order.order_number)).toEqual(['ORDER-B']);
+  });
+
   it('normalise les formats d erreurs API (message | error | detail)', async () => {
     const store = createStore();
 
     mockApi.getOrders.mockRejectedValueOnce({ response: { data: { error: 'Erreur backend' } } } as any);
-    await store.dispatch(fetchOrders() as any);
+    await store.dispatch(fetchOrders({ productionCycleId: 'cycle-1' }) as any);
     let state = store.getState().commerce;
     expect(state.orders.error).toBe('Erreur backend');
 
     mockApi.getOrders.mockRejectedValueOnce({ response: { data: { detail: 'Session invalide' } } } as any);
-    await store.dispatch(fetchOrders() as any);
+    await store.dispatch(fetchOrders({ productionCycleId: 'cycle-1' }) as any);
     state = store.getState().commerce;
     expect(state.orders.error).toBe('Session invalide');
   });

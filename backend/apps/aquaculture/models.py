@@ -182,11 +182,20 @@ class CycleFeedStockEntryQuerySet(models.QuerySet):
     def for_api(self):
         return self.select_related(
             'cycle',
+            'feed_reference',
+            'feed_reference__catalog_product',
             'product',
             'order',
             'order_item',
             'order_item__product',
         )
+
+
+class FarmFeedReferenceQuerySet(models.QuerySet):
+    """Référentiel d'aliments visible par ferme."""
+
+    def for_api(self):
+        return self.select_related('farm_profile', 'catalog_product')
 
 
 class ProductionReportQuerySet(models.QuerySet):
@@ -695,6 +704,122 @@ class CycleUnitAllocation(models.Model):
         return super().save(*args, **kwargs)
 
 
+class FarmFeedReference(models.Model):
+    """Identité stable d'un aliment utilisé dans une ferme."""
+
+    SOURCE_CATALOG = 'aquacare_catalog'
+    SOURCE_EXTERNAL = 'external'
+    SOURCE_CHOICES = [
+        (SOURCE_CATALOG, _('Catalogue AquaCare')),
+        (SOURCE_EXTERNAL, _('Aliment externe')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(unique=True, null=True, blank=True, verbose_name=_('UUID client'))
+    farm_profile = models.ForeignKey(
+        'accounts.FarmProfile',
+        on_delete=models.CASCADE,
+        related_name='feed_references',
+        verbose_name=_('Ferme'),
+    )
+    source = models.CharField(max_length=24, choices=SOURCE_CHOICES, verbose_name=_('Origine'))
+    catalog_product = models.ForeignKey(
+        'commerce.Product',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='farm_feed_references',
+        verbose_name=_('Produit AquaCare'),
+    )
+    name = models.CharField(max_length=200, verbose_name=_("Nom de l'aliment"))
+    normalized_name = models.CharField(max_length=200, editable=False)
+    species = models.CharField(max_length=20, choices=SPECIES_CHOICES, verbose_name=_('Espèce cible'))
+    pellet_size_mm = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.1')), MaxValueValidator(Decimal('20.0'))],
+        verbose_name=_('Granulométrie (mm)'),
+    )
+    brand = models.CharField(max_length=100, blank=True, verbose_name=_('Marque'))
+    protein_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name=_('Taux de protéines (%)'),
+    )
+    lipid_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name=_('Taux de lipides (%)'),
+    )
+    package_weight_kg = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_('Poids du conditionnement (kg)'),
+    )
+    created_offline = models.BooleanField(default=False, verbose_name=_('Créé hors ligne'))
+    synced_at = models.DateTimeField(null=True, blank=True, verbose_name=_('Synchronisé le'))
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = FarmFeedReferenceQuerySet.as_manager()
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_farm_feed_reference'
+        ordering = ['name', 'pellet_size_mm']
+        constraints = [
+            models.UniqueConstraint(
+                condition=Q(source='external'),
+                fields=['farm_profile', 'normalized_name', 'species', 'pellet_size_mm'],
+                name='aq_external_feed_identity_uniq',
+            ),
+            models.UniqueConstraint(
+                condition=Q(source='aquacare_catalog'),
+                fields=[
+                    'farm_profile', 'catalog_product', 'normalized_name',
+                    'species', 'pellet_size_mm',
+                ],
+                name='aq_catalog_feed_identity_uniq',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(source='external', catalog_product__isnull=True)
+                    | Q(source='aquacare_catalog', catalog_product__isnull=False)
+                ),
+                name='aq_farm_feed_source_product_ck',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['farm_profile', 'species', 'pellet_size_mm'], name='aq_farm_feed_lookup_idx'),
+        ]
+        verbose_name = _('Référence aliment de ferme')
+        verbose_name_plural = _('Références aliments de ferme')
+
+    def clean(self):
+        super().clean()
+        if self.source == self.SOURCE_CATALOG and not self.catalog_product_id:
+            raise ValidationError({'catalog_product': _('Un produit AquaCare est requis.')})
+        if self.source == self.SOURCE_EXTERNAL and self.catalog_product_id:
+            raise ValidationError({'catalog_product': _('Un aliment externe ne peut pas référencer le catalogue.')})
+
+    def save(self, *args, **kwargs):
+        self.name = self.name.strip()
+        self.normalized_name = ' '.join(self.name.casefold().split())
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.name} · {self.pellet_size_mm} mm'
+
+
 class CycleFeedStockEntry(models.Model):
     """Entrée du magasin rattachée à un cycle de production."""
 
@@ -718,6 +843,14 @@ class CycleFeedStockEntry(models.Model):
         on_delete=models.CASCADE,
         related_name='feed_stock_entries',
         verbose_name=_("Cycle de production"),
+    )
+    feed_reference = models.ForeignKey(
+        FarmFeedReference,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='stock_entries',
+        verbose_name=_('Référence aliment'),
     )
     source = models.CharField(
         max_length=20,
@@ -810,6 +943,69 @@ class CycleFeedStockEntry(models.Model):
 
     def __str__(self):
         return f"{self.cycle.cycle_name} - {self.label} ({self.quantity_kg} kg)"
+
+
+class CycleFeedPlan(models.Model):
+    """Instantané auditable du plan alimentaire initial d'un cycle."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    cycle = models.OneToOneField(
+        'ProductionCycle',
+        on_delete=models.CASCADE,
+        related_name='feed_plan_snapshot',
+        verbose_name=_('Cycle de production'),
+    )
+    version = models.PositiveSmallIntegerField(default=2, verbose_name=_('Version'))
+    parameters = models.JSONField(default=dict, verbose_name=_('Paramètres de simulation'))
+    phases = models.JSONField(default=list, verbose_name=_('Phases alimentaires'))
+    total_feed_kg = models.DecimalField(max_digits=14, decimal_places=2, verbose_name=_('Aliment total planifié (kg)'))
+    highest_reached_phase_sequence = models.PositiveSmallIntegerField(
+        default=0,
+        db_default=0,
+        verbose_name=_('Dernière phase atteinte'),
+    )
+    generated_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Calculé le'))
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_feed_plan'
+        verbose_name = _('Plan alimentaire du cycle')
+        verbose_name_plural = _('Plans alimentaires des cycles')
+
+    def __str__(self):
+        return f'{self.cycle.cycle_name} · v{self.version}'
+
+
+class CycleFeedStockAdjustment(models.Model):
+    """Ajustement immuable conservant un reliquat physique historique."""
+
+    REASON_LEGACY_CONSUMPTION = 'legacy_consumption'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stock_entry = models.OneToOneField(
+        CycleFeedStockEntry,
+        on_delete=models.CASCADE,
+        related_name='historical_adjustment',
+        verbose_name=_('Entrée de stock'),
+    )
+    quantity_kg = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_('Quantité déjà consommée (kg)'),
+    )
+    reason = models.CharField(
+        max_length=32,
+        default=REASON_LEGACY_CONSUMPTION,
+        editable=False,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_feed_stock_adjustment'
+        verbose_name = _('Ajustement historique du stock')
+        verbose_name_plural = _('Ajustements historiques du stock')
 
 
 class ProductionCycle(models.Model):
@@ -1359,6 +1555,14 @@ class CycleLog(models.Model):
         blank=True,
         verbose_name=_("Type d'aliment"),
         help_text=_("Référence produit AquaCare")
+    )
+    feed_reference = models.ForeignKey(
+        'FarmFeedReference',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='cycle_logs',
+        verbose_name=_('Référence aliment'),
     )
     feed_size_mm = models.DecimalField(
         max_digits=3,

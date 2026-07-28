@@ -31,8 +31,10 @@ from ..serializers import (
     CalibrationTankSerializer,
     CycleComparisonSerializer,
     CycleDashboardSerializer,
+    CycleFeedRecommendationSerializer,
     CycleHarvestResponseSerializer,
     CycleStatisticsSerializer,
+    CycleStoreClassificationSerializer,
     CycleStoreManualStockSerializer,
     CycleStoreSerializer,
     CycleUnitAllocationSerializer,
@@ -474,8 +476,11 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             OpenApiExample(
                 "Déclaration manuelle",
                 value={
-                    'label': 'Aliment starter 25kg',
-                    'feed_size_mm': '2.00',
+                    'external_feed': {
+                        'name': 'Aliment local starter',
+                        'species': 'clarias',
+                        'pellet_size_mm': '2.00',
+                    },
                     'quantity_kg': '50.00',
                     'total_cost_fcfa': '75000.00',
                     'entry_date': '2026-06-29',
@@ -498,8 +503,11 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
                 user=request.user,
                 cycle=cycle,
                 command=DeclareManualStockCommand(
-                    label=serializer.validated_data['label'],
-                    feed_size_mm=serializer.validated_data['feed_size_mm'],
+                    feed_reference_id=serializer.validated_data.get('feed_reference_id'),
+                    feed_reference_client_uuid=serializer.validated_data.get('feed_reference_client_uuid'),
+                    external_feed=serializer.validated_data.get('external_feed'),
+                    label=serializer.validated_data.get('label', ''),
+                    feed_size_mm=serializer.validated_data.get('feed_size_mm'),
                     quantity_kg=serializer.validated_data['quantity_kg'],
                     total_cost_fcfa=serializer.validated_data['total_cost_fcfa'],
                     entry_date=serializer.validated_data['entry_date'],
@@ -510,10 +518,36 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             )
         except PermissionError as exc:
             raise PermissionDenied(str(exc)) from exc
+        except ValueError as exc:
+            raise serializers.ValidationError({'detail': str(exc)}) from exc
 
         payload = CycleStoreApplicationService.get_store(cycle)
         response_serializer = CycleStoreSerializer(payload, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary='Classifier une ancienne entrée de stock',
+        request=CycleStoreClassificationSerializer,
+        responses={200: CycleStoreSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='store/classify')
+    def store_classify(self, request, pk=None):
+        cycle = self.get_object()
+        serializer = CycleStoreClassificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            CycleStoreApplicationService.classify_legacy_stock(
+                user=request.user,
+                cycle=cycle,
+                entry_id=serializer.validated_data['entry_id'],
+                feed_reference_id=serializer.validated_data['feed_reference_id'],
+            )
+        except PermissionError as exc:
+            raise PermissionDenied(str(exc)) from exc
+        except ValueError as exc:
+            raise serializers.ValidationError({'detail': str(exc)}) from exc
+        payload = CycleStoreApplicationService.get_store(cycle)
+        return Response(CycleStoreSerializer(payload).data)
     
     @extend_schema(
         summary="Comparaison avec cycles précédents",
@@ -588,15 +622,15 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             "estimés via CycleSimulationService avec les paramètres du cycle. "
             "Utilisé pour l'écran de commande par phase."
         ),
-        responses={200: dict},
+        responses={200: CycleFeedRecommendationSerializer},
     )
     @action(detail=True, methods=['get'], url_path='feed-phases')
     def feed_phases(self, request, pk=None):
         """
         GET /api/aquaculture/cycles/{id}/feed-phases/
 
-        Retourne les phases d'alimentation issues de CycleSimulationService.
-        Chaque phase contient les produits recommandés avec quantity_bags.
+        Retourne le besoin futur recalculé, puis sa couverture exacte par le
+        stock, les commandes en attente et les produits AquaCare compatibles.
         """
         cycle = self.get_object()
 
@@ -623,9 +657,9 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         GET /api/aquaculture/cycles/{id}/feed-status/
 
         Délègue à CycleFeedService le calcul du statut des aliments :
-        - bags_needed  : issu des FeedingPlans du cycle (agrégation SQL)
-        - bags_ordered : commandes liées à ce cycle (Order.production_cycle)
-        - bags_consumed: total_feed_consumed / 25 kg
+        - besoin futur : moteur de recommandation par phase ;
+        - sacs proposés : vrais conditionnements des produits compatibles ;
+        - commandes et consommation : données réelles liées au cycle.
         """
         cycle = self.get_object()
         result = CycleFeedService.get_feed_status(cycle)

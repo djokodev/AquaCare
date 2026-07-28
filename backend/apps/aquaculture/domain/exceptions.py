@@ -42,6 +42,13 @@ class BusinessRuleViolation(AquacultureBusinessException):
     default_code = 'business_rule_violation'
 
 
+class CycleLogCycleImmutableError(BusinessRuleViolation):
+    """Un journal existant reste attaché à son cycle d'origine."""
+
+    default_detail = _('Le cycle d’un journal existant ne peut pas être modifié.')
+    default_code = 'cycle_immutable'
+
+
 class CycleNotActiveError(AquacultureBusinessException):
     """
     Tentative d'opération sur un cycle non actif.
@@ -181,6 +188,42 @@ class OfflineSyncConflictError(AquacultureBusinessException):
     default_code = 'sync_conflict'
 
 
+class FeedReferenceIdempotencyConflict(OfflineSyncConflictError):
+    """Un UUID de référence aliment est rejoué avec une autre identité."""
+
+    default_code = 'feed_reference_idempotency_conflict'
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': _('Cet UUID correspond à une autre référence d’aliment.'),
+        })
+
+
+class StockEntryIdempotencyConflict(OfflineSyncConflictError):
+    """Un UUID de stock est rejoué avec un autre payload."""
+
+    default_code = 'stock_entry_idempotency_conflict'
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': _('Cet UUID correspond à une autre déclaration de stock.'),
+        })
+
+
+class CycleLogIdempotencyConflict(OfflineSyncConflictError):
+    """Un UUID de journal est rejoué avec un autre payload."""
+
+    default_code = 'cycle_log_idempotency_conflict'
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': _('Cet UUID correspond à un autre journal quotidien.'),
+        })
+
+
 class DataIntegrityError(AquacultureBusinessException):
     """
     Violation de l'intégrité des données métier.
@@ -234,7 +277,16 @@ class FeedStockValidationError(BusinessRuleViolation):
 
     default_code = 'feed_stock_validation_error'
 
-    def __init__(self, *, code: str, detail, available_feed_kg=None):
+    def __init__(
+        self,
+        *,
+        code: str,
+        detail,
+        available_feed_kg=None,
+        minimum_balance_kg=None,
+        requested_feed_kg=None,
+        feed_reference_id=None,
+    ):
         payload = {
             'code': code,
             'detail': detail,
@@ -242,6 +294,12 @@ class FeedStockValidationError(BusinessRuleViolation):
         }
         if available_feed_kg is not None:
             payload['available_feed_kg'] = str(available_feed_kg)
+        if minimum_balance_kg is not None:
+            payload['minimum_balance_kg'] = str(minimum_balance_kg)
+        if requested_feed_kg is not None:
+            payload['requested_feed_kg'] = str(requested_feed_kg)
+        if feed_reference_id is not None:
+            payload['feed_reference_id'] = str(feed_reference_id)
         super().__init__(payload)
 
 

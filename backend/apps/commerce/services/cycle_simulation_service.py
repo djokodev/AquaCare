@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from decimal import Decimal
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from aquaculture.domain.cycle_duration import (
     get_default_cycle_duration_days,
@@ -23,12 +23,13 @@ from ..constants import (
     TARGET_WEIGHT_TILAPIA_DEFAULT,
 )
 from ..domain.growth_calculator import (
+    DailyFeedingEntry,
     FeedingCalculator,
     FeedingPhase,
     GrowthCalculator,
+    NutritionalGuideRule,
     PhaseDetector,
     ROICalculator,
-    WeightProgressionEntry,
 )
 from ..models import Product
 from .base import BaseCommerceService
@@ -61,7 +62,7 @@ class SimulationPhaseDetails(TypedDict):
     phase_name: str
     days_range: list[int]
     weight_range_g: list[float]
-    pellet_size_mm: float
+    pellet_size_mm: float | None
     duration_days: int
     total_consumption_kg: Decimal
     daily_avg_kg: float
@@ -91,6 +92,7 @@ class CycleSimulationResult(TypedDict):
     parameters: SimulationParams
     feeding_phases: list[SimulationPhaseDetails]
     summary: SimulationSummary
+    _daily_feeding_schedule: NotRequired[list[DailyFeedingEntry]]
 
 
 class CycleSimulationService(BaseCommerceService):
@@ -115,6 +117,8 @@ class CycleSimulationService(BaseCommerceService):
         selling_price_per_kg_fcfa: float | None = None,
         fingerlings_cost_fcfa: float | None = None,
         other_costs_fcfa: float | None = None,
+        include_daily_feeding_schedule: bool = False,
+        nutritional_guide_rules: list[NutritionalGuideRule] | None = None,
     ) -> CycleSimulationResult:
         """
         Simule un cycle complet avec estimation détaillée des besoins.
@@ -160,16 +164,15 @@ class CycleSimulationService(BaseCommerceService):
         )
 
         # 2. Calculer progression du poids jour par jour
-        weight_progression = GrowthCalculator.calculate_weight_progression(
-            params['initial_weight_g'],
-            params['target_weight_g'],
-            params['cycle_duration_days']
+        weight_progression, daily_feeding_schedule = (
+            CycleSimulationService.build_daily_feeding_schedule(params)
         )
 
         # 3. Regrouper par phases d'alimentation (changements de granulé)
         feeding_phases = PhaseDetector.group_by_phases(
             params['species'],
-            weight_progression
+            weight_progression,
+            nutritional_guide_rules=nutritional_guide_rules,
         )
 
         # 4. Calculer consommation et produits pour chaque phase
@@ -181,7 +184,7 @@ class CycleSimulationService(BaseCommerceService):
             phase_data = CycleSimulationService._calculate_phase_details(
                 phase,
                 params,
-                weight_progression
+                daily_feeding_schedule,
             )
             phases_with_products.append(phase_data)
             total_feed_kg += phase_data['total_consumption_kg']
@@ -194,12 +197,32 @@ class CycleSimulationService(BaseCommerceService):
             total_cost
         )
 
-        return {
+        result: CycleSimulationResult = {
             'simulation_type': 'predictive',
             'parameters': params,
             'feeding_phases': phases_with_products,
             'summary': summary
         }
+        if include_daily_feeding_schedule:
+            result['_daily_feeding_schedule'] = daily_feeding_schedule
+        return result
+
+    @staticmethod
+    def build_daily_feeding_schedule(
+        params: SimulationParams,
+    ) -> tuple[list[dict[str, float]], list[DailyFeedingEntry]]:
+        """Construit la progression et les rations quotidiennes de référence."""
+        weight_progression = GrowthCalculator.calculate_weight_progression(
+            float(params['initial_weight_g']),
+            float(params['target_weight_g']),
+            int(params['cycle_duration_days']),
+        )
+        daily_feeding_schedule = FeedingCalculator.calculate_daily_feed_progression(
+            int(params['initial_fish_count']),
+            weight_progression,
+            float(params['survival_rate']),
+        )
+        return weight_progression, daily_feeding_schedule
 
     @staticmethod
     def _build_simulation_params(
@@ -256,7 +279,7 @@ class CycleSimulationService(BaseCommerceService):
     def _calculate_phase_details(
         phase: FeedingPhase,
         params: SimulationParams,
-        weight_progression: list[WeightProgressionEntry],
+        daily_feeding_schedule: list[DailyFeedingEntry],
     ) -> SimulationPhaseDetails:
         """
         Calcule consommation et produits nécessaires pour une phase.
@@ -264,39 +287,35 @@ class CycleSimulationService(BaseCommerceService):
         Args:
             phase: Phase info (days_range, pellet_size_mm, etc.)
             params: Paramètres simulation
-            weight_progression: Progression complète du poids
+            daily_feeding_schedule: Rations biologiques journalières
 
         Returns:
             dict: Phase avec consommation et produits
         """
         # Calculer consommation totale de la phase
         start_day, end_day = phase['days_range']
-        total_consumption_kg = FeedingCalculator.calculate_period_consumption(
-            params['initial_fish_count'],
-            weight_progression,
-            start_day,
-            end_day,
-            params['survival_rate']
+        total_consumption_kg = sum(
+            (
+                entry['feed_kg']
+                for entry in daily_feeding_schedule
+                if start_day <= entry['day'] <= end_day
+            ),
+            Decimal('0'),
         )
 
         # Trouver produits DIBAQ disponibles pour cette granulométrie
-        products = Product.objects.filter(
-            brand='dibaq',
-            species=params['species'],
-            pellet_size_mm=Decimal(str(phase['pellet_size_mm'])),
-            is_available=True
-        ).order_by('-package_weight_kg')  # Privilégier gros formats
-
-        if not products.exists():
-            # Fallback : chercher taille proche (±0.5mm) parmi les produits DIBAQ
-            pellet_size = phase['pellet_size_mm']
+        products = Product.objects.none()
+        if phase['pellet_size_mm'] is not None:
             products = Product.objects.filter(
                 brand='dibaq',
                 species=params['species'],
-                pellet_size_mm__gte=Decimal(str(pellet_size - 0.5)),
-                pellet_size_mm__lte=Decimal(str(pellet_size + 0.5)),
+                pellet_size_mm=Decimal(str(phase['pellet_size_mm'])),
                 is_available=True
-            ).order_by('-package_weight_kg')
+            ).order_by('-package_weight_kg')  # Privilégier gros formats
+        # Évaluer explicitement l'absence de produit exact afin de conserver
+        # le contrat de requêtes du simulateur, sans réintroduire un produit
+        # approximatif d'une autre granulométrie.
+        products.exists()
 
         # Convertir kg en sacs (privilégier 20kg, compléter avec 1kg)
         suggested_products = CycleSimulationService._convert_kg_to_bags(

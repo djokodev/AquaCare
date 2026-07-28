@@ -15,6 +15,7 @@ import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 import { AppHeader, AppText, Badge, Button, Card, InlineAlert, LoadingState, Screen, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
 type Props = StackScreenProps<RootStackParamList, 'PostHarvestConsolidation'>;
 
@@ -25,9 +26,9 @@ const MAX_DENSITY_POND_PER_M2 = 10;
 const MAX_DENSITY_TANK_PER_M3 = 300;
 
 function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  const d = new Date(`${dateStr}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return getBusinessIsoDate(d);
 }
 
 function formatKg(val: number): string {
@@ -105,7 +106,7 @@ export default function PostHarvestConsolidationScreen({ route, navigation }: Pr
   const restDays = DEFAULT_INTER_CYCLE_REST_DAYS;
   const defaultStartDate = harvestedCycle?.end_date
     ? addDays(harvestedCycle.end_date, restDays)
-    : new Date().toISOString().split('T')[0];
+    : getBusinessIsoDate();
 
   // ── État du formulaire ───────────────────────────────────────────────────────
   const [fingerlings, setFingerlings] = useState(String(recommendedFingerlings));

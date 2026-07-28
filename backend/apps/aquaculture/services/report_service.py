@@ -1618,7 +1618,14 @@ class ReportService(BaseService):
                     "feed_cost_consumed_fcfa": feed_cost_consumed_fcfa,
                     "feed_consumed_kg": total_feed,
                     "planned_feed_cost_fcfa": round(
-                        CycleFeedService.get_feed_status(cycle)["total_feed_needed_kg"] * feed_price_per_kg, 2
+                        (
+                            ReportService._to_float(
+                                CycleFeedService.get_feed_status(cycle)["total_feed_needed_kg"]
+                            )
+                            or 0.0
+                        )
+                        * feed_price_per_kg,
+                        2,
                     ),
                 },
                 "growth_logs": ReportService._build_growth_logs(cycle, [], period_start, period_end),
@@ -1864,7 +1871,10 @@ class ReportService(BaseService):
         )
         fingerlings_cost = ReportService._to_float(cycle.fingerlings_cost_fcfa) or 0.0
         planned_feed_kg = CycleFeedService.get_feed_status(cycle)["total_feed_needed_kg"]
-        planned_feed_cost = round(planned_feed_kg * feed_price_per_kg, 2)
+        planned_feed_cost = round(
+            (ReportService._to_float(planned_feed_kg) or 0.0) * feed_price_per_kg,
+            2,
+        )
 
         scope_label = ReportService._pick_text(
             ReportService._resolve_language_code(farm_profile.user),

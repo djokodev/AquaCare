@@ -1,12 +1,12 @@
 """
 Commande de management pour charger les données de guides nutritionnels AquaCare.
-Source : Tables officielles DIBAQ (Catfish + Tilapia — phase production uniquement).
+Sources : passerelles starter AquaCare (0–10 g) et tables officielles DIBAQ
+(Catfish + Tilapia — phase production à partir de 10 g).
 
 Les tables de rationnement DIBAQ sont température-dépendantes.
 temperature_rates = dict {temp_°C: kg_aliment_pour_100kg_biomasse_par_jour}
 feeding_rate_percentage = taux à la température de référence (26°C pour Cameroun tropical).
 
-Starter phase (<10g) non chargée — hors scope (utilisateurs achètent alevins à 10g+).
 """
 from decimal import Decimal
 
@@ -15,7 +15,42 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = 'Charge les tables de rationnement officielles DIBAQ (production, 10g+)'
+    help = 'Charge les starters AquaCare et les tables DIBAQ (production, 10g+)'
+
+    STARTER_MARKER = (
+        'AQUACARE_MANAGED_STARTER_V1 — Passerelle opérationnelle AquaCare '
+        'pour les cycles démarrant sous 10 g, fondée sur les hypothèses '
+        'internes de simulation ; ce guide n’est pas une ligne officielle DIBAQ.'
+    )
+
+    STARTERS = {
+        'clarias': {
+            'growth_stage': 'alevin',
+            'min_weight': Decimal('0.00'),
+            'max_weight': Decimal('10.00'),
+            'feed_size_mm': Decimal('2.0'),
+            'feeding_rate_percentage': Decimal('5.00'),
+            'protein_requirement': 45,
+            'meals_per_day': 3,
+            'expected_fcr': Decimal('1.10'),
+            'recommended_products': ['DIBAQ Catfish 2mm'],
+            'reference_temperature_c': 26,
+            'temperature_rates': {},
+        },
+        'tilapia': {
+            'growth_stage': 'alevin',
+            'min_weight': Decimal('0.00'),
+            'max_weight': Decimal('10.00'),
+            'feed_size_mm': Decimal('2.0'),
+            'feeding_rate_percentage': Decimal('5.00'),
+            'protein_requirement': 45,
+            'meals_per_day': 3,
+            'expected_fcr': Decimal('1.05'),
+            'recommended_products': ['DIBAQ Tilapia 2mm'],
+            'reference_temperature_c': 26,
+            'temperature_rates': {},
+        },
+    }
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -25,7 +60,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write('Chargement des tables DIBAQ (production)...')
+        self.stdout.write('Chargement des starters AquaCare et tables DIBAQ...')
+        self.load_starter_guides(options)
         self.load_dibaq_guides(options)
 
         total = NutritionalGuide.objects.count()
@@ -248,19 +284,8 @@ class Command(BaseCommand):
     ]
 
     def load_dibaq_guides(self, options):
-        """Charge ou met à jour les guides DIBAQ via update_or_create (idempotent).
-        Supprime d'abord les anciennes entrées non-DIBAQ pour éviter les conflits de lookup.
-        """
+        """Charge ou met à jour les guides DIBAQ sans supprimer d'autres sources."""
         species_filter = options.get('species')
-
-        # Nettoyer les anciennes entrées AquaCare (source par défaut avant cette refonte)
-        old_entries = NutritionalGuide.objects.exclude(source='DIBAQ')
-        if species_filter:
-            old_entries = old_entries.filter(species=species_filter)
-        deleted_count = old_entries.count()
-        if deleted_count:
-            old_entries.delete()
-            self.stdout.write(f'  Supprimé {deleted_count} ancienne(s) entrée(s) non-DIBAQ')
 
         datasets = []
         if not species_filter or species_filter == 'clarias':
@@ -293,3 +318,23 @@ class Command(BaseCommand):
             self.stdout.write(
                 f'  {species}: {created_count} créés, {updated_count} mis à jour'
             )
+
+    def load_starter_guides(self, options):
+        """Crée les deux passerelles 0–10 g gérées par AquaCare."""
+        species_filter = options.get('species')
+        for species, row in self.STARTERS.items():
+            if species_filter and species_filter != species:
+                continue
+            defaults = {
+                **row,
+                'source': 'AquaCare',
+                'feeding_notes': self.STARTER_MARKER,
+            }
+            _, created = NutritionalGuide.objects.update_or_create(
+                species=species,
+                min_weight=Decimal('0.00'),
+                source='AquaCare',
+                defaults=defaults,
+            )
+            action = 'créé' if created else 'mis à jour'
+            self.stdout.write(f'  starter {species}: {action}')

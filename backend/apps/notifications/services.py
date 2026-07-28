@@ -122,20 +122,20 @@ class NotificationService:
 
     @staticmethod
     def _dispatch_immediate_notifications(
-        notification: Notification,
+        notification_id: str,
         channels: list[NotificationChannel],
     ) -> None:
         try:
             from .tasks import send_email_notification_task, send_push_notification_task
 
             if "email" in channels:
-                send_email_notification_task.delay(str(notification.id))
+                send_email_notification_task.delay(notification_id)
             if "push" in channels:
-                send_push_notification_task.delay(str(notification.id))
+                send_push_notification_task.delay(notification_id)
         except Exception:
             logger.exception(
                 "Immediate notification dispatch failed for %s",
-                notification.id,
+                notification_id,
             )
 
     @staticmethod
@@ -278,7 +278,13 @@ class NotificationService:
         )
 
         if send_immediately:
-            NotificationService._dispatch_immediate_notifications(notification, channels)
+            notification_id = str(notification.id)
+            transaction.on_commit(
+                lambda: NotificationService._dispatch_immediate_notifications(
+                    notification_id,
+                    channels,
+                )
+            )
 
         return notification
 

@@ -7,6 +7,11 @@ from decimal import Decimal
 import pytest
 from commerce.models import Product
 from commerce.services import CycleSimulationService
+from commerce.services.catalog_application_service import (
+    CatalogApplicationService,
+    CycleSimulationCommand,
+)
+from django.core.management import call_command
 
 
 @pytest.mark.django_db
@@ -72,8 +77,9 @@ class TestCycleSimulationService:
         assert params['cycle_duration_days'] == 180  # Défaut tilapia
         assert params['survival_rate'] == 0.95  # Défaut
 
-        # Vérifier phases (tilapia = 3 phases)
-        assert len(result['feeding_phases']) == 3
+        # Vérifier phases (tilapia = 2 granulométries dans le guide DIBAQ
+        # pour une cible de 350 g : 2 mm puis 3,5 mm)
+        assert len(result['feeding_phases']) == 2
 
         # Vérifier summary
         summary = result['summary']
@@ -111,6 +117,27 @@ class TestCycleSimulationService:
 
         summary = result['summary']
         assert summary['estimated_final_count'] == 450  # 500 × 0.90
+
+    def test_daily_feeding_schedule_is_internal_and_reconciles_total(self, tilapia_products):
+        public_result = CycleSimulationService.simulate_cycle(
+            species='tilapia',
+            initial_fish_count=500,
+            cycle_duration_days=90,
+        )
+        internal_result = CycleSimulationService.simulate_cycle(
+            species='tilapia',
+            initial_fish_count=500,
+            cycle_duration_days=90,
+            include_daily_feeding_schedule=True,
+        )
+
+        assert '_daily_feeding_schedule' not in public_result
+        schedule = internal_result['_daily_feeding_schedule']
+        assert len(schedule) == 90
+        assert [entry['day'] for entry in schedule] == list(range(1, 91))
+        assert sum(entry['feed_kg'] for entry in schedule) == Decimal(
+            str(internal_result['summary']['total_feed_kg'])
+        )
 
     def test_simulate_cycle_with_selling_price_override(self, tilapia_products):
         """Test prise en compte du prix de vente surchargé."""
@@ -155,14 +182,13 @@ class TestCycleSimulationService:
 
         phases = result['feeding_phases']
 
-        # Tilapia : doit avoir 3 phases (2mm, 3mm, 4.5mm)
-        assert len(phases) == 3
+        # Tilapia : doit avoir 2 phases (2 mm, 3,5 mm) pour une cible de 350 g.
+        assert len(phases) == 2
 
         # Vérifier progression granulométrie
         pellet_sizes = [phase['pellet_size_mm'] for phase in phases]
         assert 2.0 in pellet_sizes  # Alevinage
-        assert 3.0 in pellet_sizes  # Pré-grossissement
-        assert 4.5 in pellet_sizes  # Grossissement
+        assert 3.5 in pellet_sizes  # Grossissement
 
         # Vérifier que chaque phase a des produits
         for phase in phases:
@@ -207,3 +233,35 @@ class TestCycleSimulationService:
         # Note : La simulation peut donner des FCR très optimistes car basée sur formules théoriques
         assert fcr > 0
         assert fcr < 3.0
+
+
+@pytest.mark.django_db
+def test_application_simulation_uses_persistent_starter_without_losing_days_or_feed():
+    call_command('load_nutritional_data', species='clarias', verbosity=0)
+    Product.objects.create(
+        name='DIBAQ Catfish 2mm',
+        brand='dibaq',
+        species='catfish',
+        pellet_size_mm=Decimal('2.0'),
+        package_weight_kg=Decimal('15.0'),
+        price_per_package=Decimal('23500.00'),
+    )
+
+    result = CatalogApplicationService.simulate_cycle(CycleSimulationCommand(
+        species='clarias',
+        initial_fish_count=3000,
+        initial_weight_g=5.0,
+        target_weight_g=400.0,
+        cycle_duration_days=120,
+        survival_rate=0.95,
+    ))
+
+    phases = result['feeding_phases']
+    assert phases[0]['pellet_size_mm'] == 2.0
+    assert phases[0]['weight_range_g'][0] < 10
+    assert all(phase['pellet_size_mm'] is not None for phase in phases)
+    assert sum(phase['duration_days'] for phase in phases) == 120
+    assert sum(
+        (phase['total_consumption_kg'] for phase in phases),
+        Decimal('0'),
+    ) == Decimal(str(result['summary']['total_feed_kg']))

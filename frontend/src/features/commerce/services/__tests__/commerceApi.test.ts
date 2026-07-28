@@ -77,12 +77,14 @@ describe('features/commerce/services/commerceApi', () => {
       .mockResolvedValueOnce({ data: [{ id: 'o1' }] } as any)
       .mockResolvedValueOnce({ data: { results: [{ id: 'o2' }] } } as any);
 
-    const direct = await commerceApi.getOrders();
-    const paged = await commerceApi.getOrders();
+    const direct = await commerceApi.getOrders({ productionCycleId: 'cycle-1' });
+    const paged = await commerceApi.getOrders({ productionCycleId: 'cycle-1' });
 
     expect(direct).toEqual([{ id: 'o1' }]);
     expect(paged).toEqual([{ id: 'o2' }]);
-    expect(mockApi.get).toHaveBeenCalledWith('/commerce/orders/');
+    expect(mockApi.get).toHaveBeenCalledWith('/commerce/orders/', {
+      params: { production_cycle: 'cycle-1' },
+    });
   });
 
   it('getOrderDetail, createOrder, getOrderStatistics, previewDeliveryFee', async () => {
@@ -98,7 +100,7 @@ describe('features/commerce/services/commerceApi', () => {
     const detail = await commerceApi.getOrderDetail('o1');
     const created = await commerceApi.createOrder({ items: [], delivery_method: 'home' } as any);
     const confirmedReceipt = await commerceApi.confirmOrderReceipt('o-created');
-    const stats = await commerceApi.getOrderStatistics();
+    const stats = await commerceApi.getOrderStatistics({ productionCycleId: 'cycle-1' });
     const preview = await commerceApi.previewDeliveryFee({
       items: [{ product_id: 'p1', quantity: 2 }],
       delivery_method: 'home',
@@ -111,7 +113,9 @@ describe('features/commerce/services/commerceApi', () => {
     expect(preview.total).toBe('13000');
 
     expect(mockApi.get).toHaveBeenNthCalledWith(1, '/commerce/orders/o1/');
-    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/commerce/orders/statistics/');
+    expect(mockApi.get).toHaveBeenNthCalledWith(2, '/commerce/orders/statistics/', {
+      params: { production_cycle: 'cycle-1' },
+    });
     expect(mockApi.post).toHaveBeenNthCalledWith(1, '/commerce/orders/', {
       items: [],
       delivery_method: 'home',

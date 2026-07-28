@@ -13,6 +13,7 @@ from aquaculture.models import (
     CycleFeedStockEntry,
     CycleLog,
     CycleUnitAllocation,
+    FarmFeedReference,
     ProductionCycle,
     ProductionUnit,
 )
@@ -47,8 +48,16 @@ def create_cycle_unit_allocation(cycle, name='Bac 1'):
 @pytest.mark.django_db
 class TestCycleLogApplicationService:
     def test_create_or_update_log_updates_existing_log(self, authenticated_user, production_cycle):
+        feed_reference = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            source='external',
+            name='Stock test',
+            species=production_cycle.species,
+            pellet_size_mm=Decimal('2.00'),
+        )
         CycleFeedStockEntry.objects.create(
             cycle=production_cycle,
+            feed_reference=feed_reference,
             source='manual',
             label='Stock test',
             feed_size_mm=Decimal('2.00'),
@@ -69,8 +78,7 @@ class TestCycleLogApplicationService:
                 "log_date": date.today(),
                 "mortality_count": 5,
                 "feed_quantity": Decimal("2.5"),
-                "feed_type": "Stock test",
-                "feed_size_mm": Decimal("2.0"),
+                "feed_reference": feed_reference,
             },
         )
 

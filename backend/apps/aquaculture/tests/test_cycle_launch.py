@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 from aquaculture.cycle_launch_serializers import CycleLaunchRequestSerializer
-from aquaculture.models import CycleUnitAllocation, FarmProductionPlan, ProductionCycle, ProductionUnit
+from aquaculture.models import CycleFeedPlan, CycleUnitAllocation, FarmProductionPlan, ProductionCycle, ProductionUnit
 from aquaculture.services.cycle_launch_application_service import (
     CycleLaunchApplicationService,
     CycleLaunchUnitAlreadyAllocated,
@@ -116,6 +116,7 @@ def test_cycle_launch_creates_complete_aggregate_and_replays(auth_client, farm_p
     assert CycleUnitAllocation.objects.count() == 2
     assert FarmProductionPlan.objects.get(farm_profile=farm_profile).setup_completed is True
     assert CycleUnitAllocation.objects.get(initial_fish_count=1200).initial_biomass_kg == Decimal("12.00")
+    assert CycleFeedPlan.objects.filter(cycle_id=created.data["production_cycle"]["id"]).count() == 1
 
     cycle_ids = {created.data["production_cycle"]["id"]}
     replay = auth_client.post(url, payload, format="json")
@@ -127,6 +128,7 @@ def test_cycle_launch_creates_complete_aggregate_and_replays(auth_client, farm_p
     assert ProductionCycle.objects.count() == 1
     assert ProductionUnit.objects.count() == 2
     assert CycleUnitAllocation.objects.count() == 2
+    assert CycleFeedPlan.objects.count() == 1
 
     conflict_payload = launch_payload(launch_uuid=payload["launch_uuid"])
     conflict_payload["cycle"]["initial_count"] = 1999

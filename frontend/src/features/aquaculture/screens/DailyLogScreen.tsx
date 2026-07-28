@@ -33,7 +33,10 @@ import {
 } from '@/features/aquaculture/services/aquacultureWorkflowService';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import FeedingTimesField from '@/features/aquaculture/components/FeedingTimesField';
-import { formatEditableNumber, parseLocalizedNumber } from '@/utils/localizedNumber';
+import { formatDecimalForDisplay, formatEditableNumber, parseLocalizedNumber } from '@/utils/localizedNumber';
+import { getBusinessIsoDate } from '@/utils/businessDate';
+import { projectOfflineStore } from '@/features/aquaculture/services/offlineStoreProjection';
+import { OfflineCycleLog, offlineService } from '@/services/offlineService';
 
 interface DailyLogData {
   mortality_count: string;
@@ -41,6 +44,7 @@ interface DailyLogData {
   feed_quantity: string;
   feed_type: string;
   feed_size_mm: string;
+  feed_reference: string;
   dissolved_oxygen: string;
   water_temperature: string;
   ph_level: string;
@@ -58,6 +62,7 @@ const FEED_STOCK_ERROR_CODES = new Set([
   'feed_stock_not_started',
   'feed_log_before_stock_tracking',
   'insufficient_feed_stock',
+  'feed_stock_history_inconsistent',
   'feed_stock_item_unavailable',
 ]);
 
@@ -75,6 +80,7 @@ const EMPTY_FORM: DailyLogData = {
   feed_quantity: '',
   feed_type: '',
   feed_size_mm: '',
+  feed_reference: '',
   dissolved_oxygen: '',
   water_temperature: '',
   ph_level: '',
@@ -84,11 +90,7 @@ const EMPTY_FORM: DailyLogData = {
   observations: '',
 };
 
-const getLocalIsoDate = (): string => {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
-};
+const getLocalIsoDate = (): string => getBusinessIsoDate();
 
 const parseOptionalDecimal = (value: string): number | null => {
   const result = parseLocalizedNumber(value);
@@ -103,6 +105,40 @@ const parseOptionalInteger = (value: string): number | null => {
   return Number(trimmed);
 };
 
+const numericFeedSize = (value: string | number | null | undefined): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const parsed = parseLocalizedNumber(value);
+  return parsed.kind === 'valid' ? parsed.value : null;
+};
+
+const offlineLogAsCycleLog = (offlineLog: OfflineCycleLog): CycleLog => ({
+  id: offlineLog.id,
+  cycle: offlineLog.cycleId,
+  cycle_unit_allocation: offlineLog.logData.cycle_unit_allocation ?? null,
+  log_date: offlineLog.logData.log_date ?? getLocalIsoDate(),
+  client_uuid: offlineLog.logData.client_uuid,
+  mortality_count: offlineLog.logData.mortality_count,
+  mortality_reason: offlineLog.logData.mortality_reason,
+  sample_count: offlineLog.logData.sample_count,
+  sample_total_weight: offlineLog.logData.sample_total_weight,
+  feed_quantity: offlineLog.logData.feed_quantity,
+  feed_type: offlineLog.logData.feed_type,
+  feed_size_mm: offlineLog.logData.feed_size_mm,
+  feed_reference: offlineLog.logData.feed_reference,
+  feed_reference_client_uuid: offlineLog.logData.feed_reference_client_uuid,
+  feeding_times: offlineLog.logData.feeding_times,
+  water_temperature: offlineLog.logData.water_temperature,
+  dissolved_oxygen: offlineLog.logData.dissolved_oxygen,
+  ph_level: offlineLog.logData.ph_level,
+  ammonia_level: offlineLog.logData.ammonia_level,
+  observations: offlineLog.logData.observations,
+  created_offline: true,
+  pending_sync: true,
+  created_at: new Date(offlineLog.timestamp).toISOString(),
+  server_log_id: offlineLog.server_log_id ?? null,
+});
+
 export default function DailyLogScreen({ navigation, route }: DailyLogScreenProps) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
@@ -113,12 +149,14 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
   const unitName = routeParams?.productionUnitName || t('productionUnitsUnknownUnit');
   const selectedCycle = dashboardData?.active_cycles?.find((cycle) => cycle.id === cycleId) || null;
   const useComma = i18n.language?.startsWith('fr') ?? false;
+  const numberLocale = useComma ? 'fr-FR' : 'en-US';
 
   const [formData, setFormData] = useState<DailyLogData>(EMPTY_FORM);
   const [feedingStatus, setFeedingStatus] = useState<FeedingStatus>(null);
   const [feedingTimes, setFeedingTimes] = useState<string[]>([]);
   const [store, setStore] = useState<CycleStore | null>(null);
   const [existingLog, setExistingLog] = useState<CycleLog | null>(null);
+  const [localLogConflict, setLocalLogConflict] = useState(false);
   const [loadingContext, setLoadingContext] = useState(Boolean(cycleId && unitAllocationId));
   const [contextError, setContextError] = useState(false);
   const [touched, setTouched] = useState<Partial<Record<DailyLogField, boolean>>>({});
@@ -151,31 +189,65 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     const loadContext = async () => {
       setLoadingContext(true);
       setContextError(false);
-      const [logsResult, storeResult] = await Promise.allSettled([
+      setLocalLogConflict(false);
+      const today = getLocalIsoDate();
+      const [logsResult, storeResult, localLogResult] = await Promise.allSettled([
         aquacultureService.getCycleLogs(cycleId, { cycleUnitAllocationId: unitAllocationId }),
         aquacultureService.getCycleStore(cycleId),
+        offlineService.findPendingCycleLogForScope({
+          cycleId,
+          logDate: today,
+          cycleUnitAllocationId: unitAllocationId || null,
+        }),
       ]);
       if (!active) {
         return;
       }
 
-      if (storeResult.status === 'fulfilled') {
-        setStore(storeResult.value);
-      } else {
-        setStore(null);
-        setContextError(true);
+      const serverStore = storeResult.status === 'fulfilled' ? storeResult.value : null;
+      setStore(serverStore);
+      try {
+        const projection = await projectOfflineStore(
+          cycleId,
+          serverStore,
+          t('storePendingStockLabel'),
+        );
+        if (active) setStore(projection.store);
+      } catch {
+        if (storeResult.status === 'rejected') setContextError(true);
       }
 
-      if (logsResult.status === 'fulfilled') {
-        const todayLog = logsResult.value.find((log) => log.log_date === getLocalIsoDate()) || null;
-        setExistingLog(todayLog);
-        if (todayLog) {
+      const serverLog = logsResult.status === 'fulfilled'
+        ? logsResult.value.find((log) => log.log_date === today) ?? null
+        : null;
+      const offlineLog = localLogResult.status === 'fulfilled'
+        ? localLogResult.value
+        : null;
+      const localEditableLog = offlineLog ? offlineLogAsCycleLog(offlineLog) : null;
+      let todayLog = serverLog;
+      if (localEditableLog) {
+        const sameServerLog = Boolean(
+          serverLog && localEditableLog.server_log_id && localEditableLog.server_log_id === serverLog.id,
+        );
+        if (serverLog && !sameServerLog && serverLog.client_uuid !== localEditableLog.client_uuid) {
+          setLocalLogConflict(true);
+        } else {
+          todayLog = localEditableLog.server_log_id && !sameServerLog
+            ? { ...localEditableLog, server_log_id: null }
+            : localEditableLog;
+        }
+      }
+      setExistingLog(todayLog);
+      if (todayLog) {
           setFormData({
             mortality_count: String(todayLog.mortality_count ?? 0),
             mortality_reason: todayLog.mortality_reason ?? '',
             feed_quantity: formatEditableNumber(todayLog.feed_quantity, useComma),
             feed_type: todayLog.feed_type ?? '',
             feed_size_mm: formatEditableNumber(todayLog.feed_size_mm, useComma),
+            feed_reference: todayLog.feed_reference
+              ?? todayLog.feed_reference_client_uuid
+              ?? '',
             dissolved_oxygen: formatEditableNumber(todayLog.dissolved_oxygen, useComma),
             water_temperature: formatEditableNumber(todayLog.water_temperature, useComma),
             ph_level: formatEditableNumber(todayLog.ph_level, useComma),
@@ -187,8 +259,8 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
           const wasFed = Number(todayLog.feed_quantity ?? 0) > 0 || (todayLog.feeding_times?.length ?? 0) > 0;
           setFeedingStatus(wasFed ? 'fed' : 'not_fed');
           setFeedingTimes(todayLog.feeding_times ?? []);
-        }
-      } else {
+      }
+      if (logsResult.status === 'rejected' && !localEditableLog) {
         setContextError(true);
       }
       setLoadingContext(false);
@@ -200,32 +272,60 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     };
   }, [cycleId, unitAllocationId, useComma]);
 
+  const stockBySize = useMemo(() => {
+    if (!store) return [];
+    if (store.stock_by_size?.length) return store.stock_by_size;
+    const groups = new Map<string, NonNullable<CycleStore['stock_by_size']>[number]>();
+    store.stock_items.forEach((item) => {
+      // Un stock legacy sans référence alimentaire reste visible dans le
+      // Magasin, mais ne peut pas être utilisé pour une ration journalière.
+      if ((!item.feed_reference_id && !item.feed_reference_client_uuid) || !item.feed_size_mm) return;
+      const key = String(Number(item.feed_size_mm));
+      const current = groups.get(key) ?? {
+        feed_size_mm: item.feed_size_mm,
+        quantity_added_kg: '0.00',
+        quantity_consumed_kg: '0.00',
+        quantity_available_kg: '0.00',
+      };
+      current.quantity_added_kg = (Number(current.quantity_added_kg) + Number(item.quantity_added_kg)).toFixed(2);
+      current.quantity_consumed_kg = (Number(current.quantity_consumed_kg) + Number(item.quantity_consumed_kg)).toFixed(2);
+      current.quantity_available_kg = (Number(current.quantity_available_kg) + Number(item.quantity_available_kg)).toFixed(2);
+      groups.set(key, current);
+    });
+    return Array.from(groups.values()).sort((left, right) => Number(left.feed_size_mm) - Number(right.feed_size_mm));
+  }, [store]);
+
   const selectedStockItem = useMemo(() => store?.stock_items?.find((item) => (
-    item.label.trim().toLocaleLowerCase() === formData.feed_type.trim().toLocaleLowerCase()
-      && (item.feed_size_mm === null
-        ? !formData.feed_size_mm.trim()
-        : Number(item.feed_size_mm) === Number(parseOptionalDecimal(formData.feed_size_mm)))
-  )) ?? null, [formData.feed_size_mm, formData.feed_type, store?.stock_items]);
+    Number(item.feed_size_mm) === numericFeedSize(formData.feed_size_mm)
+      && Boolean(item.feed_reference_id || item.feed_reference_client_uuid)
+      && Number(item.quantity_available_kg) > 0
+  )) ?? null, [formData.feed_size_mm, store?.stock_items]);
+  const selectedStockBySize = stockBySize.find(
+    (item) => Number(item.feed_size_mm) === numericFeedSize(formData.feed_size_mm),
+  ) ?? null;
 
   const availableFeedKg = useMemo(() => {
-    if (!selectedStockItem) {
+    if (!selectedStockBySize) {
       return null;
     }
-    const remaining = Number(selectedStockItem.quantity_available_kg);
-    const previousMatchesSelection = existingLog
-      && (existingLog.feed_type ?? '').trim().toLocaleLowerCase() === selectedStockItem.label.trim().toLocaleLowerCase()
-      && (selectedStockItem.feed_size_mm === null
-        ? existingLog.feed_size_mm == null
-        : Number(existingLog.feed_size_mm) === Number(selectedStockItem.feed_size_mm));
-    const previous = previousMatchesSelection ? Number(existingLog?.feed_quantity ?? 0) : 0;
-    return Math.max(0, remaining + previous);
-  }, [existingLog, selectedStockItem]);
+    const remaining = Number(selectedStockBySize.quantity_available_kg ?? 0);
+    const previous = numericFeedSize(existingLog?.feed_size_mm) === numericFeedSize(formData.feed_size_mm)
+      ? Number(existingLog?.feed_quantity ?? 0)
+      : 0;
+    return remaining + previous;
+  }, [existingLog, formData.feed_size_mm, selectedStockBySize]);
   const totalAvailableFeedKg = store
-    ? Math.max(0, Number(store.summary.estimated_feed_remaining_kg))
+    ? stockBySize.reduce((total, item) => total + Number(item.quantity_available_kg ?? 0), 0)
     : null;
+  const unclassifiedStockKg = store
+    ? Number(store.summary.unclassified_stock_kg ?? 0)
+    : 0;
 
   const validationErrors = useMemo<FormErrors>(() => {
     const errors: FormErrors = {};
+    if (localLogConflict) {
+      errors.scope = t('dailyLogServerLocalConflict');
+    }
     const mortality = parseOptionalInteger(formData.mortality_count);
     if (!formData.mortality_count.trim()) {
       errors.mortality_count = t('fieldRequired');
@@ -250,10 +350,16 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         errors.feed_quantity = t('feedStockUnavailable');
       } else if (store.status === 'not_started') {
         errors.feed_quantity = t('feedStockRequired');
-      } else if (!selectedStockItem) {
+      } else if (unclassifiedStockKg > 0 && stockBySize.length === 0) {
+        errors.feed_stock_item = t('feedStockRequiresClassification', {
+          available: formatDecimalForDisplay(unclassifiedStockKg, numberLocale),
+        });
+      } else if (!selectedStockBySize) {
         errors.feed_stock_item = t('feedStockItemRequired');
       } else if (availableFeedKg !== null && quantity.value > availableFeedKg) {
-        errors.feed_quantity = t('feedStockInsufficient', { available: availableFeedKg.toFixed(2) });
+        errors.feed_quantity = t('feedStockInsufficient', {
+          available: formatDecimalForDisplay(availableFeedKg, numberLocale),
+        });
       }
       if (feedingTimes.length === 0) {
         errors.feeding_times = t('feedingTimeRequired');
@@ -294,7 +400,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     }
 
     return errors;
-  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, selectedStockItem, store, t]);
+  }, [availableFeedKg, feedingStatus, feedingTimes.length, formData, localLogConflict, numberLocale, selectedStockBySize, stockBySize.length, store, t, unclassifiedStockKg]);
 
   const visibleError = (field: DailyLogField): string | undefined =>
     submitted || touched[field] ? serverErrors[field] ?? validationErrors[field] : undefined;
@@ -313,6 +419,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       feed_quantity: undefined,
       feed_type: undefined,
       feed_size_mm: undefined,
+      feed_reference: undefined,
       feed_stock_item: undefined,
       feeding_times: undefined,
     }));
@@ -323,6 +430,7 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
         feed_quantity: '',
         feed_type: '',
         feed_size_mm: '',
+        feed_reference: '',
       }));
       setFeedingTimes([]);
     }
@@ -347,19 +455,28 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       sample_count: sampleCount,
       sample_total_weight: sampleWeight,
       feed_quantity: feedQuantity,
-      feed_type: feedingStatus === 'fed' ? formData.feed_type.trim() : '',
+      feed_type: feedingStatus === 'fed' ? selectedStockItem?.label ?? '' : '',
       feed_size_mm: feedingStatus === 'fed' ? parseOptionalDecimal(formData.feed_size_mm) : null,
+      // The mobile flow selects only the compatible pellet size. The backend
+      // owns origin resolution and FIFO allocation across all matching feeds.
+      feed_reference: null,
+      feed_reference_client_uuid: null,
       feeding_times: feedingStatus === 'fed' ? feedingTimes : [],
       water_temperature: parseOptionalDecimal(formData.water_temperature),
       dissolved_oxygen: parseOptionalDecimal(formData.dissolved_oxygen),
       ph_level: parseOptionalDecimal(formData.ph_level),
       ammonia_level: parseOptionalDecimal(formData.ammonia_level),
       observations: formData.observations.trim(),
+      client_uuid: existingLog?.client_uuid,
     };
 
     setSaving(true);
     try {
-      const creationResult = await createCycleLogWithOfflineFallback(cycleId, logData);
+      const serverLogId = existingLog?.server_log_id
+        ?? (existingLog && !existingLog.pending_sync ? existingLog.id : null);
+      const creationResult = serverLogId
+        ? await createCycleLogWithOfflineFallback(cycleId, logData, { serverLogId })
+        : await createCycleLogWithOfflineFallback(cycleId, logData);
       dispatch(fetchDashboardData({ lightweight: true }));
 
       if (sampleCount && sampleWeight && selectedCycle) {
@@ -385,8 +502,16 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
       if (parsedError.code && FEED_STOCK_ERROR_CODES.has(parsedError.code)) {
         const message = parsedError.code === 'insufficient_feed_stock'
           ? t('feedStockInsufficient', { available: String(rawError.available_feed_kg ?? '0') })
+          : parsedError.code === 'feed_stock_history_inconsistent'
+            ? t('feedStockHistoryInconsistent', {
+              minimum: String(rawError.minimum_balance_kg ?? '0'),
+            })
           : parsedError.code === 'feed_stock_item_unavailable'
-            ? t('feedStockItemRequired')
+            ? unclassifiedStockKg > 0
+              ? t('feedStockRequiresClassification', {
+                available: formatDecimalForDisplay(unclassifiedStockKg, numberLocale),
+              })
+              : t('feedStockItemRequired')
           : parsedError.code === 'feed_log_before_stock_tracking'
             ? t('feedLogBeforeStockTracking')
             : t('feedStockRequired');
@@ -444,7 +569,9 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
     );
   }
 
-  const stockTone = store?.status === 'ok' ? 'success' : store?.status === 'low' ? 'warning' : 'error';
+  const stockTone = unclassifiedStockKg > 0 && (totalAvailableFeedKg ?? 0) <= 0
+    ? 'warning'
+    : store?.status === 'ok' ? 'success' : store?.status === 'low' ? 'warning' : 'error';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.page }}>
@@ -458,12 +585,17 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
             <AppText variant="body" color="muted">{t('dailyLogUnitContextLabel', { unitName })}</AppText>
             {existingLog ? (
               <AppText variant="helper" color="link" style={{ marginTop: spacing[2] }}>
-                {t('dailyLogUpdatingToday')}
+                {existingLog.pending_sync
+                  ? t('dailyLogPendingLocalUpdate')
+                  : t('dailyLogUpdatingToday')}
               </AppText>
             ) : null}
           </Card>
 
           {contextError ? <InlineAlert tone="warning" message={t('dailyLogContextLoadError')} /> : null}
+          {localLogConflict ? (
+            <InlineAlert tone="warning" message={t('dailyLogServerLocalConflict')} />
+          ) : null}
 
           <Card>
             <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('dailyRecommendedSection')}</AppText>
@@ -522,12 +654,18 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                 <InlineAlert
                   tone={stockTone}
                   message={store
-                    ? t('feedStockAvailable', { available: (availableFeedKg ?? totalAvailableFeedKg ?? 0).toFixed(2) })
+                    ? (unclassifiedStockKg > 0 && (totalAvailableFeedKg ?? 0) <= 0
+                      ? t('feedStockRequiresClassification', {
+                        available: formatDecimalForDisplay(unclassifiedStockKg, numberLocale),
+                      })
+                      : t('feedStockAvailable', {
+                        available: formatDecimalForDisplay(availableFeedKg ?? totalAvailableFeedKg ?? 0, numberLocale),
+                      }))
                     : t('feedStockUnavailable')}
                 />
-                {store?.status === 'not_started' || (totalAvailableFeedKg ?? 0) <= 0 ? (
+                {store?.status === 'not_started' || (totalAvailableFeedKg ?? 0) <= 0 || unclassifiedStockKg > 0 ? (
                   <Button
-                    label={t('declareFeedStock')}
+                    label={unclassifiedStockKg > 0 ? t('identifyFeedStock') : t('declareFeedStock')}
                     onPress={() => navigation.navigate('Store', { cycleId })}
                     variant="outline"
                     size="small"
@@ -536,41 +674,52 @@ export default function DailyLogScreen({ navigation, route }: DailyLogScreenProp
                 ) : <View style={{ height: spacing[4] }} />}
 
                 <AppText variant="label" style={{ marginBottom: spacing[2] }}>
-                  {t('feedStockItem')} <AppText variant="label" color="error">*</AppText>
+                  {t('feedGranulometry')} <AppText variant="label" color="error">*</AppText>
                 </AppText>
                 <View style={{ gap: spacing[2], marginBottom: spacing[2] }}>
-                  {store?.stock_items?.filter((item) => Number(item.quantity_available_kg) > 0 || (
-                    (existingLog?.feed_type ?? '').trim().toLocaleLowerCase() === item.label.trim().toLocaleLowerCase()
-                  )).map((item) => {
-                    const selected = selectedStockItem === item;
-                    const optionLabel = item.feed_size_mm
-                      ? t('feedStockItemOption', {
-                        label: item.label,
-                        size: item.feed_size_mm,
-                        available: item.quantity_available_kg,
-                      })
-                      : t('feedStockItemOptionWithoutSize', {
-                        label: item.label,
-                        available: item.quantity_available_kg,
-                      });
+                  {(store?.available_pellet_sizes ?? stockBySize.map((item) => item.feed_size_mm)).map((size) => {
+                    const group = stockBySize.find((item) => Number(item.feed_size_mm) === Number(size));
+                    const sizeItem = store?.stock_items.find(
+                      (item) => Number(item.feed_size_mm) === Number(size) && Number(item.quantity_available_kg) > 0,
+                    );
+                    const displaySize = formatDecimalForDisplay(size, numberLocale);
+                    const selected = numericFeedSize(formData.feed_size_mm) === Number(size);
+                    const recommended = numericFeedSize(store?.recommended_pellet_size_mm) === Number(size);
+                    const optionLabel = t('feedStockItemOption', {
+                      label: '',
+                      size: displaySize,
+                      available: formatDecimalForDisplay(group?.quantity_available_kg ?? '0', numberLocale),
+                    });
+                    const displayLabel = recommended
+                      ? `${optionLabel} · ${t('recommendedPelletSizeChip')}`
+                      : optionLabel;
                     return (
                       <Button
-                        key={`${item.label}-${item.feed_size_mm ?? 'legacy'}`}
-                        label={optionLabel}
+                        key={size}
+                        label={displayLabel}
                         variant={selected ? 'primary' : 'outline'}
+                        disabled={!group || Number(group.quantity_available_kg) <= 0}
                         onPress={() => {
                           setTouched((previous) => ({ ...previous, feed_stock_item: true }));
                           setServerErrors((previous) => ({ ...previous, feed_stock_item: undefined }));
                           setFormData((previous) => ({
                             ...previous,
-                            feed_type: item.label,
-                            feed_size_mm: item.feed_size_mm ?? '',
+                            feed_type: sizeItem?.label ?? '',
+                            feed_size_mm: String(size),
+                            feed_reference: sizeItem?.feed_reference_id ?? sizeItem?.feed_reference_client_uuid ?? '',
                           }));
                         }}
                       />
                     );
                   })}
                 </View>
+                {Number(store?.recommended_pellet_size_mm) > 0 ? (
+                  <AppText variant="helper" color="link" style={{ marginBottom: spacing[2] }}>
+                    {t('recommendedPelletSize', {
+                      size: formatDecimalForDisplay(store?.recommended_pellet_size_mm, numberLocale),
+                    })}
+                  </AppText>
+                ) : null}
                 {visibleError('feed_stock_item') ? (
                   <AppText variant="helper" color="error" style={{ marginBottom: spacing[3] }}>
                     {visibleError('feed_stock_item')}

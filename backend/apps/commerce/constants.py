@@ -32,8 +32,9 @@ BRAND_CHOICES = [
 # Statuts de commande
 ORDER_STATUS_CHOICES = [
     ('confirmed', _('Commandée')),
-    ('delivered', _('Livrée')),
-    ('received', _('Reçue')),
+    ('delivered', _('Livrée — confirmation attendue')),
+    ('ready_for_pickup', _('Prête au retrait')),
+    ('received', _('Réception confirmée')),
 ]
 
 # Méthodes de livraison

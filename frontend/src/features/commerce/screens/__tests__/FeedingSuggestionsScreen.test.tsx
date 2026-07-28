@@ -9,6 +9,24 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 let mockState: any;
+let mockLanguage: 'keys' | 'fr' | 'en' = 'keys';
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      if (mockLanguage === 'keys') return key;
+      const translations: Record<string, string> =
+        mockLanguage === 'fr'
+          ? jest.requireActual('@/i18n/locales/fr').fr
+          : jest.requireActual('@/i18n/locales/en').en;
+      return translations[key] ?? key;
+    },
+  }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: jest.fn(),
+  },
+}));
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -91,6 +109,7 @@ describe('FeedingSuggestionsScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLanguage = 'keys';
     mockDispatch.mockResolvedValue(undefined);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     mockState = {
@@ -198,5 +217,40 @@ describe('FeedingSuggestionsScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('CycleSessionEntry', {
       showBackToDashboard: true,
     });
+  });
+
+  it('traduit la phase pre_recolte pour le cycle et les phases futures', () => {
+    const preHarvestSuggestion = {
+      ...suggestionData,
+      suggestions: [
+        {
+          ...suggestionData.suggestions[0],
+          current_phase: 'pre_recolte',
+          phases: [
+            {
+              ...suggestionData.suggestions[0].phases[0],
+              phase_name: 'pre_recolte',
+              pellet_size_mm: 6,
+            },
+          ],
+        },
+      ],
+    };
+    mockState.commerce.suggestions.data = preHarvestSuggestion;
+
+    mockLanguage = 'fr';
+    const french = render(<FeedingSuggestionsScreen />);
+    expect(french.getByText(/Phase actuelle: Pré-récolte/)).toBeTruthy();
+    fireEvent.press(french.getByLabelText('Cycle Tilapia, Détails'));
+    expect(french.getByText('Pré-récolte')).toBeTruthy();
+    expect(french.queryByText(/pre_recolte/)).toBeNull();
+    french.unmount();
+
+    mockLanguage = 'en';
+    const english = render(<FeedingSuggestionsScreen />);
+    expect(english.getByText(/Current phase: Pre-harvest/)).toBeTruthy();
+    fireEvent.press(english.getByLabelText('Cycle Tilapia, Details'));
+    expect(english.getByText('Pre-harvest')).toBeTruthy();
+    expect(english.queryByText(/pre_recolte/)).toBeNull();
   });
 });

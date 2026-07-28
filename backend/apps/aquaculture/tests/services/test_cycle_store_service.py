@@ -5,7 +5,14 @@ from uuid import uuid4
 import pytest
 from accounts.models import FarmProfile, User
 from aquaculture.domain.exceptions import FeedStockValidationError
-from aquaculture.models import CycleFeedStockEntry, CycleLog, CycleUnitAllocation, ProductionCycle, ProductionUnit
+from aquaculture.models import (
+    CycleFeedStockEntry,
+    CycleLog,
+    CycleUnitAllocation,
+    FarmFeedReference,
+    ProductionCycle,
+    ProductionUnit,
+)
 from aquaculture.services.cycle_store_application_service import (
     CycleStoreApplicationService,
     DeclareManualStockCommand,
@@ -128,16 +135,12 @@ class TestCycleStoreService:
                 entry_date=timezone.localdate(),
             ),
         )
-        monkeypatch.setattr(
-            'aquaculture.services.cycle_feed_service.CycleFeedService.compute_total_feed_needed_kg',
-            lambda _cycle: 300.0,
-        )
-
         payload = CycleStoreApplicationService.get_store(cycle)
 
-        assert payload['summary']['total_feed_needed_kg'] == '300.00'
-        assert payload['summary']['secured_feed_kg'] == '110.00'
-        assert payload['summary']['feed_to_secure_kg'] == '190.00'
+        assert payload['calculation_status'] == 'unavailable'
+        assert payload['summary']['total_feed_needed_kg'] is None
+        assert payload['summary']['secured_feed_kg'] is None
+        assert payload['summary']['feed_to_secure_kg'] is None
 
     def test_daily_feed_must_use_matching_stock_identity(self):
         user = _create_user('+237690100096')
@@ -159,8 +162,13 @@ class TestCycleStoreService:
             CycleStoreService.validate_daily_feed_quantity(
                 cycle=cycle,
                 feed_quantity=Decimal('5.00'),
-                feed_type='Grossissement local',
-                feed_size_mm=Decimal('4.00'),
+                feed_reference=FarmFeedReference.objects.create(
+                    farm_profile=farm,
+                    source=FarmFeedReference.SOURCE_EXTERNAL,
+                    name='Grossissement local',
+                    species=cycle.species,
+                    pellet_size_mm=Decimal('4.00'),
+                ),
                 log_date=timezone.localdate(),
             )
 
@@ -178,13 +186,13 @@ class TestCycleStoreService:
                 log_date=timezone.localdate(),
             )
 
-        assert exc_info.value.detail['code'] == 'feed_stock_not_started'
+        assert exc_info.value.detail['code'] == 'feed_reference_required'
 
     def test_daily_feed_replacement_restores_previous_quantity_before_validation(self):
         user = _create_user('+237690100098')
         farm = _create_farm(user, 'Ferme remplacement ration')
         cycle = _create_cycle(farm)
-        CycleStoreApplicationService.declare_manual_stock(
+        entry = CycleStoreApplicationService.declare_manual_stock(
             user=user,
             cycle=cycle,
             command=DeclareManualStockCommand(
@@ -201,6 +209,7 @@ class TestCycleStoreService:
             feed_quantity=Decimal('16.80'),
             feed_type='Stock du jour',
             feed_size_mm=Decimal('2.00'),
+            feed_reference=entry.feed_reference,
         )
 
         CycleStoreService.validate_daily_feed_quantity(
@@ -208,8 +217,7 @@ class TestCycleStoreService:
             feed_quantity=Decimal('18.00'),
             log_date=timezone.localdate(),
             existing_log=existing,
-            feed_type='Stock du jour',
-            feed_size_mm=Decimal('2.00'),
+            feed_reference=entry.feed_reference,
         )
 
         with pytest.raises(FeedStockValidationError) as exc_info:
@@ -218,8 +226,7 @@ class TestCycleStoreService:
                 feed_quantity=Decimal('20.01'),
                 log_date=timezone.localdate(),
                 existing_log=existing,
-                feed_type='Stock du jour',
-                feed_size_mm=Decimal('2.00'),
+                feed_reference=entry.feed_reference,
             )
 
         assert exc_info.value.detail['code'] == 'insufficient_feed_stock'
@@ -316,6 +323,28 @@ class TestCycleStoreService:
         assert payload['summary']['estimated_feed_remaining_kg'] == '50.00'
         assert payload['pending_orders'][0]['order_number'] == pending_order.order_number
 
+    def test_pending_order_weight_uses_order_snapshot_after_catalogue_change(self):
+        user = _create_user('+237690100014')
+        farm = _create_farm(user, 'Ferme Snapshot')
+        cycle = _create_cycle(farm)
+        product = _create_product('Sac historique 15kg', package_weight_kg=15)
+        order = _create_order(
+            user=user,
+            farm_profile=farm,
+            cycle=cycle,
+            product=product,
+            quantity=10,
+            status='confirmed',
+        )
+        order.items.update(product_package_weight_kg_snapshot=15)
+        product.package_weight_kg = 20
+        product.save(update_fields=['package_weight_kg'])
+
+        payload = CycleStoreApplicationService.get_store(cycle)
+
+        assert payload['summary']['pending_order_feed_kg'] == '150.00'
+        assert payload['pending_orders'][0]['estimated_feed_kg'] == '150.00'
+
     def test_import_received_order_skips_inconvertible_items_and_is_idempotent(self):
         user = _create_user('+237690100005')
         farm = _create_farm(user, 'Ferme Import')
@@ -406,7 +435,9 @@ class TestCycleStoreService:
         payload = CycleStoreApplicationService.get_store(cycle)
 
         assert payload['summary']['feed_consumed_kg'] == '12.50'
-        assert payload['summary']['estimated_feed_remaining_kg'] == '87.50'
+        # Une ration historique sans référence, nom ni granulométrie reste dans
+        # le total consommé, mais n'est pas retirée arbitrairement d'un aliment.
+        assert payload['summary']['estimated_feed_remaining_kg'] == '100.00'
         assert payload['status'] == 'ok'
 
     def test_store_ignores_logs_created_before_tracking_started(self):
@@ -440,6 +471,9 @@ class TestCycleStoreService:
 
         payload = CycleStoreApplicationService.get_store(cycle)
 
-        assert payload['summary']['feed_consumed_kg'] == '5.00'
-        assert payload['summary']['estimated_feed_remaining_kg'] == '20.00'
+        # L'indicateur affiche toute la consommation du cycle. Les rations sans
+        # identité alimentaire restent non classifiées et ne sont pas retirées
+        # arbitrairement d'une ligne de stock.
+        assert payload['summary']['feed_consumed_kg'] == '75.00'
+        assert payload['summary']['estimated_feed_remaining_kg'] == '25.00'
         assert payload['stock_tracking_started_at'] == timezone.localdate() - timedelta(days=1)

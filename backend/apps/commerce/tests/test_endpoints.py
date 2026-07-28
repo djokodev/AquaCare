@@ -10,6 +10,7 @@ from commerce.models import Order, Product
 from commerce.services import CycleSimulationService
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.management import call_command
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -24,6 +25,9 @@ class TestProductEndpoints:
     def setup(self):
         """Setup pour tous les tests."""
         self.client = APIClient()
+        # Les migrations de données sont désactivées dans les tests SQLite.
+        # Charger explicitement le même référentiel que celui installé en prod.
+        call_command('load_nutritional_data', verbosity=0)
 
         # Créer utilisateur de test
         self.user = User.objects.create_user(
@@ -165,7 +169,7 @@ class TestProductEndpoints:
         assert params['survival_rate'] == 0.95
 
         # Vérifier phases
-        assert len(data['feeding_phases']) == 3  # Tilapia = 3 phases
+        assert len(data['feeding_phases']) == 2  # Tilapia = 2 granulométries jusqu'à 350 g
 
         # Vérifier summary
         summary = data['summary']

@@ -50,8 +50,14 @@ export const simulateCycle = async (params: CycleSimulationParams) => {
   return response.data;
 };
 
-export const getOrders = async () => {
-  const response = await api.get<Order[] | { results: Order[] }>('/commerce/orders/');
+export interface CycleOrderQuery {
+  productionCycleId: string;
+}
+
+export const getOrders = async ({ productionCycleId }: CycleOrderQuery) => {
+  const response = await api.get<Order[] | { results: Order[] }>('/commerce/orders/', {
+    params: { production_cycle: productionCycleId },
+  });
   const payload = response.data as Order[] | { results: Order[] };
   return Array.isArray(payload) ? payload : payload.results;
 };
@@ -71,8 +77,10 @@ export const confirmOrderReceipt = async (orderId: string) => {
   return response.data;
 };
 
-export const getOrderStatistics = async () => {
-  const response = await api.get<OrderStatistics>('/commerce/orders/statistics/');
+export const getOrderStatistics = async ({ productionCycleId }: CycleOrderQuery) => {
+  const response = await api.get<OrderStatistics>('/commerce/orders/statistics/', {
+    params: { production_cycle: productionCycleId },
+  });
   return response.data;
 };
 

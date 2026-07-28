@@ -6,6 +6,7 @@ ainsi que les taches de nettoyage et de scheduling.
 """
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 import requests
@@ -51,6 +52,14 @@ class TestEmailNotificationTask:
             call_args = mock_send.call_args
             assert "[AquaCare]" in call_args.kwargs['subject']
             assert user.email in call_args.kwargs['recipient_list']
+
+    @pytest.mark.parametrize('task', [send_email_notification_task, send_push_notification_task])
+    def test_missing_notification_is_retried_instead_of_silently_dropped(self, task):
+        with patch.object(task, 'retry', side_effect=RuntimeError('retry scheduled')) as retry:
+            with pytest.raises(RuntimeError, match='retry scheduled'):
+                task(str(uuid4()))
+
+        retry.assert_called_once()
 
     def test_send_email_notification_task_no_email(self, notification, user):
         """User sans email -> Pas d'erreur, email_error defini."""

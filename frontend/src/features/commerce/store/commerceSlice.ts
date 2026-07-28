@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   CommerceState,
+  DeliveryAddressIncompleteError,
+  Order,
   Product,
   ProductFilters,
   DeliveryMethod,
@@ -57,6 +59,30 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+const extractCreateOrderError = (
+  error: unknown,
+  fallback: string,
+): string | DeliveryAddressIncompleteError => {
+  const data = (error as { response?: { data?: unknown } })?.response?.data;
+  if (data && typeof data === 'object') {
+    const payload = data as Record<string, unknown>;
+    if (
+      payload.code === 'delivery_address_incomplete'
+      && typeof payload.message === 'string'
+      && Array.isArray(payload.missing_fields)
+    ) {
+      return {
+        code: 'delivery_address_incomplete',
+        message: payload.message,
+        missing_fields: payload.missing_fields.filter(
+          (field): field is string => typeof field === 'string',
+        ),
+      };
+    }
+  }
+  return extractApiErrorMessage(error, fallback);
+};
+
 const initialState: CommerceState = {
   products: {
     items: [],
@@ -74,6 +100,7 @@ const initialState: CommerceState = {
   orders: {
     items: [],
     statistics: null,
+    contextCycleId: null,
     loading: false,
     error: null,
   },
@@ -152,9 +179,12 @@ export const fetchCycleSimulation = createAsyncThunk(
 
 export const fetchOrders = createAsyncThunk(
   'commerce/fetchOrders',
-  async (_, { rejectWithValue }) => {
+  async (
+    options: { productionCycleId: string },
+    { rejectWithValue },
+  ) => {
     try {
-      return await commerceApi.getOrders();
+      return await commerceApi.getOrders(options);
     } catch (error) {
       return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération commandes'));
     }
@@ -172,13 +202,17 @@ export const fetchOrderDetail = createAsyncThunk(
   }
 );
 
-export const createOrder = createAsyncThunk(
+export const createOrder = createAsyncThunk<
+  Order,
+  CreateOrderPayload,
+  { rejectValue: string | DeliveryAddressIncompleteError }
+>(
   'commerce/createOrder',
   async (orderData: CreateOrderPayload, { rejectWithValue }) => {
     try {
       return await commerceApi.createOrder(orderData);
     } catch (error) {
-      return rejectWithValue(extractApiErrorMessage(error, 'Erreur création commande'));
+      return rejectWithValue(extractCreateOrderError(error, 'Erreur création commande'));
     }
   }
 );
@@ -196,9 +230,12 @@ export const confirmOrderReceipt = createAsyncThunk(
 
 export const fetchOrderStatistics = createAsyncThunk(
   'commerce/fetchOrderStatistics',
-  async (_, { rejectWithValue }) => {
+  async (
+    options: { productionCycleId: string },
+    { rejectWithValue },
+  ) => {
     try {
-      return await commerceApi.getOrderStatistics();
+      return await commerceApi.getOrderStatistics(options);
     } catch (error) {
       return rejectWithValue(extractApiErrorMessage(error, 'Erreur récupération statistiques'));
     }
@@ -229,14 +266,28 @@ const commerceSlice = createSlice({
     resetFilters: (state) => {
       state.products.filters = {};
     },
-    addToCart: (state, action: PayloadAction<{ product: Product; quantity: number }>) => {
-      const { product, quantity } = action.payload;
+    addToCart: (state, action: PayloadAction<{
+      product: Product;
+      quantity: number;
+      recommendation?: { phase_name: string; pellet_size_mm: string; suggested_bags: number };
+    }>) => {
+      const { product, quantity, recommendation } = action.payload;
       const existingItem = state.cart.items.find((item) => item.product.id === product.id);
 
       if (existingItem) {
         existingItem.quantity += quantity;
+        if (recommendation) {
+          existingItem.recommendation_breakdown = [
+            ...(existingItem.recommendation_breakdown ?? []),
+            recommendation,
+          ];
+        }
       } else {
-        state.cart.items.push({ product, quantity });
+        state.cart.items.push({
+          product,
+          quantity,
+          recommendation_breakdown: recommendation ? [recommendation] : undefined,
+        });
       }
 
       state.cart.deliveryPreview = null;
@@ -284,6 +335,13 @@ const commerceSlice = createSlice({
       state.simulation.result = null;
       state.simulation.error = null;
     },
+    clearOrderContext: (state) => {
+      state.orders.items = [];
+      state.orders.statistics = null;
+      state.orders.contextCycleId = null;
+      state.orders.loading = false;
+      state.orders.error = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -329,15 +387,22 @@ const commerceSlice = createSlice({
       });
 
     builder
-      .addCase(fetchOrders.pending, (state) => {
+      .addCase(fetchOrders.pending, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) {
+          state.orders.items = [];
+          state.orders.statistics = null;
+        }
+        state.orders.contextCycleId = action.meta.arg.productionCycleId;
         state.orders.loading = true;
         state.orders.error = null;
       })
       .addCase(fetchOrders.fulfilled, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) return;
         state.orders.loading = false;
         state.orders.items = action.payload;
       })
       .addCase(fetchOrders.rejected, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) return;
         state.orders.loading = false;
         state.orders.error = action.payload as string;
       });
@@ -372,7 +437,9 @@ const commerceSlice = createSlice({
       })
       .addCase(createOrder.rejected, (state, action) => {
         state.orders.loading = false;
-        state.orders.error = action.payload as string;
+        state.orders.error = typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.message ?? 'Erreur création commande';
       });
 
     builder
@@ -395,15 +462,22 @@ const commerceSlice = createSlice({
       });
 
     builder
-      .addCase(fetchOrderStatistics.pending, (state) => {
+      .addCase(fetchOrderStatistics.pending, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) {
+          state.orders.items = [];
+          state.orders.statistics = null;
+        }
+        state.orders.contextCycleId = action.meta.arg.productionCycleId;
         state.orders.loading = true;
         state.orders.error = null;
       })
       .addCase(fetchOrderStatistics.fulfilled, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) return;
         state.orders.loading = false;
         state.orders.statistics = action.payload;
       })
       .addCase(fetchOrderStatistics.rejected, (state, action) => {
+        if (state.orders.contextCycleId !== action.meta.arg.productionCycleId) return;
         state.orders.loading = false;
         state.orders.error = action.payload as string;
       });
@@ -434,6 +508,7 @@ export const {
   setPickupLocation,
   resetSuggestions,
   resetSimulation,
+  clearOrderContext,
 } = commerceSlice.actions;
 
 export default commerceSlice.reducer;

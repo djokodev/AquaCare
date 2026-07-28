@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING, TypedDict
 
 from django.db.models import Q, QuerySet
 
-from ..domain.calculators import ProductRecommendationCalculator
 from ..domain.exceptions import ProductNotAvailableError, ProductNotFoundError
+from ..domain.growth_calculator import NutritionalGuideResolver
 from ..models import Product
 from .base import BaseCommerceService
+from .nutritional_guide_gateway import NutritionalGuideGateway
 
 if TYPE_CHECKING:
     from .contracts import ProductionCycleReadModel
@@ -211,8 +212,8 @@ class ProductService(BaseCommerceService):
         """
         Recommande le produit adapté selon espèce et poids poisson.
 
-        Utilise ProductRecommendationCalculator pour déterminer
-        la taille de granulé optimale, puis trouve le produit correspondant.
+        Résout la granulométrie depuis NutritionalGuide, puis exige un produit
+        disponible de la même espèce et de taille strictement identique.
 
         Args:
             species: 'tilapia' ou 'catfish'
@@ -224,38 +225,35 @@ class ProductService(BaseCommerceService):
         Examples:
             >>> product = ProductService.get_recommended_product('catfish', 150)
             >>> product.pellet_size_mm
-            Decimal('4.5')
+            Decimal('4.0')
             >>> product.name
-            'CLARIAS FLOAT 4.5MM'
+            'DIBAQ CATFISH 4MM'
         """
         ProductService.log_operation('get_recommended_product', {
             'species': species,
             'weight_g': weight_g
         })
 
-        # Calculer taille granulé recommandée
-        recommended_size = ProductRecommendationCalculator.get_recommended_pellet_size(
-            species, weight_g
+        normalized_species = (species or '').strip().lower()
+        guide, _warning = NutritionalGuideResolver.resolve(
+            NutritionalGuideGateway.for_species(normalized_species),
+            Decimal(str(weight_g)),
         )
+        if guide is None:
+            return None
 
-        # Chercher produit correspondant (priorité Aller Aqua)
-        product = Product.objects.available().filter(
-            species=species,
-            pellet_size_mm=Decimal(str(recommended_size)),
+        catalog_species = (
+            'catfish'
+            if normalized_species in {'catfish', 'clarias'}
+            else normalized_species
+        )
+        return Product.objects.available().filter(
+            species=catalog_species,
+            pellet_size_mm=guide['feed_size_mm'],
         ).order_by(
-            # Priorité Aller Aqua : 'aller_aqua' < 'dibaq' en ordre croissant
-            'brand'
+            'brand',
+            'id',
         ).first()
-
-        if not product:
-            # Fallback : chercher taille proche (±0.5mm)
-            product = Product.objects.available().filter(
-                species=species,
-                pellet_size_mm__gte=Decimal(str(recommended_size - 0.5)),
-                pellet_size_mm__lte=Decimal(str(recommended_size + 0.5)),
-            ).order_by('brand', 'pellet_size_mm').first()
-
-        return product
 
     @staticmethod
     def get_products_for_cycle(cycle: ProductionCycleReadModel) -> QuerySet[Product]:

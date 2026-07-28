@@ -85,6 +85,9 @@ logger = logging.getLogger(__name__)
         description="""
         Enregistre les données quotidiennes d'un cycle : alimentation, mortalité, 
         échantillonnage de poids et paramètres environnementaux.
+        Lorsque `feed_quantity` est supérieur à zéro, `feed_size_mm` est requis.
+        Le serveur résout automatiquement le stock compatible de la ferme ; le
+        mobile ne choisit pas l'origine de l'aliment.
         Met automatiquement à jour les métriques du cycle.
         """,
         examples=[
@@ -97,6 +100,7 @@ logger = logging.getLogger(__name__)
                     'sample_count': 20,
                     'sample_total_weight': 520.00,
                     'feed_quantity': 48.50,
+                    'feed_size_mm': 3.0,
                     'water_temperature': 26.5,
                     'dissolved_oxygen': 7.2,
                     'ph_level': 7.8,

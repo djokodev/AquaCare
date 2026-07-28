@@ -12,6 +12,10 @@ import {
   CycleDashboard,
   CycleStore,
   CycleStoreManualStockPayload,
+  CycleFeedRecommendation,
+  FarmFeedReference,
+  FarmFeedReferenceCreatePayload,
+  ExternalFeedPayload,
   ProductionReport,
   ReportScope,
   ReportType,
@@ -234,6 +238,33 @@ class AquacultureService {
       logger.error(`Erreur lors de la declaration de stock du cycle ${cycleId}:`, error);
       throw error;
     }
+  }
+
+  async getFarmFeedReferences(farmProfileId: string): Promise<FarmFeedReference[]> {
+    const response = await apiService.get<ListResponse<FarmFeedReference>>(
+      `${this.baseUrl}/feed-references/?farm_profile=${farmProfileId}`
+    );
+    return extractResults(response.data);
+  }
+
+  async createFarmFeedReference(payload: FarmFeedReferenceCreatePayload): Promise<FarmFeedReference> {
+    const response = await apiService.post<FarmFeedReference>(
+      `${this.baseUrl}/feed-references/`,
+      payload
+    );
+    return response.data;
+  }
+
+  async classifyCycleStoreEntry(
+    cycleId: string,
+    entryId: string,
+    feedReferenceId: string
+  ): Promise<CycleStore> {
+    const response = await apiService.post<CycleStore>(
+      `${this.baseUrl}/cycles/${cycleId}/store/classify/`,
+      { entry_id: entryId, feed_reference_id: feedReferenceId }
+    );
+    return response.data;
   }
 
   // =================== REPORTS ===================
@@ -897,9 +928,9 @@ class AquacultureService {
     }
   }
 
-  async getCycleFeedPhases(cycleId: string): Promise<{ feeding_phases: FeedPhase[] }> {
+  async getCycleFeedPhases(cycleId: string): Promise<CycleFeedRecommendation> {
     try {
-      const response = await apiService.get<{ feeding_phases: FeedPhase[] }>(
+      const response = await apiService.get<CycleFeedRecommendation>(
         `${this.baseUrl}/cycles/${cycleId}/feed-phases/`
       );
       return response.data;

@@ -6,6 +6,7 @@ import CartScreen from '../CartScreen';
 import type { Product } from '@/types/commerce';
 
 const mockNavigate = jest.fn();
+const mockPush = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 let mockState: any;
@@ -14,8 +15,10 @@ let mockRouteParams: any;
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
+    push: mockPush,
     goBack: mockGoBack,
   }),
+  useFocusEffect: (callback: () => void) => callback(),
   useRoute: () => ({
     params: mockRouteParams,
   }),
@@ -60,7 +63,15 @@ const populatedCartState = (product: Product) => ({
     },
   },
   auth: {
-    user: { id: 'u1', region: 'Littoral' },
+    user: {
+      id: 'u1',
+      full_name: 'Jean Dupont',
+      display_name: 'Jean Dupont',
+      phone_number: '+237670000000',
+      region: 'Littoral',
+      city: 'Douala',
+      neighborhood: 'Bonamoussadi',
+    },
     farmProfile: { id: 'farm-1' },
   },
   aquaculture: { currentCycle: { id: 'cycle-1' } },
@@ -141,7 +152,15 @@ describe('CartScreen', () => {
         },
       },
       auth: {
-        user: { id: 'u1', region: 'Littoral' },
+        user: {
+          id: 'u1',
+          full_name: 'Jean Dupont',
+          display_name: 'Jean Dupont',
+          phone_number: '+237670000000',
+          region: 'Littoral',
+          city: 'Douala',
+          neighborhood: 'Bonamoussadi',
+        },
         farmProfile: { id: 'farm-1' },
       },
       aquaculture: {
@@ -153,6 +172,33 @@ describe('CartScreen', () => {
     fireEvent.press(getByText('confirmOrder'));
 
     expect(alertSpy).toHaveBeenCalledWith('error', 'selectPickupLocationError');
+  });
+
+  it('affiche les champs manquants et ouvre le profil pour une adresse domicile incomplete', () => {
+    mockState = populatedCartState(product);
+    mockState.auth.user = {
+      id: 'u1',
+      full_name: 'Jean Dupont',
+      display_name: 'Jean Dupont',
+      phone_number: '+237670000000',
+      region: 'Littoral',
+      city: '',
+      neighborhood: '',
+    };
+
+    const { getByText } = render(<CartScreen />);
+
+    expect(getByText('deliveryAddressIncompleteTitle')).toBeTruthy();
+    expect(getByText('deliveryAddressIncompleteMessage')).toBeTruthy();
+    fireEvent.press(getByText('completeDeliveryAddress'));
+
+    expect(mockPush).toHaveBeenCalledWith('MainTabs', {
+      screen: 'ProfileStack',
+      params: {
+        screen: 'ProfileMain',
+        params: { startEditing: true, returnToCart: true },
+      },
+    });
   });
 
   it('cree une commande et redirige vers historique apres confirmation', async () => {
@@ -182,7 +228,15 @@ describe('CartScreen', () => {
         },
       },
       auth: {
-        user: { id: 'u1', region: 'Littoral' },
+        user: {
+          id: 'u1',
+          full_name: 'Jean Dupont',
+          display_name: 'Jean Dupont',
+          phone_number: '+237670000000',
+          region: 'Littoral',
+          city: 'Douala',
+          neighborhood: 'Bonamoussadi',
+        },
         farmProfile: { id: 'farm-1' },
       },
       aquaculture: {
@@ -315,7 +369,15 @@ describe('CartScreen', () => {
         },
       },
       auth: {
-        user: { id: 'u1', region: 'Littoral' },
+        user: {
+          id: 'u1',
+          full_name: 'Jean Dupont',
+          display_name: 'Jean Dupont',
+          phone_number: '+237670000000',
+          region: 'Littoral',
+          city: 'Douala',
+          neighborhood: 'Bonamoussadi',
+        },
         farmProfile: { id: 'farm-1' },
       },
       aquaculture: {
@@ -328,6 +390,32 @@ describe('CartScreen', () => {
 
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith('error', 'detail API');
+    });
+  });
+
+  it('propose le profil si le serveur signale une adresse domicile incomplete', async () => {
+    const unwrap = jest.fn().mockRejectedValue({
+      code: 'delivery_address_incomplete',
+      message: 'Informations de livraison à domicile incomplètes',
+      missing_fields: ['delivery_city', 'neighborhood'],
+    });
+    mockDispatch.mockImplementation(() => ({ unwrap }));
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title: any, _message?: any, buttons?: any) => {
+      if (title === 'confirmOrder') {
+        buttons?.[1]?.onPress?.();
+      }
+    });
+    mockState = populatedCartState(product);
+
+    const { getByText } = render(<CartScreen />);
+    fireEvent.press(getByText('confirmOrder'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        'deliveryAddressIncompleteTitle',
+        'deliveryAddressIncompleteMessage',
+        expect.any(Array),
+      );
     });
   });
 });

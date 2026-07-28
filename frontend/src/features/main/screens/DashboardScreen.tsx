@@ -20,6 +20,7 @@ import {
 } from "@/features/aquaculture/store/aquacultureSlice";
 import { fetchNotifications } from "@/features/notifications/store/notificationSlice";
 import {
+  clearOrderContext,
   confirmOrderReceipt,
   fetchOrderStatistics,
   fetchOrders,
@@ -32,6 +33,11 @@ import DashboardHeader from "../components/DashboardHeader";
 import QuickActionsPreview from "../components/QuickActionsPreview";
 import QuickActionsSheet from "../components/QuickActionsSheet";
 import { CycleDashboard, ProductionCycle } from "@/types/aquaculture";
+import type { Order } from "@/types/commerce";
+import {
+  canConfirmOrderReceipt,
+  getOrderReceiptActionLabelKey,
+} from "@/features/commerce/utils/orderStatus";
 import { useAuth } from "@/hooks/useAuth";
 import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
 import {
@@ -109,6 +115,7 @@ export default function DashboardScreen({ navigation }: any) {
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(
     null,
   );
+  const confirmationLock = useRef(false);
   const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<
     number | null
   >(null);
@@ -135,7 +142,6 @@ export default function DashboardScreen({ navigation }: any) {
       tryGlobalOfflineSync();
       dispatch(fetchDashboardData(undefined));
       dispatch(fetchProductionCycles());
-      dispatch(fetchOrders());
     };
 
     initializeDashboard();
@@ -149,7 +155,11 @@ export default function DashboardScreen({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
-      dispatch(fetchOrders());
+      if (currentCycle?.id) {
+        dispatch(fetchOrders({ productionCycleId: currentCycle.id }));
+      } else {
+        dispatch(clearOrderContext());
+      }
     }, [currentCycle?.id, dispatch]),
   );
 
@@ -170,7 +180,7 @@ export default function DashboardScreen({ navigation }: any) {
   };
 
   const pendingDeliveryConfirmations = useMemo(
-    () => ordersList.filter((order) => order.status === "delivered"),
+    () => ordersList.filter(canConfirmOrderReceipt),
     [ordersList],
   );
 
@@ -261,7 +271,9 @@ export default function DashboardScreen({ navigation }: any) {
       loadCurrentCycleDashboard("refresh"),
       dispatch(fetchProductionCycles()),
       dispatch(fetchNotifications({ cycleId: currentCycle?.id })),
-      dispatch(fetchOrders()),
+      currentCycle?.id
+        ? dispatch(fetchOrders({ productionCycleId: currentCycle.id }))
+        : Promise.resolve(),
     ]).finally(() => {
       setRefreshing(false);
     });
@@ -369,26 +381,38 @@ export default function DashboardScreen({ navigation }: any) {
     });
   };
 
-  const handleConfirmOrderReceipt = (orderId: string, orderNumber: string) => {
+  const handleConfirmOrderReceipt = (order: Order) => {
+    if (!primaryActiveCycleId) return;
+    const isPickup = order.delivery_method === "pickup";
     Alert.alert(
-      t("confirmReceiptTitle"),
-      t("confirmReceiptMessage", { orderNumber }),
+      t(isPickup ? "confirmPickupTitle" : "confirmReceiptTitle"),
+      t(isPickup ? "confirmPickupMessage" : "confirmReceiptMessage", {
+        orderNumber: order.order_number,
+      }),
       [
         { text: t("cancel"), style: "cancel" },
         {
           text: t("confirm"),
           onPress: async () => {
+            if (confirmationLock.current) return;
             try {
-              setConfirmingOrderId(orderId);
-              await dispatch(confirmOrderReceipt(orderId)).unwrap();
+              confirmationLock.current = true;
+              setConfirmingOrderId(order.id);
+              await dispatch(confirmOrderReceipt(order.id)).unwrap();
               await Promise.all([
-                dispatch(fetchOrders()),
-                dispatch(fetchOrderStatistics()),
+                dispatch(fetchOrders({ productionCycleId: primaryActiveCycleId })),
+                dispatch(fetchOrderStatistics({ productionCycleId: primaryActiveCycleId })),
               ]);
-              Alert.alert(t("success"), t("confirmReceiptSuccess"));
-            } catch {
-              Alert.alert(t("error"), t("confirmReceiptError"));
+              Alert.alert(t("success"), t(isPickup ? "confirmPickupSuccess" : "confirmReceiptSuccess"));
+            } catch (caughtError) {
+              Alert.alert(
+                t("error"),
+                typeof caughtError === "string" && caughtError.trim()
+                  ? caughtError
+                  : t("confirmReceiptError"),
+              );
             } finally {
+              confirmationLock.current = false;
               setConfirmingOrderId(null);
             }
           },
@@ -572,7 +596,7 @@ export default function DashboardScreen({ navigation }: any) {
           </View>
         ) : null}
 
-        {pendingDeliveryConfirmations.length > 0 && (
+        {primaryActiveCycleId && pendingDeliveryConfirmations.length > 0 && (
           <View className="px-5 pb-2">
             <Card variant="elevated" style={{ marginBottom: 8 }}>
               <View className="flex-row items-center justify-between mb-3">
@@ -591,8 +615,10 @@ export default function DashboardScreen({ navigation }: any) {
                   </AppText>
                 </View>
                 <Button
-                  label={t("ordersHistory")}
-                  onPress={() => navigation.navigate("OrdersHistory")}
+                  label={t("cycleOrders")}
+                  onPress={() => navigation.navigate("OrdersHistory", {
+                    cycleId: primaryActiveCycleId,
+                  })}
                   variant="outline"
                   size="small"
                   fullWidth={false}
@@ -622,15 +648,12 @@ export default function DashboardScreen({ navigation }: any) {
                         </AppText>
                       </View>
                       <Button
-                        label={t("confirmReceiptAction")}
+                        label={t(getOrderReceiptActionLabelKey(order))}
                         size="small"
                         fullWidth={false}
                         loading={isConfirming}
                         onPress={() =>
-                          handleConfirmOrderReceipt(
-                            order.id,
-                            order.order_number,
-                          )
+                          handleConfirmOrderReceipt(order)
                         }
                       />
                     </View>

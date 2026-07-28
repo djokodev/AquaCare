@@ -10,6 +10,7 @@ from accounts.models import FarmProfile
 from accounts.services.auth_application_service import AuthApplicationService
 from django.contrib.auth import get_user_model
 from django.core.cache import cache, caches
+from django.core.management import call_command
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -1345,6 +1346,10 @@ class TestAnnualSimulationView:
     def setup_method(self):
         self.client = APIClient()
         self.url = reverse('accounts:annual_simulation')
+        # Les migrations de données sont volontairement désactivées dans les
+        # tests SQLite rapides. Reproduire ici le référentiel persistant présent
+        # dans une installation migrée afin de tester le vrai chemin applicatif.
+        call_command('load_nutritional_data', verbosity=0)
         self.user = User.objects.create_user(
             phone_number="+237691000002",
             first_name="Simulation",
@@ -1377,14 +1382,14 @@ class TestAnnualSimulationView:
         assert 'feed_bags_per_cycle' in result
 
     def test_simulate_tilapia_keeps_query_budget(self, django_assert_num_queries):
-        """La simulation est un calcul pur quand l'utilisateur est deja authentifie."""
+        """La simulation ajoute une lecture unique du référentiel nutritionnel."""
         data = {
             'species': 'tilapia',
             'annual_production_target_kg': '1000',
             'num_cycles': 2,
         }
 
-        with django_assert_num_queries(12):
+        with django_assert_num_queries(9):
             response = self.client.post(self.url, data, format='json')
 
         assert response.status_code == status.HTTP_200_OK
@@ -1400,7 +1405,7 @@ class TestAnnualSimulationView:
             'num_cycles': 2,
         }
 
-        with django_assert_num_queries(13):
+        with django_assert_num_queries(10):
             response = self.client.post(self.url, data, format='json')
 
         assert response.status_code == status.HTTP_200_OK

@@ -43,6 +43,11 @@ export interface ProductFilters {
 export interface CartItem {
   product: Product;
   quantity: number;
+  recommendation_breakdown?: Array<{
+    phase_name: string;
+    pellet_size_mm: string;
+    suggested_bags: number;
+  }>;
 }
 
 export type DeliveryMethod = 'home' | 'pickup';
@@ -57,7 +62,7 @@ export interface DeliveryFeePreview {
 }
 
 // Orders
-export type OrderStatus = 'confirmed' | 'delivered' | 'received';
+export type OrderStatus = 'confirmed' | 'delivered' | 'ready_for_pickup' | 'received';
 
 export interface OrderItem {
   id: string;
@@ -74,11 +79,16 @@ export interface Order {
   id: string;
   order_number: string;
   status: OrderStatus;
+  delivered_at?: string | null;
+  delivered_by?: string | null;
+  ready_for_pickup_at?: string | null;
+  ready_for_pickup_by?: string | null;
+  received_at?: string | null;
   user: string;
   user_name: string;
   farm_profile: string;
   farm_name: string;
-  production_cycle_id?: string;
+  production_cycle_id?: string | null;
   delivery_method: DeliveryMethod;
   pickup_location?: PickupLocation;
   delivery_name: string;
@@ -109,6 +119,12 @@ export interface CreateOrderPayload {
   production_cycle_id?: string;
   client_uuid?: string;
   created_offline?: boolean;
+}
+
+export interface DeliveryAddressIncompleteError {
+  code: 'delivery_address_incomplete';
+  message: string;
+  missing_fields: string[];
 }
 
 export interface OrderStatistics {
@@ -262,6 +278,7 @@ export interface CommerceState {
   orders: {
     items: Order[];
     statistics: OrderStatistics | null;
+    contextCycleId: string | null;
     loading: boolean;
     error: string | null;
   };

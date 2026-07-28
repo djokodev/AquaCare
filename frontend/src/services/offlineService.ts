@@ -2,13 +2,49 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { API_CONFIG } from '@/constants/api';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { CalibrationRequest, CreateCalibrationTankForm, CreateCycleForm, DailyLogForm, FinalHarvestOperation, HarvestData, SanitaryLogForm, SyncPayload } from '@/types/aquaculture';
+import {
+  CalibrationRequest,
+  CreateCalibrationTankForm,
+  CreateCycleForm,
+  CycleStoreManualStockPayload,
+  DailyLogForm,
+  FarmFeedReferenceCreatePayload,
+  FinalHarvestOperation,
+  HarvestData,
+  SanitaryLogForm,
+  SyncPayload,
+} from '@/types/aquaculture';
 import logger from '@/utils/logger';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
-interface OfflineCycleLog {
+export interface OfflineCycleLog {
   id: string;
   cycleId: string;
   logData: DailyLogForm;
+  fingerprint: string;
+  timestamp: number;
+  synced: boolean;
+  server_log_id?: string;
+}
+
+export interface OfflineFeedReference {
+  id: string;
+  clientUuid: string;
+  payload: FarmFeedReferenceCreatePayload;
+  fingerprint: string;
+  timestamp: number;
+  synced: boolean;
+  serverId?: string;
+}
+
+export interface OfflineStockDeclaration {
+  id: string;
+  cycleId: string;
+  clientUuid: string;
+  feedReferenceClientUuid?: string;
+  feedSizeMmSnapshot?: string;
+  payload: CycleStoreManualStockPayload;
+  fingerprint: string;
   timestamp: number;
   synced: boolean;
 }
@@ -57,7 +93,76 @@ interface SyncCounter {
   failed: number;
 }
 
+const resolveReferenceIdentity = (
+  referenceId: string | null | undefined,
+  referenceClientUuid: string | null | undefined,
+  references: OfflineFeedReference[],
+): string | null => {
+  if (referenceId) return `server:${referenceId}`;
+  if (!referenceClientUuid) return null;
+  const localReference = references.find((reference) => reference.clientUuid === referenceClientUuid);
+  return localReference?.serverId
+    ? `server:${localReference.serverId}`
+    : `client:${referenceClientUuid}`;
+};
+
+const normalizeFeedSize = (value: unknown): string | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(String(value).trim().replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
+};
+
+const getStockFeedSize = (
+  stock: OfflineStockDeclaration,
+  references: OfflineFeedReference[],
+): string | null => {
+  if (stock.feedSizeMmSnapshot) return normalizeFeedSize(stock.feedSizeMmSnapshot);
+  const externalSize = stock.payload.external_feed?.pellet_size_mm;
+  if (externalSize !== undefined) return normalizeFeedSize(externalSize);
+  const referenceClientUuid = stock.feedReferenceClientUuid
+    ?? stock.payload.feed_reference_client_uuid;
+  if (!referenceClientUuid) return null;
+  const reference = references.find((item) => item.clientUuid === referenceClientUuid);
+  return normalizeFeedSize(reference?.payload.pellet_size_mm);
+};
+
+const hasPendingStockDependency = (
+  cycleId: string,
+  logData: DailyLogForm,
+  stockDeclarations: OfflineStockDeclaration[],
+  references: OfflineFeedReference[],
+): boolean => {
+  const logIdentity = resolveReferenceIdentity(
+    logData.feed_reference,
+    logData.feed_reference_client_uuid,
+    references,
+  );
+  if (logIdentity && stockDeclarations.some((stock) => {
+    if (stock.synced || stock.cycleId !== cycleId) return false;
+    const stockIdentity = resolveReferenceIdentity(
+      stock.payload.feed_reference_id,
+      stock.feedReferenceClientUuid ?? stock.payload.feed_reference_client_uuid,
+      references,
+    );
+    return stockIdentity === logIdentity;
+  })) return true;
+
+  // Le mobile peut enregistrer un journal avec la seule granulométrie. Une
+  // déclaration de stock offline de la même taille et du même cycle doit alors
+  // être synchronisée avant le journal, sans bloquer les autres cycles ou
+  // d'autres granulométries.
+  const logSize = normalizeFeedSize(logData.feed_size_mm);
+  if (logIdentity || !logSize) return false;
+  return stockDeclarations.some((stock) => (
+    !stock.synced
+    && stock.cycleId === cycleId
+    && getStockFeedSize(stock, references) === logSize
+  ));
+};
+
 interface OfflineSyncDetails {
+  feedReferences?: SyncCounter;
+  stockDeclarations?: SyncCounter;
   cycleLogs: SyncCounter;
   newCycles: SyncCounter;
   sanitaryLogs: SyncCounter;
@@ -71,6 +176,8 @@ interface OfflineSyncResult extends SyncCounter {
 }
 
 const STORAGE_KEYS = {
+  OFFLINE_FEED_REFERENCES: 'aquacare_offline_feed_references',
+  OFFLINE_STOCK_DECLARATIONS: 'aquacare_offline_stock_declarations',
   OFFLINE_CYCLE_LOGS: 'aquacare_offline_cycle_logs',
   OFFLINE_NEW_CYCLES: 'aquacare_offline_new_cycles',
   OFFLINE_SANITARY_LOGS: 'aquacare_offline_sanitary_logs',
@@ -79,6 +186,50 @@ const STORAGE_KEYS = {
   OFFLINE_FINAL_HARVESTS: 'aquacare_offline_final_harvests',
   LAST_SYNC: 'aquacare_last_sync',
 };
+
+const feedReferenceFingerprint = (payload: FarmFeedReferenceCreatePayload): string => JSON.stringify({
+  farm_profile: payload.farm_profile,
+  source: payload.source,
+  catalog_product: payload.catalog_product ?? null,
+  name: payload.name?.trim().toLocaleLowerCase() ?? '',
+  species: payload.species ?? null,
+  pellet_size_mm: payload.pellet_size_mm ?? null,
+  brand: payload.brand?.trim() ?? '',
+});
+
+const stockDeclarationFingerprint = (
+  cycleId: string,
+  payload: CycleStoreManualStockPayload,
+): string => JSON.stringify({
+  cycle_id: cycleId,
+  feed_reference_id: payload.feed_reference_id ?? null,
+  feed_reference_client_uuid: payload.feed_reference_client_uuid ?? null,
+  external_feed: payload.external_feed ?? null,
+  quantity_kg: payload.quantity_kg,
+  total_cost_fcfa: payload.total_cost_fcfa,
+  entry_date: payload.entry_date,
+  note: payload.note ?? '',
+});
+
+const cycleLogFingerprint = (cycleId: string, data: DailyLogForm): string => JSON.stringify({
+  cycle_id: cycleId,
+  client_uuid: data.client_uuid ?? null,
+  cycle_unit_allocation: data.cycle_unit_allocation ?? null,
+  log_date: data.log_date ?? null,
+  mortality_count: data.mortality_count ?? 0,
+  mortality_reason: data.mortality_reason ?? '',
+  sample_count: data.sample_count ?? null,
+  sample_total_weight: data.sample_total_weight ?? null,
+  feed_quantity: data.feed_quantity ?? null,
+  feed_reference: data.feed_reference ?? null,
+  feed_reference_client_uuid: data.feed_reference_client_uuid ?? null,
+  feeding_times: data.feeding_times ?? [],
+  water_temperature: data.water_temperature ?? null,
+  dissolved_oxygen: data.dissolved_oxygen ?? null,
+  ph_level: data.ph_level ?? null,
+  ammonia_level: data.ammonia_level ?? null,
+  observations: data.observations ?? '',
+});
 
 const finalHarvestFingerprint = (data: HarvestData): string => JSON.stringify({
   client_uuid: data.client_uuid,
@@ -96,6 +247,141 @@ const finalHarvestFingerprint = (data: HarvestData): string => JSON.stringify({
 class OfflineService {
   private static readonly BULK_SYNC_DEVICE_ID = 'mobile-offline-sync';
   private syncPromise: Promise<OfflineSyncResult> | null = null;
+
+  async saveFeedReferenceOffline(payload: FarmFeedReferenceCreatePayload): Promise<OfflineFeedReference> {
+    const normalizedPayload = { ...payload, client_uuid: payload.client_uuid, created_offline: true };
+    const fingerprint = feedReferenceFingerprint(normalizedPayload);
+    const current = await this.getOfflineFeedReferences();
+    const existing = current.find((item) => item.clientUuid === normalizedPayload.client_uuid);
+    if (existing) {
+      if (existing.fingerprint !== fingerprint) throw new Error('feed_reference_idempotency_conflict');
+      return existing;
+    }
+    const item: OfflineFeedReference = {
+      id: this.generateOfflineId(),
+      clientUuid: normalizedPayload.client_uuid,
+      payload: normalizedPayload,
+      fingerprint,
+      timestamp: Date.now(),
+      synced: false,
+    };
+    await this.persist(STORAGE_KEYS.OFFLINE_FEED_REFERENCES, [...current, item]);
+    return item;
+  }
+
+  async getOfflineFeedReferences(): Promise<OfflineFeedReference[]> {
+    return this.readList(STORAGE_KEYS.OFFLINE_FEED_REFERENCES, 'Erreur lecture aliments offline');
+  }
+
+  async saveStockDeclarationOffline(
+    cycleId: string,
+    payload: CycleStoreManualStockPayload,
+    options?: { feedSizeMmSnapshot?: string | number | null },
+  ): Promise<OfflineStockDeclaration> {
+    const clientUuid = payload.client_uuid ?? this.generateClientUUID();
+    const normalizedPayload = { ...payload, client_uuid: clientUuid, created_offline: true };
+    const fingerprint = stockDeclarationFingerprint(cycleId, normalizedPayload);
+    const current = await this.getOfflineStockDeclarations();
+    const references = await this.getOfflineFeedReferences();
+    const localReferenceClientUuid = normalizedPayload.feed_reference_client_uuid;
+    const localReference = localReferenceClientUuid
+      ? references.find((reference) => reference.clientUuid === localReferenceClientUuid)
+      : undefined;
+    const feedSizeMmSnapshot = normalizeFeedSize(
+      options?.feedSizeMmSnapshot
+      ?? normalizedPayload.external_feed?.pellet_size_mm
+      ?? localReference?.payload.pellet_size_mm,
+    ) ?? undefined;
+    const existing = current.find((item) => item.clientUuid === clientUuid);
+    if (existing) {
+      if (existing.fingerprint !== fingerprint) throw new Error('stock_entry_idempotency_conflict');
+      if (!existing.feedSizeMmSnapshot && feedSizeMmSnapshot) {
+        const updated = { ...existing, feedSizeMmSnapshot };
+        await this.persist(
+          STORAGE_KEYS.OFFLINE_STOCK_DECLARATIONS,
+          current.map((candidate) => candidate.id === existing.id ? updated : candidate),
+        );
+        return updated;
+      }
+      return existing;
+    }
+    const item: OfflineStockDeclaration = {
+      id: this.generateOfflineId(),
+      cycleId,
+      clientUuid,
+      feedReferenceClientUuid: normalizedPayload.feed_reference_client_uuid,
+      feedSizeMmSnapshot,
+      payload: normalizedPayload,
+      fingerprint,
+      timestamp: Date.now(),
+      synced: false,
+    };
+    await this.persist(STORAGE_KEYS.OFFLINE_STOCK_DECLARATIONS, [...current, item]);
+    return item;
+  }
+
+  async getOfflineStockDeclarations(): Promise<OfflineStockDeclaration[]> {
+    return this.readList(STORAGE_KEYS.OFFLINE_STOCK_DECLARATIONS, 'Erreur lecture stocks offline');
+  }
+
+  async syncOfflineFeedReferences(): Promise<SyncCounter> {
+    const items = (await this.getOfflineFeedReferences()).filter((item) => !item.synced);
+    let success = 0;
+    let failed = 0;
+    for (const item of items) {
+      try {
+        const reference = await aquacultureService.createFarmFeedReference(item.payload);
+        const allItems = await this.getOfflineFeedReferences();
+        await this.persist(
+          STORAGE_KEYS.OFFLINE_FEED_REFERENCES,
+          allItems.map((candidate) => candidate.id === item.id
+            ? { ...candidate, synced: true, serverId: reference.id }
+            : candidate),
+        );
+        success += 1;
+      } catch (error) {
+        logger.error(`Erreur sync aliment ${item.id}:`, error);
+        failed += 1;
+      }
+    }
+    return { success, failed };
+  }
+
+  async syncOfflineStockDeclarations(): Promise<SyncCounter> {
+    const items = (await this.getOfflineStockDeclarations()).filter((item) => !item.synced);
+    const references = await this.getOfflineFeedReferences();
+    let success = 0;
+    let failed = 0;
+    for (const item of items) {
+      const dependency = item.feedReferenceClientUuid
+        ? references.find((reference) => reference.clientUuid === item.feedReferenceClientUuid)
+        : undefined;
+      if (dependency && !dependency.synced) {
+        failed += 1;
+        continue;
+      }
+      try {
+        const payload = dependency?.serverId
+          ? {
+            ...item.payload,
+            feed_reference_id: dependency.serverId,
+            feed_reference_client_uuid: undefined,
+          }
+          : item.payload;
+        await aquacultureService.declareCycleStoreManualStock(item.cycleId, payload);
+        const allItems = await this.getOfflineStockDeclarations();
+        await this.persist(
+          STORAGE_KEYS.OFFLINE_STOCK_DECLARATIONS,
+          allItems.map((candidate) => candidate.id === item.id ? { ...candidate, synced: true } : candidate),
+        );
+        success += 1;
+      } catch (error) {
+        logger.error(`Erreur sync stock ${item.id}:`, error);
+        failed += 1;
+      }
+    }
+    return { success, failed };
+  }
 
   async saveFinalHarvestOffline(
     allocationId: string,
@@ -309,7 +595,11 @@ class OfflineService {
     return this.readList(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS, 'Erreur lecture calibrages offline');
   }
 
-  async saveCycleLogOffline(cycleId: string, logData: DailyLogForm): Promise<string> {
+  async saveCycleLogOffline(
+    cycleId: string,
+    logData: DailyLogForm,
+    options?: { serverLogId?: string | null },
+  ): Promise<string> {
     try {
       const logDate = logData.log_date || this.today();
       const allocationId = logData.cycle_unit_allocation ?? null;
@@ -331,9 +621,14 @@ class OfflineService {
           client_uuid: existingLog?.logData.client_uuid ?? logData.client_uuid ?? this.generateClientUUID(),
           created_offline: true,
         },
+        fingerprint: '',
         timestamp: Date.now(),
         synced: false,
+        server_log_id: options && Object.prototype.hasOwnProperty.call(options, 'serverLogId')
+          ? options.serverLogId ?? undefined
+          : existingLog?.server_log_id,
       };
+      offlineLog.fingerprint = cycleLogFingerprint(cycleId, offlineLog.logData);
 
       if (existingIndex >= 0) {
         existingLogs[existingIndex] = offlineLog;
@@ -359,6 +654,23 @@ class OfflineService {
     return logs.filter((log) => !log.synced);
   }
 
+  async findPendingCycleLogForScope({
+    cycleId,
+    logDate,
+    cycleUnitAllocationId,
+  }: {
+    cycleId: string;
+    logDate: string;
+    cycleUnitAllocationId: string | null;
+  }): Promise<OfflineCycleLog | null> {
+    const logs = await this.getPendingSyncLogs();
+    return logs.find((log) =>
+      log.cycleId === cycleId
+      && log.logData.log_date === logDate
+      && (log.logData.cycle_unit_allocation ?? null) === cycleUnitAllocationId
+    ) ?? null;
+  }
+
   async syncOfflineLogs(): Promise<SyncCounter> {
     const pendingLogs = await this.getPendingSyncLogs();
     if (pendingLogs.length === 0) {
@@ -368,9 +680,30 @@ class OfflineService {
 
     let success = 0;
     let failed = 0;
+    const stockDeclarations = await this.getOfflineStockDeclarations();
+    const feedReferences = await this.getOfflineFeedReferences();
     for (const log of pendingLogs) {
+      if (hasPendingStockDependency(log.cycleId, log.logData, stockDeclarations, feedReferences)) {
+        failed += 1;
+        continue;
+      }
       try {
-        await aquacultureService.createCycleLog(log.cycleId, log.logData);
+        const feedReferenceClientUuid = log.logData.feed_reference_client_uuid;
+        const localReference = feedReferenceClientUuid
+          ? feedReferences.find((item) => item.clientUuid === feedReferenceClientUuid)
+          : undefined;
+        const logData = localReference?.serverId
+          ? {
+            ...log.logData,
+            feed_reference: localReference.serverId,
+            feed_reference_client_uuid: undefined,
+          }
+          : log.logData;
+        if (log.server_log_id) {
+          await aquacultureService.updateCycleLog(log.server_log_id, logData);
+        } else {
+          await aquacultureService.createCycleLog(log.cycleId, logData);
+        }
         await this.markLogAsSynced(log.id);
         success += 1;
       } catch (error) {
@@ -527,6 +860,8 @@ class OfflineService {
   }
 
   private async performSyncAllOfflineData(): Promise<OfflineSyncResult> {
+    const pendingFeedReferences = (await this.getOfflineFeedReferences()).filter((item) => !item.synced);
+    const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).filter((item) => !item.synced);
     const pendingCycleLogs = await this.getPendingSyncLogs();
     const pendingNewCycles = (await this.getOfflineNewCycles()).filter((cycle) => !cycle.synced);
     const pendingSanitaryLogs = (await this.getOfflineSanitaryLogs()).filter((log) => !log.synced);
@@ -535,6 +870,7 @@ class OfflineService {
     const pendingFinalHarvests = await this.getPendingFinalHarvests();
 
     if (
+      pendingFeedReferences.length === 0 && pendingStockDeclarations.length === 0 &&
       pendingCycleLogs.length === 0 &&
       pendingNewCycles.length === 0 &&
       pendingSanitaryLogs.length === 0 && pendingCalibrationTanks.length === 0 &&
@@ -545,6 +881,8 @@ class OfflineService {
         failed: 0,
         details: {
           cycleLogs: { success: 0, failed: 0 },
+          feedReferences: { success: 0, failed: 0 },
+          stockDeclarations: { success: 0, failed: 0 },
           newCycles: { success: 0, failed: 0 },
           sanitaryLogs: { success: 0, failed: 0 },
           calibrationTanks: { success: 0, failed: 0 },
@@ -554,13 +892,15 @@ class OfflineService {
       };
     }
 
-    const bulkResult = await this.tryBulkSync(
-      pendingCycleLogs,
-      pendingNewCycles,
-      pendingSanitaryLogs
-    );
-    if (bulkResult) {
-      return bulkResult;
+    if (pendingFeedReferences.length === 0 && pendingStockDeclarations.length === 0) {
+      const bulkResult = await this.tryBulkSync(
+        pendingCycleLogs,
+        pendingNewCycles,
+        pendingSanitaryLogs
+      );
+      if (bulkResult) {
+        return bulkResult;
+      }
     }
 
     const results: OfflineSyncResult = {
@@ -568,6 +908,8 @@ class OfflineService {
       failed: 0,
       details: {
         cycleLogs: { success: 0, failed: 0 },
+        feedReferences: { success: 0, failed: 0 },
+        stockDeclarations: { success: 0, failed: 0 },
         newCycles: { success: 0, failed: 0 },
         sanitaryLogs: { success: 0, failed: 0 },
         calibrationTanks: { success: 0, failed: 0 },
@@ -576,8 +918,10 @@ class OfflineService {
       },
     };
 
-    results.details.cycleLogs = await this.syncOfflineLogs();
     results.details.newCycles = await this.syncOfflineNewCycles();
+    results.details.feedReferences = await this.syncOfflineFeedReferences();
+    results.details.stockDeclarations = await this.syncOfflineStockDeclarations();
+    results.details.cycleLogs = await this.syncOfflineLogs();
     results.details.sanitaryLogs = await this.syncOfflineSanitaryLogs();
     results.details.calibrationTanks = await this.syncOfflineCalibrationTanks();
     const businessOperations = await this.syncOfflineBusinessOperations();
@@ -585,6 +929,8 @@ class OfflineService {
     results.details.finalHarvests = businessOperations.finalHarvests;
 
     results.success =
+      (results.details.feedReferences?.success ?? 0) +
+      (results.details.stockDeclarations?.success ?? 0) +
       results.details.cycleLogs.success +
       results.details.newCycles.success +
       results.details.sanitaryLogs.success +
@@ -592,6 +938,8 @@ class OfflineService {
       (results.details.calibrationOperations?.success ?? 0) +
       (results.details.finalHarvests?.success ?? 0);
     results.failed =
+      (results.details.feedReferences?.failed ?? 0) +
+      (results.details.stockDeclarations?.failed ?? 0) +
       results.details.cycleLogs.failed +
       results.details.newCycles.failed +
       results.details.sanitaryLogs.failed +
@@ -1020,6 +1368,8 @@ class OfflineService {
   }
 
   async hasAnyPendingSync(): Promise<boolean> {
+    const pendingFeedReferences = (await this.getOfflineFeedReferences()).some((item) => !item.synced);
+    const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).some((item) => !item.synced);
     const pendingCycleLogs = await this.hasPendingSync();
     const pendingNewCycles = (await this.getOfflineNewCycles()).some((cycle) => !cycle.synced);
     const pendingSanitaryLogs = (await this.getOfflineSanitaryLogs()).some((log) => !log.synced);
@@ -1027,11 +1377,13 @@ class OfflineService {
     const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).some((item) => !item.synced);
     const pendingFinalHarvests = (await this.getOfflineFinalHarvests()).some((item) => !item.synced);
 
-    return pendingCycleLogs || pendingNewCycles || pendingSanitaryLogs || pendingCalibrationTanks ||
+    return pendingFeedReferences || pendingStockDeclarations || pendingCycleLogs || pendingNewCycles || pendingSanitaryLogs || pendingCalibrationTanks ||
       pendingCalibrationOperations || pendingFinalHarvests;
   }
 
   async getTotalPendingCount(): Promise<number> {
+    const pendingFeedReferences = (await this.getOfflineFeedReferences()).filter((item) => !item.synced).length;
+    const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).filter((item) => !item.synced).length;
     const pendingCycleLogs = await this.getPendingCount();
     const pendingNewCycles = (await this.getOfflineNewCycles()).filter((cycle) => !cycle.synced).length;
     const pendingSanitaryLogs = (await this.getOfflineSanitaryLogs()).filter((log) => !log.synced).length;
@@ -1039,11 +1391,13 @@ class OfflineService {
     const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).filter((item) => !item.synced).length;
     const pendingFinalHarvests = (await this.getOfflineFinalHarvests()).filter((item) => !item.synced).length;
 
-    return pendingCycleLogs + pendingNewCycles + pendingSanitaryLogs + pendingCalibrationTanks +
+    return pendingFeedReferences + pendingStockDeclarations + pendingCycleLogs + pendingNewCycles + pendingSanitaryLogs + pendingCalibrationTanks +
       pendingCalibrationOperations + pendingFinalHarvests;
   }
 
   async resetOfflineData(): Promise<void> {
+    await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_FEED_REFERENCES);
+    await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_STOCK_DECLARATIONS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CYCLE_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_NEW_CYCLES);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_SANITARY_LOGS);
@@ -1073,7 +1427,7 @@ class OfflineService {
   }
 
   private today(): string {
-    return new Date().toISOString().split('T')[0];
+    return getBusinessIsoDate();
   }
 
   private generateOfflineId(): string {

@@ -400,6 +400,7 @@ class NotificationPreference(models.Model):
             'order_confirmed': 'order_confirmations',
             'order_shipped': 'order_status_updates',
             'order_delivered': 'order_status_updates',
+            'order_ready_for_pickup': 'order_status_updates',
             'order_cancelled': 'order_status_updates',
             'payment_received': 'order_confirmations',
             'delivery_scheduled': 'delivery_notifications',

@@ -356,6 +356,7 @@ class AnnualSimulationService:
     ) -> dict[str, Any]:
         """Lance la simulation d'un cycle type via le catalogue commerce."""
         from commerce.services.cycle_simulation_service import CycleSimulationService  # noqa: PLC0415
+        from commerce.services.nutritional_guide_gateway import NutritionalGuideGateway  # noqa: PLC0415
 
         return CycleSimulationService.simulate_cycle(
             species=resolved_inputs.species,
@@ -366,6 +367,9 @@ class AnnualSimulationService:
             selling_price_per_kg_fcfa=resolved_inputs.selling_price,
             fingerlings_cost_fcfa=fingerlings_cost_fcfa,
             other_costs_fcfa=other_costs_fcfa,
+            nutritional_guide_rules=NutritionalGuideGateway.for_species(
+                resolved_inputs.species
+            ),
         )
 
     @staticmethod

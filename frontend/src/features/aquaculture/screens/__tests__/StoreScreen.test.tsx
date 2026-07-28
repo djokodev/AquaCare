@@ -10,6 +10,9 @@ const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockGetCycleStore = jest.fn();
 const mockDeclareCycleStoreManualStock = jest.fn();
+const mockCreateFarmFeedReference = jest.fn();
+const mockConfirmOrderReceipt = jest.fn();
+const mockGetProducts = jest.fn();
 const mockT = (key: string) => key;
 let mockState: any;
 let mockRouteParams: { cycleId?: string };
@@ -35,6 +38,16 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     getCycleStore: (...args: unknown[]) => mockGetCycleStore(...args),
     declareCycleStoreManualStock: (...args: unknown[]) => mockDeclareCycleStoreManualStock(...args),
+    createFarmFeedReference: (...args: unknown[]) => mockCreateFarmFeedReference(...args),
+    getFarmFeedReferences: jest.fn().mockResolvedValue([]),
+  },
+}));
+
+jest.mock('@/features/commerce/services/commerceApi', () => ({
+  __esModule: true,
+  default: {
+    confirmOrderReceipt: (...args: unknown[]) => mockConfirmOrderReceipt(...args),
+    getProducts: (...args: unknown[]) => mockGetProducts(...args),
   },
 }));
 
@@ -61,6 +74,8 @@ describe('StoreScreen', () => {
         currentCycle: {
           id: 'cycle-1',
           cycle_name: 'Cycle Magasin',
+          farm_profile: 'farm-1',
+          species: 'tilapia',
         },
         cycleFeedStatus: {
           data: {
@@ -87,6 +102,10 @@ describe('StoreScreen', () => {
     }));
     mockGetCycleStore.mockResolvedValue({
       cycle_id: 'cycle-1',
+      calculation_status: 'available',
+      calculation_source: 'current_cycle_reforecast:cycle_current_weight',
+      calculated_at: '2026-07-20T00:00:00Z',
+      calculation_warnings: [],
       summary: {
         manual_feed_kg: '50.00',
         received_order_feed_kg: '20.00',
@@ -102,6 +121,7 @@ describe('StoreScreen', () => {
         secured_feed_kg: '80.00',
         feed_to_secure_kg: '510.00',
         stock_tracking_started_at: '2026-06-01',
+        unclassified_stock_kg: '0.00',
       },
       stock_items: [{ label: 'Aliment starter 20kg', feed_size_mm: '2.00', quantity_added_kg: '70.00', quantity_consumed_kg: '10.00', quantity_available_kg: '60.00' }],
       status: 'ok',
@@ -118,6 +138,7 @@ describe('StoreScreen', () => {
         },
       ],
       stock_tracking_started_at: '2026-06-01',
+      unclassified_entries: [],
     });
     mockDeclareCycleStoreManualStock.mockResolvedValue({
       cycle_id: 'cycle-1',
@@ -142,6 +163,16 @@ describe('StoreScreen', () => {
       pending_orders: [],
       stock_tracking_started_at: '2026-06-01',
     });
+    mockCreateFarmFeedReference.mockResolvedValue({ id: 'feed-server-1' });
+    mockConfirmOrderReceipt.mockResolvedValue({ status: 'received' });
+    mockGetProducts.mockResolvedValue([
+      {
+        id: 'product-1', brand: 'dibaq', name: 'DIBAQ Tilapia 2 mm', species: 'tilapia',
+        phase: 'grossissement', pellet_size_mm: '2.00', protein_percentage: 32,
+        lipid_percentage: 10, package_weight_kg: 15, price_per_package: '23500.00',
+        price_per_kg: '1566.67', is_available: true, created_at: '', updated_at: '',
+      },
+    ]);
   });
 
   it('affiche le stock du cycle et ouvre les actions du Magasin', async () => {
@@ -179,6 +210,8 @@ describe('StoreScreen', () => {
     });
 
     fireEvent.press(getByText('storeManualSubmit'));
+    expect(getByText('storeManualCycleContext')).toBeTruthy();
+    expect(getByText('storeManualSpeciesContext')).toBeTruthy();
 
     fireEvent.changeText(getByPlaceholderText('storeManualLabelPlaceholder'), 'Aliment starter 20kg');
     fireEvent.changeText(getByPlaceholderText('storeManualFeedSizePlaceholder'), '2,5');
@@ -193,8 +226,7 @@ describe('StoreScreen', () => {
       expect(mockDeclareCycleStoreManualStock).toHaveBeenCalledWith(
         'cycle-1',
         expect.objectContaining({
-          label: 'Aliment starter 20kg',
-          feed_size_mm: '2.5',
+          feed_reference_id: 'feed-server-1',
           quantity_kg: '75.5',
           total_cost_fcfa: '90000.5',
           entry_date: '2026-06-29',
@@ -203,6 +235,16 @@ describe('StoreScreen', () => {
         })
       );
     });
+  });
+
+  it('affiche uniquement la saisie du nouvel aliment pour une déclaration normale', async () => {
+    const { getByText, queryByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('storeManualSubmit')).toBeTruthy());
+    fireEvent.press(getByText('storeManualSubmit'));
+    expect(getByText('storeManualLabel')).toBeTruthy();
+    expect(queryByText('storeAquacareFeed')).toBeNull();
+    expect(queryByText('storeUseExistingFeed')).toBeNull();
   });
 
   it('recommande un réapprovisionnement seulement avec un stock explicitement nul', async () => {
@@ -219,6 +261,24 @@ describe('StoreScreen', () => {
     });
     const { getByText } = render(<StoreScreen />);
     await waitFor(() => expect(getByText('storeReplenishmentRequired')).toBeTruthy());
+  });
+
+  it('n affiche jamais un besoin couvert lorsque le calcul est indisponible', async () => {
+    mockGetCycleStore.mockResolvedValueOnce({
+      ...(await mockGetCycleStore()),
+      calculation_status: 'unavailable',
+      calculation_warnings: ['target_weight_unavailable'],
+      summary: {
+        ...(await mockGetCycleStore()).summary,
+        feed_to_secure_kg: null,
+        total_feed_needed_kg: null,
+      },
+    });
+
+    const { findByText, queryByText } = render(<StoreScreen />);
+
+    expect(await findByText('feedEstimateUnavailable')).toBeTruthy();
+    expect(queryByText('storeNeedCoveredTitle')).toBeNull();
   });
 
   it('ignore le statut alimentaire d un autre cycle', async () => {
@@ -266,6 +326,31 @@ describe('StoreScreen', () => {
     });
   });
 
+  it('explique une commande legacy incompatible sans proposer une classification dangereuse', async () => {
+    const payload = await mockGetCycleStore();
+    mockGetCycleStore.mockResolvedValueOnce({
+      ...payload,
+      unclassified_entries: [{
+        id: 'legacy-order-1',
+        label: 'Catfish 2mm',
+        quantity_kg: '30.00',
+        quantity_added_kg: '30.00',
+        historical_consumption_kg: '0.00',
+        quantity_available_kg: '30.00',
+        source: 'order',
+        classification_reason: 'order_species_mismatch',
+        catalog_product_id: 'product-catfish',
+        catalog_product_species: 'clarias',
+        catalog_product_pellet_size_mm: '2.00',
+      }],
+    });
+
+    const { findByText, queryByText } = render(<StoreScreen />);
+
+    expect(await findByText('storeLegacyOrderSpeciesMismatch')).toBeTruthy();
+    expect(queryByText('storeClassificationCatalogAction')).toBeNull();
+  });
+
   it('affiche une validation lorsque le formulaire de stock est vide', async () => {
     const { getAllByText } = render(<StoreScreen />);
 
@@ -297,7 +382,7 @@ describe('StoreScreen', () => {
     fireEvent.press(getAllByText('storeManualSubmit')[1]);
     fireEvent.press(getAllByText('storeManualSubmit')[1]);
 
-    expect(mockDeclareCycleStoreManualStock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockDeclareCycleStoreManualStock).toHaveBeenCalledTimes(1));
     resolveSubmission?.();
   });
 
@@ -311,6 +396,81 @@ describe('StoreScreen', () => {
     await waitFor(() => expect(getByText('network refresh failed')).toBeTruthy());
     expect(getByText('ORD-001')).toBeTruthy();
     expect(mockGetCycleStore).toHaveBeenCalledTimes(2);
+  });
+
+  it('confirme un retrait prêt et recharge le magasin sans double clic', async () => {
+    const initialPayload = await mockGetCycleStore();
+    mockGetCycleStore.mockClear();
+    mockGetCycleStore.mockResolvedValueOnce({
+      ...initialPayload,
+      pending_orders: [{
+        id: 'order-ready',
+        order_number: 'ORD-READY',
+        status: 'ready_for_pickup',
+        delivery_method: 'pickup',
+        total_bags: 1,
+        total_fcfa: '30000.00',
+        estimated_feed_kg: '20.00',
+        created_at: '2026-06-10T08:00:00.000Z',
+      }],
+    }).mockResolvedValueOnce({
+      ...initialPayload,
+      summary: { ...initialPayload.summary, pending_orders_count: 0 },
+      pending_orders: [],
+    });
+    let confirmAction: (() => Promise<void>) | undefined;
+    jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      if (title === 'confirmPickupTitle') confirmAction = buttons?.[1]?.onPress as () => Promise<void>;
+    });
+    const { getByText, queryByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('confirmPickupAction')).toBeTruthy());
+    fireEvent.press(getByText('confirmPickupAction'));
+    void confirmAction?.();
+    void confirmAction?.();
+
+    await waitFor(() => expect(mockConfirmOrderReceipt).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(queryByText('ORD-READY')).toBeNull());
+  });
+
+  it('conserve la confirmation si le refresh du magasin échoue', async () => {
+    const initialPayload = await mockGetCycleStore();
+    mockGetCycleStore.mockClear();
+    mockGetCycleStore.mockResolvedValueOnce({
+      ...initialPayload,
+      pending_orders: [{
+        id: 'order-confirmed',
+        order_number: 'ORD-CONFIRMED',
+        status: 'delivered',
+        delivery_method: 'home',
+        total_bags: 1,
+        total_fcfa: '30000.00',
+        estimated_feed_kg: '20.00',
+        created_at: '2026-06-10T08:00:00.000Z',
+      }],
+    }).mockRejectedValueOnce(new Error('refresh unavailable'));
+    mockConfirmOrderReceipt.mockResolvedValueOnce({
+      id: 'order-confirmed',
+      status: 'received',
+    });
+    let confirmAction: (() => Promise<void>) | undefined;
+    jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      if (title === 'confirmReceiptTitle') confirmAction = buttons?.[1]?.onPress as () => Promise<void>;
+    });
+    const { getByText, queryByText } = render(<StoreScreen />);
+
+    await waitFor(() => expect(getByText('confirmReceiptAction')).toBeTruthy());
+    fireEvent.press(getByText('confirmReceiptAction'));
+    await confirmAction?.();
+
+    await waitFor(() => {
+      expect(mockConfirmOrderReceipt).toHaveBeenCalledWith('order-confirmed');
+      expect(queryByText('ORD-CONFIRMED')).toBeNull();
+    });
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'success',
+      'confirmReceiptSuccess\n\nstoreRefreshAfterConfirmationError',
+    );
   });
 
   it('permet un retry après une erreur initiale', async () => {

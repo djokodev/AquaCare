@@ -12,19 +12,25 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockConfirmOrderReceipt = jest.fn((id: string) => ({ type: 'confirmOrderReceipt', payload: id }));
+let mockRouteParams: { cycleId?: string } | undefined;
 let mockState: {
   commerce: {
     orders: {
       items: Order[];
       statistics: { total_orders: number; total_spent: string; total_bags_ordered: number; average_order_value: string } | null;
+      contextCycleId: string | null;
       loading: boolean;
       error: string | null;
     };
+  };
+  aquaculture: {
+    currentCycle?: { id: string; cycle_name: string };
   };
 };
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
+  useRoute: () => ({ params: mockRouteParams }),
 }));
 
 jest.mock('react-redux', () => ({
@@ -33,8 +39,9 @@ jest.mock('react-redux', () => ({
 }));
 
 jest.mock('@/features/commerce/store/commerceSlice', () => ({
-  fetchOrders: jest.fn(() => ({ type: 'fetchOrders' })),
-  fetchOrderStatistics: jest.fn(() => ({ type: 'fetchOrderStatistics' })),
+  fetchOrders: jest.fn((payload) => ({ type: 'fetchOrders', payload })),
+  fetchOrderStatistics: jest.fn((payload) => ({ type: 'fetchOrderStatistics', payload })),
+  clearOrderContext: jest.fn(() => ({ type: 'clearOrderContext' })),
   confirmOrderReceipt: (id: string) => mockConfirmOrderReceipt(id),
 }));
 
@@ -50,7 +57,7 @@ const createOrder = (status: Order['status'] = 'confirmed'): Order => ({
   id: `order-${status}`,
   order_number: `ORD-${status}`,
   status,
-  delivery_method: 'pickup',
+  delivery_method: status === 'delivered' ? 'home' : 'pickup',
   pickup_location: 'ndokoti',
   subtotal: '30000',
   delivery_fee: '0',
@@ -75,14 +82,19 @@ const createOrder = (status: Order['status'] = 'confirmed'): Order => ({
 describe('OrdersHistoryScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRouteParams = { cycleId: 'cycle-a' };
     mockState = {
       commerce: {
         orders: {
           items: [createOrder()],
           statistics: { total_orders: 1, total_spent: '30000', total_bags_ordered: 1, average_order_value: '30000' },
+          contextCycleId: 'cycle-a',
           loading: false,
           error: null,
         },
+      },
+      aquaculture: {
+        currentCycle: { id: 'cycle-a', cycle_name: 'Cycle A' },
       },
     };
     mockDispatch.mockImplementation((action: { type?: string }) => {
@@ -93,14 +105,59 @@ describe('OrdersHistoryScreen', () => {
     });
   });
 
+  it('ne lance aucune requête globale sans cycle', () => {
+    mockRouteParams = undefined;
+    mockState.aquaculture.currentCycle = undefined;
+    const { getByText } = render(<OrdersHistoryScreen />);
+
+    expect(getByText('noCycleSelected')).toBeTruthy();
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'fetchOrders' }));
+    expect(mockDispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'fetchOrderStatistics' }));
+  });
+
+  it('masque immédiatement le cycle précédent et charge le nouveau cycle', async () => {
+    const screen = render(<OrdersHistoryScreen />);
+    expect(screen.getByText('ORD-confirmed')).toBeTruthy();
+
+    mockRouteParams = { cycleId: 'cycle-b' };
+    mockState.aquaculture.currentCycle = { id: 'cycle-b', cycle_name: 'Cycle B' };
+    mockDispatch.mockImplementation((action: { type?: string; payload?: { productionCycleId?: string } }) => {
+      if (action.type === 'fetchOrders' && action.payload?.productionCycleId === 'cycle-b') {
+        return { unwrap: jest.fn().mockResolvedValue([]) };
+      }
+      if (action.type === 'fetchOrderStatistics' && action.payload?.productionCycleId === 'cycle-b') {
+        return {
+          unwrap: jest.fn().mockResolvedValue({
+            total_orders: 0,
+            total_spent: '0',
+            total_bags_ordered: 0,
+            average_order_value: '0',
+          }),
+        };
+      }
+      return { unwrap: jest.fn().mockResolvedValue({}) };
+    });
+    screen.rerender(<OrdersHistoryScreen />);
+
+    await waitFor(() => expect(screen.queryByText('ORD-confirmed')).toBeNull());
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'fetchOrders',
+      payload: { productionCycleId: 'cycle-b' },
+    });
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'fetchOrderStatistics',
+      payload: { productionCycleId: 'cycle-b' },
+    });
+  });
+
   it('affiche statistiques, statuts et aucune action PDF', () => {
     mockState.commerce.orders.items = [createOrder('confirmed'), createOrder('delivered'), createOrder('received')];
     const { getByText, queryByText } = render(<OrdersHistoryScreen />);
 
     expect(getByText('orderStatistics')).toBeTruthy();
     expect(getByText('orderStatusConfirmed')).toBeTruthy();
-    expect(getByText('orderStatusDelivered')).toBeTruthy();
-    expect(getByText('orderStatusReceived')).toBeTruthy();
+    expect(getByText('orderStatusDeliveredHome')).toBeTruthy();
+    expect(getByText('orderStatusPickupConfirmed')).toBeTruthy();
     expect(queryByText(/pdf|download|télécharger/i)).toBeNull();
   });
 
@@ -147,6 +204,23 @@ describe('OrdersHistoryScreen', () => {
     await waitFor(() => expect(mockConfirmOrderReceipt).toHaveBeenCalledTimes(1));
 
     expect(Alert.alert).toHaveBeenCalledWith('success', 'confirmReceiptSuccess');
+  });
+
+  it('confirme un retrait uniquement quand la commande est prête', async () => {
+    mockState.commerce.orders.items = [createOrder('ready_for_pickup')];
+    let confirmAction: (() => Promise<void>) | undefined;
+    jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      if (title === 'confirmPickupTitle') confirmAction = buttons?.[1]?.onPress as () => Promise<void>;
+    });
+    const { getByText, queryByText } = render(<OrdersHistoryScreen />);
+
+    expect(getByText('confirmPickupAction')).toBeTruthy();
+    expect(queryByText('confirmReceiptAction')).toBeNull();
+    fireEvent.press(getByText('confirmPickupAction'));
+    await confirmAction?.();
+
+    await waitFor(() => expect(mockConfirmOrderReceipt).toHaveBeenCalledTimes(1));
+    expect(Alert.alert).toHaveBeenCalledWith('success', 'confirmPickupSuccess');
   });
 
   it('ignore un chargement composite obsolète et son timestamp', async () => {

@@ -1,13 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
-import { confirmOrderReceipt, fetchOrders, fetchOrderStatistics } from '@/features/commerce/store/commerceSlice';
-import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
+import {
+  clearOrderContext,
+  confirmOrderReceipt,
+  fetchOrders,
+  fetchOrderStatistics,
+} from '@/features/commerce/store/commerceSlice';
+import {
+  canConfirmOrderReceipt,
+  getOrderReceiptActionLabelKey,
+  getOrderStatusLabelKey,
+  getOrderStatusTone,
+} from '@/features/commerce/utils/orderStatus';
 import { Order, OrderStatistics } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import {
@@ -34,26 +44,41 @@ import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
+type OrdersRouteProp = RouteProp<RootStackParamList, 'OrdersHistory'>;
 type OrdersLoadResult = 'success' | 'error' | 'stale';
 
 export default function OrdersHistoryScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<OrdersRouteProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { items, statistics } = useSelector((state: RootState) => state.commerce.orders);
+  const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const orderState = useSelector((state: RootState) => state.commerce.orders);
+  const routeCycleId = route.params?.cycleId;
+  const cycleId = routeCycleId ?? currentCycle?.id;
+  const cycleName = currentCycle && currentCycle.id === cycleId
+    ? currentCycle.cycle_name
+    : undefined;
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
-  const [displayItems, setDisplayItems] = useState<Order[]>(items);
-  const [displayStatistics, setDisplayStatistics] = useState<OrderStatistics | null>(statistics);
+  const [displayItems, setDisplayItems] = useState<Order[]>(
+    orderState.contextCycleId === cycleId ? orderState.items : [],
+  );
+  const [displayStatistics, setDisplayStatistics] = useState<OrderStatistics | null>(
+    orderState.contextCycleId === cycleId ? orderState.statistics : null,
+  );
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const confirmingOrderRef = useRef<string | null>(null);
   const loadRequestRef = useRef(0);
+  const translationRef = useRef(t);
+  translationRef.current = t;
   const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('orders');
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
   const loadOrders = useCallback(async (mode: 'initial' | 'refresh' = 'initial'): Promise<OrdersLoadResult> => {
+    if (!cycleId) return 'error';
     const requestId = loadRequestRef.current + 1;
     loadRequestRef.current = requestId;
     if (mode === 'refresh') {
@@ -64,11 +89,11 @@ export default function OrdersHistoryScreen() {
     setDashboardError(null);
     try {
       const [ordersResult, statisticsResult] = await Promise.allSettled([
-        dispatch(fetchOrders()).unwrap(),
-        dispatch(fetchOrderStatistics()).unwrap(),
+        dispatch(fetchOrders({ productionCycleId: cycleId })).unwrap(),
+        dispatch(fetchOrderStatistics({ productionCycleId: cycleId })).unwrap(),
       ]);
       if (ordersResult.status !== 'fulfilled' || statisticsResult.status !== 'fulfilled') {
-        throw new Error(t('ordersDashboardLoadError'));
+        throw new Error(translationRef.current('ordersDashboardLoadError'));
       }
       if (requestId !== loadRequestRef.current) return 'stale';
       setDisplayItems(ordersResult.value);
@@ -79,7 +104,7 @@ export default function OrdersHistoryScreen() {
       return requestId === loadRequestRef.current ? 'success' : 'stale';
     } catch {
       if (requestId !== loadRequestRef.current) return 'stale';
-      setDashboardError(t('ordersDashboardLoadError'));
+      setDashboardError(translationRef.current('ordersDashboardLoadError'));
       return 'error';
     } finally {
       if (requestId === loadRequestRef.current) {
@@ -87,9 +112,24 @@ export default function OrdersHistoryScreen() {
         setDashboardRefreshing(false);
       }
     }
-  }, [dispatch, refreshLastSyncedAt, t]);
+  }, [cycleId, dispatch, refreshLastSyncedAt]);
 
-  useEffect(() => { void loadOrders(); }, [loadOrders]);
+  useEffect(() => {
+    loadRequestRef.current += 1;
+    if (orderState.contextCycleId !== cycleId) {
+      setDisplayItems([]);
+      setDisplayStatistics(null);
+    }
+    setDashboardError(null);
+    setExpandedOrderId(null);
+    if (!cycleId) {
+      dispatch(clearOrderContext());
+      setDashboardLoading(false);
+      setDashboardRefreshing(false);
+      return;
+    }
+    void loadOrders();
+  }, [cycleId, dispatch, loadOrders]);
 
   const handleRefresh = useCallback(async () => {
     await loadOrders('refresh');
@@ -107,21 +147,33 @@ export default function OrdersHistoryScreen() {
   }, [i18n.language]);
 
   const handleConfirmReceipt = useCallback((order: Order) => {
-    Alert.alert(t('confirmReceiptTitle'), t('confirmReceiptMessage', { orderNumber: order.order_number }), [
+    const isPickup = order.delivery_method === 'pickup';
+    const titleKey = isPickup ? 'confirmPickupTitle' : 'confirmReceiptTitle';
+    const messageKey = isPickup ? 'confirmPickupMessage' : 'confirmReceiptMessage';
+    const cycleMessage = order.production_cycle_id ? `\n\n${t('confirmOrderCycleStockMessage')}` : '';
+    Alert.alert(t(titleKey), `${t(messageKey, { orderNumber: order.order_number })}${cycleMessage}`, [
       { text: t('cancel'), style: 'cancel' },
       { text: t('confirm'), onPress: async () => {
         if (confirmingOrderRef.current) return;
         try {
           confirmingOrderRef.current = order.id;
           setConfirmingOrderId(order.id);
-          await dispatch(confirmOrderReceipt(order.id)).unwrap();
+          const updatedOrder = await dispatch(confirmOrderReceipt(order.id)).unwrap();
+          setDisplayItems((current) => current.map((item) => (
+            item.id === updatedOrder.id ? updatedOrder : item
+          )));
           const refreshResult = await loadOrders('refresh');
           if (refreshResult === 'stale') return;
           if (refreshResult === 'error') {
-            throw new Error('orders refresh failed');
+            setDashboardError(t('ordersDashboardLoadError'));
           }
-          Alert.alert(t('success'), t('confirmReceiptSuccess'));
-        } catch { Alert.alert(t('error'), t('confirmReceiptError')); }
+          Alert.alert(t('success'), t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess'));
+        } catch (caughtError) {
+          const message = typeof caughtError === 'string' && caughtError.trim()
+            ? caughtError
+            : t('confirmReceiptError');
+          Alert.alert(t('error'), message);
+        }
         finally {
           confirmingOrderRef.current = null;
           setConfirmingOrderId(null);
@@ -149,7 +201,10 @@ export default function OrdersHistoryScreen() {
           />
         </View>
         <View style={styles.rowBetween}>
-          <Badge label={t(getOrderStatusLabelKey(order.status))} tone={order.status === 'received' ? 'success' : 'info'} />
+          <Badge
+            label={t(getOrderStatusLabelKey(order.status, order.delivery_method))}
+            tone={getOrderStatusTone(order)}
+          />
           <AppText variant="sectionTitle" color="link">{Number(order.total).toLocaleString()} FCFA</AppText>
         </View>
         <View style={styles.badges}>
@@ -157,8 +212,16 @@ export default function OrdersHistoryScreen() {
           <Badge label={t(order.delivery_method === 'home' ? 'homeDelivery' : 'pickupStore')} />
           {order.is_free_delivery ? <Badge label={t('free')} tone="success" /> : null}
         </View>
-        {order.status === 'delivered' ? (
-          <Button label={t('confirmReceiptAction')} loading={confirmingOrderId === order.id} onPress={() => handleConfirmReceipt(order)} />
+        {canConfirmOrderReceipt(order) ? (
+          <View style={styles.confirmationAction}>
+            <AppText variant="helper" color="warning">{t('orderConfirmationPendingHelp')}</AppText>
+            <Button
+              label={t(getOrderReceiptActionLabelKey(order))}
+              loading={confirmingOrderId === order.id}
+              disabled={Boolean(confirmingOrderId) && confirmingOrderId !== order.id}
+              onPress={() => handleConfirmReceipt(order)}
+            />
+          </View>
         ) : null}
 
         {expanded ? (
@@ -238,8 +301,20 @@ export default function OrdersHistoryScreen() {
 
   return (
     <View style={styles.screen}>
-      <AppHeader title={t('ordersHistory')} subtitle={t('orderCount', { count: displayItems.length })} onBack={() => navigation.goBack()} backLabel={t('back')} />
-      {dashboardLoading && displayItems.length === 0 ? <LoadingState message={t('loading')} /> : dashboardError && displayItems.length === 0 ? (
+      <AppHeader
+        title={t('cycleOrders')}
+        subtitle={cycleName ?? (cycleId ? t('orderCount', { count: displayItems.length }) : undefined)}
+        onBack={() => navigation.goBack()}
+        backLabel={t('back')}
+      />
+      {!cycleId ? (
+        <EmptyState
+          title={t('noCycleSelected')}
+          message={t('ordersRequireCycle')}
+          actionLabel={t('back')}
+          onAction={() => navigation.goBack()}
+        />
+      ) : dashboardLoading && displayItems.length === 0 ? <LoadingState message={t('loading')} /> : dashboardError && displayItems.length === 0 ? (
         <ErrorState title={dashboardError} actionLabel={t('retry')} onAction={() => void loadOrders('refresh')} />
       ) : (
         <FlatList
@@ -267,6 +342,7 @@ const styles = StyleSheet.create({
   orderCard: { marginBottom: spacing[3], gap: spacing[3] },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  confirmationAction: { gap: spacing[2] },
   details: { gap: spacing[3] },
   address: { backgroundColor: colors.surface.selected, gap: spacing[1] },
   listHeader: { gap: spacing[3], marginBottom: spacing[4] },

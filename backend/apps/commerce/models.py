@@ -41,7 +41,7 @@ class OrderQuerySet(models.QuerySet["Order"]):
     """QuerySet utilitaire pour les commandes avec details precharges."""
 
     def with_details(self) -> models.QuerySet["Order"]:
-        return self.select_related('user', 'farm_profile').prefetch_related('items__product')
+        return self.select_related('user', 'farm_profile', 'production_cycle').prefetch_related('items__product')
 
 
 class Product(models.Model):
@@ -276,6 +276,42 @@ class Order(models.Model):
         default='confirmed',
         help_text=_('Statut de la commande')
     )
+    delivered_at = models.DateTimeField(
+        _('Livrée le'),
+        null=True,
+        blank=True,
+        help_text=_('Date à laquelle la livraison à domicile a été déclarée'),
+    )
+    delivered_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders_marked_delivered',
+        verbose_name=_('Livrée par'),
+        help_text=_('Opérateur ayant déclaré la livraison à domicile'),
+    )
+    ready_for_pickup_at = models.DateTimeField(
+        _('Prête au retrait le'),
+        null=True,
+        blank=True,
+        help_text=_('Date à laquelle la commande a été déclarée prête au retrait'),
+    )
+    ready_for_pickup_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders_marked_ready_for_pickup',
+        verbose_name=_('Prête au retrait par'),
+        help_text=_('Opérateur ayant déclaré la commande prête au retrait'),
+    )
+    received_at = models.DateTimeField(
+        _('Réception confirmée le'),
+        null=True,
+        blank=True,
+        help_text=_('Date à laquelle le client a confirmé la réception ou le retrait'),
+    )
 
     # Livraison (snapshot adresse au moment de la commande)
     delivery_method = models.CharField(
@@ -440,8 +476,8 @@ class OrderItem(models.Model):
 
     class Meta:
         app_label = 'commerce'
-        verbose_name = _("Article commande")
-        verbose_name_plural = _("Articles commande")
+        verbose_name = _("Article commandé")
+        verbose_name_plural = _("Articles commandés")
         ordering = ['order', 'id']
         indexes = [
             # Index pour performance admin inline OrderItem

@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Image, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -15,7 +15,8 @@ import {
   fetchDeliveryFeePreview,
   createOrder,
 } from '@/features/commerce/store/commerceSlice';
-import { CartItem, DeliveryMethod, PickupLocation } from '@/types/commerce';
+import { loadUserProfile } from '@/features/auth/store/authSlice';
+import { CartItem, DeliveryAddressIncompleteError, DeliveryMethod, PickupLocation } from '@/types/commerce';
 import {
   DELIVERY_METHODS,
   FREE_DELIVERY_THRESHOLD,
@@ -27,7 +28,7 @@ import { RootStackParamList } from '@/navigation/MainNavigator';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
-import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
+import { parseApiError, sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import {
   AppHeader,
   AppText,
@@ -79,6 +80,14 @@ const extractErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+const DELIVERY_ADDRESS_FIELD_LABELS: Record<string, string> = {
+  delivery_name: 'deliveryRecipientName',
+  delivery_phone: 'deliveryPhone',
+  delivery_region: 'deliveryRegion',
+  delivery_city: 'deliveryCity',
+  neighborhood: 'deliveryNeighborhood',
+};
+
 export default function CartScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
@@ -103,6 +112,12 @@ export default function CartScreen() {
   const storeCycleId = routeCycleId || currentCycle?.id;
   const { items: cartItems, delivery_method, pickup_location, deliveryPreview, previewLoading } = cart;
 
+  useFocusEffect(
+    useCallback(() => {
+      void dispatch(loadUserProfile());
+    }, [dispatch])
+  );
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = React.useRef(false);
 
@@ -110,6 +125,34 @@ export default function CartScreen() {
     () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
     [cartItems]
   );
+
+  const homeDeliveryMissingFields = useMemo(() => {
+    if (delivery_method !== 'home' || !user) {
+      return [];
+    }
+
+    const fields = [
+      ['delivery_name', user.full_name || user.display_name],
+      ['delivery_phone', user.phone_number],
+      ['delivery_region', user.region],
+      ['delivery_city', user.city],
+      ['neighborhood', user.neighborhood],
+    ] as const;
+
+    return fields
+      .filter(([, value]) => !String(value || '').trim())
+      .map(([field]) => t(DELIVERY_ADDRESS_FIELD_LABELS[field] || field));
+  }, [delivery_method, t, user]);
+
+  const handleCompleteDeliveryAddress = useCallback(() => {
+    navigation.push('MainTabs', {
+      screen: 'ProfileStack',
+      params: {
+        screen: 'ProfileMain',
+        params: { startEditing: true, returnToCart: true },
+      },
+    });
+  }, [navigation]);
 
   const handleFetchPreview = useCallback(async () => {
     if (cartItems.length === 0) return;
@@ -172,6 +215,11 @@ export default function CartScreen() {
       return;
     }
 
+    if (delivery_method === 'home' && homeDeliveryMissingFields.length > 0) {
+      handleCompleteDeliveryAddress();
+      return;
+    }
+
     Alert.alert(
       t('confirmOrder'),
       t('confirmOrderMessage', {
@@ -216,6 +264,29 @@ export default function CartScreen() {
                 },
               ]);
             } catch (error) {
+              const structuredError = error as Partial<DeliveryAddressIncompleteError>;
+              const parsedError = parseApiError(error);
+              const rawError = parsedError.rawError as Record<string, unknown> | null;
+              const missingFields = structuredError.code === 'delivery_address_incomplete'
+                ? structuredError.missing_fields
+                : parsedError.code === 'delivery_address_incomplete'
+                  ? rawError?.missing_fields
+                  : null;
+              if (Array.isArray(missingFields)) {
+                const labels = missingFields
+                  .filter((field): field is string => typeof field === 'string')
+                  .map((field) => t(DELIVERY_ADDRESS_FIELD_LABELS[field] || field))
+                  .join(', ');
+                Alert.alert(
+                  t('deliveryAddressIncompleteTitle'),
+                  t('deliveryAddressIncompleteMessage', { fields: labels }),
+                  [
+                    { text: t('cancel'), style: 'cancel' },
+                    { text: t('completeDeliveryAddress'), onPress: handleCompleteDeliveryAddress },
+                  ],
+                );
+                return;
+              }
               const msg = extractErrorMessage(error, t('orderCreationError'));
               logger.warn('[CartScreen] Order error:', msg);
               Alert.alert(t('error'), msg);
@@ -247,6 +318,15 @@ export default function CartScreen() {
               {product.pellet_size_mm}mm · {product.package_weight_kg}kg
               {product.protein_percentage ? ` · ${product.protein_percentage}% ${t('protein')}` : ''}
             </AppText>
+            {item.recommendation_breakdown?.length ? (
+              <AppText variant="caption" color="muted">
+                {t('feedRecommendationBreakdown', {
+                  phases: item.recommendation_breakdown
+                    .map((entry) => `${entry.phase_name}: ${entry.suggested_bags}`)
+                    .join(' · '),
+                })}
+              </AppText>
+            ) : null}
           </View>
           <IconButton icon="trash-outline" accessibilityLabel={`${t('remove')} ${product.name}`} variant="danger" onPress={() => handleRemoveItem(product.id, product.name)} />
         </View>
@@ -281,6 +361,22 @@ export default function CartScreen() {
             </SelectableCard>
           ))}
         </View>
+        {delivery_method === 'home' && homeDeliveryMissingFields.length > 0 ? (
+          <>
+            <InlineAlert
+              tone="warning"
+              title={t('deliveryAddressIncompleteTitle')}
+              message={t('deliveryAddressIncompleteMessage', {
+                fields: homeDeliveryMissingFields.join(', '),
+              })}
+            />
+            <Button
+              label={t('completeDeliveryAddress')}
+              variant="outline"
+              onPress={handleCompleteDeliveryAddress}
+            />
+          </>
+        ) : null}
         {delivery_method === 'pickup' ? (
           <SelectField
             label={t('selectPickupPoint')}
@@ -308,7 +404,16 @@ export default function CartScreen() {
         </Card>
       ) : null}
     </View>
-  ), [deliveryPreview, delivery_method, pickup_location, previewLoading, t, user?.region]);
+  ), [
+    deliveryPreview,
+    delivery_method,
+    handleCompleteDeliveryAddress,
+    homeDeliveryMissingFields,
+    pickup_location,
+    previewLoading,
+    t,
+    user?.region,
+  ]);
 
   return (
     <View style={styles.screen}>

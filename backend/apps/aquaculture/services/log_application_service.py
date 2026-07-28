@@ -7,6 +7,7 @@ from typing import Any
 
 from django.db import transaction
 
+from ..domain.exceptions import CycleLogCycleImmutableError
 from ..models import CycleLog, ProductionCycle
 from .analytics_service import AnalyticsService
 from .cycle_service import ProductionCycleService
@@ -64,7 +65,7 @@ class CycleLogApplicationService:
             log_date=log_date,
             cycle_unit_allocation=cycle_unit_allocation,
             existing_log=existing_log,
-            feed_type=validated_data.get("feed_type"),
+            feed_reference=validated_data.get("feed_reference"),
             feed_size_mm=validated_data.get("feed_size_mm"),
         )
 
@@ -76,6 +77,11 @@ class CycleLogApplicationService:
             if not validated_data.get("sample_count") or not validated_data.get("sample_total_weight"):
                 existing_log.average_weight = None
             existing_log.save()
+            from .cycle_feed_plan_progression_service import (
+                CycleFeedPlanProgressionService,
+            )
+
+            CycleFeedPlanProgressionService.record_progress_from_log(existing_log)
             ProductionCycleService.recalculate_all_metrics(cycle)
             CycleLogApplicationService._refresh_cycles_and_cache(
                 user=user,
@@ -108,6 +114,8 @@ class CycleLogApplicationService:
 
         # Interdire un changement de cycle vers un cycle d'un autre utilisateur.
         target_cycle = validated_data.get("cycle")
+        if target_cycle is not None and target_cycle.id != log.cycle_id:
+            raise CycleLogCycleImmutableError()
         if target_cycle and target_cycle.farm_profile.user_id != user.id:
             raise UnauthorizedCycleAccessError("Cycle non autorise.")
 

@@ -6,6 +6,7 @@ import DailyLogScreen from '../DailyLogScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { CycleStore, ProductionCycle } from '@/types/aquaculture';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
@@ -21,6 +22,7 @@ jest.mock('react-redux', () => ({ useDispatch: jest.fn(), useSelector: jest.fn()
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
     createCycleLog: jest.fn(),
+    updateCycleLog: jest.fn(),
     getCycleLogs: jest.fn(),
     getCycleStore: jest.fn(),
   },
@@ -31,6 +33,10 @@ jest.mock('@/services/offlineService', () => ({
     hasAnyPendingSync: jest.fn(),
     syncAllOfflineData: jest.fn(),
     saveCycleLogOffline: jest.fn(),
+    findPendingCycleLogForScope: jest.fn(),
+    getOfflineStockDeclarations: jest.fn(),
+    getOfflineFeedReferences: jest.fn(),
+    getPendingSyncLogs: jest.fn(),
   },
 }));
 
@@ -88,6 +94,10 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
 
   const store: CycleStore = {
     cycle_id: 'cycle-1',
+    calculation_status: 'available',
+    calculation_source: 'current_cycle_reforecast',
+    calculated_at: '2026-07-20T00:00:00Z',
+    calculation_warnings: [],
     status: 'ok',
     summary: {
       manual_feed_kg: '50.00',
@@ -104,8 +114,12 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
       secured_feed_kg: '50.00',
       feed_to_secure_kg: '320.00',
       stock_tracking_started_at: '2026-01-01',
+      unclassified_stock_kg: '0.00',
     },
     stock_items: [{
+      feed_reference_id: 'feed-1',
+      source: 'external',
+      species: 'tilapia',
       label: 'Dibaq',
       feed_size_mm: '2.50',
       quantity_added_kg: '50.00',
@@ -114,6 +128,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     }],
     pending_orders: [],
     stock_tracking_started_at: '2026-01-01',
+    unclassified_entries: [],
   };
 
   beforeEach(() => {
@@ -126,6 +141,10 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     mockService.getCycleStore.mockResolvedValue(store);
     mockService.createCycleLog.mockResolvedValue({ id: 'log-1' } as any);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
+    mockOffline.findPendingCycleLogForScope.mockResolvedValue(null);
+    mockOffline.getOfflineStockDeclarations.mockResolvedValue([]);
+    mockOffline.getOfflineFeedReferences.mockResolvedValue([]);
+    mockOffline.getPendingSyncLogs.mockResolvedValue([]);
     mockOffline.syncAllOfflineData.mockResolvedValue({
       success: 0,
       failed: 0,
@@ -235,10 +254,46 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     expect(mockService.createCycleLog).not.toHaveBeenCalled();
   });
 
+  it('ne propose pas un stock non classifié comme ration utilisable', async () => {
+    mockService.getCycleStore.mockResolvedValue({
+      ...store,
+      status: 'check_stock',
+      stock_items: [{
+        feed_reference_id: null,
+        source: null,
+        species: null,
+        label: 'Ancien aliment',
+        feed_size_mm: '2.00',
+        quantity_added_kg: '30.00',
+        quantity_consumed_kg: '0.00',
+        quantity_available_kg: '30.00',
+      }],
+      stock_by_size: [],
+      available_pellet_sizes: ['2.00'],
+      summary: {
+        ...store.summary,
+        estimated_feed_remaining_kg: '30.00',
+        unclassified_stock_kg: '30.00',
+      },
+    });
+
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+    await waitFor(() => expect(getByText('Cycle 1')).toBeTruthy());
+
+    fireEvent.changeText(getByPlaceholderText('mortalityPlaceholder'), '0');
+    fireEvent.press(getByText('feedingDone'));
+
+    expect(getByText('feedStockRequiresClassification')).toBeTruthy();
+    expect(queryByText('feedStockItemRequired')).toBeNull();
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '5');
+    expect(getByText('feedStockRequiresClassification')).toBeTruthy();
+    expect(mockService.createCycleLog).not.toHaveBeenCalled();
+  });
+
   it('préremplit puis remplace la saisie existante du jour', async () => {
-    const today = new Date();
-    const offset = today.getTimezoneOffset() * 60_000;
-    const localDate = new Date(today.getTime() - offset).toISOString().slice(0, 10);
+    const localDate = getBusinessIsoDate();
     mockService.getCycleLogs.mockResolvedValue([{
       id: 'existing-log',
       cycle: 'cycle-1',
@@ -265,6 +320,129 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     expect(getByDisplayValue('16,8')).toBeTruthy();
     expect(getByText('updateTodayEntry')).toBeTruthy();
     expect(getByText('feedStockAvailable')).toBeTruthy();
+  });
+
+  it('crée un journal quand le brouillon local référence un journal serveur disparu', async () => {
+    const localDate = getBusinessIsoDate();
+    const staleLocalLog = {
+      id: 'offline-log-stale',
+      cycleId: 'cycle-1',
+      logData: {
+        cycle_unit_allocation: 'allocation-1',
+        log_date: localDate,
+        client_uuid: 'offline-client-stale',
+        mortality_count: 0,
+        mortality_reason: '',
+        feed_quantity: null,
+        feed_type: '',
+        feed_size_mm: null,
+        feed_reference: null,
+        feeding_times: [],
+        created_offline: true,
+      },
+      fingerprint: 'stale-fingerprint',
+      timestamp: Date.now(),
+      synced: false,
+      server_log_id: 'missing-server-log',
+    };
+    mockOffline.findPendingCycleLogForScope.mockResolvedValue(staleLocalLog);
+
+    const { getByText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+    await waitFor(() => expect(getByText('Cycle 1')).toBeTruthy());
+
+    fireEvent.press(getByText('feedingNotDone'));
+    fireEvent.press(getByText('updateTodayEntry'));
+
+    await waitFor(() => expect(mockService.createCycleLog).toHaveBeenCalledWith(
+      'cycle-1',
+      expect.objectContaining({ client_uuid: 'offline-client-stale' }),
+    ));
+    expect(mockService.updateCycleLog).not.toHaveBeenCalled();
+  });
+
+  it('rouvre et modifie la saisie locale du jour sans accès serveur', async () => {
+    const localDate = getBusinessIsoDate();
+    const localLog = {
+      id: 'offline-log-1',
+      cycleId: 'cycle-1',
+      logData: {
+        cycle_unit_allocation: 'allocation-1',
+        log_date: localDate,
+        client_uuid: 'offline-client-uuid',
+        mortality_count: 0,
+        mortality_reason: '',
+        feed_quantity: 5,
+        feed_type: 'Dibaq',
+        feed_size_mm: 2.5,
+        feed_reference: 'feed-1',
+        feeding_times: ['08:00'],
+        created_offline: true,
+      },
+      fingerprint: 'fingerprint',
+      timestamp: Date.now(),
+      synced: false,
+    };
+    mockService.getCycleLogs.mockRejectedValue(new TypeError('Network request failed'));
+    mockService.getCycleStore.mockRejectedValue(new TypeError('Network request failed'));
+    mockService.createCycleLog.mockRejectedValue(new TypeError('Network request failed'));
+    mockOffline.findPendingCycleLogForScope.mockResolvedValue(localLog);
+    mockOffline.getPendingSyncLogs.mockResolvedValue([localLog]);
+    mockOffline.getOfflineFeedReferences.mockResolvedValue([{
+      id: 'offline-reference',
+      clientUuid: 'offline-reference-uuid',
+      serverId: 'feed-1',
+      payload: {
+        client_uuid: 'offline-reference-uuid',
+        farm_profile: 'farm-1',
+        source: 'external',
+        name: 'Dibaq',
+        species: 'tilapia',
+        pellet_size_mm: '2.50',
+      },
+      fingerprint: 'reference-fingerprint',
+      timestamp: Date.now(),
+      synced: true,
+    }]);
+    mockOffline.getOfflineStockDeclarations.mockResolvedValue([{
+      id: 'offline-stock',
+      cycleId: 'cycle-1',
+      clientUuid: 'offline-stock-uuid',
+      feedReferenceClientUuid: 'offline-reference-uuid',
+      payload: {
+        client_uuid: 'offline-stock-uuid',
+        feed_reference_client_uuid: 'offline-reference-uuid',
+        quantity_kg: '10.00',
+        total_cost_fcfa: '8000.00',
+        entry_date: localDate,
+      },
+      fingerprint: 'stock-fingerprint',
+      timestamp: Date.now(),
+      synced: false,
+    }]);
+
+    const { getByText, getByDisplayValue, getByPlaceholderText } = render(
+      <DailyLogScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => expect(getByText('dailyLogPendingLocalUpdate')).toBeTruthy());
+    expect(getByDisplayValue('5')).toBeTruthy();
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '11');
+    expect(getByText('feedStockInsufficient')).toBeTruthy();
+    expect(mockOffline.saveCycleLogOffline).not.toHaveBeenCalled();
+    fireEvent.changeText(getByPlaceholderText('feedQuantityPlaceholder'), '4');
+    fireEvent.press(getByText('updateTodayEntry'));
+
+    await waitFor(() => expect(mockOffline.saveCycleLogOffline).toHaveBeenCalledWith(
+      'cycle-1',
+      expect.objectContaining({
+        client_uuid: 'offline-client-uuid',
+        feed_quantity: 4,
+        feed_reference: null,
+      }),
+      { serverLogId: null },
+    ));
   });
 
   it('affiche une validation serveur sous le champ concerné', async () => {

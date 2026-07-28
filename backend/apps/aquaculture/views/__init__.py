@@ -7,6 +7,7 @@ from .calibration_views import CalibrationOperationViewSet, CalibrationTankViewS
 from .cycle_launch_views import CycleLaunchView
 from .cycle_views import ProductionCycleViewSet
 from .dashboard_views import DashboardView
+from .feed_reference_views import FarmFeedReferenceViewSet
 from .feeding_views import FeedingPlanViewSet
 from .log_views import CycleLogViewSet
 from .nutritional_views import NutritionalGuideViewSet
@@ -21,6 +22,7 @@ __all__ = [
     'CycleLaunchView',
     'CycleLogViewSet',
     'FeedingPlanViewSet',
+    'FarmFeedReferenceViewSet',
     'SanitaryLogViewSet',
     'NutritionalGuideViewSet',
     'ProductionUnitViewSet',

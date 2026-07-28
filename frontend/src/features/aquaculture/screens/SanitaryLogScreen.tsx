@@ -20,6 +20,7 @@ import {
 } from '@/features/aquaculture/services/aquacultureWorkflowService';
 import { AppHeader, AppText, Button, Card, IconButton, InlineAlert, Screen, SelectableCard, TextField } from '@/components/ui';
 import { colors, spacing } from '@/theme';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 
 type VisibleSanitaryEventType = 'disease' | 'treatment' | 'abnormal_mortality' | 'other';
 
@@ -277,7 +278,7 @@ export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScre
     setSaving(true);
     try {
       const sanitaryData: SanitaryLogForm = {
-        event_date: new Date().toISOString().split('T')[0],
+        event_date: getBusinessIsoDate(),
         ...(unitAllocationId ? { cycle_unit_allocation: unitAllocationId } : {}),
         event_type: formData.event_type as SanitaryEventType,
         symptoms: formData.symptoms,

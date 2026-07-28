@@ -664,15 +664,15 @@ class TestCommerceAdmin:
 
         assert admin.has_add_permission(request) is False
 
-    def test_order_delete_permission_superuser_only(self, mock_request, superuser):
-        """Seul le superuser peut supprimer des commandes."""
+    def test_order_delete_permission_disabled_even_for_superuser(self, mock_request, superuser):
+        """Les commandes historiques ne sont jamais supprimables dans l'admin."""
         from commerce.admin import OrderAdmin
         from commerce.models import Order
 
         admin = OrderAdmin(Order, AdminSite())
         request = mock_request(superuser)
 
-        assert admin.has_delete_permission(request) is True
+        assert admin.has_delete_permission(request) is False
 
 
 # =============================================================================

@@ -10,6 +10,7 @@ import { CycleUnitAllocation, HarvestData, ProductionCycle } from '@/types/aquac
 import { getApiErrorMessage } from '@/utils/errorParser';
 import { AppText, Button, Card, FormField, IconButton, InlineAlert, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
+import { getBusinessIsoDate } from '@/utils/businessDate';
 import { offlineService } from '@/services/offlineService';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
@@ -41,8 +42,7 @@ const toNumber = (value: number | string | null | undefined): number => {
 };
 
 const localHarvestDate = (value: Date): string => {
-  const offset = value.getTimezoneOffset() * 60_000;
-  return new Date(value.getTime() - offset).toISOString().slice(0, 10);
+  return getBusinessIsoDate(value);
 };
 
 const localHarvestTime = (value: Date): string =>

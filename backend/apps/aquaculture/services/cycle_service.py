@@ -217,6 +217,12 @@ class ProductionCycleService(BaseService):
         # 4. Création du cycle
         cycle = ProductionCycle.objects.create(**cycle_data_complete)
 
+        # Le plan initial est un snapshot métier du lancement, jamais un effet
+        # de bord normal d'un GET ultérieur.
+        from .cycle_feed_recommendation_service import CycleFeedRecommendationService
+
+        CycleFeedRecommendationService.create_initial_plan(cycle, source='cycle_launch')
+
         ProductionCycleService.log_operation(
             "cycle_created",
             {"cycle_id": str(cycle.id), "initial_biomass": float(initial_biomass)},
@@ -549,7 +555,13 @@ class ProductionCycleService(BaseService):
         )
 
         if cycle.unit_allocations.exists():
-            return ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
+            cycle = ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
+            from .cycle_feed_plan_progression_service import (
+                CycleFeedPlanProgressionService,
+            )
+
+            CycleFeedPlanProgressionService.record_progress_from_history(cycle)
+            return cycle
 
         # Les sessions de calibrage rejouent leurs entrées depuis zéro afin de ne
         # jamais compter deux fois le premier mouvement.
@@ -638,6 +650,11 @@ class ProductionCycleService(BaseService):
             cycle.fcr = None
 
         cycle.save()
+        from .cycle_feed_plan_progression_service import (
+            CycleFeedPlanProgressionService,
+        )
+
+        CycleFeedPlanProgressionService.record_progress_from_history(cycle)
 
         ProductionCycleService.log_operation(
             "metrics_recalculated",
@@ -671,7 +688,13 @@ class ProductionCycleService(BaseService):
         if cycle.unit_allocations.exists():
             if log.cycle_unit_allocation_id:
                 ProductionCycleService.recalculate_allocation_current_metrics(log.cycle_unit_allocation)
-            return ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
+            cycle = ProductionCycleService._recalculate_cycle_metrics_from_allocations(cycle)
+            from .cycle_feed_plan_progression_service import (
+                CycleFeedPlanProgressionService,
+            )
+
+            CycleFeedPlanProgressionService.record_progress_from_log(log)
+            return cycle
 
         # Mise à jour mortalité
         if log.mortality_count:
@@ -705,6 +728,11 @@ class ProductionCycleService(BaseService):
             )
 
         cycle.save()
+        from .cycle_feed_plan_progression_service import (
+            CycleFeedPlanProgressionService,
+        )
+
+        CycleFeedPlanProgressionService.record_progress_from_log(log)
         return cycle
 
     @staticmethod

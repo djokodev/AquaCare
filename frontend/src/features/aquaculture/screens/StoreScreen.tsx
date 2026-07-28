@@ -32,6 +32,7 @@ import {
   InlineAlert,
   InteractiveCard,
   LoadingState,
+  SelectableCard,
   TextField,
   formatDashboardCurrency,
   formatDashboardNumber,
@@ -41,12 +42,23 @@ import { colors, spacing } from '@/theme';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { RootState } from '@/store/store';
-import { CycleStore } from '@/types/aquaculture';
+import { CycleStore, FarmFeedReference } from '@/types/aquaculture';
+import { Product } from '@/types/commerce';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
-import { parseLocalizedNumber } from '@/utils/localizedNumber';
-import { getOrderStatusLabelKey } from '@/features/commerce/utils/orderStatus';
+import { formatDecimalForDisplay, parseLocalizedNumber } from '@/utils/localizedNumber';
+import { getBusinessIsoDate } from '@/utils/businessDate';
+import commerceApi from '@/features/commerce/services/commerceApi';
+import {
+  canConfirmOrderReceipt,
+  getOrderReceiptActionLabelKey,
+  getOrderStatusLabelKey,
+  getOrderStatusTone,
+} from '@/features/commerce/utils/orderStatus';
 import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
 import { dashboardSyncService } from '@/services/dashboardSyncService';
+import { offlineService } from '@/services/offlineService';
+import { declareManualStockWithOfflineFallback } from '@/features/aquaculture/services/aquacultureWorkflowService';
+import { projectOfflineStore } from '@/features/aquaculture/services/offlineStoreProjection';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Store'>;
 
@@ -89,7 +101,9 @@ const extractErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
-const todayIsoDate = () => new Date().toISOString().slice(0, 10);
+const todayIsoDate = () => getBusinessIsoDate();
+
+type StoreLoadResult = 'success' | 'error' | 'stale';
 
 const generateClientUuid = (): string => {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -107,8 +121,10 @@ export default function StoreScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RootStackParamList, 'Store'>>();
   const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const cycles = useSelector((state: RootState) => state.aquaculture.cycles) ?? [];
 
   const cycleId = route.params?.cycleId || currentCycle?.id || null;
+  const selectedCycle = cycles.find((cycle) => cycle.id === cycleId) ?? currentCycle;
 
   const [store, setStore] = useState<CycleStore | null>(null);
   const [loading, setLoading] = useState(false);
@@ -116,19 +132,38 @@ export default function StoreScreen() {
   const [error, setError] = useState<string | null>(null);
   const [manualModalVisible, setManualModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [feedSizeMm, setFeedSizeMm] = useState('');
   const [quantityKg, setQuantityKg] = useState('');
   const [totalCostFcfa, setTotalCostFcfa] = useState('');
   const [entryDate, setEntryDate] = useState(todayIsoDate());
   const [note, setNote] = useState('');
+  const [creatingExternalFeed, setCreatingExternalFeed] = useState(true);
+  const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedFeedReferenceId, setSelectedFeedReferenceId] = useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [classificationEntryId, setClassificationEntryId] = useState<string | null>(null);
+  const [pendingStockCount, setPendingStockCount] = useState(0);
   const submissionLock = useRef(false);
+  const confirmationLock = useRef(false);
   const loadRequestRef = useRef(0);
+  const serverStoreRef = useRef<CycleStore | null>(null);
   const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('store', cycleId);
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+  const displayDecimal = (value: string | number | null | undefined): string =>
+    formatDecimalForDisplay(value, locale);
   const storeNavigationParams = cycleId ? { cycleId, source: 'store' as const } : undefined;
 
-  const loadStore = useCallback(async (preserveVisibleStore = false) => {
+  const applyPendingStockProjection = useCallback(async (serverStore: CycleStore): Promise<CycleStore> => {
+    if (!cycleId) return serverStore;
+    const projection = await projectOfflineStore(cycleId, serverStore, t('storePendingStockLabel'));
+    setPendingStockCount(projection.pendingStockCount);
+    return projection.store;
+  }, [cycleId, t]);
+
+  const loadStore = useCallback(async (preserveVisibleStore = false): Promise<StoreLoadResult> => {
     const requestId = loadRequestRef.current + 1;
     loadRequestRef.current = requestId;
     if (!cycleId) {
@@ -136,7 +171,7 @@ export default function StoreScreen() {
       setError(t('storeNoCycleSelected'));
       setLoading(false);
       setRefreshing(false);
-      return;
+      return 'error';
     }
 
     setLoading(true);
@@ -145,25 +180,28 @@ export default function StoreScreen() {
       const payload = await aquacultureService.getCycleStore(cycleId);
 
       if (requestId !== loadRequestRef.current) {
-        return;
+        return 'stale';
       }
       if (payload.cycle_id !== cycleId) {
         throw new Error(t('storeContextMismatch'));
       }
-      setStore(payload);
+      serverStoreRef.current = payload;
+      setStore(await applyPendingStockProjection(payload));
       await dashboardSyncService.markSuccessful('store', cycleId);
       await refreshLastSyncedAt();
+      return 'success';
     } catch (caughtError) {
       if (!preserveVisibleStore && requestId === loadRequestRef.current) {
         setStore(null);
       }
       setError(extractErrorMessage(caughtError, t('storeLoadError')));
+      return 'error';
     } finally {
       if (requestId === loadRequestRef.current) {
         setLoading(false);
       }
     }
-  }, [cycleId, refreshLastSyncedAt, t]);
+  }, [applyPendingStockProjection, cycleId, refreshLastSyncedAt, t]);
 
   useEffect(() => {
     setStore(null);
@@ -188,6 +226,37 @@ export default function StoreScreen() {
     }
   };
 
+  const loadFeedChoices = useCallback(async () => {
+    if (!selectedCycle?.farm_profile) return;
+    const localReferences = (await offlineService.getOfflineFeedReferences())
+      .filter((item) => !item.synced && item.payload.farm_profile === selectedCycle.farm_profile)
+      .map((item): FarmFeedReference => ({
+        id: item.clientUuid,
+        client_uuid: item.clientUuid,
+        farm_profile: item.payload.farm_profile,
+        source: item.payload.source,
+        catalog_product_id: item.payload.catalog_product ?? null,
+        name: item.payload.name ?? t('storePendingStockLabel'),
+        species: item.payload.species ?? selectedCycle.species,
+        pellet_size_mm: item.payload.pellet_size_mm ?? '',
+        brand: item.payload.brand ?? '',
+        protein_percentage: null,
+        lipid_percentage: null,
+        package_weight_kg: null,
+      }));
+    try {
+      const [references, catalogProducts] = await Promise.all([
+        aquacultureService.getFarmFeedReferences(selectedCycle.farm_profile),
+        commerceApi.getProducts({ species: selectedCycle.species === 'clarias' ? 'catfish' : 'tilapia' }),
+      ]);
+      setFeedReferences([...references, ...localReferences]);
+      setProducts(catalogProducts);
+    } catch (caughtError) {
+      setFeedReferences(localReferences);
+      Alert.alert(t('error'), extractErrorMessage(caughtError, t('storeFeedChoicesLoadError')));
+    }
+  }, [selectedCycle?.farm_profile, selectedCycle?.species, t]);
+
   const openManualModal = () => {
     setLabel('');
     setFeedSizeMm('');
@@ -195,7 +264,21 @@ export default function StoreScreen() {
     setTotalCostFcfa('');
     setEntryDate(todayIsoDate());
     setNote('');
+    setCreatingExternalFeed(true);
+    setSelectedFeedReferenceId(null);
+    setSelectedProductId(null);
+    setClassificationEntryId(null);
     setManualModalVisible(true);
+  };
+
+  const openClassificationModal = (entryId: string) => {
+    const entry = store?.unclassified_entries.find((item) => item.id === entryId);
+    openManualModal();
+    setClassificationEntryId(entryId);
+    void loadFeedChoices();
+    if (entry?.source === 'order') {
+      setCreatingExternalFeed(false);
+    }
   };
 
   const handleOpenProducts = () => navigation.navigate('ProductCatalog', storeNavigationParams);
@@ -225,9 +308,12 @@ export default function StoreScreen() {
     const invalidFeedSize = parsedFeedSize.kind !== 'valid'
       || parsedFeedSize.value < 0.1
       || parsedFeedSize.value > 20;
-    const invalidQuantity = parsedQuantity.kind !== 'valid' || parsedQuantity.value <= 0;
-    const invalidTotalCost = parsedTotalCost.kind !== 'valid' || parsedTotalCost.value < 0;
-    if (!label.trim() || invalidFeedSize || invalidQuantity || invalidTotalCost || !entryDate.trim()) {
+    const invalidQuantity = !classificationEntryId && (parsedQuantity.kind !== 'valid' || parsedQuantity.value <= 0);
+    const invalidTotalCost = !classificationEntryId && (parsedTotalCost.kind !== 'valid' || parsedTotalCost.value < 0);
+    const hasExistingFeed = Boolean(selectedFeedReferenceId || selectedProductId);
+    const invalidReference = !hasExistingFeed
+      && (!creatingExternalFeed || !label.trim() || invalidFeedSize);
+    if (invalidReference || invalidQuantity || invalidTotalCost || (!classificationEntryId && !entryDate.trim())) {
       Alert.alert(t('error'), t('storeManualValidationError'));
       return;
     }
@@ -235,16 +321,72 @@ export default function StoreScreen() {
     try {
       submissionLock.current = true;
       setSubmitting(true);
-      await aquacultureService.declareCycleStoreManualStock(cycleId, {
-        label: label.trim(),
-        feed_size_mm: String(parsedFeedSize.value),
-        quantity_kg: String(parsedQuantity.value),
-        total_cost_fcfa: String(parsedTotalCost.value),
-        entry_date: entryDate.trim(),
-        note: note.trim(),
-        client_uuid: generateClientUuid(),
-        created_offline: false,
-      });
+      const feedReferenceClientUuid = generateClientUuid();
+      const stockClientUuid = generateClientUuid();
+      const selectedReference = feedReferences.find((reference) => reference.id === selectedFeedReferenceId);
+      const selectedReferenceIsLocal = Boolean(
+        selectedReference?.client_uuid && selectedReference.id === selectedReference.client_uuid,
+      );
+      const feedReferencePayload = !selectedFeedReferenceId && selectedCycle
+        ? selectedProductId
+          ? {
+          farm_profile: selectedCycle.farm_profile,
+          source: 'aquacare_catalog' as const,
+          catalog_product: selectedProductId,
+          client_uuid: feedReferenceClientUuid,
+          created_offline: false,
+        }
+            : creatingExternalFeed && parsedFeedSize.kind === 'valid'
+            ? {
+              farm_profile: selectedCycle.farm_profile,
+              source: 'external' as const,
+              name: label.trim(),
+              species: selectedCycle.species,
+              pellet_size_mm: String(parsedFeedSize.value),
+              client_uuid: feedReferenceClientUuid,
+              created_offline: false,
+            }
+            : undefined
+        : undefined;
+      let referenceId = selectedFeedReferenceId;
+      if (classificationEntryId) {
+        if (!referenceId && feedReferencePayload) {
+          const reference = await aquacultureService.createFarmFeedReference({
+            ...feedReferencePayload,
+          });
+          referenceId = reference.id;
+        }
+        if (!referenceId) throw new Error(t('storeManualValidationError'));
+        await aquacultureService.classifyCycleStoreEntry(cycleId, classificationEntryId, referenceId);
+      } else {
+        const result = await declareManualStockWithOfflineFallback(cycleId, {
+          ...(referenceId
+            ? selectedReferenceIsLocal
+              ? { feed_reference_client_uuid: selectedReference?.client_uuid ?? referenceId }
+              : { feed_reference_id: referenceId }
+            : {}),
+          quantity_kg: String(parsedQuantity.kind === 'valid' ? parsedQuantity.value : 0),
+          total_cost_fcfa: String(parsedTotalCost.kind === 'valid' ? parsedTotalCost.value : 0),
+          entry_date: entryDate.trim(),
+          note: note.trim(),
+          client_uuid: stockClientUuid,
+          created_offline: false,
+        }, feedReferencePayload, {
+          feedSizeMmSnapshot: (
+            selectedReference?.pellet_size_mm
+            ?? (parsedFeedSize.kind === 'valid' ? parsedFeedSize.value : null)
+          ),
+        });
+        if (result.mode === 'online') {
+          serverStoreRef.current = result.data;
+          setStore(result.data);
+        } else if (serverStoreRef.current ?? store) {
+          setStore(await applyPendingStockProjection((serverStoreRef.current ?? store)!));
+        }
+        setManualModalVisible(false);
+        Alert.alert(t('success'), t(result.mode === 'online' ? 'storeManualSubmitSuccess' : 'storeManualSubmitOfflineSuccess'));
+        return;
+      }
       setManualModalVisible(false);
       await loadStore();
       Alert.alert(t('success'), t('storeManualSubmitSuccess'));
@@ -256,7 +398,55 @@ export default function StoreScreen() {
     }
   };
 
-  const feedToSecureKg = parseDashboardNumber(store?.summary.feed_to_secure_kg);
+  const handleConfirmPendingOrder = useCallback((order: CycleStore['pending_orders'][number]) => {
+    const isPickup = order.delivery_method === 'pickup';
+    const title = t(isPickup ? 'confirmPickupTitle' : 'confirmReceiptTitle');
+    const message = `${t(
+      isPickup ? 'confirmPickupMessage' : 'confirmReceiptMessage',
+      { orderNumber: order.order_number },
+    )}\n\n${t('confirmOrderCycleStockMessage')}`;
+
+    Alert.alert(title, message, [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('confirm'),
+        onPress: async () => {
+          if (confirmationLock.current) return;
+          try {
+            confirmationLock.current = true;
+            setConfirmingOrderId(order.id);
+            const updatedOrder = await commerceApi.confirmOrderReceipt(order.id);
+            setStore((currentStore) => currentStore ? {
+              ...currentStore,
+              pending_orders: currentStore.pending_orders.filter(
+                (pendingOrder) => pendingOrder.id !== updatedOrder.id,
+              ),
+              summary: {
+                ...currentStore.summary,
+                pending_orders_count: Math.max(0, currentStore.summary.pending_orders_count - 1),
+              },
+            } : currentStore);
+            const refreshResult = await loadStore(true);
+            if (refreshResult === 'success') {
+              Alert.alert(t('success'), t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess'));
+            } else {
+              Alert.alert(
+                t('success'),
+                `${t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess')}\n\n${t('storeRefreshAfterConfirmationError')}`,
+              );
+            }
+          } catch (caughtError) {
+            Alert.alert(t('error'), extractErrorMessage(caughtError, t('confirmReceiptError')));
+          } finally {
+            confirmationLock.current = false;
+            setConfirmingOrderId(null);
+          }
+        },
+      },
+    ]);
+  }, [loadStore, t]);
+
+  const feedToSecureKg = parseDashboardNumber(store?.summary.feed_to_secure_kg ?? null);
   const requiresReplenishment = feedToSecureKg !== null && feedToSecureKg > 0;
 
   const actionRows = [
@@ -299,12 +489,18 @@ export default function StoreScreen() {
           {store ? (
             <>
               <DashboardSection title={t('storeStatusTitle')} lastSyncedAt={lastSyncedAt}>
-                <DashboardHeroCard
-                  label={t('storeEstimatedNeedToFinish')}
-                  value={formatDashboardNumber(store.summary.feed_to_secure_kg, locale, { maximumFractionDigits: 1 })}
-                  unit={t('kg')}
-                  unavailableLabel={t('dashboardDataUnavailable')}
-                />
+                {store.calculation_status === 'available' && Number(store.summary.feed_to_secure_kg) <= 0 && Number(store.summary.unclassified_stock_kg) <= 0 ? (
+                  <InlineAlert tone="success" message={`${t('storeNeedCoveredTitle')}\n${t('storeNeedCoveredDescription')}`} />
+                ) : store.calculation_status === 'unavailable' ? (
+                  <InlineAlert tone="warning" message={t('feedEstimateUnavailable')} />
+                ) : (
+                  <DashboardHeroCard
+                    label={t('storeEstimatedNeedToFinish')}
+                    value={formatDashboardNumber(store.summary.feed_to_secure_kg, locale, { maximumFractionDigits: 1 })}
+                    unit={t('kg')}
+                    unavailableLabel={t('dashboardDataUnavailable')}
+                  />
+                )}
                 <View style={styles.metrics}>
                   <DashboardMetricCard
                     label={t('storeCurrentStock')}
@@ -332,33 +528,58 @@ export default function StoreScreen() {
                 {requiresReplenishment ? (
                   <DashboardStatus title={t('storeReplenishmentRequired')} tone="warning" />
                 ) : null}
+                {pendingStockCount > 0 ? (
+                  <InlineAlert tone="info" message={t('storePendingSyncMessage', { count: pendingStockCount })} />
+                ) : null}
+                {store.calculation_warnings?.includes('feed_stock_history_inconsistent') ? (
+                  <InlineAlert tone="warning" message={t('feedStockHistoryInconsistentWarning')} />
+                ) : null}
               </DashboardSection>
-              {store.summary.stock_tracking_started_at ? (
-                <AppText variant="caption" color="muted" style={styles.tracking}>
-                  {t('storeTrackingSince')}{' '}
-                  {new Date(store.summary.stock_tracking_started_at).toLocaleDateString(i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US')}
-                </AppText>
-              ) : null}
-              <Card variant="outlined" style={styles.section}>
-                <AppText variant="cardTitle">{t('storeStockByFeedTitle')}</AppText>
-                {(store.stock_items ?? []).length ? (store.stock_items ?? []).map((item) => (
-                  <View key={`${item.label}-${item.feed_size_mm ?? 'legacy'}`} style={styles.stockItem}>
-                    <View style={styles.flex}>
-                      <AppText variant="label">{item.label}</AppText>
-                      <AppText variant="helper" color="muted">
-                        {item.feed_size_mm
-                          ? t('storeFeedSizeValue', { size: formatDashboardNumber(item.feed_size_mm, locale) })
-                          : t('storeFeedSizeUnknown')}
-                      </AppText>
-                    </View>
-                    <AppText variant="bodyStrong" color="link">
-                      {formatDashboardNumber(item.quantity_available_kg, locale, { maximumFractionDigits: 2 })} {t('kg')}
-                    </AppText>
-                  </View>
-                )) : (
-                  <AppText variant="body" color="muted">{t('storeStockByFeedEmpty')}</AppText>
-                )}
-              </Card>
+              {store.unclassified_entries?.map((entry) => (
+                <Card key={entry.id} variant="outlined" style={styles.section}>
+                  <InlineAlert
+                    tone={entry.classification_reason === 'order_species_mismatch' ? 'error' : 'warning'}
+                    message={
+                      entry.classification_reason === 'order_species_mismatch'
+                        ? t('storeLegacyOrderSpeciesMismatch', {
+                          productSpecies: entry.catalog_product_species === 'clarias' ? t('catfish') : t('tilapia'),
+                          cycleSpecies: selectedCycle?.species === 'clarias' ? t('catfish') : t('tilapia'),
+                        })
+                        : t('storeUnclassifiedStockMessage', {
+                          quantity: displayDecimal(entry.quantity_available_kg),
+                          name: entry.label,
+                        })
+                    }
+                  />
+                  <AppText variant="helper">
+                    {entry.classification_reason === 'order_species_mismatch'
+                      ? t('storeReviewCycleOrOrder')
+                      : entry.source === 'order'
+                        ? t('storeLegacyOrderMessage')
+                        : t('storeLegacyManualStockMessage')}
+                  </AppText>
+                  <AppText variant="helper" color="muted">
+                    {t('storeUnclassifiedStockBreakdown', {
+                      added: displayDecimal(entry.quantity_added_kg),
+                      consumed: displayDecimal(entry.historical_consumption_kg),
+                      available: displayDecimal(entry.quantity_available_kg),
+                    })}
+                  </AppText>
+                  {entry.classification_reason === 'order_species_mismatch' ? (
+                    <Button
+                      label={t('storeReviewCycleOrOrder')}
+                      variant="outline"
+                      onPress={handleOpenOrders}
+                    />
+                  ) : (
+                    <Button
+                      label={entry.source === 'order' ? t('storeClassificationCatalogAction') : t('storeClassifyStockAction')}
+                      variant="outline"
+                      onPress={() => openClassificationModal(entry.id)}
+                    />
+                  )}
+                </Card>
+              ))}
             </>
           ) : null}
           <Card variant="outlined" style={styles.section}>
@@ -371,7 +592,7 @@ export default function StoreScreen() {
                 tone="info"
               />
             </View>
-            {store?.pending_orders.length ? store.pending_orders.map((order) => (
+                {store?.pending_orders.length ? store.pending_orders.map((order) => (
               <Card key={order.id} variant="outlined" style={styles.orderCard}>
                 <View style={styles.orderHeader}>
                   <View style={styles.flex}>
@@ -381,9 +602,25 @@ export default function StoreScreen() {
                     <AppText variant="label" color="link">
                       {formatDashboardCurrency(order.total_fcfa, locale)} {t('dashboardDirectProductionCostUnit')}
                     </AppText>
-                    <Badge label={t(getOrderStatusLabelKey(order.status))} tone="info" />
+                    <Badge
+                      label={t(getOrderStatusLabelKey(order.status, order.delivery_method))}
+                      tone={getOrderStatusTone(order)}
+                    />
                   </View>
                 </View>
+                {canConfirmOrderReceipt(order) ? (
+                  <View style={styles.pendingOrderAction}>
+                    <AppText variant="helper" color="warning">
+                      {t('orderConfirmationPendingHelp')}
+                    </AppText>
+                    <Button
+                      label={t(getOrderReceiptActionLabelKey(order))}
+                      loading={confirmingOrderId === order.id}
+                      disabled={Boolean(confirmingOrderId) && confirmingOrderId !== order.id}
+                      onPress={() => handleConfirmPendingOrder(order)}
+                    />
+                  </View>
+                ) : null}
               </Card>
             )) : <EmptyState compact title={t('storePendingOrdersEmptyTitle')} message={t('storePendingOrdersEmptyDescription')} />}
           </Card>
@@ -404,20 +641,167 @@ export default function StoreScreen() {
               <View style={styles.modalHeader}>
                 <View style={styles.flex}>
                   <AppText variant="sectionTitle">{t('storeManualFormTitle')}</AppText>
-                  <AppText variant="helper" color="muted">{t('storeManualFormDescription')}</AppText>
                 </View>
                 <IconButton icon="close" variant="surface" accessibilityLabel={t('close')} onPress={() => setManualModalVisible(false)} disabled={submitting} />
               </View>
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <View style={styles.form}>
-                  <TextField label={t('storeManualLabel')} value={label} onChangeText={setLabel} placeholder={t('storeManualLabelPlaceholder')} />
-                  <TextField label={t('storeManualFeedSize')} value={feedSizeMm} onChangeText={setFeedSizeMm} keyboardType="decimal-pad" placeholder={t('storeManualFeedSizePlaceholder')} />
-                  <View style={styles.formRow}>
-                    <View style={styles.flex}><TextField label={t('storeManualQuantity')} value={quantityKg} onChangeText={setQuantityKg} keyboardType="decimal-pad" placeholder={t('storeManualQuantityPlaceholder')} /></View>
-                    <View style={styles.flex}><TextField label={t('storeManualTotalCost')} value={totalCostFcfa} onChangeText={setTotalCostFcfa} keyboardType="decimal-pad" placeholder={t('storeManualTotalCostPlaceholder')} /></View>
-                  </View>
-                  <TextField label={t('storeManualDate')} value={entryDate} onChangeText={setEntryDate} placeholder={t('storeManualDatePlaceholder')} />
-                  <TextField label={t('storeManualNote')} value={note} onChangeText={setNote} placeholder={t('storeManualNotePlaceholder')} multiline textAlignVertical="top" />
+                  {selectedCycle ? (
+                    <View style={styles.modalContext}>
+                      <AppText variant="bodyStrong">
+                        {t('storeManualCycleContext', { cycle: selectedCycle.cycle_name })}
+                      </AppText>
+                      <AppText variant="helper" color="muted">
+                        {t('storeManualSpeciesContext', {
+                          species: selectedCycle.species === 'clarias' ? t('catfish') : t('tilapia'),
+                        })}
+                      </AppText>
+                    </View>
+                  ) : null}
+                  {creatingExternalFeed ? (
+                    <>
+                      <TextField
+                        label={t('storeManualLabel')}
+                        value={label}
+                        onChangeText={setLabel}
+                        placeholder={t('storeManualLabelPlaceholder')}
+                      />
+                      {store?.available_pellet_sizes === undefined ? (
+                        <TextField
+                          label={t('storeManualFeedSize')}
+                          value={feedSizeMm}
+                          onChangeText={setFeedSizeMm}
+                          keyboardType="decimal-pad"
+                          placeholder={t('storeManualFeedSizePlaceholder')}
+                        />
+                      ) : (
+                        <>
+                          <AppText variant="label">{t('storePelletSizeOptions')}</AppText>
+                          <View style={styles.sizeChips}>
+                            {store.available_pellet_sizes.map((size) => (
+                              <Button
+                                key={size}
+                                label={t('storePelletSizeChip', { size: displayDecimal(size) })}
+                                size="small"
+                                fullWidth={false}
+                                variant={feedSizeMm === size ? 'primary' : 'outline'}
+                                onPress={() => setFeedSizeMm(size)}
+                              />
+                            ))}
+                          </View>
+                        </>
+                      )}
+                      {classificationEntryId ? (
+                        <Button
+                          label={t('storeUseExistingFeed')}
+                          variant="outline"
+                          onPress={() => {
+                            setCreatingExternalFeed(false);
+                            setSelectedProductId(null);
+                            setSelectedFeedReferenceId(null);
+                          }}
+                        />
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <AppText variant="label">{t('storeExistingExternalFeeds')}</AppText>
+                      {feedReferences.filter((reference) => reference.species === selectedCycle?.species).map((reference) => (
+                        <SelectableCard
+                          key={reference.id}
+                          accessibilityLabel={t('storeExternalFeedOption', {
+                            name: reference.name,
+                            size: displayDecimal(reference.pellet_size_mm),
+                          })}
+                          selected={selectedFeedReferenceId === reference.id}
+                          layout="column"
+                          primaryBorder
+                          onPress={() => {
+                            setSelectedFeedReferenceId(reference.id);
+                            setSelectedProductId(null);
+                            setLabel(reference.name);
+                            setFeedSizeMm(reference.pellet_size_mm);
+                          }}
+                        >
+                          <View style={styles.productOptionHeader}>
+                            <View style={styles.flex}>
+                              <AppText variant="bodyStrong">{reference.name}</AppText>
+                              <AppText variant="helper" color="muted">
+                                {t('storePelletSizeChip', { size: displayDecimal(reference.pellet_size_mm) })}
+                              </AppText>
+                            </View>
+                            <Ionicons
+                              name={selectedFeedReferenceId === reference.id ? 'checkmark-circle' : 'ellipse-outline'}
+                              size={24}
+                              color={colors.brand.primary}
+                            />
+                          </View>
+                        </SelectableCard>
+                      ))}
+                      {products
+                        .filter((product) => (
+                          product.species === (selectedCycle?.species === 'clarias' ? 'catfish' : selectedCycle?.species)
+                          && !feedReferences.some((reference) => reference.catalog_product_id === product.id)
+                        ))
+                        .map((product) => (
+                          <SelectableCard
+                            key={product.id}
+                            accessibilityLabel={`${product.brand || product.name} ${product.name}`}
+                            selected={selectedProductId === product.id}
+                            layout="column"
+                            primaryBorder
+                            onPress={() => {
+                              setSelectedProductId(product.id);
+                              setSelectedFeedReferenceId(null);
+                              setFeedSizeMm(String(product.pellet_size_mm));
+                            }}
+                          >
+                            <View style={styles.productOptionHeader}>
+                              <View style={styles.flex}>
+                                <AppText variant="bodyStrong" color="link" numberOfLines={1}>
+                                  {t('storeProductTitle', {
+                                    species: product.species === 'catfish' ? t('catfish') : t('tilapia'),
+                                  })}
+                                </AppText>
+                                <AppText variant="helper" color="muted">
+                                  {t('storeProductDetails', {
+                                    brand: product.brand || t('storeProductBrandFallback'),
+                                    size: displayDecimal(product.pellet_size_mm),
+                                    weight: displayDecimal(product.package_weight_kg),
+                                  })}
+                                </AppText>
+                              </View>
+                              <Ionicons
+                                name={selectedProductId === product.id ? 'checkmark-circle' : 'ellipse-outline'}
+                                size={24}
+                                color={colors.brand.primary}
+                              />
+                            </View>
+                          </SelectableCard>
+                        ))}
+                      <Button
+                        label={t('storeAddExternalFeed')}
+                        variant="outline"
+                        onPress={() => {
+                          setCreatingExternalFeed(true);
+                          setSelectedFeedReferenceId(null);
+                          setSelectedProductId(null);
+                          setLabel('');
+                          setFeedSizeMm('');
+                        }}
+                      />
+                    </>
+                  )}
+                  {!classificationEntryId ? (
+                    <>
+                      <View style={styles.formRow}>
+                        <View style={styles.flex}><TextField label={t('storeManualQuantity')} value={quantityKg} onChangeText={setQuantityKg} keyboardType="decimal-pad" placeholder={t('storeManualQuantityPlaceholder')} /></View>
+                        <View style={styles.flex}><TextField label={t('storeManualTotalCost')} value={totalCostFcfa} onChangeText={setTotalCostFcfa} keyboardType="decimal-pad" placeholder={t('storeManualTotalCostPlaceholder')} /></View>
+                      </View>
+                      <TextField label={t('storeManualDate')} value={entryDate} onChangeText={setEntryDate} placeholder={t('storeManualDatePlaceholder')} />
+                      <TextField label={t('storeManualNote')} value={note} onChangeText={setNote} placeholder={t('storeManualNotePlaceholder')} multiline textAlignVertical="top" />
+                    </>
+                  ) : null}
                   <Divider />
                   <View style={styles.formActions}>
                     <Button label={t('storeManualSubmit')} onPress={handleSubmitManualStock} loading={submitting} disabled={submitting} />
@@ -442,7 +826,9 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   orderCard: { padding: spacing[3] },
   orderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  pendingOrderAction: { marginTop: spacing[3], gap: spacing[2] },
   orderAmount: { alignItems: 'flex-end', gap: spacing[1] },
+  productOptionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], width: '100%' },
   stockItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2] },
   actionList: { gap: spacing[3] },
   flex: { flex: 1 },
@@ -451,6 +837,8 @@ const styles = StyleSheet.create({
   modalCard: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: spacing[5], maxHeight: '100%' },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3], marginBottom: spacing[4] },
   form: { gap: spacing[3], paddingBottom: spacing[2] },
+  modalContext: { gap: spacing[1], padding: spacing[3], borderRadius: 12, backgroundColor: colors.brand.subtle },
   formRow: { flexDirection: 'row', gap: spacing[3] },
   formActions: { gap: spacing[2] },
+  sizeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
 });

@@ -12,6 +12,7 @@ from datetime import time, timedelta
 from unittest.mock import patch
 
 import pytest
+from django.db import transaction
 from django.test import override_settings
 from django.utils import timezone
 from notifications.application_services import (
@@ -155,11 +156,16 @@ class TestNotificationServiceCreate:
         assert notif is not None
         assert notif.channels == ['in_app']
 
-    def test_create_notification_logs_dispatch_failure_without_aborting(self, user):
+    def test_create_notification_logs_dispatch_failure_without_aborting(
+        self,
+        user,
+        django_capture_on_commit_callbacks,
+    ):
         with patch(
             'notifications.tasks.send_email_notification_task.delay',
             side_effect=RuntimeError('queue unavailable'),
-        ), patch('notifications.services.logger.exception') as mock_logger:
+        ), patch('notifications.services.logger.exception') as mock_logger, \
+                django_capture_on_commit_callbacks(execute=True):
             notif = NotificationService.create_notification(
                 user=user,
                 notification_type='system_update',
@@ -172,6 +178,43 @@ class TestNotificationServiceCreate:
         assert notif is not None
         assert Notification.objects.filter(id=notif.id).exists()
         mock_logger.assert_called_once()
+
+    def test_immediate_dispatch_waits_for_commit_and_never_dispatches_rolled_back_rows(
+        self,
+        user,
+        django_capture_on_commit_callbacks,
+    ):
+        with patch('notifications.tasks.send_email_notification_task.delay') as mock_delay:
+            with django_capture_on_commit_callbacks(execute=True):
+                with transaction.atomic():
+                    notif = NotificationService.create_notification(
+                        user=user,
+                        notification_type='system_update',
+                        title='After commit',
+                        message='Only dispatch after commit',
+                        channels=['email'],
+                        send_immediately=True,
+                    )
+                    mock_delay.assert_not_called()
+
+            mock_delay.assert_called_once_with(str(notif.id))
+
+        mock_delay.reset_mock()
+        with django_capture_on_commit_callbacks(execute=True):
+            with pytest.raises(RuntimeError, match='rollback'):
+                with transaction.atomic():
+                    rolled_back = NotificationService.create_notification(
+                        user=user,
+                        notification_type='system_update',
+                        title='Rollback',
+                        message='Must not dispatch',
+                        channels=['email'],
+                        send_immediately=True,
+                    )
+                    raise RuntimeError('rollback')
+
+        mock_delay.assert_not_called()
+        assert not Notification.objects.filter(id=rolled_back.id).exists()
 
 
 @pytest.mark.django_db

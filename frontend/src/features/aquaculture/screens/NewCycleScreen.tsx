@@ -3,6 +3,7 @@ import { Alert, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useDispatch } from "react-redux";
+import { getBusinessIsoDate } from "@/utils/businessDate";
 
 import { useAuth } from "@/hooks/useAuth";
 import { AppDispatch } from "@/store/store";
@@ -88,7 +89,7 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     infrastructure_type: [],
     initial_count: "",
     initial_average_weight: "",
-    start_date: new Date().toISOString().split("T")[0],
+    start_date: getBusinessIsoDate(),
     target_harvest_weight_g: "",
     planned_cycle_duration_days: "",
     expected_survival_rate_pct: "",
