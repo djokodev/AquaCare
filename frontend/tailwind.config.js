@@ -1,3 +1,5 @@
+const tokens = require('./src/theme/tokens.json');
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -6,14 +8,14 @@ module.exports = {
   ],
   presets: [require('nativewind/preset')],
   safelist: [
-    // Couleurs custom MAVECAM - empêche tree-shaking des classes dynamiques
-    'bg-mavecam-primary',
-    'bg-mavecam-primary-light',
-    'bg-mavecam-primary-dark',
-    'border-mavecam-primary',
-    'border-mavecam-primary-light',
-    'border-mavecam-primary-dark',
-    'text-mavecam-primary',
+    // Couleurs custom AquaCare - empêche tree-shaking des classes dynamiques
+    'bg-aquacare-primary',
+    'bg-aquacare-primary-light',
+    'bg-aquacare-primary-dark',
+    'border-aquacare-primary',
+    'border-aquacare-primary-light',
+    'border-aquacare-primary-dark',
+    'text-aquacare-primary',
     'text-white',
     'text-gray-dark',
     'text-gray-light',
@@ -21,18 +23,48 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        'mavecam-primary': '#059669',
-        'mavecam-primary-light': '#10b981',
-        'mavecam-primary-dark': '#047857',
-        cream: '#f8fafc',
-        'gray-light': '#64748b',
-        'gray-dark': '#1e293b',
-        error: '#dc2626',
+        'aquacare-primary': tokens.colors.brand.primary,
+        'aquacare-primary-light': tokens.colors.brand.light,
+        'aquacare-primary-dark': tokens.colors.brand.dark,
+        cream: tokens.colors.surface.page,
+        dashboard: tokens.colors.surface.dashboard,
+        'gray-light': tokens.colors.text.muted,
+        'gray-dark': tokens.colors.text.primary,
+        error: tokens.colors.status.error,
+        success: tokens.colors.status.success,
+        warning: tokens.colors.status.warning,
+        info: tokens.colors.status.info,
+        'aquacare-selected': tokens.colors.surface.selected,
+        'border-default': tokens.colors.border.default,
+        'border-subtle': tokens.colors.border.subtle,
+        'text-muted': tokens.colors.text.muted,
+      },
+      fontSize: {
+        xs: ['0.75rem', { lineHeight: '1rem' }],
+        sm: ['0.875rem', { lineHeight: '1.25rem' }],
+        base: ['1rem', { lineHeight: '1.5rem' }],
+        lg: ['1.125rem', { lineHeight: '1.625rem' }],
+        xl: ['1.25rem', { lineHeight: '1.75rem' }],
+        '2xl': ['1.5rem', { lineHeight: '2rem' }],
+        '3xl': ['1.875rem', { lineHeight: '2.25rem' }],
+      },
+      fontWeight: {
+        medium: '500',
+        semibold: '600',
+        bold: '700',
       },
       borderRadius: {
-        xl: '16px',
-        '2xl': '20px',
+        sm: `${tokens.radii.sm}px`,
+        md: `${tokens.radii.md}px`,
+        lg: `${tokens.radii.lg}px`,
+        xl: `${tokens.radii.xl}px`,
+        '2xl': `${tokens.radii.xxl}px`,
+        full: tokens.radii.full,
       },
+      spacing: Object.fromEntries(
+        Object.entries(tokens.spacing).map(([key, value]) => [key, `${value}px`]),
+      ),
+      opacity: tokens.opacity,
     },
   },
   plugins: [],

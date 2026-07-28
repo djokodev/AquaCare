@@ -5,24 +5,56 @@ import logging
 
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
-from rest_framework import permissions, status, viewsets
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from ..domain.exceptions import CycleAlreadyHarvestedError, InvalidHarvestDataError
-from ..models import ProductionCycle
+from ..domain.exceptions import BusinessRuleViolation, FeedingPlanGenerationError
+from ..models import (
+    CalibrationOperation,
+    CycleUnitAllocation,
+    ProductionCycle,
+    ProductionUnit,
+)
 from ..serializers import (
+    CalibrationOperationSerializer,
+    CalibrationRequestSerializer,
+    CalibrationResponseSerializer,
+    CalibrationTankSerializer,
     CycleComparisonSerializer,
+    CycleDashboardSerializer,
+    CycleFeedRecommendationSerializer,
     CycleHarvestResponseSerializer,
     CycleStatisticsSerializer,
+    CycleStoreClassificationSerializer,
+    CycleStoreManualStockSerializer,
+    CycleStoreSerializer,
+    CycleUnitAllocationSerializer,
     HarvestSerializer,
+    PartialHarvestReadSerializer,
+    PartialHarvestResponseSerializer,
+    PartialHarvestSerializer,
     ProductionCycleSerializer,
 )
 from ..services import (
+    CycleDashboardService,
+    CycleStoreApplicationService,
+    DeclareManualStockCommand,
     HarvestCycleCommand,
+    PartialHarvestCommand,
     ProductionCycleApplicationService,
 )
+from ..services.calibration_service import CalibrationService
+from ..services.cycle_feed_service import CycleFeedService
+from ..services.production_unit_service import ProductionUnitLifecycleService
 
 logger = logging.getLogger(__name__)
 
@@ -76,26 +108,20 @@ logger = logging.getLogger(__name__)
         ]
     ),
     create=extend_schema(
-        summary="Créer un nouveau cycle de production",
+        deprecated=True,
+        summary="Création directe désactivée (deprecated)",
         description="""
-        Crée un nouveau cycle de production aquacole.
-        Calcule automatiquement la biomasse initiale et initialise les métriques.
+        La création directe d'un cycle est désactivée pour les nouveaux parcours.
+        Utilisez POST /api/aquaculture/cycles/launch/ avec un mode de lancement,
+        des unités et leurs allocations. Les lectures, PATCH et les données legacy
+        restent disponibles.
         """,
-        examples=[
-            OpenApiExample(
-                'Nouveau cycle Clarias',
-                value={
-                    'cycle_name': 'Cycle Clarias P1-2025',
-                    'species': 'clarias',
-                    'pond_identifier': 'Bassin A1',
-                    'pond_surface_m2': 500.00,
-                    'pond_volume_m3': 600.00,
-                    'start_date': '2025-08-20',
-                    'initial_count': 5000,
-                    'initial_average_weight': 15.50
-                }
+        request=None,
+        responses={
+            400: OpenApiResponse(
+                description="cycle_launch_requires_production_units; utilisez /api/aquaculture/cycles/launch/"
             )
-        ]
+        }
     ),
     retrieve=extend_schema(
         summary="Détails d'un cycle de production",
@@ -127,7 +153,22 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'harvest':
             return HarvestSerializer
+        if self.action == 'partial_harvest':
+            return PartialHarvestSerializer
         return super().get_serializer_class()
+
+    def create(self, request, *args, **kwargs):
+        """Keep legacy reads/updates while requiring an aggregate launch for new cycles."""
+        return Response(
+            {
+                'code': 'cycle_launch_requires_production_units',
+                'detail': _(
+                    'Un nouveau cycle doit être lancé avec au moins une unité de production.'
+                ),
+                'endpoint': '/api/aquaculture/cycles/launch/',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     def get_queryset(self):
         """Retourne les cycles uniquement pour la ferme de l'utilisateur authentifié."""
@@ -139,6 +180,9 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
             queryset = queryset.for_statistics()
         else:
             queryset = queryset.for_api()
+
+        if self.action == 'list':
+            queryset = queryset.user_visible()
 
         # Filtrage par status si spécifié dans les query parameters
         status_filter = self.request.query_params.get('status', None)
@@ -162,6 +206,101 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
 
         # Update serializer instance with created cycle
         serializer.instance = cycle
+
+    def perform_destroy(self, instance):
+        if instance.unit_allocations.exists() or instance.current_count > 0 or instance.current_biomass > 0:
+            raise serializers.ValidationError(
+                {'detail': _('Un cycle avec stock ou historique doit être clôturé par un service métier.')}
+            )
+        instance.delete()
+
+    @extend_schema(
+        summary="Adaptateur de calibrage depuis un cycle",
+        description=(
+            "Délègue à l'allocation active unique. Retourne source_allocation_required "
+            "lorsque le cycle possède plusieurs allocations actives."
+        ),
+        request=CalibrationRequestSerializer,
+        responses={200: CalibrationResponseSerializer, 201: CalibrationResponseSerializer, 400: OpenApiTypes.OBJECT},
+    )
+    @action(detail=True, methods=['post'], url_path='calibrate')
+    def calibrate(self, request, pk=None):
+        source = self.get_object()
+        serializer = CalibrationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        allocation_query = source.unit_allocations.filter(status=CycleUnitAllocation.STATUS_ACTIVE)
+        source_allocation = None
+        if data.get('source_allocation_id'):
+            source_allocation = allocation_query.filter(pk=data['source_allocation_id']).first()
+        elif data.get('source_allocation_client_uuid'):
+            source_allocation = allocation_query.filter(client_uuid=data['source_allocation_client_uuid']).first()
+        elif allocation_query.count() == 1:
+            source_allocation = allocation_query.first()
+        elif allocation_query.count() > 1:
+            return Response(
+                {'code': 'source_allocation_required', 'detail': _('Sélectionnez l’unité source du calibrage.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if source_allocation is None:
+            return Response(
+                {'code': 'source_allocation_not_found', 'detail': _('Allocation source introuvable.')},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        tank_query = ProductionUnit.objects.filter(
+            farm_profile__user=request.user,
+            purpose=ProductionUnit.PURPOSE_CALIBRATION,
+        )
+        tank = (
+            tank_query.filter(pk=data['destination_production_unit_id']).first()
+            if data.get('destination_production_unit_id')
+            else tank_query.filter(client_uuid=data['destination_production_unit_client_uuid']).first()
+        )
+        if tank is None:
+            return Response({'detail': _('Bac de calibrage introuvable.')}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            operation, warnings, created = CalibrationService.calibrate(
+                source_allocation=source_allocation,
+                destination_production_unit=tank,
+                user=request.user,
+                **{
+                    key: value
+                    for key, value in data.items()
+                    if key not in {
+                        'source_allocation_id',
+                        'source_allocation_client_uuid',
+                        'destination_production_unit_id',
+                        'destination_production_unit_client_uuid',
+                    }
+                },
+            )
+        except BusinessRuleViolation as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        operation = CalibrationOperation.objects.select_related(
+            'source_allocation__cycle',
+            'source_allocation__production_unit',
+            'destination_allocation__cycle',
+            'destination_allocation__production_unit',
+        ).get(pk=operation.pk)
+        source_cycle = ProductionCycle.objects.for_api().get(pk=operation.source_allocation.cycle_id)
+        destination_cycle = ProductionCycle.objects.for_api().get(pk=operation.destination_allocation.cycle_id)
+        destination_tank = ProductionUnitLifecycleService.calibration_tanks_for_api().get(
+            pk=operation.destination_allocation.production_unit_id
+        )
+        payload = {
+            'operation': CalibrationOperationSerializer(operation).data,
+            'source_allocation': CycleUnitAllocationSerializer(operation.source_allocation).data,
+            'destination_allocation': CycleUnitAllocationSerializer(operation.destination_allocation).data,
+            'source_cycle': ProductionCycleSerializer(source_cycle, context={'request': request}).data,
+            'destination_cycle': ProductionCycleSerializer(destination_cycle, context={'request': request}).data,
+            'destination_tank': CalibrationTankSerializer(
+                destination_tank,
+                context={'request': request},
+            ).data,
+            'warnings': warnings,
+            'idempotent_replay': not created,
+        }
+        return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
     
     @extend_schema(
         summary="Finaliser un cycle (récolte)",
@@ -204,30 +343,38 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            harvested_cycle = ProductionCycleApplicationService.harvest_cycle(
-                cycle=cycle,
-                command=HarvestCycleCommand(
-                    harvest_date=serializer.validated_data['harvest_date'],
-                    final_count=serializer.validated_data['final_count'],
-                    final_average_weight=serializer.validated_data['final_average_weight'],
-                    harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+        harvest_result = ProductionCycleApplicationService.harvest_cycle(
+            cycle=cycle,
+            command=HarvestCycleCommand(
+                harvest_date=serializer.validated_data['harvest_date'],
+                final_harvested_at=serializer.validated_data['final_harvested_at'],
+                final_count=serializer.validated_data['final_count'],
+                final_average_weight=serializer.validated_data['final_average_weight'],
+                client_uuid=serializer.validated_data['client_uuid'],
+                harvest_notes=serializer.validated_data.get('harvest_notes', ''),
+                total_harvested_weight=serializer.validated_data.get(
+                    'total_harvested_weight'
                 ),
-            )
+                created_offline=serializer.validated_data['created_offline'],
+                allow_pending_reconciliation=serializer.validated_data[
+                    'allow_pending_reconciliation'
+                ],
+            ),
+        )
 
-            response_serializer = CycleHarvestResponseSerializer(
-                {
-                    'message': _('Cycle récolté avec succès'),
-                    'cycle': harvested_cycle,
-                },
-                context={'request': request},
-            )
-            return Response(response_serializer.data, status=status.HTTP_200_OK)
-        except (CycleAlreadyHarvestedError, InvalidHarvestDataError) as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        operations = harvest_result.operations
+        response_serializer = CycleHarvestResponseSerializer(
+            {
+                'message': _('Cycle récolté avec succès'),
+                'cycle': harvest_result.cycle,
+                'final_harvest': operations[0] if len(operations) == 1 else None,
+                'final_harvests': operations,
+                'reconciliation_status': harvest_result.reconciliation_status,
+                'idempotent_replay': harvest_result.idempotent_replay,
+            },
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
     
     @extend_schema(
         summary="Statistiques détaillées d'un cycle",
@@ -280,6 +427,127 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
 
         serializer = CycleStatisticsSerializer(statistics)
         return Response(serializer.data)
+
+    @extend_schema(
+        summary="Dashboard global d'un cycle de production",
+        description="""
+        Retourne les indicateurs agrégés du cycle à partir de ses unités de production.
+        Si le cycle n'a pas encore d'unités liées, la réponse conserve le comportement legacy.
+        """,
+        responses={200: CycleDashboardSerializer},
+    )
+    @action(detail=True, methods=['get'])
+    def dashboard(self, request, pk=None):
+        """
+        Retourne le dashboard global du cycle courant.
+
+        La logique d'agrégation reste dans le service métier pour garder la vue fine.
+        """
+        cycle = self.get_object()
+        payload = CycleDashboardService.build_dashboard_payload(cycle)
+        serializer = CycleDashboardSerializer(payload, context={'request': request})
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Magasin d'un cycle de production",
+        description="""
+        Retourne le stock d'aliments du cycle, les commandes reçues importées automatiquement,
+        et les commandes en attente qui ne sont pas encore comptabilisées dans le stock.
+        """,
+        responses={200: CycleStoreSerializer},
+    )
+    @action(detail=True, methods=['get'], url_path='store')
+    def store(self, request, pk=None):
+        """Retourne le résumé du Magasin pour un cycle."""
+        cycle = self.get_object()
+        payload = CycleStoreApplicationService.get_store(cycle)
+        serializer = CycleStoreSerializer(payload, context={'request': request})
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Déclarer un stock manuel pour le Magasin",
+        description="""
+        Enregistre une entrée de stock déclarée manuellement pour le cycle.
+        Le champ client_uuid reste utilisable pour dédupliquer les soumissions offline.
+        """,
+        request=CycleStoreManualStockSerializer,
+        responses={200: CycleStoreSerializer},
+        examples=[
+            OpenApiExample(
+                "Déclaration manuelle",
+                value={
+                    'external_feed': {
+                        'name': 'Aliment local starter',
+                        'species': 'clarias',
+                        'pellet_size_mm': '2.00',
+                    },
+                    'quantity_kg': '50.00',
+                    'total_cost_fcfa': '75000.00',
+                    'entry_date': '2026-06-29',
+                    'note': 'Premier stock du cycle',
+                    'client_uuid': '11111111-1111-4111-8111-111111111111',
+                    'created_offline': True,
+                },
+            )
+        ],
+    )
+    @action(detail=True, methods=['post'], url_path='store/manual-stock')
+    def store_manual_stock(self, request, pk=None):
+        """Enregistre une déclaration manuelle de stock pour un cycle."""
+        cycle = self.get_object()
+        serializer = CycleStoreManualStockSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            CycleStoreApplicationService.declare_manual_stock(
+                user=request.user,
+                cycle=cycle,
+                command=DeclareManualStockCommand(
+                    feed_reference_id=serializer.validated_data.get('feed_reference_id'),
+                    feed_reference_client_uuid=serializer.validated_data.get('feed_reference_client_uuid'),
+                    external_feed=serializer.validated_data.get('external_feed'),
+                    label=serializer.validated_data.get('label', ''),
+                    feed_size_mm=serializer.validated_data.get('feed_size_mm'),
+                    quantity_kg=serializer.validated_data['quantity_kg'],
+                    total_cost_fcfa=serializer.validated_data['total_cost_fcfa'],
+                    entry_date=serializer.validated_data['entry_date'],
+                    note=serializer.validated_data.get('note', ''),
+                    client_uuid=serializer.validated_data.get('client_uuid'),
+                    created_offline=serializer.validated_data.get('created_offline', False),
+                ),
+            )
+        except PermissionError as exc:
+            raise PermissionDenied(str(exc)) from exc
+        except ValueError as exc:
+            raise serializers.ValidationError({'detail': str(exc)}) from exc
+
+        payload = CycleStoreApplicationService.get_store(cycle)
+        response_serializer = CycleStoreSerializer(payload, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary='Classifier une ancienne entrée de stock',
+        request=CycleStoreClassificationSerializer,
+        responses={200: CycleStoreSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='store/classify')
+    def store_classify(self, request, pk=None):
+        cycle = self.get_object()
+        serializer = CycleStoreClassificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            CycleStoreApplicationService.classify_legacy_stock(
+                user=request.user,
+                cycle=cycle,
+                entry_id=serializer.validated_data['entry_id'],
+                feed_reference_id=serializer.validated_data['feed_reference_id'],
+            )
+        except PermissionError as exc:
+            raise PermissionDenied(str(exc)) from exc
+        except ValueError as exc:
+            raise serializers.ValidationError({'detail': str(exc)}) from exc
+        payload = CycleStoreApplicationService.get_store(cycle)
+        return Response(CycleStoreSerializer(payload).data)
     
     @extend_schema(
         summary="Comparaison avec cycles précédents",
@@ -345,4 +613,126 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
         )
 
         serializer = CycleComparisonSerializer(comparison_data)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Phases d'alimentation simulées pour un cycle",
+        description=(
+            "Retourne les phases d'alimentation et les produits recommandés "
+            "estimés via CycleSimulationService avec les paramètres du cycle. "
+            "Utilisé pour l'écran de commande par phase."
+        ),
+        responses={200: CycleFeedRecommendationSerializer},
+    )
+    @action(detail=True, methods=['get'], url_path='feed-phases')
+    def feed_phases(self, request, pk=None):
+        """
+        GET /api/aquaculture/cycles/{id}/feed-phases/
+
+        Retourne le besoin futur recalculé, puis sa couverture exacte par le
+        stock, les commandes en attente et les produits AquaCare compatibles.
+        """
+        cycle = self.get_object()
+
+        try:
+            return Response(CycleFeedService.get_feed_phases(cycle))
+        except Exception as exc:
+            logger.exception('Erreur calcul feed_phases pour cycle %s', pk)
+            raise FeedingPlanGenerationError(
+                _("Impossible de calculer les phases d'alimentation pour ce cycle.")
+            ) from exc
+
+    @extend_schema(
+        summary="Statut des aliments pour un cycle",
+        description=(
+            "Retourne le suivi des achats d'aliments pour ce cycle : "
+            "total nécessaire (d'après les plans d'alimentation), "
+            "déjà commandé (commandes liées au cycle), consommé et reste à commander."
+        ),
+        responses={200: dict},
+    )
+    @action(detail=True, methods=['get'], url_path='feed-status')
+    def feed_status(self, request, pk=None):
+        """
+        GET /api/aquaculture/cycles/{id}/feed-status/
+
+        Délègue à CycleFeedService le calcul du statut des aliments :
+        - besoin futur : moteur de recommandation par phase ;
+        - sacs proposés : vrais conditionnements des produits compatibles ;
+        - commandes et consommation : données réelles liées au cycle.
+        """
+        cycle = self.get_object()
+        result = CycleFeedService.get_feed_status(cycle)
+        return Response(result)
+
+    @extend_schema(
+        summary="Enregistrer une récolte partielle",
+        description="""
+        Enregistre une vente partielle de poissons sur un cycle actif.
+        Le cycle reste actif après l'opération. Le current_count est décrémenté
+        du nombre de poissons récoltés.
+        """,
+        request=PartialHarvestSerializer,
+        responses={
+            200: PartialHarvestResponseSerializer,
+            400: OpenApiExample(
+                'Effectif insuffisant',
+                value={'error': 'Nombre à récolter supérieur à l\'effectif disponible'}
+            )
+        },
+    )
+    @action(detail=True, methods=['post'], url_path='partial-harvest')
+    def partial_harvest(self, request, pk=None):
+        """
+        POST /api/aquaculture/cycles/{id}/partial-harvest/
+
+        Récolte partielle : le cycle reste actif, current_count décrémenté.
+        """
+        cycle = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        updated_cycle, partial = ProductionCycleApplicationService.partial_harvest_cycle(
+            cycle=cycle,
+            command=PartialHarvestCommand(
+                harvest_date=serializer.validated_data['harvest_date'],
+                count_harvested=serializer.validated_data['count_harvested'],
+                average_weight_g=serializer.validated_data['average_weight_g'],
+                sale_price_fcfa_per_kg=serializer.validated_data.get('sale_price_fcfa_per_kg'),
+                notes=serializer.validated_data.get('notes', ''),
+                client_uuid=serializer.validated_data.get('client_uuid'),
+                created_offline=serializer.validated_data.get('created_offline', False),
+            ),
+        )
+
+        response_serializer = PartialHarvestResponseSerializer(
+            {
+                'message': _('Récolte partielle enregistrée avec succès'),
+                'cycle': updated_cycle,
+                'partial_harvest': partial,
+            },
+            context={'request': request},
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Historique des récoltes partielles d'un cycle",
+        description="Retourne la liste de toutes les récoltes partielles enregistrées pour ce cycle.",
+        responses={200: PartialHarvestReadSerializer(many=True)},
+    )
+    @action(detail=True, methods=['get'], url_path='partial-harvests')
+    def partial_harvests(self, request, pk=None):
+        """
+        GET /api/aquaculture/cycles/{id}/partial-harvests/
+
+        Liste toutes les récoltes partielles du cycle, du plus récent au plus ancien.
+        """
+        cycle = self.get_object()
+        partial_harvests_qs = cycle.partial_harvests.all()
+        page = self.paginate_queryset(partial_harvests_qs)
+        if page is not None:
+            serializer = PartialHarvestReadSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = PartialHarvestReadSerializer(partial_harvests_qs, many=True)
         return Response(serializer.data)

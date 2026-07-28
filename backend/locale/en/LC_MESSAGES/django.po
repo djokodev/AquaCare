@@ -587,3 +587,741 @@ msgstr "City in the district"
 
 msgid "Quartier ou localité spécifique"
 msgstr "Specific neighborhood or locality"
+
+msgid "The cycle duration must be between 30 and 365 days."
+msgstr "The cycle duration must be between 30 and 365 days."
+
+msgid "The estimated harvest date must match the cycle duration."
+msgstr "The estimated harvest date must match the cycle duration."
+
+# Transactional cycle launch
+msgid "L'identifiant local de l'unité est obligatoire."
+msgstr "The unit local identifier is required."
+
+msgid "Le nom de l'unité est obligatoire."
+msgstr "The unit name is required."
+
+msgid "L'unité de l'allocation est obligatoire."
+msgstr "The allocation unit is required."
+
+msgid "Chaque unité doit avoir un identifiant local unique."
+msgstr "Each unit must have a unique local identifier."
+
+msgid "Chaque unité doit avoir exactement une allocation."
+msgstr "Each unit must have exactly one allocation."
+
+msgid "Une allocation référence une unité inconnue."
+msgstr "An allocation references an unknown unit."
+
+msgid "L'espèce du plan doit correspondre à celle du cycle."
+msgstr "The plan species must match the cycle species."
+
+msgid "La somme des allocations doit correspondre à l'effectif initial du cycle."
+msgstr "The allocation total must match the cycle initial fish count."
+
+msgid "La capacité recommandée de l'unité est dépassée."
+msgstr "The unit recommended capacity is exceeded."
+
+msgid "Ce lancement existe déjà avec un contenu différent ou appartient à une autre ferme."
+msgstr "This launch already exists with different content or belongs to another farm."
+
+msgid "L'effectif courant du cycle ne correspond pas aux allocations."
+msgstr "The cycle current fish count does not match its allocations."
+
+msgid "Un nouveau cycle doit être lancé avec au moins une unité de production."
+msgstr "A new cycle must be launched with at least one production unit."
+
+msgid "Une unité existante ne peut pas contenir des champs de création."
+msgstr "An existing unit cannot contain creation fields."
+
+msgid "L'identifiant de l'unité existante est obligatoire."
+msgstr "The existing production unit identifier is required."
+
+msgid "Une nouvelle unité ne peut pas référencer une unité existante."
+msgstr "A new unit cannot reference an existing production unit."
+
+msgid "Une même unité ne peut être sélectionnée deux fois."
+msgstr "The same production unit cannot be selected twice."
+
+msgid "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+msgstr "The launch mode does not match the farm setup state."
+
+msgid "Le plan de production est obligatoire pour le setup initial."
+msgstr "The production plan is required for initial setup."
+
+msgid "La configuration de la ferme est déjà terminée."
+msgstr "The farm setup is already complete."
+
+msgid "La ferme doit être configurée avant de lancer un cycle supplémentaire."
+msgstr "The farm must be configured before launching an additional cycle."
+
+msgid "L'unité de production sélectionnée est inactive."
+msgstr "The selected production unit is inactive."
+
+msgid "Cette unité de production est déjà utilisée par un autre cycle actif."
+msgstr "This production unit is already assigned to another active cycle."
+
+msgid "La capacité recommandée de l'unité de production est dépassée."
+msgstr "The recommended capacity of the production unit has been exceeded."
+
+msgid "La capacité de cette unité de production ne peut pas être déterminée."
+msgstr "The capacity of this production unit cannot be determined."
+
+#: apps/aquaculture/admin.py:1327 apps/aquaculture/admin.py:1561
+#: apps/commerce/admin.py:352 apps/commerce/admin.py:379
+#: apps/commerce/admin.py:381 apps/commerce/admin.py:975
+msgid "Erreur interne lors de la génération du PDF."
+msgstr "Internal error while generating the PDF."
+
+#: apps/aquaculture/admin.py:1539 apps/aquaculture/admin.py:1594
+#: apps/commerce/admin.py:337 apps/commerce/admin.py:365
+#: apps/commerce/admin.py:938
+msgid "Accès refusé."
+msgstr "Access denied."
+
+#: apps/aquaculture/domain/exceptions.py:192
+msgid "Cet UUID correspond à une autre référence d’aliment."
+msgstr "This UUID belongs to a different feed reference."
+
+#: apps/aquaculture/domain/exceptions.py:204
+msgid "Cet UUID correspond à une autre déclaration de stock."
+msgstr "This UUID belongs to a different stock declaration."
+
+#: apps/aquaculture/domain/exceptions.py:216
+msgid "Cet UUID correspond à un autre journal quotidien."
+msgstr "This UUID belongs to a different daily log."
+
+#: apps/aquaculture/models.py:373 apps/aquaculture/models.py:530
+#: apps/aquaculture/models.py:718 apps/aquaculture/models.py:838
+#: apps/aquaculture/models.py:1045 apps/aquaculture/models.py:1476
+#: apps/aquaculture/models.py:1818 apps/aquaculture/models.py:1958
+#: apps/chat/models.py:163 apps/commerce/models.py:230
+msgid "UUID client"
+msgstr "Client UUID"
+
+# Farm feed references and phase recommendations
+#: apps/aquaculture/models.py:713
+msgid "Catalogue AquaCare"
+msgstr "AquaCare catalog"
+
+#: apps/aquaculture/models.py:714
+msgid "Aliment externe"
+msgstr "External feed"
+
+#: apps/aquaculture/models.py:725
+msgid "Origine"
+msgstr "Source"
+
+#: apps/aquaculture/models.py:732
+msgid "Produit AquaCare"
+msgstr "AquaCare product"
+
+#: apps/aquaculture/models.py:734 apps/aquaculture/models.py:862
+msgid "Nom de l'aliment"
+msgstr "Feed name"
+
+#: apps/aquaculture/models.py:736 apps/commerce/models.py:88
+msgid "Espèce cible"
+msgstr "Target species"
+
+#: apps/aquaculture/models.py:741 apps/aquaculture/models.py:870
+msgid "Granulométrie (mm)"
+msgstr "Pellet size (mm)"
+
+#: apps/aquaculture/models.py:743 apps/commerce/admin.py:166
+#: apps/commerce/models.py:75
+msgid "Marque"
+msgstr "Brand"
+
+#: apps/aquaculture/models.py:750 apps/commerce/models.py:111
+msgid "Taux de protéines (%)"
+msgstr "Protein content (%)"
+
+#: apps/aquaculture/models.py:758 apps/commerce/models.py:118
+msgid "Taux de lipides (%)"
+msgstr "Fat content (%)"
+
+#: apps/aquaculture/models.py:766
+msgid "Poids du conditionnement (kg)"
+msgstr "Package weight (kg)"
+
+#: apps/aquaculture/models.py:768 apps/aquaculture/models.py:919
+#: apps/aquaculture/models.py:1260 apps/aquaculture/models.py:1622
+#: apps/aquaculture/models.py:1907 apps/aquaculture/models.py:2018
+#| msgid "Créée le"
+msgid "Créé hors ligne"
+msgstr "Created offline"
+
+#: apps/aquaculture/models.py:769 apps/aquaculture/models.py:924
+#: apps/aquaculture/models.py:1265 apps/aquaculture/models.py:1627
+#: apps/aquaculture/models.py:1912 apps/aquaculture/models.py:2023
+#| msgid "Synchronisation"
+msgid "Synchronisé le"
+msgstr "Synchronized on"
+
+#: apps/aquaculture/models.py:804
+msgid "Référence aliment de ferme"
+msgstr "Farm feed reference"
+
+#: apps/aquaculture/models.py:805
+msgid "Références aliments de ferme"
+msgstr "Farm feed references"
+
+#: apps/aquaculture/models.py:810
+#: apps/aquaculture/services/feed_reference_service.py:62
+msgid "Un produit AquaCare est requis."
+msgstr "An AquaCare product is required."
+
+#: apps/aquaculture/models.py:812
+#: apps/aquaculture/services/feed_reference_service.py:81
+msgid "Un aliment externe ne peut pas référencer le catalogue."
+msgstr "An external feed cannot reference the catalog."
+
+#: apps/aquaculture/models.py:853 apps/aquaculture/models.py:1560
+msgid "Référence aliment"
+msgstr "Feed reference"
+
+#: apps/aquaculture/models.py:958
+#| msgid "Permissions"
+msgid "Version"
+msgstr "Version"
+
+#: apps/aquaculture/models.py:959
+msgid "Paramètres de simulation"
+msgstr "Simulation parameters"
+
+#: apps/aquaculture/models.py:960
+msgid "Phases alimentaires"
+msgstr "Feeding phases"
+
+#: apps/aquaculture/models.py:961
+msgid "Aliment total planifié (kg)"
+msgstr "Total planned feed (kg)"
+
+#: apps/aquaculture/models.py:962
+msgid "Calculé le"
+msgstr "Calculated on"
+
+#: apps/aquaculture/models.py:967
+msgid "Plan alimentaire du cycle"
+msgstr "Cycle feeding plan"
+
+#: apps/aquaculture/models.py:968
+msgid "Plans alimentaires des cycles"
+msgstr "Cycle feeding plans"
+
+#: apps/aquaculture/models.py:984
+#| msgid "Entrée de stock introuvable."
+msgid "Entrée de stock"
+msgstr "Stock entry"
+
+#: apps/aquaculture/models.py:990
+msgid "Quantité déjà consommée (kg)"
+msgstr "Quantity already consumed (kg)"
+
+#: apps/aquaculture/models.py:1002
+msgid "Ajustement historique du stock"
+msgstr "Historical stock adjustment"
+
+#: apps/aquaculture/models.py:1003
+msgid "Ajustements historiques du stock"
+msgstr "Historical stock adjustments"
+
+#: apps/aquaculture/serializers.py:1008
+#| msgid "Une référence aliment est requise."
+msgid "Le cycle est requis."
+msgstr "The cycle is required."
+
+#: apps/aquaculture/serializers.py:1017
+#| msgid "Référence aliment introuvable."
+msgid "Référence aliment introuvable pour cette ferme."
+msgstr "Feed reference not found for this farm."
+
+#: apps/aquaculture/serializers.py:1022
+#: apps/aquaculture/services/cycle_store_application_service.py:69
+msgid "L’identifiant et le client_uuid désignent deux aliments différents."
+msgstr "The identifier and client_uuid refer to different feeds."
+
+#: apps/aquaculture/serializers.py:1029
+#: apps/aquaculture/services/cycle_store_service.py:467
+msgid "Sélectionnez l’aliment distribué."
+msgstr "Select the feed that was distributed."
+
+#: apps/aquaculture/serializers.py:1031
+#: apps/aquaculture/services/cycle_store_application_service.py:90
+#: apps/aquaculture/services/cycle_store_service.py:473
+#: apps/aquaculture/services/cycle_store_service.py:563
+msgid "Cet aliment appartient à une autre ferme."
+msgstr "This feed belongs to another farm."
+
+#: apps/aquaculture/serializers.py:1034
+#: apps/aquaculture/services/cycle_store_application_service.py:92
+#: apps/aquaculture/services/cycle_store_service.py:480
+#: apps/aquaculture/services/cycle_store_service.py:565
+msgid "Cet aliment ne correspond pas à l’espèce du cycle."
+msgstr "This feed does not match the cycle species."
+
+#: apps/aquaculture/serializers.py:2068
+msgid "Fournissez soit une référence aliment, soit un nouvel aliment externe."
+msgstr "Provide either a feed reference or a new external feed."
+
+#: apps/aquaculture/services/cycle_service.py:189
+#: apps/aquaculture/services/cycle_service.py:783
+#: apps/aquaculture/services/cycle_service.py:890
+#: apps/aquaculture/services/log_service.py:192
+#: apps/aquaculture/services/log_service.py:622
+#: apps/aquaculture/services/sanitary_service.py:88
+#| msgid "Ce client_uuid appartient à une autre ferme."
+msgid ""
+"Conflit de synchronisation : ce client_uuid appartient à un autre "
+"utilisateur."
+msgstr "Synchronization conflict: this client_uuid belongs to another user."
+
+#: apps/aquaculture/services/cycle_store_application_service.py:88
+msgid "Une référence aliment est requise."
+msgstr "A feed reference is required."
+
+#: apps/aquaculture/services/cycle_store_service.py:495
+#| msgid "Sélectionnez l’aliment distribué."
+msgid "Sélectionnez un aliment disponible dans votre stock."
+msgstr "Select a feed available in your stock."
+
+#: apps/aquaculture/services/cycle_store_service.py:525
+msgid ""
+"Le stock enregistré est déjà dépassé. Corrigez l’historique avant de "
+"continuer."
+msgstr "Recorded consumption already exceeds this stock. Correct the history before continuing."
+
+#: apps/aquaculture/services/cycle_store_service.py:623
+msgid "Entrée de stock introuvable."
+msgstr "Stock entry not found."
+
+#: apps/aquaculture/services/cycle_store_service.py:627
+msgid "Cette entrée de stock est déjà classifiée."
+msgstr "This stock entry is already classified."
+
+#: apps/aquaculture/services/cycle_store_service.py:629
+msgid "Cet aliment n’est pas compatible avec le cycle."
+msgstr "This feed is not compatible with the cycle."
+
+#: apps/aquaculture/services/cycle_store_service.py:659
+msgid ""
+"Plusieurs stocks historiques correspondent à ces consommations. Précisez "
+"d’abord le reliquat physique."
+msgstr "Several historical stock entries match these consumptions. Specify the physical remainder first."
+
+#: apps/aquaculture/services/cycle_store_service.py:664
+msgid ""
+"Les consommations historiques dépassent cette entrée de stock. Corrigez le "
+"reliquat physique avant la classification."
+msgstr "Historical consumption exceeds this stock entry. Correct the physical remainder before classification."
+
+#: apps/aquaculture/services/cycle_store_service.py:691
+msgid "La commande ne correspond pas au cycle indiqué."
+msgstr "The order does not match the selected cycle."
+
+#: apps/aquaculture/services/cycle_store_service.py:705
+#| msgid "Cet aliment ne correspond pas à l’espèce du cycle."
+msgid "Un article de cette commande ne correspond pas à l’espèce du cycle."
+msgstr "An item in this order does not match the cycle species."
+
+#: apps/aquaculture/services/feed_reference_service.py:56
+msgid "Cette ferme ne vous appartient pas."
+msgstr "This farm does not belong to you."
+
+#: apps/aquaculture/services/feed_reference_service.py:86
+msgid "Le nom, l’espèce et la granulométrie sont requis."
+msgstr "Name, species, and pellet size are required."
+
+#: apps/aquaculture/services/feed_reference_service.py:108
+msgid "Ce client_uuid appartient à une autre ferme."
+msgstr "This client_uuid belongs to another farm."
+
+#: apps/aquaculture/services/feed_reference_service.py:145
+#: apps/aquaculture/services/feed_reference_service.py:155
+msgid "Référence aliment introuvable."
+msgstr "Feed reference not found."
+
+#: apps/aquaculture/services/feed_reference_service.py:147
+#: apps/aquaculture/services/feed_reference_service.py:157
+msgid "Cette référence aliment ne vous appartient pas."
+msgstr "This feed reference does not belong to you."
+
+#: apps/aquaculture/views/feed_reference_views.py:37
+msgid "Ferme introuvable."
+msgstr "Farm not found."
+
+#: apps/commerce/admin.py:207 apps/commerce/models.py:140
+msgid "Disponible"
+msgstr "Available"
+
+#: apps/commerce/admin.py:208
+msgid "Indisponible"
+msgstr "Unavailable"
+
+#: apps/commerce/admin.py:248
+msgid "Résumé de commande"
+msgstr "Order summary"
+
+#: apps/commerce/admin.py:251
+msgid "Workflow et statut"
+msgstr "Workflow and status"
+
+#: apps/commerce/admin.py:254
+msgid "Ferme, client et cycle"
+msgstr "Farm, customer and cycle"
+
+#: apps/commerce/admin.py:257
+msgid "Livraison ou retrait"
+msgstr "Delivery or pickup"
+
+#: apps/commerce/admin.py:264
+#: templates/admin/commerce/order/fulfil_confirmation.html:288
+msgid "Articles"
+msgstr "Items"
+
+#: apps/commerce/admin.py:273 apps/commerce/admin.py:597
+#: apps/commerce/admin.py:616
+msgid "Documents"
+msgstr "Documents"
+
+#: apps/commerce/admin.py:276
+msgid "Synchronisation et métadonnées"
+msgstr "Synchronization and metadata"
+
+#: apps/commerce/admin.py:332 apps/commerce/admin.py:360
+#: apps/commerce/admin.py:477
+msgid "Commande introuvable."
+msgstr "Order not found."
+
+#: apps/commerce/admin.py:335 apps/commerce/admin.py:363
+msgid "Langue invalide."
+msgstr "Invalid language."
+
+#: apps/commerce/admin.py:481
+msgid "Cette commande ne nécessite plus cette action."
+msgstr "This order no longer requires this action."
+
+#: apps/commerce/admin.py:485 apps/commerce/admin.py:575
+msgid "Marquer comme livrée"
+msgstr "Mark as delivered"
+
+#: apps/commerce/admin.py:487 apps/commerce/admin.py:577
+msgid "Marquer comme prête au retrait"
+msgstr "Mark as ready for pickup"
+
+#: apps/commerce/admin.py:502
+msgid "Transition logistique effectuée via le service métier."
+msgstr "Logistics transition completed through the business service."
+
+#: apps/commerce/admin.py:507
+#, python-brace-format
+msgid ""
+"La commande {} a été mise à jour. La notification client a été traitée selon "
+"ses préférences."
+msgstr ""
+"Order {} was updated. The customer notification was handled according to "
+"their preferences."
+
+#: apps/commerce/admin.py:514
+#, python-brace-format
+msgid "La commande {} était déjà dans cet état."
+msgstr "Order {} was already in this state."
+
+#: apps/commerce/admin.py:543
+#: templates/admin/commerce/order/fulfil_confirmation.html:263
+msgid "Aucun cycle associé"
+msgstr "No associated cycle"
+
+#: apps/commerce/admin.py:549
+msgid "Ferme / cycle"
+msgstr "Farm / cycle"
+
+#: apps/commerce/admin.py:555
+msgid "Retrait"
+msgstr "Pickup"
+
+#: apps/commerce/admin.py:556
+msgid "Point non renseigné"
+msgstr "Location not provided"
+
+#: apps/commerce/admin.py:561
+msgid "Domicile"
+msgstr "Home delivery"
+
+#: apps/commerce/admin.py:562
+msgid "Destination non renseignée"
+msgstr "Destination not provided"
+
+#: apps/commerce/admin.py:564 apps/commerce/admin.py:793
+#: apps/commerce/admin.py:910
+msgid "Livraison"
+msgstr "Delivery"
+
+#: apps/commerce/admin.py:568 apps/commerce/models.py:407
+#: apps/notifications/models.py:169
+msgid "Créée le"
+msgstr "Created on"
+
+#: apps/commerce/admin.py:581
+msgid "Action"
+msgstr "Action"
+
+#: apps/commerce/admin.py:585
+msgid "Action opérateur"
+msgstr "Operator action"
+
+#: apps/commerce/admin.py:611 apps/commerce/admin.py:843
+msgid "Visualiser FR"
+msgstr "View in French"
+
+#: apps/commerce/admin.py:612 apps/commerce/admin.py:844
+msgid "Télécharger FR"
+msgstr "Download in French"
+
+#: apps/commerce/admin.py:613
+msgid "View EN"
+msgstr "View in English"
+
+#: apps/commerce/admin.py:614
+msgid "Download EN"
+msgstr "Download in English"
+
+#: apps/commerce/admin.py:620
+#, python-brace-format
+msgid "Cycle associé : {}"
+msgstr "Associated cycle: {}"
+
+#: apps/commerce/admin.py:624
+#: templates/admin/commerce/order/fulfil_confirmation.html:324
+msgid ""
+"Aucun cycle associé — cette commande ne générera pas d'entrée automatique "
+"dans un magasin de cycle."
+msgstr ""
+"No associated cycle — this order will not automatically create an entry in a "
+"cycle store."
+
+#: apps/commerce/admin.py:628
+msgid "Magasin du cycle"
+msgstr "Cycle store"
+
+#: apps/commerce/admin.py:633 apps/commerce/models.py:280
+msgid "Livrée le"
+msgstr "Delivered on"
+
+#: apps/commerce/admin.py:633 apps/commerce/models.py:295
+msgid "Prête au retrait le"
+msgstr "Ready for pickup on"
+
+#: apps/commerce/admin.py:637 apps/commerce/models.py:310
+msgid "Réception confirmée le"
+msgstr "Receipt confirmed on"
+
+#: apps/commerce/admin.py:639
+msgid "Retrait confirmé le"
+msgstr "Pickup confirmed on"
+
+# Order fulfilment workflow
+#: apps/commerce/admin.py:642
+msgid "Commandée le"
+msgstr "Ordered on"
+
+#: apps/commerce/admin.py:644
+msgid "Opérateur"
+msgstr "Operator"
+
+#: apps/commerce/admin.py:659
+msgid "Historique du workflow"
+msgstr "Workflow history"
+
+#: apps/commerce/admin.py:664 apps/commerce/admin.py:756
+#: templates/admin/commerce/order/fulfil_confirmation.html:307
+msgid "Aucun article."
+msgstr "No items."
+
+#: apps/commerce/admin.py:679 apps/commerce/admin.py:920
+#: apps/commerce/models.py:521
+#: templates/admin/commerce/order/fulfil_confirmation.html:294
+msgid "Quantité"
+msgstr "Quantity"
+
+#: apps/commerce/admin.py:679 apps/commerce/admin.py:1071
+msgid "Prix unitaire"
+msgstr "Unit price"
+
+#: apps/commerce/admin.py:679 apps/commerce/admin.py:737
+#: apps/commerce/admin.py:797 apps/commerce/admin.py:929
+#: apps/commerce/admin.py:1080
+#: templates/admin/commerce/order/fulfil_confirmation.html:283
+#: templates/admin/commerce/order/fulfil_confirmation.html:295
+msgid "Total"
+msgstr "Total"
+
+#: apps/commerce/admin.py:682 apps/commerce/models.py:480
+msgid "Articles commandés"
+msgstr "Order items"
+
+#: apps/commerce/admin.py:691
+msgid "Confirmée"
+msgstr "Confirmed"
+
+#: apps/commerce/admin.py:692
+msgid "Livrée"
+msgstr "Delivered"
+
+#: apps/commerce/admin.py:693
+msgid "Reçue"
+msgstr "Received"
+
+#: apps/commerce/admin.py:737
+msgid "Qté (sacs)"
+msgstr "Qty (bags)"
+
+#: apps/commerce/admin.py:737
+msgid "Prix unit."
+msgstr "Unit price"
+
+#: apps/commerce/admin.py:761
+msgid "Articles non disponibles."
+msgstr "Items unavailable."
+
+#: apps/commerce/admin.py:781
+msgid "Commande #"
+msgstr "Order #"
+
+#: apps/commerce/admin.py:789
+msgid "Sous-total"
+msgstr "Subtotal"
+
+#: apps/commerce/admin.py:801
+msgid "Sacs commandés"
+msgstr "Bags ordered"
+
+#: apps/commerce/admin.py:804 apps/commerce/admin.py:918
+msgid "sac"
+msgid_plural "sacs"
+msgstr[0] "bag"
+msgstr[1] "bags"
+
+#: apps/commerce/admin.py:845
+msgid "Visualiser EN"
+msgstr "View in English"
+
+#: apps/commerce/admin.py:846
+msgid "Télécharger EN"
+msgstr "Download in English"
+
+#: apps/commerce/admin.py:856
+msgid "Tel"
+msgstr "Phone"
+
+#: apps/commerce/admin.py:858 apps/commerce/models.py:242
+#: templates/admin/commerce/order/fulfil_confirmation.html:254
+msgid "Client"
+msgstr "Customer"
+
+# Order fulfilment workflow
+#: apps/commerce/admin.py:878 apps/commerce/constants.py:34
+msgid "Commandée"
+msgstr "Ordered"
+
+#: apps/commerce/admin.py:879 apps/commerce/constants.py:35
+msgid "Livrée — confirmation attendue"
+msgstr "Delivered — confirmation pending"
+
+#: apps/commerce/admin.py:880 apps/commerce/constants.py:36
+msgid "Prête au retrait"
+msgstr "Ready for pickup"
+
+#: apps/commerce/admin.py:882 apps/commerce/constants.py:37
+msgid "Réception confirmée"
+msgstr "Receipt confirmed"
+
+#: apps/commerce/admin.py:884
+msgid "Retrait confirmé"
+msgstr "Pickup confirmed"
+
+#: apps/commerce/models.py:283
+msgid "Date à laquelle la livraison à domicile a été déclarée"
+msgstr "Date when home delivery was declared"
+
+#: apps/commerce/models.py:291
+#| msgid "Livrée"
+msgid "Livrée par"
+msgstr "Delivered by"
+
+#: apps/commerce/models.py:292
+msgid "Opérateur ayant déclaré la livraison à domicile"
+msgstr "Operator who declared home delivery"
+
+#: apps/commerce/models.py:298
+msgid "Date à laquelle la commande a été déclarée prête au retrait"
+msgstr "Date when the order was declared ready for pickup"
+
+#: apps/commerce/models.py:306
+#| msgid "Prête au retrait"
+msgid "Prête au retrait par"
+msgstr "Marked ready for pickup by"
+
+#: apps/commerce/models.py:307
+#| msgid "Marquer comme prête au retrait"
+msgid "Opérateur ayant déclaré la commande prête au retrait"
+msgstr "Operator who declared the order ready for pickup"
+
+#: apps/commerce/models.py:313
+msgid "Date à laquelle le client a confirmé la réception ou le retrait"
+msgstr "Date when the customer confirmed delivery or pickup"
+
+#: apps/commerce/models.py:479
+msgid "Article commandé"
+msgstr "Order item"
+
+#: apps/notifications/constants.py:25
+msgid "Commande prête au retrait"
+msgstr "Order ready for pickup"
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:241
+msgid "Vérifiez les informations avant de confirmer cette action logistique."
+msgstr "Review the information before confirming this logistics action."
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:268
+msgid "Mode et destination"
+msgstr "Method and destination"
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:279
+msgid "Nombre de sacs"
+msgstr "Number of bags"
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:316
+msgid "Le client sera invité à confirmer la réception de la commande."
+msgstr "The customer will be asked to confirm receipt of the order."
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:318
+msgid "Le client sera invité à confirmer le retrait de la commande."
+msgstr "The customer will be asked to confirm pickup of the order."
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:330
+msgid ""
+"La commande passera à l'état livrée et le client pourra confirmer sa "
+"réception."
+msgstr ""
+"The order will move to delivered status and the customer will be able to "
+"confirm receipt."
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:332
+msgid ""
+"La commande passera à l'état prête au retrait et le client pourra confirmer "
+"son retrait."
+msgstr ""
+"The order will move to ready-for-pickup status and the customer will be able "
+"to confirm pickup."
+
+#: templates/admin/commerce/order/fulfil_confirmation.html:340
+msgid "Annuler"
+msgstr "Cancel"
+
+msgid "Confirmer la réception"
+msgstr "Confirm receipt"
+
+msgid "Confirmer le retrait"
+msgstr "Confirm pickup"

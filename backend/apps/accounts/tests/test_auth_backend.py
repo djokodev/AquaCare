@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import pytest
-from accounts.backends import MavecamAuthBackend
+from accounts.backends import AquaCareAuthBackend
 
 
 @pytest.mark.django_db
-class TestMavecamAuthBackend:
+class TestAquaCareAuthBackend:
     @pytest.fixture
-    def backend(self) -> MavecamAuthBackend:
-        return MavecamAuthBackend()
+    def backend(self) -> AquaCareAuthBackend:
+        return AquaCareAuthBackend()
 
-    def test_authenticate_by_login_name(self, backend: MavecamAuthBackend, user_factory) -> None:
+    def test_authenticate_by_login_name(self, backend: AquaCareAuthBackend, user_factory) -> None:
         user = user_factory(
             first_name="Jeanne",
             last_name="Piscicultrice",
@@ -25,7 +25,7 @@ class TestMavecamAuthBackend:
 
         assert authenticated_user == user
 
-    def test_authenticate_company_by_login_name(self, backend: MavecamAuthBackend, user_factory) -> None:
+    def test_authenticate_company_by_login_name(self, backend: AquaCareAuthBackend, user_factory) -> None:
         user = user_factory(
             account_type="company",
             business_name="Aqua Business SARL",
@@ -43,7 +43,7 @@ class TestMavecamAuthBackend:
 
         assert authenticated_user == user
 
-    def test_authenticate_by_phone_number(self, backend: MavecamAuthBackend, user_factory) -> None:
+    def test_authenticate_by_phone_number(self, backend: AquaCareAuthBackend, user_factory) -> None:
         user = user_factory(password="motdepasse_test123")
 
         authenticated_user = backend.authenticate(
@@ -64,7 +64,7 @@ class TestMavecamAuthBackend:
     )
     def test_authenticate_returns_none_for_unknown_or_invalid_credentials(
         self,
-        backend: MavecamAuthBackend,
+        backend: AquaCareAuthBackend,
         user_factory,
         login_kwargs: dict[str, str],
         password: str,
@@ -81,7 +81,7 @@ class TestMavecamAuthBackend:
 
     def test_authenticate_returns_none_for_inactive_user(
         self,
-        backend: MavecamAuthBackend,
+        backend: AquaCareAuthBackend,
         user_factory,
     ) -> None:
         user = user_factory(is_active=False, password="motdepasse_test123")
@@ -96,7 +96,7 @@ class TestMavecamAuthBackend:
 
     def test_authenticate_returns_none_without_password(
         self,
-        backend: MavecamAuthBackend,
+        backend: AquaCareAuthBackend,
         user_factory,
     ) -> None:
         user = user_factory()
@@ -109,5 +109,5 @@ class TestMavecamAuthBackend:
 
         assert authenticated_user is None
 
-    def test_get_user_returns_none_for_unknown_identifier(self, backend: MavecamAuthBackend) -> None:
+    def test_get_user_returns_none_for_unknown_identifier(self, backend: AquaCareAuthBackend) -> None:
         assert backend.get_user(999999999) is None

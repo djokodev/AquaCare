@@ -10,6 +10,7 @@ Couvre :
 """
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from aquaculture.domain.exceptions import (
@@ -20,6 +21,7 @@ from aquaculture.domain.exceptions import (
 )
 from aquaculture.models import CycleLog
 from aquaculture.services import ProductionCycleService
+from django.utils import timezone
 
 from tests.fixtures.factories import FarmProfileFactory
 
@@ -54,7 +56,7 @@ class TestProductionCycleService:
         assert cycle.total_feed_consumed == Decimal('0')
 
     def test_create_cycle_validates_max_density_tilapia(self):
-        """Vérifie que la densité maximale pour tilapia est respectée."""
+        """Vérifie que la densité maximale en bassin est respectée."""
         farm_profile = FarmProfileFactory()
 
         cycle_data = {
@@ -64,7 +66,7 @@ class TestProductionCycleService:
             'pond_surface_m2': Decimal('100.00'),  # Petit bassin
             'pond_volume_m3': Decimal('120.00'),
             'start_date': date.today(),
-            'initial_count': 35000,  # 350 poissons/m² (> 300 max pour tilapia)
+            'initial_count': 35000,  # 350 poissons/m² (> 10 max en bassin)
             'initial_average_weight': Decimal('10.00'),
         }
 
@@ -73,10 +75,10 @@ class TestProductionCycleService:
 
         assert "Densité initiale trop élevée" in str(exc_info.value)
         assert "350" in str(exc_info.value)  # Densité calculée
-        assert "300" in str(exc_info.value)  # Max autorisé
+        assert "10" in str(exc_info.value)  # Max autorisé en bassin
 
     def test_create_cycle_validates_max_density_clarias(self):
-        """Vérifie que la densité maximale pour clarias est respectée."""
+        """Vérifie que la densité maximale en bassin est respectée."""
         farm_profile = FarmProfileFactory()
 
         cycle_data = {
@@ -85,7 +87,7 @@ class TestProductionCycleService:
             'pond_identifier': 'Bassin C',
             'pond_surface_m2': Decimal('100.00'),
             'start_date': date.today(),
-            'initial_count': 60000,  # 600 poissons/m² (> 500 max pour clarias)
+            'initial_count': 60000,  # 600 poissons/m² (> 10 max en bassin)
             'initial_average_weight': Decimal('8.00'),
         }
 
@@ -93,7 +95,65 @@ class TestProductionCycleService:
             ProductionCycleService.create_cycle(farm_profile, cycle_data)
 
         assert "Densité initiale trop élevée" in str(exc_info.value)
-        assert "500" in str(exc_info.value)  # Max autorisé clarias
+        assert "10" in str(exc_info.value)  # Max autorisé en bassin
+
+    def test_create_cycle_validates_max_volume_density_tilapia(self):
+        """Vérifie que la densité maximale en volume est respectée."""
+        farm_profile = FarmProfileFactory()
+
+        cycle_data = {
+            'cycle_name': 'Test Overcrowded Volume Tilapia',
+            'species': 'tilapia',
+            'pond_identifier': 'Cage A',
+            'infrastructure_type': 'bac_hors_sol',
+            'pond_volume_m3': Decimal('15.00'),
+            'start_date': date.today(),
+            'initial_count': 9000,  # 600 poissons/m³ (> 300 max)
+            'initial_average_weight': Decimal('10.00'),
+        }
+
+        with pytest.raises(InvalidDensityError) as exc_info:
+            ProductionCycleService.create_cycle(farm_profile, cycle_data)
+
+        assert "Densité initiale trop élevée" in str(exc_info.value)
+        assert "300" in str(exc_info.value)
+
+    def test_create_cycle_validates_volume_density_boundary_passes(self):
+        """Vérifie que 300 poissons/m³ est accepté."""
+        farm_profile = FarmProfileFactory()
+
+        cycle_data = {
+            'cycle_name': 'Test Volume Boundary',
+            'species': 'clarias',
+            'pond_identifier': 'Cage B',
+            'infrastructure_type': 'cage_flottante',
+            'pond_volume_m3': Decimal('15.00'),
+            'start_date': date.today(),
+            'initial_count': 4500,  # 300 poissons/m³, limite autorisée
+            'initial_average_weight': Decimal('10.00'),
+        }
+
+        cycle = ProductionCycleService.create_cycle(farm_profile, cycle_data)
+
+        assert cycle.initial_count == 4500
+
+    def test_create_cycle_validates_volume_density_just_above_boundary(self):
+        """Vérifie que 301 poissons/m³ est refusé."""
+        farm_profile = FarmProfileFactory()
+
+        cycle_data = {
+            'cycle_name': 'Test Volume Boundary Fail',
+            'species': 'clarias',
+            'pond_identifier': 'Cage C',
+            'infrastructure_type': 'cage_flottante',
+            'pond_volume_m3': Decimal('15.00'),
+            'start_date': date.today(),
+            'initial_count': 4501,  # 300.07 poissons/m³
+            'initial_average_weight': Decimal('10.00'),
+        }
+
+        with pytest.raises(InvalidDensityError):
+            ProductionCycleService.create_cycle(farm_profile, cycle_data)
 
     def test_create_cycle_validates_minimum_weight(self):
         """Vérifie que le poids minimum initial est respecté."""
@@ -125,6 +185,8 @@ class TestProductionCycleService:
         harvested = ProductionCycleService.harvest_cycle(
             cycle=cycle,
             harvest_date=date.today(),
+            final_harvested_at=timezone.now(),
+            client_uuid=uuid4(),
             final_count=4850,  # 97% survie
             final_average_weight=Decimal('285.00'),
             harvest_notes='Excellente croissance'
@@ -158,6 +220,8 @@ class TestProductionCycleService:
             ProductionCycleService.harvest_cycle(
                 cycle=cycle,
                 harvest_date=date.today(),
+                final_harvested_at=timezone.now(),
+                client_uuid=uuid4(),
                 final_count=4850,
                 final_average_weight=Decimal('285.00'),
             )
@@ -174,6 +238,8 @@ class TestProductionCycleService:
             ProductionCycleService.harvest_cycle(
                 cycle=cycle,
                 harvest_date=invalid_date,
+                final_harvested_at=timezone.now(),
+                client_uuid=uuid4(),
                 final_count=4850,
                 final_average_weight=Decimal('285.00'),
             )
@@ -190,6 +256,8 @@ class TestProductionCycleService:
             ProductionCycleService.harvest_cycle(
                 cycle=cycle,
                 harvest_date=date.today(),
+                final_harvested_at=timezone.now(),
+                client_uuid=uuid4(),
                 final_count=4800,  # > 4500 actuel
                 final_average_weight=Decimal('285.00'),
             )
@@ -204,6 +272,8 @@ class TestProductionCycleService:
             ProductionCycleService.harvest_cycle(
                 cycle=cycle,
                 harvest_date=date.today(),
+                final_harvested_at=timezone.now(),
+                client_uuid=uuid4(),
                 final_count=4850,
                 final_average_weight=Decimal('150.00'),  # < 250g minimum clarias
             )
@@ -309,13 +379,34 @@ class TestProductionCycleService:
             'pond_identifier': 'Bassin Valid',
             'pond_surface_m2': Decimal('1000.00'),
             'start_date': date.today(),
-            'initial_count': 250000,  # 250 poissons/m² (< 300 max)
+            'initial_count': 10000,  # 10 poissons/m² (max en bassin)
             'initial_average_weight': Decimal('12.00'),
         }
 
         cycle = ProductionCycleService.create_cycle(farm_profile, cycle_data)
 
         assert cycle is not None
+        assert cycle.status == 'active'
+
+    def test_create_cycle_skips_density_validation_for_mixed_infrastructure_types(self):
+        """Vérifie qu'un cycle multi-unités ne dépend pas d'une densité globale legacy."""
+        farm_profile = FarmProfileFactory()
+
+        cycle_data = {
+            'cycle_name': 'Test Mixed Infrastructure',
+            'species': 'tilapia',
+            'pond_identifier': 'Cycle multi-unités',
+            'pond_surface_m2': Decimal('120.00'),
+            'pond_volume_m3': Decimal('3.00'),
+            'infrastructure_type': ['tank', 'pond'],
+            'start_date': date.today(),
+            'initial_count': 3600,
+            'initial_average_weight': Decimal('10.00'),
+        }
+
+        cycle = ProductionCycleService.create_cycle(farm_profile, cycle_data)
+
+        assert cycle.initial_count == 3600
         assert cycle.status == 'active'
 
     # =================== HELPERS ===================

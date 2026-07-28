@@ -4,6 +4,8 @@ import {
   logApiError,
   hasFieldError,
   getFieldErrorMessage,
+  getApiErrorMessage,
+  sanitizeUserFacingErrorMessage,
 } from '../errorParser';
 import logger from '../logger';
 
@@ -41,6 +43,8 @@ describe('utils/errorParser', () => {
       response: {
         status: 400,
         data: {
+          code: 'invalid',
+          status_code: 400,
           initial_count: ['Trop élevé'],
           non_field_errors: 'Erreur générale',
         },
@@ -49,16 +53,112 @@ describe('utils/errorParser', () => {
 
     expect(parsed.status).toBe(400);
     expect(parsed.message).toBe('Erreur de validation des données');
+    expect(parsed.code).toBe('invalid');
     expect(parsed.details).toEqual([
       { field: 'initial_count', messages: ['Trop élevé'] },
       { field: 'non_field_errors', messages: ['Erreur générale'] },
     ]);
   });
 
+  it('parseApiError ignore les metadonnees code et status_code des reponses DRF', () => {
+    const parsed = parseApiError({
+      response: {
+        status: 409,
+        data: {
+          code: 'sync_conflict',
+          status_code: 409,
+        },
+      },
+    });
+
+    expect(parsed.code).toBe('sync_conflict');
+    expect(parsed.details).toEqual([]);
+  });
+
+  it('parseApiError expose les champs imbriques des erreurs de lancement', () => {
+    const parsed = parseApiError({
+      response: {
+        status: 400,
+        data: {
+          cycle: {
+            initial_count: ['Assurez-vous que cette valeur est inférieure ou égale à 100000.'],
+          },
+        },
+      },
+    });
+
+    expect(parsed.details).toEqual([
+      {
+        field: 'cycle.initial_count',
+        messages: ['Assurez-vous que cette valeur est inférieure ou égale à 100000.'],
+      },
+    ]);
+    expect(formatErrorForDisplay(parsed)).toContain(
+      '• Nombre initial de poissons : Assurez-vous que cette valeur est inférieure ou égale à 100000.'
+    );
+  });
+
+  it('getApiErrorMessage extrait les formats DRF et legacy sans JSON brut', () => {
+    expect(getApiErrorMessage('Erreur déjà normalisée')).toBe('Erreur déjà normalisée');
+    expect(getApiErrorMessage({ response: { data: { detail: 'Cycle non trouvé' } } })).toBe('Cycle non trouvé');
+    expect(getApiErrorMessage({ response: { data: { error: 'Action impossible' } } })).toBe('Action impossible');
+    expect(getApiErrorMessage({ response: { status: 400, data: { initial_count: ['Trop élevé'] } } })).toBe(
+      'Erreur de validation des données\n\n• Nombre initial de poissons : Trop élevé'
+    );
+    expect(getApiErrorMessage({ response: { status: 400, data: { non_field_errors: ['Valeur incohérente'] } } })).toBe(
+      'Erreur de validation des données\n\n• Erreur générale : Valeur incohérente'
+    );
+  });
+
+  it('sanitizeUserFacingErrorMessage supprime les suffixes techniques visibles', () => {
+    expect(
+      sanitizeUserFacingErrorMessage("Aucun compte n'est associé à ce nom de connexion. 400 invalid")
+    ).toBe("Aucun compte n'est associé à ce nom de connexion.");
+    expect(sanitizeUserFacingErrorMessage('Identifiants invalides. 401 invalid')).toBe('Identifiants invalides.');
+    expect(sanitizeUserFacingErrorMessage('HTTP_400')).toBe('UNKNOWN_ERROR');
+    expect(sanitizeUserFacingErrorMessage('AUTH_NETWORK_ERROR')).toBe('AUTH_NETWORK_ERROR');
+    expect(sanitizeUserFacingErrorMessage('Erreur. HTTP_400')).toBe('Erreur.');
+    expect(sanitizeUserFacingErrorMessage('status_code: 400')).toBe('UNKNOWN_ERROR');
+    expect(sanitizeUserFacingErrorMessage('code: invalid')).toBe('UNKNOWN_ERROR');
+  });
+
+  it('sanitizeUserFacingErrorMessage preserve les messages métiers valides', () => {
+    expect(sanitizeUserFacingErrorMessage('Veuillez saisir le code')).toBe('Veuillez saisir le code');
+    expect(sanitizeUserFacingErrorMessage('Le code de confirmation est invalide')).toBe(
+      'Le code de confirmation est invalide'
+    );
+    expect(sanitizeUserFacingErrorMessage('La quantité minimale est 400')).toBe('La quantité minimale est 400');
+  });
+
+  it('getApiErrorMessage masque les erreurs purement techniques', () => {
+    expect(getApiErrorMessage('HTTP_400', 'Message générique')).toBe('Message générique');
+    expect(
+      getApiErrorMessage({
+        response: {
+          status: 400,
+          data: { detail: "Aucun compte n'est associé à ce nom de connexion. 400 invalid" },
+        },
+      })
+    ).toBe("Aucun compte n'est associé à ce nom de connexion.");
+  });
+
+  it('parseApiError garde un message métier 400 sans suffixe technique', () => {
+    const parsed = parseApiError({
+      response: {
+        status: 400,
+        data: { detail: "Aucun compte n'est associé à ce nom de connexion. 400 invalid" },
+      },
+    });
+
+    expect(parsed.message).toBe("Aucun compte n'est associé à ce nom de connexion.");
+    expect(parsed.details).toEqual([]);
+  });
+
   it('parseApiError couvre les statuts 401/403/404/500+/default', () => {
     expect(parseApiError({ response: { status: 401, data: {} } }).message).toContain('Session expirée');
     expect(parseApiError({ response: { status: 403, data: {} } }).message).toContain('permissions');
     expect(parseApiError({ response: { status: 404, data: {} } }).message).toContain('Ressource non trouvée');
+    expect(parseApiError({ response: { status: 409, data: {} } }).message).toContain('Conflit de synchronisation');
     expect(parseApiError({ response: { status: 503, data: {} } }).message).toContain('Erreur serveur');
 
     const defaultError = parseApiError({ response: { status: 418, data: { detail: 'Teapot' } } });
@@ -119,7 +219,7 @@ describe('utils/errorParser', () => {
       'Création cycle'
     );
 
-    expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('API Error - Création cycle'));
+    expect(mockLogger.log).toHaveBeenCalledWith(expect.stringContaining('API Error: Création cycle'));
     expect(mockLogger.log).toHaveBeenCalledWith('Status:', 400);
     expect(mockLogger.log).toHaveBeenCalledWith('Validation Errors:');
   });

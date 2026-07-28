@@ -1,6 +1,5 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { TouchableOpacity } from 'react-native';
 import { MessageBubble } from '../MessageBubble';
 import type { Message } from '../../types/chat';
 
@@ -71,7 +70,7 @@ describe('features/chat/components/MessageBubble', () => {
 
   it('gère les médias image/video et callback image', () => {
     const onImagePress = jest.fn();
-    const { UNSAFE_getByType, getByText, queryByText, rerender } = render(
+    const { getByLabelText, getByText, queryByText, rerender } = render(
       <MessageBubble
         message={{
           ...BASE_MESSAGE,
@@ -82,7 +81,10 @@ describe('features/chat/components/MessageBubble', () => {
       />
     );
 
-    fireEvent.press(UNSAFE_getByType(TouchableOpacity));
+    const imageButton = getByLabelText('chatOpenImage');
+    expect(imageButton.props.accessibilityRole).toBe('button');
+    expect(imageButton.props.accessibilityHint).toBe('chatOpenImageHint');
+    fireEvent.press(imageButton);
     expect(onImagePress).toHaveBeenCalledWith('https://cdn.example.com/photo.jpg');
 
     rerender(

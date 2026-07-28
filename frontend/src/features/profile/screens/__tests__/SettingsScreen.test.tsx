@@ -79,7 +79,7 @@ describe('features/profile/screens/SettingsScreen', () => {
     expect(getByText('Jean Dupont')).toBeTruthy();
     expect(getByText('+237670000000')).toBeTruthy();
 
-    fireEvent.press(getByText('English'));
+    fireEvent.press(getByText('languageEnglish'));
 
     await waitFor(() => {
       expect(mockI18n.changeLanguage).toHaveBeenCalledWith('en');
@@ -88,16 +88,34 @@ describe('features/profile/screens/SettingsScreen', () => {
     });
   });
 
+  it('rollback la langue sur erreur et bloque la double action', async () => {
+    let rejectUpdate: (reason?: unknown) => void = () => undefined;
+    mockUpdateProfile.mockReturnValue(new Promise((_resolve, reject) => { rejectUpdate = reject; }));
+    const screen = render(<SettingsScreen />);
+
+    fireEvent.press(screen.getByText('languageEnglish'));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByText('languageEnglish'));
+    expect(mockUpdateProfile).toHaveBeenCalledTimes(1);
+
+    rejectUpdate(new Error('network'));
+    await waitFor(() => {
+      expect(mockI18n.changeLanguage).toHaveBeenLastCalledWith('fr');
+      expect(SecureStore.setItemAsync).toHaveBeenLastCalledWith(STORAGE_KEYS.LANGUAGE, 'fr');
+      expect(Alert.alert).toHaveBeenCalledWith('error', 'languageChangeError');
+    });
+  });
+
   it('declenche logout quand l utilisateur confirme', () => {
     const { getByText } = render(<SettingsScreen />);
 
     fireEvent.press(getByText('disconnect'));
 
-    const logoutAlertCall = (Alert.alert as jest.Mock).mock.calls.find((call) => call[0] === 'Déconnexion');
+    const logoutAlertCall = (Alert.alert as jest.Mock).mock.calls.find((call) => call[0] === 'logoutConfirm');
     expect(logoutAlertCall).toBeTruthy();
 
     const actions = logoutAlertCall?.[2] as Array<{ text: string; onPress?: () => void }>;
-    const confirmAction = actions.find((a) => a.text === 'Déconnexion');
+    const confirmAction = actions.find((a) => a.text === 'logoutConfirm');
     expect(confirmAction?.onPress).toBeTruthy();
 
     confirmAction?.onPress?.();

@@ -1,5 +1,5 @@
 """
-Constantes métier pour le module commerce MAVECAM AquaCare.
+Constantes métier pour le module commerce AquaCare.
 """
 from django.utils.translation import gettext_lazy as _
 
@@ -26,15 +26,15 @@ PHASE_CHOICES = [
 
 # Marques d'aliments
 BRAND_CHOICES = [
-    ('aller_aqua', _('Aller Aqua')),
     ('dibaq', _('DIBAQ')),
 ]
 
 # Statuts de commande
 ORDER_STATUS_CHOICES = [
     ('confirmed', _('Commandée')),
-    ('delivered', _('Livrée')),
-    ('received', _('Reçue')),
+    ('delivered', _('Livrée — confirmation attendue')),
+    ('ready_for_pickup', _('Prête au retrait')),
+    ('received', _('Réception confirmée')),
 ]
 
 # Méthodes de livraison
@@ -43,7 +43,7 @@ DELIVERY_METHOD_CHOICES = [
     ('pickup', _('Retrait en magasin')),
 ]
 
-# Points de retrait MAVECAM
+# Points de retrait AquaCare
 PICKUP_LOCATION_CHOICES = [
     ('ndokoti', _('Marché Ndokoti')),
     ('ndogpasi', _('Marché Ndogpasi')),
@@ -56,24 +56,24 @@ DELIVERY_FEE_FREE_THRESHOLD_BAGS = 20  # Sacs minimum pour livraison gratuite à
 
 # ===== CONSTANTES SIMULATION CYCLE =====
 
-# Taux de survie standard MAVECAM
-SURVIVAL_RATE_DEFAULT = 0.85  # 85% survie
+# Taux de survie standard AquaCare
+SURVIVAL_RATE_DEFAULT = 0.95  # 95% survie avec accompagnement AquaCare
 
-# FCR (Feed Conversion Ratio) cible MAVECAM
+# FCR (Feed Conversion Ratio) cible AquaCare
 FCR_TARGET_TILAPIA = 1.8  # kg aliment / kg gain de poids
 FCR_TARGET_CATFISH = 1.9
 
 # Prix de vente moyen au marché camerounais (FCFA/kg)
-MARKET_PRICE_PER_KG_TILAPIA = 2500
-MARKET_PRICE_PER_KG_CATFISH = 2800
+MARKET_PRICE_PER_KG_TILAPIA = 2800
+MARKET_PRICE_PER_KG_CATFISH = 2000
 
-# Durée standard des cycles (jours)
-CYCLE_DURATION_DEFAULT_TILAPIA = 120
-CYCLE_DURATION_DEFAULT_CATFISH = 150
+# Durée standard des cycles (jours) — validé DT AquaCare
+CYCLE_DURATION_DEFAULT_TILAPIA = 180
+CYCLE_DURATION_DEFAULT_CATFISH = 120
 
-# Poids standards (grammes)
+# Poids standards (grammes) — validé DT AquaCare
 INITIAL_WEIGHT_DEFAULT = 5  # Alevins standards
-TARGET_WEIGHT_TILAPIA_DEFAULT = 300  # Taille commerciale
+TARGET_WEIGHT_TILAPIA_DEFAULT = 350  # Taille commerciale marché local Cameroun
 TARGET_WEIGHT_CATFISH_DEFAULT = 400
 
 # Taux d'alimentation selon poids (% biomasse)

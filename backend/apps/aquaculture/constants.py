@@ -7,8 +7,14 @@ SAMPLING_TOLERANCE = Decimal('0.10')  # 10%
 # Default feed price (FCFA/kg) used when FarmProfile has no custom price
 DEFAULT_FEED_PRICE_PER_KG = Decimal('1250')
 
-# Maximum initial stocking density (fish per m²)
-MAX_INITIAL_DENSITY_PER_M2 = 500
+# Maximum initial stocking density (offline-first shared rules)
+# Keep these values aligned with frontend `constants/aquaculture.ts`.
+MAX_STOCKING_DENSITY_POND_PER_M2 = 10
+MAX_STOCKING_DENSITY_TANK_PER_M3 = 300
+
+# Shared upper bound for a production cycle. Keep aligned with the frontend
+# `INPUT_LIMITS.fishCount` value.
+MAX_INITIAL_FISH_COUNT = 1_000_000
 
 # Water temperature valid range for log entries (°C)
 LOG_TEMPERATURE_MIN = 15
@@ -46,7 +52,7 @@ GROWTH_STAGES = [
 NUTRITIONAL_GUIDE_SOURCES = [
     ('DIBAQ', 'DIBAQ'),
     ('ALLER_AQUA', 'Aller Aqua'),
-    ('MAVECAM', 'MAVECAM'),
+    ('AquaCare', 'AquaCare'),
 ]
 
 CYCLE_STATUS_CHOICES = [
@@ -133,21 +139,37 @@ PERFORMANCE_THRESHOLDS = {
     'fcr_poor': 2.5,
 }
 
-# ===== PARAMÈTRES ÉCONOMIQUES CYCLE =====
+# ===== PARAMÈTRES ÉCONOMIQUES ET SIMULATION =====
+
+# Default survival rate validated by AquaCare experts for initial setup/simulation.
+DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = Decimal('95')
+
+# Technical pause between two production cycles (cleaning, resting, restart).
+TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS = 14
+
+# AquaCare service fee used in production simulations and projections.
+AQUACARE_FEE_PER_KG = Decimal('20')
+
+# Other operating charges are now modeled as a percentage of estimated revenue.
+DEFAULT_OTHER_COSTS_RATE_PCT = Decimal('5')
 
 ECONOMIC_DEFAULTS_BY_SPECIES = {
     'tilapia': {
-        'target_harvest_weight_g': Decimal('300'),
-        'planned_cycle_duration_days': 120,
-        'planned_selling_price_per_kg_fcfa': Decimal('1800'),
+        'target_harvest_weight_g': Decimal('350'),
+        'planned_cycle_duration_days': 180,
+        'planned_selling_price_per_kg_fcfa': Decimal('2800'),
     },
     'clarias': {
         'target_harvest_weight_g': Decimal('400'),
-        'planned_cycle_duration_days': 150,
+        'planned_cycle_duration_days': 120,
         'planned_selling_price_per_kg_fcfa': Decimal('2000'),
     },
 }
 
-DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = Decimal('85')
+DEFAULT_INITIAL_AVERAGE_WEIGHT_G_BY_SPECIES = {
+    'tilapia': Decimal('5'),
+    'clarias': Decimal('5'),
+}
+
 DEFAULT_FINGERLINGS_COST_FCFA = Decimal('0')
 DEFAULT_OTHER_OPERATIONAL_COSTS_FCFA = Decimal('0')

@@ -1,5 +1,5 @@
 """
-Service de gestion des commandes MAVECAM AquaCare.
+Service de gestion des commandes AquaCare.
 
 Architecture Clean : Service stateless coordonnant les opérations commande.
 Gère création, validation, calculs automatiques et notifications.
@@ -12,16 +12,20 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, TypedDict
 
+from aquaculture.services.cycle_store_application_service import CycleStoreApplicationService
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count, QuerySet, Sum
 from django.utils import timezone
 
+from ..constants import PICKUP_LOCATION_CHOICES
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
-from ..domain.exceptions import InvalidOrderError
+from ..domain.exceptions import DeliveryAddressIncompleteError, InvalidOrderError
 from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
 from ..models import Order, OrderItem
 from .base import BaseCommerceService
 from .product_service import ProductService
+from .production_cycle_gateway import ProductionCycleAccessError, ProductionCycleGateway
 
 if TYPE_CHECKING:
     from accounts.models import User
@@ -84,9 +88,17 @@ class CalculatedOrderAmounts:
     total: Decimal
 
 
+@dataclass(frozen=True)
+class OperatorOrderTransitionResult:
+    """Résultat explicite d'une transition opérateur, y compris lors d'un replay."""
+
+    order: Order
+    transitioned: bool
+
+
 class OrderService(BaseCommerceService):
     """
-    Service de gestion des commandes MAVECAM.
+    Service de gestion des commandes AquaCare.
 
     Responsabilités :
     - Création commande avec validation complète
@@ -103,6 +115,7 @@ class OrderService(BaseCommerceService):
         items_data: list[OrderItemPayload],
         delivery_method: DeliveryMethod,
         pickup_location: str | None = None,
+        production_cycle_id: str | None = None,
         client_uuid: str | None = None,
         created_offline: bool = False,
     ) -> Order:
@@ -112,7 +125,7 @@ class OrderService(BaseCommerceService):
         Workflow :
         1. Validation données (items, livraison)
         2. Récupération produits et calcul sous-total
-        3. Calcul frais de livraison (règles MAVECAM)
+        3. Calcul frais de livraison (règles AquaCare)
         4. Snapshot adresse utilisateur
         5. Création Order + OrderItems
         6. Notification utilisateur
@@ -122,6 +135,7 @@ class OrderService(BaseCommerceService):
             items_data: Liste de dicts [{'product_id': UUID, 'quantity': int}, ...]
             delivery_method: 'home' ou 'pickup'
             pickup_location: 'ndokoti' ou 'ndogpasi' (si pickup)
+            production_cycle_id: UUID cycle aquaculture optionnel
             client_uuid: UUID client pour déduplication sync offline
             created_offline: True si commande créée en mode offline
 
@@ -169,12 +183,15 @@ class OrderService(BaseCommerceService):
             region=OrderService._normalize_region(user.region),
             prepared_items=prepared_items,
         )
+        production_cycle = OrderService._resolve_order_cycle(user, production_cycle_id)
 
         delivery_address_data = OrderService._build_delivery_address_snapshot(user)
+        OrderService._validate_delivery_snapshot(delivery_method, delivery_address_data, user)
         order = OrderService._create_order_with_retry(
             user=user,
             delivery_method=delivery_method,
             pickup_location=pickup_location or '',
+            production_cycle=production_cycle,
             client_uuid=client_uuid,
             created_offline=created_offline,
             delivery_address_data=delivery_address_data,
@@ -194,6 +211,19 @@ class OrderService(BaseCommerceService):
         })
 
         return Order.objects.with_details().get(pk=order.pk)
+
+    @staticmethod
+    def _resolve_order_cycle(user: User, production_cycle_id: str | None):
+        """Valide et retourne le cycle aquaculture si fourni."""
+        if not production_cycle_id:
+            return None
+        try:
+            return ProductionCycleGateway.get_user_cycle(
+                user_id=user.id,
+                cycle_id=production_cycle_id,
+            )
+        except ProductionCycleAccessError as exc:
+            raise InvalidOrderError("Cycle de production introuvable ou inaccessible") from exc
 
     @staticmethod
     def _get_existing_order_for_user(
@@ -274,10 +304,34 @@ class OrderService(BaseCommerceService):
                 unit_price=line.unit_price,
                 quantity=line.quantity,
                 line_total=line.line_total,
+                product_brand_snapshot=line.product.brand,
+                product_species_snapshot=line.product.species,
+                product_phase_snapshot=line.product.phase or '',
+                product_pellet_size_mm_snapshot=line.product.pellet_size_mm,
+                product_package_weight_kg_snapshot=line.product.package_weight_kg,
             )
             for line in prepared_items.lines
         ]
         OrderItem.objects.bulk_create(order_items)
+
+    @staticmethod
+    def _validate_delivery_snapshot(delivery_method, delivery_address_data, user):
+        if delivery_method != 'home':
+            return
+
+        required_fields = {
+            'delivery_name': delivery_address_data.get('delivery_name'),
+            'delivery_phone': delivery_address_data.get('delivery_phone'),
+            'delivery_region': delivery_address_data.get('delivery_region'),
+            'delivery_city': delivery_address_data.get('delivery_city'),
+            'neighborhood': user.neighborhood,
+        }
+        missing_fields = [
+            field for field, value in required_fields.items()
+            if not str(value or '').strip()
+        ]
+        if missing_fields:
+            raise DeliveryAddressIncompleteError(missing_fields)
 
     @staticmethod
     def _notify_order_created(order: Order) -> None:
@@ -329,6 +383,7 @@ class OrderService(BaseCommerceService):
         user: User,
         delivery_method: DeliveryMethod,
         pickup_location: str,
+        production_cycle: object | None,
         client_uuid: str | None,
         created_offline: bool,
         delivery_address_data: DeliveryAddressSnapshot,
@@ -350,11 +405,24 @@ class OrderService(BaseCommerceService):
                     status='confirmed',  # Statut initial : commandée
                     delivery_method=delivery_method,
                     pickup_location=pickup_location,
+                    production_cycle=production_cycle,
                     client_uuid=client_uuid,
                     created_offline=created_offline,
                     synced_at=None if created_offline else timezone.now(),
                     # Snapshot adresse
                     **delivery_address_data,
+                    farm_name_snapshot=user.farm_profile.farm_name or '',
+                    document_schema_version='1.0',
+                    issuer_snapshot=dict(settings.ORDER_DOCUMENT_ISSUER),
+                    fulfilment_partner_snapshot=dict(settings.ORDER_DOCUMENT_FULFILMENT_PARTNER),
+                    production_cycle_name_snapshot=(production_cycle.cycle_name if production_cycle else ''),
+                    pickup_location_display_fr_snapshot=(
+                        dict(PICKUP_LOCATION_CHOICES).get(pickup_location, '') if pickup_location else ''
+                    ),
+                    pickup_location_display_en_snapshot=(
+                        {'ndokoti': 'Ndokoti Market', 'ndogpasi': 'Ndogpasi Market'}.get(pickup_location, '')
+                        if pickup_location else ''
+                    ),
                     # Montants
                     subtotal=subtotal,
                     delivery_fee=delivery_fee,
@@ -399,11 +467,118 @@ class OrderService(BaseCommerceService):
             metadata={
                 'order_id': str(order.id),
                 'order_number': order.order_number,
-                'total': float(order.total)
+                'total': float(order.total),
+                'production_cycle_id': str(order.production_cycle_id) if order.production_cycle_id else None,
             },
             channels=['in_app', 'email'],
             send_immediately=True
         )
+
+    @staticmethod
+    def _is_commerce_operator(user: User) -> bool:
+        return bool(
+            user.is_superuser
+            or user.groups.filter(name='aquacare_commerce').exists()
+        )
+
+    @staticmethod
+    def _notify_order_ready_for_customer_confirmation(order: Order) -> None:
+        """Notifie le client après commit sans invalider la transition en cas de panne."""
+        try:
+            from notifications.services import NotificationService
+
+            language = getattr(order.user, 'language_preference', 'fr')
+            is_english = str(language).lower().startswith('en')
+            metadata = {
+                'order_id': str(order.id),
+                'order_number': order.order_number,
+                'delivery_method': order.delivery_method,
+                'pickup_location': order.pickup_location or None,
+                'production_cycle_id': (
+                    str(order.production_cycle_id) if order.production_cycle_id else None
+                ),
+                'action': 'confirm_receipt',
+            }
+            if order.delivery_method == 'home':
+                title = 'Order delivered' if is_english else 'Commande livrée'
+                message = (
+                    f'Order {order.order_number} was marked as delivered. '
+                    'Please confirm that you received it.'
+                    if is_english
+                    else f'La commande {order.order_number} a été déclarée livrée. '
+                    'Veuillez confirmer sa réception.'
+                )
+                notification_type = 'order_delivered'
+            else:
+                pickup_location = (
+                    order.pickup_location_display_en_snapshot
+                    if is_english
+                    else order.pickup_location_display_fr_snapshot
+                ) or order.get_pickup_location_display()
+                title = 'Order ready for pickup' if is_english else 'Commande prête au retrait'
+                message = (
+                    f'Order {order.order_number} is ready at {pickup_location}. '
+                    'Please confirm after collecting it.'
+                    if is_english
+                    else f'La commande {order.order_number} est prête à {pickup_location}. '
+                    'Veuillez confirmer après son retrait.'
+                )
+                notification_type = 'order_ready_for_pickup'
+
+            NotificationService.create_notification(
+                user=order.user,
+                notification_type=notification_type,
+                title=title,
+                message=message,
+                content_object=order,
+                metadata=metadata,
+                channels=['in_app', 'push'],
+                send_immediately=True,
+            )
+        except Exception:
+            logger.exception(
+                'Order fulfilment notification failed after transition, order=%s',
+                order.id,
+            )
+
+    @staticmethod
+    @transaction.atomic
+    def mark_order_ready_for_customer_confirmation(
+        order: Order,
+        operator: User,
+    ) -> OperatorOrderTransitionResult:
+        """Effectue la transition logistique home ou pickup de façon idempotente."""
+        if not OrderService._is_commerce_operator(operator):
+            raise InvalidOrderError("Vous n'êtes pas autorisé à effectuer cette action")
+
+        # Lock only the order row. ``with_details()`` includes nullable outer joins
+        # (cycle and audit actors), which PostgreSQL cannot combine with FOR UPDATE.
+        locked_order = Order.objects.select_for_update().get(pk=order.pk)
+        expected_status = 'delivered' if locked_order.delivery_method == 'home' else 'ready_for_pickup'
+
+        if locked_order.status == expected_status:
+            return OperatorOrderTransitionResult(order=locked_order, transitioned=False)
+        if locked_order.status == 'received':
+            raise InvalidOrderError('Une commande reçue ne peut plus être modifiée')
+        if locked_order.status != 'confirmed':
+            raise InvalidOrderError('Cette transition logistique est incohérente avec la commande')
+
+        transitioned_at = timezone.now()
+        locked_order.status = expected_status
+        update_fields = ['status', 'updated_at']
+        if locked_order.delivery_method == 'home':
+            locked_order.delivered_at = transitioned_at
+            locked_order.delivered_by = operator
+            update_fields.extend(['delivered_at', 'delivered_by'])
+        else:
+            locked_order.ready_for_pickup_at = transitioned_at
+            locked_order.ready_for_pickup_by = operator
+            update_fields.extend(['ready_for_pickup_at', 'ready_for_pickup_by'])
+        locked_order.save(update_fields=update_fields)
+        transaction.on_commit(
+            lambda: OrderService._notify_order_ready_for_customer_confirmation(locked_order)
+        )
+        return OperatorOrderTransitionResult(order=locked_order, transitioned=True)
 
     @staticmethod
     @transaction.atomic
@@ -415,19 +590,34 @@ class OrderService(BaseCommerceService):
         - La commande doit appartenir à l'utilisateur.
         - Seule une commande 'delivered' peut passer à 'received'.
         """
-        if order.user_id != user.id:
+        # Keep the row lock scoped to the order itself: PostgreSQL rejects
+        # FOR UPDATE when ``with_details()`` adds nullable outer joins.
+        locked_order = Order.objects.select_for_update().get(pk=order.pk)
+
+        if locked_order.user_id != user.id:
             raise InvalidOrderError("Vous n'avez pas accès à cette commande")
 
-        if order.status == 'received':
-            raise InvalidOrderError("Cette commande est déjà confirmée comme reçue")
+        if locked_order.status == 'received':
+            CycleStoreApplicationService.import_received_order(locked_order)
+            return Order.objects.with_details().get(pk=locked_order.pk)
 
-        if order.status != 'delivered':
-            raise InvalidOrderError("Seules les commandes livrées peuvent être confirmées")
+        allowed_status = (
+            locked_order.delivery_method == 'home' and locked_order.status == 'delivered'
+        ) or (
+            locked_order.delivery_method == 'pickup'
+            and locked_order.status == 'ready_for_pickup'
+        )
+        if not allowed_status:
+            raise InvalidOrderError(
+                "Cette commande n'est pas prête pour la confirmation du client"
+            )
 
-        order.status = 'received'
-        order.save(update_fields=['status', 'updated_at'])
+        locked_order.status = 'received'
+        locked_order.received_at = timezone.now()
+        locked_order.save(update_fields=['status', 'received_at', 'updated_at'])
+        CycleStoreApplicationService.import_received_order(locked_order)
 
-        return Order.objects.with_details().get(pk=order.pk)
+        return Order.objects.with_details().get(pk=locked_order.pk)
 
     @staticmethod
     def generate_order_number() -> str:
@@ -473,6 +663,7 @@ class OrderService(BaseCommerceService):
         user: User,
         status: str | None = None,
         limit: int | None = None,
+        production_cycle_id: str | None = None,
     ) -> QuerySet[Order]:
         """
         Récupère les commandes d'un utilisateur.
@@ -490,7 +681,10 @@ class OrderService(BaseCommerceService):
             >>> orders.count()
             5
         """
-        queryset = Order.objects.with_details().filter(user=user)
+        queryset = OrderService._user_orders_queryset(
+            user=user,
+            production_cycle_id=production_cycle_id,
+        ).with_details()
 
         if status:
             queryset = queryset.filter(status=status)
@@ -500,6 +694,17 @@ class OrderService(BaseCommerceService):
         if limit:
             queryset = queryset[:limit]
 
+        return queryset
+
+    @staticmethod
+    def _user_orders_queryset(
+        user: User,
+        production_cycle_id: str | None = None,
+    ) -> QuerySet[Order]:
+        """Construit le périmètre commun de la liste et des statistiques."""
+        queryset = Order.objects.filter(user=user)
+        if production_cycle_id:
+            queryset = queryset.filter(production_cycle_id=production_cycle_id)
         return queryset
 
     @staticmethod
@@ -525,7 +730,10 @@ class OrderService(BaseCommerceService):
         return Order.objects.with_details().get(id=order_id, user=user)
 
     @staticmethod
-    def get_order_statistics(user: User) -> OrderStatistics:
+    def get_order_statistics(
+        user: User,
+        production_cycle_id: str | None = None,
+    ) -> OrderStatistics:
         """
         Calcule statistiques commandes pour un utilisateur.
 
@@ -546,23 +754,30 @@ class OrderService(BaseCommerceService):
                 'last_order_date': datetime(...)
             }
         """
-        orders = Order.objects.filter(user=user)
+        orders = OrderService._user_orders_queryset(
+            user=user,
+            production_cycle_id=production_cycle_id,
+        )
 
-        aggregates = orders.aggregate(
+        order_aggregates = orders.aggregate(
             total_orders=Count('id'),
             total_spent=Sum('total'),
-            total_bags=Sum('items__quantity')
+        )
+        item_aggregates = OrderItem.objects.filter(
+            order__in=orders,
+        ).aggregate(
+            total_bags=Sum('quantity'),
         )
 
         last_order = orders.order_by('-created_at').first()
 
-        total_orders = aggregates['total_orders'] or 0
-        total_spent = aggregates['total_spent'] or Decimal('0')
+        total_orders = order_aggregates['total_orders'] or 0
+        total_spent = order_aggregates['total_spent'] or Decimal('0')
 
         return {
             'total_orders': total_orders,
             'total_spent': total_spent,
-            'total_bags_ordered': aggregates['total_bags'] or 0,
+            'total_bags_ordered': item_aggregates['total_bags'] or 0,
             'average_order_value': total_spent / total_orders if total_orders > 0 else Decimal('0'),
             'last_order_date': last_order.created_at if last_order else None,
             'last_order_number': last_order.order_number if last_order else None

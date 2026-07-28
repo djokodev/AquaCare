@@ -1,5 +1,5 @@
 """
-Calculateurs métier pour le module commerce MAVECAM AquaCare.
+Calculateurs métier pour le module commerce AquaCare.
 
 Architecture Clean : Logique de calcul pure, sans dépendances Django.
 Tous les calculs sont testables unitairement sans base de données.
@@ -11,7 +11,7 @@ from ..constants import DELIVERY_FEE_FREE_THRESHOLD_BAGS, DELIVERY_FEE_STANDARD,
 
 class DeliveryFeeCalculator:
     """
-    Calculateur des frais de livraison selon les règles MAVECAM.
+    Calculateur des frais de livraison selon les règles AquaCare.
 
     Règles métier :
     1. Retrait en magasin (pickup) = 0 FCFA

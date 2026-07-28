@@ -1,15 +1,19 @@
 import React, { useCallback } from 'react';
-import { FlatList, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AppText, Badge, SelectableCard } from '@/components/ui';
+import { formatCycleDisplayName } from '@/features/aquaculture/utils/cycleDisplay';
+import { colors, spacing } from '@/theme';
 import { ProductionCycle } from '@/types/aquaculture';
+import { formatPercentage } from '@/utils';
 
 interface CyclePickerProps {
   cycles: ProductionCycle[];
   selectedCycleId: string | null;
   onSelectCycle: (cycleId: string) => void;
+  rankingCycles?: ProductionCycle[];
 }
 
 const getDaysActive = (startDate: string): number => {
@@ -25,66 +29,74 @@ const formatBiomass = (cycle: ProductionCycle): string => {
 
 const formatSurvivalRate = (cycle: ProductionCycle): string => {
   const rate = Number(cycle.survival_rate ?? 0);
-  return Number.isFinite(rate) ? `${rate.toFixed(0)}%` : '-';
+  return Number.isFinite(rate) ? formatPercentage(rate) : '-';
 };
 
-function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProps) {
+function CyclePicker({ cycles, selectedCycleId, onSelectCycle, rankingCycles }: CyclePickerProps) {
   const { t } = useTranslation();
+  const cycleRankingSource = rankingCycles && rankingCycles.length > 0 ? rankingCycles : cycles;
 
   const renderCycleItem = useCallback(
     ({ item: cycle }: { item: ProductionCycle }) => {
       const isSelected = selectedCycleId === cycle.id;
       const daysActive = getDaysActive(cycle.start_date);
       const speciesLabel = cycle.species === 'clarias' ? t('catfish') : t('tilapia');
-      const speciesIcon: keyof typeof Ionicons.glyphMap =
-        cycle.species === 'clarias' ? 'fish' : 'fish-outline';
+      const displayName = formatCycleDisplayName(cycle, cycleRankingSource);
 
       return (
-        <TouchableOpacity
-          className={`bg-white rounded-xl p-4 mb-3 border ${
-            isSelected ? 'border-mavecam-primary bg-[#f0fdf4]' : 'border-gray-200'
-          }`}
+        <SelectableCard
+          accessibilityLabel={displayName}
+          testID={`cycle-picker-${cycle.id}`}
+          selected={isSelected}
           onPress={() => onSelectCycle(cycle.id)}
+          style={styles.cycleCard}
         >
-          <View className="flex-row items-start justify-between">
-            <View className="flex-1 mr-3">
-              <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
-
-              <View className="flex-row items-center mb-2">
-                <Ionicons name={speciesIcon} size={14} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                <Text className="text-sm text-gray-light ml-1">
-                  {speciesLabel} - {cycle.pond_identifier}
-                </Text>
-              </View>
-
-              <View className="flex-row flex-wrap gap-x-4 gap-y-1">
-                <View className="flex-row items-center">
-                  <Ionicons name="time-outline" size={12} color={MAVECAM_COLORS.GRAY_LIGHT} />
-                  <Text className="text-xs text-gray-light ml-1">
-                    {daysActive} {t('days')}
-                  </Text>
-                </View>
-                <View className="flex-row items-center">
-                  <Ionicons name="scale-outline" size={12} color={MAVECAM_COLORS.GRAY_LIGHT} />
-                  <Text className="text-xs text-gray-light ml-1">{formatBiomass(cycle)} kg</Text>
-                </View>
-                <View className="flex-row items-center">
-                  <Ionicons name="trending-up-outline" size={12} color={MAVECAM_COLORS.GRAY_LIGHT} />
-                  <Text className="text-xs text-gray-light ml-1">
-                    {formatSurvivalRate(cycle)} {t('survivalRateShort', { defaultValue: 'survie' })}
-                  </Text>
-                </View>
+          <View style={styles.headerRow}>
+            <View style={styles.titleContainer}>
+              <AppText variant="bodyStrong" numberOfLines={2}>
+                {displayName}
+              </AppText>
+              <View style={styles.metadataRow}>
+                <Badge label={speciesLabel} tone="brand" />
+                <AppText variant="caption" color="muted" numberOfLines={1}>
+                  {cycle.pond_identifier}
+                </AppText>
               </View>
             </View>
-
-            {isSelected && (
-              <Ionicons name="checkmark-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            )}
+            {isSelected ? (
+              <Ionicons
+                name="checkmark-circle"
+                size={24}
+                color={colors.brand.primary}
+                accessibilityLabel={t('selected')}
+              />
+            ) : null}
           </View>
-        </TouchableOpacity>
+
+          <View style={styles.metricsRow}>
+            <View style={styles.metric}>
+              <Ionicons name="time-outline" size={14} color={colors.text.muted} />
+              <AppText variant="caption" color="muted">
+                {daysActive} {t('days')}
+              </AppText>
+            </View>
+            <View style={styles.metric}>
+              <Ionicons name="scale-outline" size={14} color={colors.text.muted} />
+              <AppText variant="caption" color="muted">
+                {formatBiomass(cycle)} {t('kg')}
+              </AppText>
+            </View>
+            <View style={styles.metric}>
+              <Ionicons name="trending-up-outline" size={14} color={colors.text.muted} />
+              <AppText variant="caption" color="muted">
+                {formatSurvivalRate(cycle)} {t('survivalRateShort')}
+              </AppText>
+            </View>
+          </View>
+        </SelectableCard>
       );
     },
-    [onSelectCycle, selectedCycleId, t]
+    [cycleRankingSource, onSelectCycle, selectedCycleId, t],
   );
 
   return (
@@ -101,5 +113,14 @@ function CyclePicker({ cycles, selectedCycleId, onSelectCycle }: CyclePickerProp
     />
   );
 }
+
+const styles = StyleSheet.create({
+  cycleCard: { marginBottom: spacing[3], gap: spacing[3] },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[2] },
+  titleContainer: { flex: 1 },
+  metadataRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginTop: spacing[1] },
+  metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3] },
+  metric: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+});
 
 export default React.memo(CyclePicker);

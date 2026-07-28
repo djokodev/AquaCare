@@ -1,35 +1,30 @@
 ﻿import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-// Couleurs MAVECAM selon spÃ©cifications
-const MAVECAM_COLORS = {
-  GREEN_PRIMARY: '#059669',
-  GREEN_LIGHT: '#10b981',
-  GREEN_DARK: '#047857',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  BLUE: '#2563eb',
-  SUCCESS: '#059669',
-  WARNING: '#f59e0b',
-  ERROR: '#dc2626',
-  INFO: '#0ea5e9',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-};
-
+import { colors } from '@/theme';
 import { useNotificationsPolling } from '@/features/notifications/hooks/useNotificationsPolling';
 import DashboardScreen from '@/features/main/screens/DashboardScreen';
+import FarmMapScreen from '@/features/profile/screens/FarmMapScreen';
 import FarmProfileScreen from '@/features/profile/screens/FarmProfileScreen';
 import ProfileScreen from '@/features/profile/screens/ProfileScreen';
 import SettingsScreen from '@/features/profile/screens/SettingsScreen';
+import DesignSystemGalleryScreen from '@/features/dev/screens/DesignSystemGalleryScreen';
 
 // Aquaculture Screens
+import CycleSimulationScreen from '@/features/aquaculture/screens/CycleSimulationScreen';
+import CreateFarmScreen from '@/features/aquaculture/screens/CreateFarmScreen';
+import ProductionUnitOverviewScreen from '@/features/aquaculture/screens/ProductionUnitOverviewScreen';
+import ProductionUnitsHubScreen from '@/features/aquaculture/screens/ProductionUnitsHubScreen';
+import type { FarmSetupFormState } from '@/features/aquaculture/utils/farmSetupForm';
+import PostHarvestConsolidationScreen from '@/features/aquaculture/screens/PostHarvestConsolidationScreen';
 import CycleHistoryScreen from '@/features/aquaculture/screens/CycleHistoryScreen';
 import CycleSessionEntryScreen from '@/features/aquaculture/screens/CycleSessionEntryScreen';
 import DailyLogHistoryScreen from '@/features/aquaculture/screens/DailyLogHistoryScreen';
+import DailyLogDetailScreen from '@/features/aquaculture/screens/DailyLogDetailScreen';
 import DailyLogScreen from '@/features/aquaculture/screens/DailyLogScreen';
 import FeedingPlanScreen from '@/features/aquaculture/screens/FeedingPlanScreen';
 import NewCycleScreen from '@/features/aquaculture/screens/NewCycleScreen';
@@ -38,6 +33,10 @@ import ReportDetailScreen from '@/features/aquaculture/screens/ReportDetailScree
 import ReportsScreen from '@/features/aquaculture/screens/ReportsScreen';
 import SanitaryLogScreen from '@/features/aquaculture/screens/SanitaryLogScreen';
 import StatisticsScreen from '@/features/aquaculture/screens/StatisticsScreen';
+import StoreScreen from '@/features/aquaculture/screens/StoreScreen';
+import CalibrationTanksScreen from '@/features/aquaculture/screens/CalibrationTanksScreen';
+import CalibrationTankDetailScreen from '@/features/aquaculture/screens/CalibrationTankDetailScreen';
+import CalibrateCycleScreen from '@/features/aquaculture/screens/CalibrateCycleScreen';
 
 // Commerce Screens
 import CartScreen from '@/features/commerce/screens/CartScreen';
@@ -46,34 +45,111 @@ import FeedingSuggestionsScreen from '@/features/commerce/screens/FeedingSuggest
 import OrdersHistoryScreen from '@/features/commerce/screens/OrdersHistoryScreen';
 import ProductCatalogScreen from '@/features/commerce/screens/ProductCatalogScreen';
 import ProductDetailScreen from '@/features/commerce/screens/ProductDetailScreen';
+import CycleFeedPhasesScreen from '@/features/commerce/screens/CycleFeedPhasesScreen';
 
 // Chat/Support Screens
 import { ChatScreen } from '@/features/chat/screens/ChatScreen';
+import type { CycleLog, ReportScopeType } from '@/types/aquaculture';
 
 export type MainTabParamList = {
   Dashboard: undefined;
   Support: undefined;
-  ProfileStack: undefined;
+  ProfileStack: NavigatorScreenParams<ProfileStackParamList> | undefined;
 };
 
 export type RootStackParamList = {
-  CycleSessionEntry: undefined;
-  MainTabs: undefined;
-  DailyLog: undefined;
-  DailyLogHistory: undefined;
-  SanitaryLog: undefined;
+  CycleSessionEntry:
+    | {
+        showBackToDashboard?: boolean;
+      }
+    | undefined;
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  DailyLog:
+    | {
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
+  DailyLogHistory:
+    | {
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
+  DailyLogDetail:
+    | {
+        log: CycleLog;
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
+  SanitaryLog:
+    | {
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
   NewCycle: undefined;
   CycleHistory: undefined;
-  Notifications: undefined;
-  FeedingPlan: undefined;
+  Notifications:
+    | {
+        cycleId?: string;
+        cycleName?: string;
+      }
+    | undefined;
+  FeedingPlan:
+    | {
+        cycleId: string;
+        cycleUnitAllocationId: string;
+        productionUnitId: string;
+        productionUnitName?: string;
+      }
+    | undefined;
   Statistics: undefined;
-  Reports: undefined;
+  Reports:
+    | {
+        scope?: ReportScopeType;
+        cycleId?: string;
+        cycleUnitAllocationId?: string;
+        productionUnitId?: string;
+        productionUnitName?: string;
+      }
+    | undefined;
   ReportDetail: { reportId: string };
   // Commerce Screens
-  ProductCatalog: undefined;
-  ProductDetail: { productId: string };
-  Cart: undefined;
-  OrdersHistory: undefined;
+  ProductCatalog:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  ProductDetail:
+    | {
+        productId: string;
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  Cart:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  OrdersHistory:
+    | {
+        cycleId?: string;
+        source?: 'store';
+      }
+    | undefined;
+  Store: { cycleId?: string } | undefined;
   FeedingSuggestions: undefined;
   CycleSimulator: {
     cycleId?: string;
@@ -91,12 +167,39 @@ export type RootStackParamList = {
   } | undefined;
   // Chat/Support Screens
   Chat: undefined;
+  // Map Screen
+  FarmMap: undefined;
+  // Farm creation flow
+  CreateFarm: undefined;
+  CycleSimulation: { formData: FarmSetupFormState };
+  // Post-harvest consolidation
+  PostHarvestConsolidation: { harvestedCycleId: string };
+  // Feed phase ordering
+  CycleFeedPhases: { cycleId: string };
+  ProductionUnitsHub: { cycleId: string };
+  ProductionUnitOverview: {
+    cycleId: string;
+    allocationId?: string;
+    cycleUnitAllocationId?: string;
+    productionUnitId: string;
+    productionUnitName?: string;
+  };
+  CalibrationTanks: undefined;
+  CalibrationTankDetail: { tankId: string };
+  CalibrateCycle: {
+    sourceCycleId: string;
+    sourceCycleUnitAllocationId?: string;
+    sourceUnitName?: string;
+    sourceCurrentCount?: number;
+    sourceCurrentBiomassKg?: number;
+  };
 };
 
 export type ProfileStackParamList = {
-  ProfileMain: undefined;
+  ProfileMain: { startEditing?: boolean; returnToCart?: boolean } | undefined;
   FarmProfile: undefined;
   Settings: undefined;
+  DesignSystemGallery: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -109,8 +212,8 @@ function ProfileNavigator() {
   return (
     <ProfileStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-        headerTintColor: MAVECAM_COLORS.WHITE,
+        headerStyle: { backgroundColor: colors.brand.primary },
+        headerTintColor: colors.text.inverse,
         headerTitleStyle: { fontWeight: 'bold' },
       }}
     >
@@ -129,6 +232,7 @@ function ProfileNavigator() {
         component={SettingsScreen}
         options={{ title: t('settings') }}
       />
+      {__DEV__ ? <ProfileStack.Screen name="DesignSystemGallery" component={DesignSystemGalleryScreen} options={{ headerShown: false }} /> : null}
     </ProfileStack.Navigator>
   );
 }
@@ -154,8 +258,8 @@ function MainTabNavigator() {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: MAVECAM_COLORS.GREEN_PRIMARY,
-        tabBarInactiveTintColor: MAVECAM_COLORS.GRAY_LIGHT,
+        tabBarActiveTintColor: colors.brand.primary,
+        tabBarInactiveTintColor: colors.text.muted,
         headerShown: false,
       })}
     >
@@ -172,8 +276,8 @@ function MainTabNavigator() {
         options={{
           tabBarLabel: t('chatTitle'),
           headerShown: true,
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           headerTitle: t('chatTitle'),
         }}
@@ -203,7 +307,7 @@ export default function MainNavigator() {
   return (
     <RootStack.Navigator
       initialRouteName="CycleSessionEntry"
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: false, headerBackTitle: t('back') }}
     >
       <RootStack.Screen
         name="CycleSessionEntry"
@@ -220,6 +324,10 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="DailyLogHistory"
         component={DailyLogHistoryScreen}
+      />
+      <RootStack.Screen
+        name="DailyLogDetail"
+        component={DailyLogDetailScreen}
       />
       <RootStack.Screen
         name="SanitaryLog"
@@ -246,10 +354,10 @@ export default function MainNavigator() {
         component={StatisticsScreen}
         options={{
           headerShown: false, // Header personnalisÃ© dans le composant
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
-          headerTitle: 'Statistiques'
+          headerTitle: t('statisticsNavTitle')
         }}
       />
       <RootStack.Screen
@@ -259,6 +367,10 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="ReportDetail"
         component={ReportDetailScreen}
+      />
+      <RootStack.Screen
+        name="Store"
+        component={StoreScreen}
       />
       {/* Commerce Screens */}
       <RootStack.Screen
@@ -285,16 +397,82 @@ export default function MainNavigator() {
         name="CycleSimulator"
         component={CycleSimulatorScreen}
       />
+      <RootStack.Screen
+        name="CycleFeedPhases"
+        component={CycleFeedPhasesScreen}
+      />
+      <RootStack.Screen
+        name="ProductionUnitsHub"
+        component={ProductionUnitsHubScreen}
+      />
+      <RootStack.Screen
+        name="ProductionUnitOverview"
+        component={ProductionUnitOverviewScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('productionUnitDashboardTitle'),
+        }}
+      />
+      <RootStack.Screen name="CalibrationTanks" component={CalibrationTanksScreen} options={{ headerShown: true, title: t('calibrationTanksTitle') }} />
+      <RootStack.Screen name="CalibrationTankDetail" component={CalibrationTankDetailScreen} options={{ headerShown: true, title: t('calibrationTank') }} />
+      <RootStack.Screen name="CalibrateCycle" component={CalibrateCycleScreen} options={{ headerShown: true, title: t('gradeFish') }} />
       {/* Chat/Support Screens */}
       <RootStack.Screen
         name="Chat"
         component={ChatScreen}
         options={{
           headerShown: true,
-          headerStyle: { backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY },
-          headerTintColor: MAVECAM_COLORS.WHITE,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
           title: t('chatTitle'),
+        }}
+      />
+      {/* Farm Map Screen */}
+      <RootStack.Screen
+        name="FarmMap"
+        component={FarmMapScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('farmMapNavTitle'),
+          headerBackTitle: t('profile'),
+        }}
+      />
+      {/* Farm creation flow */}
+      <RootStack.Screen
+        name="CreateFarm"
+        component={CreateFarmScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <RootStack.Screen
+        name="CycleSimulation"
+        component={CycleSimulationScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('simulationNavTitle'),
+        }}
+      />
+      <RootStack.Screen
+        name="PostHarvestConsolidation"
+        component={PostHarvestConsolidationScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: colors.brand.primary },
+          headerTintColor: colors.text.inverse,
+          headerTitleStyle: { fontWeight: 'bold' },
+          title: t('consolidationTitle'),
+          headerLeft: () => null,
         }}
       />
     </RootStack.Navigator>

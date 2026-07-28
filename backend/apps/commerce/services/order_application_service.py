@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from ..domain.validators import DeliveryMethod, OrderItemPayload
 from ..models import Order
-from .order_service import OrderService
+from .order_service import OperatorOrderTransitionResult, OrderService
 
 if TYPE_CHECKING:
     from accounts.models import User
@@ -20,6 +20,7 @@ class CreateOrderCommand:
     items_data: list[OrderItemPayload]
     delivery_method: DeliveryMethod
     pickup_location: str | None = None
+    production_cycle_id: str | None = None
     client_uuid: str | None = None
     created_offline: bool = False
 
@@ -36,9 +37,12 @@ class OrderApplicationService:
     """Use cases applicatifs du bounded context commande."""
 
     @staticmethod
-    def get_user_orders(user: User):
+    def get_user_orders(user: User, production_cycle_id: str | None = None):
         """Retourne les commandes visibles pour l'utilisateur."""
-        return OrderService.get_user_orders(user)
+        return OrderService.get_user_orders(
+            user,
+            production_cycle_id=production_cycle_id,
+        )
 
     @staticmethod
     def create_order(user: User, command: CreateOrderCommand) -> Order:
@@ -48,19 +52,31 @@ class OrderApplicationService:
             items_data=command.items_data,
             delivery_method=command.delivery_method,
             pickup_location=command.pickup_location,
+            production_cycle_id=command.production_cycle_id,
             client_uuid=command.client_uuid,
             created_offline=command.created_offline,
         )
 
     @staticmethod
-    def get_order_statistics(user: User):
+    def get_order_statistics(user: User, production_cycle_id: str | None = None):
         """Retourne les statistiques agregees de commande."""
-        return OrderService.get_order_statistics(user)
+        return OrderService.get_order_statistics(
+            user,
+            production_cycle_id=production_cycle_id,
+        )
 
     @staticmethod
     def confirm_order_receipt(order: Order, user: User) -> Order:
         """Execute le use case de confirmation de reception."""
         return OrderService.confirm_order_receipt(order, user)
+
+    @staticmethod
+    def mark_order_ready_for_customer_confirmation(
+        order: Order,
+        operator: User,
+    ) -> OperatorOrderTransitionResult:
+        """Exécute la transition logistique réservée aux opérateurs Commerce."""
+        return OrderService.mark_order_ready_for_customer_confirmation(order, operator)
 
     @staticmethod
     def preview_delivery_fee(

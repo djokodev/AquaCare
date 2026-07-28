@@ -104,6 +104,22 @@ describe('features/notifications/store/notificationSlice', () => {
     expect(state.loading).toBe(false);
   });
 
+  it('transmet le scope cycle aux appels de lecture et bulk', async () => {
+    const store = createStore();
+
+    mockService.getNotifications.mockResolvedValueOnce(notifs);
+    await store.dispatch(fetchNotifications({ cycleId: 'cycle-1' }) as any);
+    expect(mockService.getNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+
+    mockService.markAllNotificationsAsRead.mockResolvedValueOnce({ count: 0 } as any);
+    await store.dispatch(markAllNotificationsAsRead({ cycleId: 'cycle-1' }) as any);
+    expect(mockService.markAllNotificationsAsRead).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+
+    mockService.deleteAllReadNotifications.mockResolvedValueOnce(undefined as any);
+    await store.dispatch(deleteAllReadNotifications({ cycleId: 'cycle-1' }) as any);
+    expect(mockService.deleteAllReadNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+  });
+
   it('fetchNotificationsSilent met a jour sans loading', async () => {
     const store = createStore();
     mockService.getNotifications.mockResolvedValueOnce([notifs[0]] as any);

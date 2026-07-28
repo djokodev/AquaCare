@@ -1,6 +1,6 @@
 #!/bin/bash
 # ════════════════════════════════════════════════════════════════════════════
-# SCRIPT RESTORE POSTGRESQL - MAVECAM AquaCare
+# SCRIPT RESTORE POSTGRESQL - AquaCare
 # ════════════════════════════════════════════════════════════════════════════
 #
 # USAGE :

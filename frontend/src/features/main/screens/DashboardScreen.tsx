@@ -1,82 +1,166 @@
-﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+﻿import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { useRef } from "react";
 import {
   View,
-  Text,
   ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
-  Modal,
   Alert,
-} from 'react-native';
-import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppDispatch, RootState } from '@/store/store';
+  StyleSheet,
+} from "react-native";
+import { useTranslation } from "react-i18next";
+import { Ionicons } from "@expo/vector-icons";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/store/store";
 import {
   clearCurrentCycle,
   fetchDashboardData,
+  fetchProductionCycles,
   setCurrentCycle,
-} from '@/features/aquaculture/store/aquacultureSlice';
-import { fetchNotifications } from '@/features/notifications/store/notificationSlice';
+} from "@/features/aquaculture/store/aquacultureSlice";
+import { fetchNotifications } from "@/features/notifications/store/notificationSlice";
 import {
+  clearOrderContext,
   confirmOrderReceipt,
   fetchOrderStatistics,
   fetchOrders,
-} from '@/features/commerce/store/commerceSlice';
-import { offlineService } from '@/services/offlineService';
-import HarvestModal from '@/components/modals/HarvestModal';
-import CyclePicker from '@/features/aquaculture/components/CyclePicker';
-import DashboardHeader from '../components/DashboardHeader';
-import QuickActionsPreview from '../components/QuickActionsPreview';
-import QuickActionsSheet from '../components/QuickActionsSheet';
-import { ProductionCycle } from '@/types/aquaculture';
-import { MAVECAM_COLORS } from '@/constants/colors';
-import { formatNumber, formatPercentage, formatCurrency } from '@/utils';
-import { useAuth } from '@/hooks/useAuth';
-
-import MetricCard from '../components/MetricCard';
+} from "@/features/commerce/store/commerceSlice";
+import { offlineService } from "@/services/offlineService";
+import HarvestModal from "@/components/modals/HarvestModal";
+import PartialHarvestModal from "@/components/modals/PartialHarvestModal";
+import PartialHarvestHistoryModal from "@/components/modals/PartialHarvestHistoryModal";
+import DashboardHeader from "../components/DashboardHeader";
+import QuickActionsPreview from "../components/QuickActionsPreview";
+import QuickActionsSheet from "../components/QuickActionsSheet";
+import { CycleDashboard, ProductionCycle } from "@/types/aquaculture";
+import type { Order } from "@/types/commerce";
 import {
-  calculateCycleEstimatedMarketValue,
-  calculateDashboardBusinessMetrics,
-} from '../utils/dashboardCalculations';
+  canConfirmOrderReceipt,
+  getOrderReceiptActionLabelKey,
+} from "@/features/commerce/utils/orderStatus";
+import { useAuth } from "@/hooks/useAuth";
+import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
+import {
+  AppText,
+  Button,
+  Card,
+  DashboardHeroCard,
+  DashboardMetricCard,
+  DashboardSection,
+  ErrorState,
+  formatDashboardCurrency,
+  formatDashboardNumber,
+  InlineAlert,
+  InteractiveCard,
+  LoadingState,
+} from "@/components/ui";
+import { colors, spacing } from "@/theme";
+import { useDashboardSyncStatus } from "@/hooks/useDashboardSyncStatus";
+import { dashboardSyncService } from "@/services/dashboardSyncService";
+
+interface DashboardActionCardProps {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  testID?: string;
+}
+
+function DashboardActionCard({
+  label,
+  onPress,
+  disabled = false,
+  testID,
+}: DashboardActionCardProps) {
+  return (
+    <InteractiveCard
+      testID={testID}
+      accessibilityLabel={label}
+      onPress={onPress}
+      disabled={disabled}
+      primaryBorder
+      style={styles.actionCard}
+    >
+      <AppText
+        variant="bodyStrong"
+        color={disabled ? "muted" : "link"}
+        style={styles.actionLabel}
+      >
+        {label}
+      </AppText>
+      <Ionicons
+        name="chevron-forward"
+        size={20}
+        color={disabled ? colors.text.muted : colors.brand.primary}
+      />
+    </InteractiveCard>
+  );
+}
 
 export default function DashboardScreen({ navigation }: any) {
-  const { t } = useTranslation();
-  const { displayName } = useAuth();
+  const { t, i18n } = useTranslation();
+  const { displayName, loadFarmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
 
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
-  const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
-  const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
-  const [cycleSwitchModalVisible, setCycleSwitchModalVisible] = useState(false);
-  const [pendingCycleId, setPendingCycleId] = useState<string | null>(null);
-  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
-
-  const { dashboardData, loading, error, currentCycle } = useSelector(
-    (state: RootState) => state.aquaculture
+  const [partialHarvestModalVisible, setPartialHarvestModalVisible] =
+    useState(false);
+  const [
+    partialHarvestHistoryModalVisible,
+    setPartialHarvestHistoryModalVisible,
+  ] = useState(false);
+  const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(
+    null,
   );
-  const { unreadCount } = useSelector((state: RootState) => state.notifications);
-  const { items: ordersList } = useSelector((state: RootState) => state.commerce.orders);
+  const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
+  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(
+    null,
+  );
+  const confirmationLock = useRef(false);
+  const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<
+    number | null
+  >(null);
+  const [currentCycleDashboard, setCurrentCycleDashboard] =
+    useState<CycleDashboard | null>(null);
+  const [cycleDashboardLoading, setCycleDashboardLoading] = useState(false);
+  const [cycleDashboardRefreshing, setCycleDashboardRefreshing] = useState(false);
+  const [cycleDashboardError, setCycleDashboardError] = useState<string | null>(null);
+  const cycleDashboardRequestRef = useRef(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { dashboardData, cycles, loading, error, currentCycle } = useSelector(
+    (state: RootState) => state.aquaculture,
+  );
+  const { unreadCount } = useSelector(
+    (state: RootState) => state.notifications,
+  );
+  const { items: ordersList } = useSelector(
+    (state: RootState) => state.commerce.orders,
+  );
 
   useEffect(() => {
     const initializeDashboard = async () => {
       tryGlobalOfflineSync();
       dispatch(fetchDashboardData(undefined));
-      dispatch(fetchNotifications());
-      dispatch(fetchOrders());
+      dispatch(fetchProductionCycles());
     };
 
     initializeDashboard();
   }, [dispatch]);
 
+  useEffect(() => {
+    dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
+  }, [currentCycle?.id, dispatch]);
+
   // Rafraîchir les notifications à chaque retour sur le dashboard (ex: après création commande)
   useFocusEffect(
     useCallback(() => {
-      dispatch(fetchNotifications());
-      dispatch(fetchOrders());
-    }, [dispatch])
+      dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
+      if (currentCycle?.id) {
+        dispatch(fetchOrders({ productionCycleId: currentCycle.id }));
+      } else {
+        dispatch(clearOrderContext());
+      }
+    }, [currentCycle?.id, dispatch]),
   );
 
   const tryGlobalOfflineSync = async () => {
@@ -87,6 +171,7 @@ export default function DashboardScreen({ navigation }: any) {
 
         if (result.success > 0) {
           dispatch(fetchDashboardData(undefined));
+          dispatch(fetchProductionCycles());
         }
       }
     } catch (err) {
@@ -94,73 +179,156 @@ export default function DashboardScreen({ navigation }: any) {
     }
   };
 
-  const onRefresh = useCallback(() => {
-    dispatch(fetchDashboardData(undefined));
-    dispatch(fetchNotifications());
-    dispatch(fetchOrders());
-  }, [dispatch]);
-
   const pendingDeliveryConfirmations = useMemo(
-    () => ordersList.filter((order) => order.status === 'delivered'),
-    [ordersList]
+    () => ordersList.filter(canConfirmOrderReceipt),
+    [ordersList],
   );
 
-  const activeCycles = dashboardData?.active_cycles || [];
+  const dashboardCycles = dashboardData?.active_cycles ?? [];
+  const availableSessionCycles = useMemo(
+    () => cycles.filter((cycle) => cycle.status === "active"),
+    [cycles],
+  );
+  const canSwitchCycle = availableSessionCycles.length > 1;
+  const activeCycles = dashboardCycles;
   const currentCycleInList = currentCycle
     ? activeCycles.find((cycle) => cycle.id === currentCycle.id)
     : undefined;
-  const dashboardBusinessMetrics = useMemo(
-    () => calculateDashboardBusinessMetrics(activeCycles, currentCycleInList),
-    [activeCycles, currentCycleInList]
+  const primaryActiveCycle = currentCycleInList || activeCycles[0] || null;
+  const currentSessionCycle = currentCycle
+    ? availableSessionCycles.find((cycle) => cycle.id === currentCycle.id)
+    : undefined;
+  const sessionCycle =
+    currentSessionCycle ??
+    availableSessionCycles[0] ??
+    dashboardCycles[0] ??
+    null;
+  const primaryCycleHasProductionUnits = Boolean(
+    primaryActiveCycle?.infrastructure_type &&
+    primaryActiveCycle.infrastructure_type.length > 0,
   );
-  const requiresCycleSelection = activeCycles.length > 1 && !currentCycleInList;
-  const cycleCards = useMemo(
-    () =>
-      activeCycles.map((cycle) => ({
-        ...cycle,
-        cycleAgeDays: Math.floor(
-          (Date.now() - new Date(cycle.start_date).getTime()) / (1000 * 60 * 60 * 24)
-        ),
-        estimatedMarketValueFcfa: calculateCycleEstimatedMarketValue(cycle),
-      })),
-    [activeCycles]
+  const cycleHasProductionUnits =
+    primaryCycleHasProductionUnits || (currentCycleUnitCount ?? 0) > 0;
+  const locale = i18n.language?.startsWith("fr") ? "fr-FR" : "en-US";
+  const primaryActiveCycleId = primaryActiveCycle?.id ?? null;
+  const { lastSyncedAt, refreshLastSyncedAt } =
+    useDashboardSyncStatus("cycle", primaryActiveCycleId);
+  const loadCurrentCycleDashboard = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    const requestId = cycleDashboardRequestRef.current + 1;
+    cycleDashboardRequestRef.current = requestId;
+
+    if (!primaryActiveCycleId) {
+      setCurrentCycleDashboard(null);
+      setCurrentCycleUnitCount(null);
+      setCycleDashboardError(null);
+      setCycleDashboardLoading(false);
+      setCycleDashboardRefreshing(false);
+      return false;
+    }
+
+    setCycleDashboardError(null);
+    if (mode === "refresh") {
+      setCycleDashboardRefreshing(true);
+    } else {
+      setCycleDashboardLoading(true);
+    }
+
+    try {
+      const cycleDashboard = await aquacultureService.getCycleDashboard(primaryActiveCycleId);
+      if (requestId !== cycleDashboardRequestRef.current) {
+        return false;
+      }
+      setCurrentCycleDashboard(cycleDashboard);
+      setCurrentCycleUnitCount(cycleDashboard.summary.total_allocations);
+      await dashboardSyncService.markSuccessful("cycle", primaryActiveCycleId);
+      await refreshLastSyncedAt();
+      return true;
+    } catch {
+      if (requestId === cycleDashboardRequestRef.current) {
+        setCycleDashboardError("cycleDashboardLoadError");
+      }
+      return false;
+    } finally {
+      if (requestId === cycleDashboardRequestRef.current) {
+        setCycleDashboardLoading(false);
+        setCycleDashboardRefreshing(false);
+      }
+    }
+  }, [primaryActiveCycleId, refreshLastSyncedAt]);
+
+  useEffect(() => {
+    setCurrentCycleDashboard(null);
+    setCurrentCycleUnitCount(null);
+    setCycleDashboardError(null);
+    void loadCurrentCycleDashboard();
+  }, [loadCurrentCycleDashboard, primaryActiveCycleId]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void Promise.all([
+      loadFarmProfile(),
+      dispatch(fetchDashboardData(undefined)),
+      loadCurrentCycleDashboard("refresh"),
+      dispatch(fetchProductionCycles()),
+      dispatch(fetchNotifications({ cycleId: currentCycle?.id })),
+      currentCycle?.id
+        ? dispatch(fetchOrders({ productionCycleId: currentCycle.id }))
+        : Promise.resolve(),
+    ]).finally(() => {
+      setRefreshing(false);
+    });
+  }, [currentCycle?.id, dispatch, loadCurrentCycleDashboard, loadFarmProfile]);
+
+  const cycleSummary = currentCycleDashboard?.summary;
+  const cycleDashboardInitialLoading = Boolean(
+    primaryActiveCycleId && !cycleSummary && !cycleDashboardError,
   );
 
   useEffect(() => {
-    if (activeCycles.length === 0) {
+    if (availableSessionCycles.length === 0) {
       if (currentCycle) {
         dispatch(clearCurrentCycle());
       }
-      setCycleSwitchModalVisible(false);
-      setPendingCycleId(null);
       return;
     }
 
-    if (activeCycles.length === 1) {
-      if (currentCycle?.id !== activeCycles[0].id) {
-        dispatch(setCurrentCycle(activeCycles[0]));
+    if (availableSessionCycles.length === 1) {
+      if (currentCycle?.id !== availableSessionCycles[0].id) {
+        dispatch(setCurrentCycle(availableSessionCycles[0]));
       }
-      setCycleSwitchModalVisible(false);
-      setPendingCycleId(null);
       return;
     }
 
     if (!currentCycleInList) {
       dispatch(clearCurrentCycle());
-      setCycleSwitchModalVisible(true);
-      setPendingCycleId(null);
     } else if (currentCycleInList.id !== currentCycle?.id) {
       dispatch(setCurrentCycle(currentCycleInList));
     }
-  }, [activeCycles, currentCycle, currentCycleInList, dispatch]);
+  }, [availableSessionCycles, currentCycle, dispatch]);
 
-  const openHarvestModal = (cycle: ProductionCycle) => {
-    setSelectedCycle(cycle);
+  const openCycleHarvestModal = useCallback(() => {
+    if (!sessionCycle) {
+      return;
+    }
+    setSelectedCycle(sessionCycle);
     setHarvestModalVisible(true);
-  };
+  }, [sessionCycle]);
+
+  const openCyclePartialHarvestModal = useCallback(() => {
+    if (!sessionCycle) {
+      return;
+    }
+    setSelectedCycle(sessionCycle);
+    setPartialHarvestModalVisible(true);
+  }, [sessionCycle]);
 
   const closeHarvestModal = () => {
     setHarvestModalVisible(false);
+    setSelectedCycle(null);
+  };
+
+  const closePartialHarvestModal = () => {
+    setPartialHarvestModalVisible(false);
     setSelectedCycle(null);
   };
 
@@ -169,76 +337,99 @@ export default function DashboardScreen({ navigation }: any) {
   };
 
   const handleNotificationsPress = () => {
-    navigation.navigate('Notifications');
+    navigation.navigate(
+      "Notifications",
+      currentCycle
+        ? {
+            cycleId: currentCycle.id,
+            cycleName: currentCycle.cycle_name,
+          }
+        : undefined,
+    );
   };
 
   const handleSettingsPress = () => {
-    navigation.navigate('ProfileStack', { screen: 'Settings' });
+    navigation.navigate("ProfileStack", { screen: "Settings" });
   };
 
-  const handleConfirmOrderReceipt = (orderId: string, orderNumber: string) => {
+  const handleProductionUnitsPress = () => {
+    if (!primaryActiveCycle) {
+      return;
+    }
+
+    navigation.navigate("ProductionUnitsHub", {
+      cycleId: primaryActiveCycle.id,
+    });
+  };
+
+  const handleStorePress = () => {
+    if (!primaryActiveCycle) {
+      return;
+    }
+
+    navigation.navigate("Store", { cycleId: primaryActiveCycle.id });
+  };
+
+  const handleCycleReportPress = () => {
+    if (!primaryActiveCycle) {
+      return;
+    }
+
+    navigation.navigate("Reports", {
+      scope: "cycle",
+      cycleId: primaryActiveCycle.id,
+    });
+  };
+
+  const handleConfirmOrderReceipt = (order: Order) => {
+    if (!primaryActiveCycleId) return;
+    const isPickup = order.delivery_method === "pickup";
     Alert.alert(
-      t('confirmReceiptTitle'),
-      t('confirmReceiptMessage', { orderNumber }),
+      t(isPickup ? "confirmPickupTitle" : "confirmReceiptTitle"),
+      t(isPickup ? "confirmPickupMessage" : "confirmReceiptMessage", {
+        orderNumber: order.order_number,
+      }),
       [
-        { text: t('cancel'), style: 'cancel' },
+        { text: t("cancel"), style: "cancel" },
         {
-          text: t('confirm'),
+          text: t("confirm"),
           onPress: async () => {
+            if (confirmationLock.current) return;
             try {
-              setConfirmingOrderId(orderId);
-              await dispatch(confirmOrderReceipt(orderId)).unwrap();
-              await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
-              Alert.alert(t('success'), t('confirmReceiptSuccess'));
-            } catch {
-              Alert.alert(t('error'), t('confirmReceiptError'));
+              confirmationLock.current = true;
+              setConfirmingOrderId(order.id);
+              await dispatch(confirmOrderReceipt(order.id)).unwrap();
+              await Promise.all([
+                dispatch(fetchOrders({ productionCycleId: primaryActiveCycleId })),
+                dispatch(fetchOrderStatistics({ productionCycleId: primaryActiveCycleId })),
+              ]);
+              Alert.alert(t("success"), t(isPickup ? "confirmPickupSuccess" : "confirmReceiptSuccess"));
+            } catch (caughtError) {
+              Alert.alert(
+                t("error"),
+                typeof caughtError === "string" && caughtError.trim()
+                  ? caughtError
+                  : t("confirmReceiptError"),
+              );
             } finally {
+              confirmationLock.current = false;
               setConfirmingOrderId(null);
             }
           },
         },
-      ]
+      ],
     );
-  };
-
-  const openCycleSwitchModal = () => {
-    if (activeCycles.length < 2) {
-      return;
-    }
-    setPendingCycleId(currentCycleInList?.id || null);
-    setCycleSwitchModalVisible(true);
-  };
-
-  const closeCycleSwitchModal = () => {
-    if (requiresCycleSelection) {
-      return;
-    }
-    setCycleSwitchModalVisible(false);
-    setPendingCycleId(currentCycleInList?.id || null);
-  };
-
-  const confirmCycleSwitch = () => {
-    if (!pendingCycleId) {
-      return;
-    }
-
-    const selected = activeCycles.find((cycle) => cycle.id === pendingCycleId);
-    if (!selected) {
-      return;
-    }
-
-    dispatch(setCurrentCycle(selected));
-    dispatch(fetchDashboardData({ cycleId: selected.id }));
-    setCycleSwitchModalVisible(false);
-    setPendingCycleId(null);
   };
 
   if (error && !dashboardData) {
     return (
       <ScrollView
-        className="flex-1 bg-cream"
+        className="flex-1 bg-dashboard"
         refreshControl={
-          <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing || loading.dashboard || cycleDashboardRefreshing}
+            onRefresh={onRefresh}
+          />
         }
       >
         <DashboardHeader
@@ -248,31 +439,24 @@ export default function DashboardScreen({ navigation }: any) {
           onSettingsPress={handleSettingsPress}
         />
 
-        <View className="flex-1 items-center justify-center px-5 py-10">
-          <Ionicons name="alert-circle" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text className="text-base text-[#dc2626] text-center mt-3 mb-5">{error}</Text>
-          <TouchableOpacity
-            className="bg-mavecam-primary px-6 py-3 rounded-lg"
-            onPress={onRefresh}
-          >
-            <Text className="text-white text-base font-semibold">{t('retry', { defaultValue: 'Réessayer' })}</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState
+          message={error}
+          actionLabel={t("retry")}
+          onAction={onRefresh}
+        />
       </ScrollView>
     );
   }
 
   return (
-    <View className="flex-1 bg-cream">
-      {/* Header Sticky - Outside ScrollView */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 100,
-        }}
+    <View style={styles.dashboardRoot}>
+      <ScrollView
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing || loading.dashboard || cycleDashboardRefreshing}
+            onRefresh={onRefresh}
+          />
+        }
       >
         <DashboardHeader
           displayName={displayName}
@@ -280,233 +464,306 @@ export default function DashboardScreen({ navigation }: any) {
           onNotificationsPress={handleNotificationsPress}
           onSettingsPress={handleSettingsPress}
         />
-      </View>
+        <View style={styles.dashboardSectionContainer}>
+          <DashboardSection
+            title={t("cycleDashboardTitle")}
+            lastSyncedAt={lastSyncedAt}
+          >
+            {(cycleDashboardLoading || cycleDashboardInitialLoading) && !cycleSummary ? (
+              <LoadingState
+                message={t("cycleDashboardLoading")}
+                compact
+              />
+            ) : cycleDashboardError && !cycleSummary ? (
+              <ErrorState
+                message={t(cycleDashboardError)}
+                actionLabel={t("retry")}
+                onAction={() => void loadCurrentCycleDashboard("refresh")}
+              />
+            ) : (
+              <>
+                {cycleDashboardError ? (
+                  <InlineAlert tone="error" message={t(cycleDashboardError)} />
+                ) : null}
+                <DashboardHeroCard
+                  label={t("dashboardEstimatedMarketValue")}
+                  value={formatDashboardCurrency(
+                    cycleSummary?.estimated_market_value_fcfa,
+                    locale,
+                  )}
+                  unit={t("dashboardDirectProductionCostUnit")}
+                  helper={
+                    cycleSummary?.estimated_market_value_fcfa == null
+                      ? cycleSummary?.biomass_data_available === false
+                        ? t("dashboardUnitsMissingWeighing", {
+                            count: cycleSummary.units_missing_biomass_data_count,
+                          })
+                        : t("dashboardMissingSellingPrice")
+                      : undefined
+                  }
+                  unavailableLabel={t("dashboardCalculationUnavailable")}
+                  progress={cycleSummary?.cycle_progress_pct}
+                  progressLabel={t("dashboardCycleProgress")}
+                  locale={locale}
+                />
+                <View style={styles.dashboardGrid}>
+                  <DashboardMetricCard
+                    label={t("dashboardDirectProductionCost")}
+                    value={formatDashboardCurrency(
+                      cycleSummary?.direct_production_cost_fcfa,
+                      locale,
+                    )}
+                    unit={t("dashboardDirectProductionCostUnit")}
+                    unavailableLabel={t("dashboardDataUnavailable")}
+                  />
+                  <DashboardMetricCard
+                    label={t("currentFish")}
+                    value={formatDashboardNumber(
+                      cycleSummary?.total_estimated_current_fish_count,
+                      locale,
+                      { maximumFractionDigits: 0 },
+                    )}
+                    tone="slate"
+                    unavailableLabel={t("dashboardDataUnavailable")}
+                  />
+                  <DashboardMetricCard
+                    label={t("dashboardTimeRemainingCycle")}
+                    value={formatDashboardNumber(
+                      cycleSummary?.days_remaining,
+                      locale,
+                      { maximumFractionDigits: 0 },
+                    )}
+                    unit={t("days")}
+                    tone="info"
+                    layout="fullWidthCompact"
+                    unavailableLabel={t("dashboardDataUnavailable")}
+                  />
+                </View>
+              </>
+            )}
+          </DashboardSection>
+        </View>
 
-      <ScrollView
-        refreshControl={
-          <RefreshControl refreshing={loading.dashboard} onRefresh={onRefresh} />
-        }
-        contentContainerStyle={{ paddingTop: 140 }}
-      >
-
-      <View className="px-5 py-5">
-        {loading.dashboard && !dashboardData ? (
-          <View className="items-center justify-center py-10">
-            <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-base text-gray-light mt-3">
-              {t('loadingData', { defaultValue: 'Chargement des données...' })}
-            </Text>
+        {sessionCycle ? (
+          <View className="px-5 pb-1">
+            {canSwitchCycle ? (
+              <InteractiveCard
+                testID="session-active-cycle-card"
+                accessibilityLabel={sessionCycle.cycle_name}
+                primaryBorder
+                onPress={() =>
+                  navigation.navigate("CycleSessionEntry", {
+                    showBackToDashboard: true,
+                  })
+                }
+                style={styles.sessionCard}
+              >
+                <View className="flex-1 mr-3">
+                  <AppText variant="bodyStrong">
+                    {sessionCycle.cycle_name}
+                  </AppText>
+                  {canSwitchCycle ? (
+                    <AppText
+                      variant="helper"
+                      color="link"
+                      style={{ marginTop: 4 }}
+                    >
+                      {t("changeSessionCycle", {
+                        defaultValue: "Changer de cycle",
+                      })}
+                    </AppText>
+                  ) : null}
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={
+                    canSwitchCycle ? colors.brand.primary : colors.text.muted
+                  }
+                />
+              </InteractiveCard>
+            ) : (
+              <Card
+                testID="session-active-cycle-card"
+                variant="outlined"
+                style={[styles.sessionCard, styles.inactiveSessionCard]}
+              >
+                <AppText variant="bodyStrong" style={styles.sessionName}>
+                  {sessionCycle.cycle_name}
+                </AppText>
+              </Card>
+            )}
           </View>
-        ) : (
-          <View className="flex-row flex-wrap justify-between">
-            <MetricCard
-              icon="cash-outline"
-              color={MAVECAM_COLORS.GREEN_PRIMARY}
-              value={formatCurrency(dashboardBusinessMetrics.estimatedMarketValueFcfa)}
-              label={t('dashboardEstimatedMarketValue')}
-              index={0}
-              animationType="pulse"
-            />
+        ) : null}
 
-            <MetricCard
-              icon="restaurant-outline"
-              color={MAVECAM_COLORS.GREEN_LIGHT}
-              value={formatCurrency(dashboardBusinessMetrics.feedCostConsumedFcfa)}
-              label={t('dashboardFeedCostConsumed')}
-              index={1}
-              animationType="wave"
-            />
+        {primaryActiveCycleId && pendingDeliveryConfirmations.length > 0 && (
+          <View className="px-5 pb-2">
+            <Card variant="elevated" style={{ marginBottom: 8 }}>
+              <View className="flex-row items-center justify-between mb-3">
+                <View className="flex-1 mr-3">
+                  <AppText variant="bodyStrong">
+                    {t("ordersPendingConfirmationTitle", {
+                      count: pendingDeliveryConfirmations.length,
+                    })}
+                  </AppText>
+                  <AppText
+                    variant="caption"
+                    color="muted"
+                    style={{ marginTop: 4 }}
+                  >
+                    {t("ordersPendingConfirmationDescription")}
+                  </AppText>
+                </View>
+                <Button
+                  label={t("cycleOrders")}
+                  onPress={() => navigation.navigate("OrdersHistory", {
+                    cycleId: primaryActiveCycleId,
+                  })}
+                  variant="outline"
+                  size="small"
+                  fullWidth={false}
+                />
+              </View>
 
-            <MetricCard
-              icon="time-outline"
-              color={MAVECAM_COLORS.GREEN_DARK}
-              value={
-                dashboardBusinessMetrics.timeRemainingDays === null
-                  ? '-'
-                  : formatNumber(dashboardBusinessMetrics.timeRemainingDays, t('days'), 0)
-              }
-              label={t('dashboardTimeRemainingCycle')}
-              index={2}
-              animationType="bounce"
-            />
-
-            <MetricCard
-              icon="calculator-outline"
-              color={MAVECAM_COLORS.SUCCESS}
-              value={formatCurrency(dashboardBusinessMetrics.directProductionCostFcfa)}
-              label={t('dashboardDirectProductionCost')}
-              index={3}
-              animationType="bounce"
-            />
+              {pendingDeliveryConfirmations.slice(0, 2).map((order) => {
+                const total = Number.parseFloat(order.total || "0");
+                const isConfirming = confirmingOrderId === order.id;
+                return (
+                  <Card
+                    key={order.id}
+                    variant="outlined"
+                    style={{ padding: 12, marginBottom: 8 }}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-1 mr-3">
+                        <AppText variant="label">{order.order_number}</AppText>
+                        <AppText
+                          variant="caption"
+                          color="muted"
+                          style={{ marginTop: 4 }}
+                        >
+                          {Number.isFinite(total)
+                            ? `${total.toLocaleString()} FCFA`
+                            : order.total}
+                        </AppText>
+                      </View>
+                      <Button
+                        label={t(getOrderReceiptActionLabelKey(order))}
+                        size="small"
+                        fullWidth={false}
+                        loading={isConfirming}
+                        onPress={() =>
+                          handleConfirmOrderReceipt(order)
+                        }
+                      />
+                    </View>
+                  </Card>
+                );
+              })}
+            </Card>
           </View>
         )}
-      </View>
 
-      {activeCycles.length > 1 && (
-        <View className="px-5 pb-1 items-end">
-          <TouchableOpacity
-            className="px-3 py-2 rounded-lg border border-mavecam-primary bg-white"
-            onPress={openCycleSwitchModal}
-          >
-            <Text className="text-sm font-semibold text-mavecam-primary">
-              {t('changeSessionCycle', { defaultValue: 'Changer de cycle' })}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        {!cycleHasProductionUnits ? (
+          <QuickActionsPreview
+            onOpenSheet={() => setActionsSheetVisible(true)}
+            hasActiveCycles={activeCycles.length > 0}
+            unreadCount={unreadCount}
+            navigation={navigation}
+            scope="cycle"
+            hideGlobalCycleOperationalActions={cycleHasProductionUnits}
+          />
+        ) : null}
 
-      {pendingDeliveryConfirmations.length > 0 && (
-        <View className="px-5 pb-2">
-          <View className="bg-white rounded-xl p-4 shadow-sm">
-            <View className="flex-row items-center justify-between mb-3">
-              <View className="flex-1 mr-3">
-                <Text className="text-base font-bold text-gray-dark">
-                  {t('ordersPendingConfirmationTitle', { count: pendingDeliveryConfirmations.length })}
-                </Text>
-                <Text className="text-xs text-gray-light mt-1">
-                  {t('ordersPendingConfirmationDescription')}
-                </Text>
-              </View>
-              <TouchableOpacity
-                className="px-3 py-2 rounded-lg border border-mavecam-primary"
-                onPress={() => navigation.navigate('OrdersHistory')}
-              >
-                <Text className="text-sm font-semibold text-mavecam-primary">{t('ordersHistory')}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {pendingDeliveryConfirmations.slice(0, 2).map((order) => {
-              const total = Number.parseFloat(order.total || '0');
-              const isConfirming = confirmingOrderId === order.id;
-              return (
-                <View key={order.id} className="border border-gray-100 rounded-lg p-3 mb-2 last:mb-0">
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-1 mr-3">
-                      <Text className="text-sm font-semibold text-gray-dark">{order.order_number}</Text>
-                      <Text className="text-xs text-gray-light mt-1">
-                        {Number.isFinite(total) ? `${total.toLocaleString()} FCFA` : order.total}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      className={`px-3 py-2 rounded-lg ${isConfirming ? 'bg-gray-300' : 'bg-mavecam-primary'}`}
-                      disabled={isConfirming}
-                      onPress={() => handleConfirmOrderReceipt(order.id, order.order_number)}
-                    >
-                      {isConfirming ? (
-                        <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
-                      ) : (
-                        <Text className="text-white text-xs font-semibold">{t('confirmReceiptAction')}</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
+        {sessionCycle ? (
+          <View className="px-5 py-5">
+            {primaryActiveCycle && (
+              <>
+                <DashboardActionCard
+                  testID="dashboard-action-production-units"
+                  label={t("productionUnitsDashboardCta")}
+                  onPress={handleProductionUnitsPress}
+                />
+                <DashboardActionCard
+                  testID="dashboard-action-store"
+                  label={t("storeTitle")}
+                  onPress={handleStorePress}
+                />
+                <DashboardActionCard
+                  testID="dashboard-action-report"
+                  label={t("reportCycleTitle")}
+                  onPress={handleCycleReportPress}
+                />
+                <DashboardActionCard
+                  testID="dashboard-action-create-cycle"
+                  label={t("createNewCycleDashboardTitle")}
+                  onPress={() => navigation.navigate("CreateFarm")}
+                />
+              </>
+            )}
           </View>
-        </View>
-      )}
+        ) : null}
 
-      <QuickActionsPreview
-        onOpenSheet={() => setActionsSheetVisible(true)}
-        hasActiveCycles={activeCycles.length > 0}
-        unreadCount={unreadCount}
-        navigation={navigation}
-      />
+        <HarvestModal
+          visible={harvestModalVisible}
+          onClose={closeHarvestModal}
+          cycle={selectedCycle}
+          onSuccess={handleHarvestSuccess}
+          onContactBuyer={() => navigation.navigate("Chat")}
+          onNextCycle={(cycleId) =>
+            navigation.navigate("PostHarvestConsolidation", {
+              harvestedCycleId: cycleId,
+            })
+          }
+        />
 
-      {activeCycles.length > 0 && (
-        <View className="px-5 py-5">
+        <PartialHarvestModal
+          visible={partialHarvestModalVisible}
+          onClose={closePartialHarvestModal}
+          cycle={selectedCycle}
+          onSuccess={handleHarvestSuccess}
+        />
 
-          {cycleCards.map((cycle) => (
-            <View
-              key={cycle.id}
-              className="bg-white rounded-xl p-4 mb-3 border border-gray-200"
-            >
-              <View className="flex-row justify-between items-start">
-                <View className="flex-1 mr-3">
-                  <Text className="text-base font-bold text-gray-dark mb-1">{cycle.cycle_name}</Text>
-                  <Text className="text-sm text-gray-light mb-1">
-                    {cycle.species === 'clarias' ? t('catfish') : t('tilapia')} - {cycle.pond_identifier}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {t('daysCount', { count: cycle.cycleAgeDays })} - {formatCurrency(cycle.estimatedMarketValueFcfa)} - {formatPercentage(cycle.survival_rate || 0)} {t('survivalRateShort')}
-                  </Text>
-                </View>
+        <PartialHarvestHistoryModal
+          visible={partialHarvestHistoryModalVisible}
+          onClose={() => setPartialHarvestHistoryModalVisible(false)}
+          cycle={selectedCycle}
+        />
 
-                <TouchableOpacity
-                  className="bg-mavecam-primary flex-row items-center py-2 px-3 rounded-lg"
-                  onPress={() => openHarvestModal(cycle)}
-                >
-                  <Text className="text-white text-sm font-semibold ml-1">{t('harvest')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <HarvestModal
-        visible={harvestModalVisible}
-        onClose={closeHarvestModal}
-        cycle={selectedCycle}
-        onSuccess={handleHarvestSuccess}
-        onContactBuyer={() => navigation.navigate('Chat')}
-      />
-
-      <QuickActionsSheet
-        visible={actionsSheetVisible}
-        onClose={() => setActionsSheetVisible(false)}
-        unreadCount={unreadCount}
-        navigation={navigation}
-      />
-
-      <Modal
-        visible={cycleSwitchModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeCycleSwitchModal}
-      >
-        <View className="flex-1 bg-black/40 items-center justify-center px-4">
-          <View className="bg-white w-full rounded-xl p-4">
-            <Text className="text-lg font-bold text-gray-dark mb-1">
-              {t('sessionCyclePickerTitle', { defaultValue: 'Sélection du cycle' })}
-            </Text>
-            <Text className="text-sm text-gray-light mb-4">
-              {t('sessionCyclePickerDescription', {
-                defaultValue: 'Choisissez le cycle sur lequel vous travaillez maintenant.',
-              })}
-            </Text>
-
-            <CyclePicker
-              cycles={activeCycles}
-              selectedCycleId={pendingCycleId}
-              onSelectCycle={setPendingCycleId}
-            />
-
-            <View className="flex-row justify-end gap-2 mt-3">
-              {!requiresCycleSelection && (
-                <TouchableOpacity
-                  className="px-4 py-2 rounded-lg border border-gray-300"
-                  onPress={closeCycleSwitchModal}
-                >
-                  <Text className="text-sm text-gray-dark">{t('cancel')}</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                className={`px-4 py-2 rounded-lg ${
-                  pendingCycleId ? 'bg-mavecam-primary' : 'bg-gray-300'
-                }`}
-                disabled={!pendingCycleId}
-                onPress={confirmCycleSwitch}
-              >
-                <Text className="text-sm text-white font-semibold">
-                  {t('sessionCycleConfirm', { defaultValue: 'Confirmer le cycle' })}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        {!cycleHasProductionUnits ? (
+          <QuickActionsSheet
+            visible={actionsSheetVisible}
+            onClose={() => setActionsSheetVisible(false)}
+            unreadCount={unreadCount}
+            navigation={navigation}
+            scope="cycle"
+            cycleContext={
+              sessionCycle?.id ? { cycleId: sessionCycle.id } : undefined
+            }
+            onPartialHarvestCycle={
+              cycleHasProductionUnits ? undefined : openCyclePartialHarvestModal
+            }
+            onHarvestCycle={openCycleHarvestModal}
+            hideGlobalCycleOperationalActions={cycleHasProductionUnits}
+          />
+        ) : null}
       </ScrollView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  dashboardRoot: { flex: 1, backgroundColor: colors.surface.dashboard },
+  dashboardSectionContainer: { paddingHorizontal: spacing[5], paddingVertical: spacing[5] },
+  dashboardGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
+  sessionCard: { marginBottom: spacing[1] },
+  actionCard: {
+    marginTop: spacing[3],
+  },
+  actionLabel: { flex: 1, marginRight: spacing[3] },
+  inactiveSessionCard: {
+    backgroundColor: colors.surface.disabled,
+    borderColor: colors.border.default,
+  },
+  sessionName: {},
+});

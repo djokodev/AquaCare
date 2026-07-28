@@ -1,1 +1,1 @@
-# Apps package for MAVECAM AquaCare project
+# Apps package for AquaCare project

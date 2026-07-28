@@ -8,11 +8,18 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from aquaculture.models import CycleLog, ProductionCycle
+from aquaculture.domain.exceptions import FeedingPlanGenerationError
+from aquaculture.models import (
+    CycleFeedStockEntry,
+    CycleLog,
+    CycleUnitAllocation,
+    FarmFeedReference,
+    ProductionCycle,
+    ProductionUnit,
+)
 from aquaculture.services import (
     CycleLogApplicationService,
     DashboardApplicationService,
-    FeedingCycleNotFoundError,
     FeedingPlanApplicationService,
     GenerateFeedingPlansCommand,
     InvalidDashboardCycleScopeError,
@@ -21,9 +28,43 @@ from aquaculture.services import (
 from django.utils import timezone
 
 
+def create_cycle_unit_allocation(cycle, name='Bac 1'):
+    unit = ProductionUnit.objects.create(
+        farm_profile=cycle.farm_profile,
+        name=name,
+        unit_type='tank',
+        volume_m3=Decimal("3.00"),
+    )
+    return CycleUnitAllocation.objects.create(
+        cycle=cycle,
+        production_unit=unit,
+        initial_fish_count=500,
+        current_fish_count=500,
+        initial_biomass_kg=Decimal("5.00"),
+        current_biomass_kg=Decimal("5.00"),
+    )
+
+
 @pytest.mark.django_db
 class TestCycleLogApplicationService:
     def test_create_or_update_log_updates_existing_log(self, authenticated_user, production_cycle):
+        feed_reference = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            source='external',
+            name='Stock test',
+            species=production_cycle.species,
+            pellet_size_mm=Decimal('2.00'),
+        )
+        CycleFeedStockEntry.objects.create(
+            cycle=production_cycle,
+            feed_reference=feed_reference,
+            source='manual',
+            label='Stock test',
+            feed_size_mm=Decimal('2.00'),
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('10000.00'),
+            entry_date=date.today(),
+        )
         existing_log = CycleLog.objects.create(
             cycle=production_cycle,
             log_date=date.today(),
@@ -37,6 +78,7 @@ class TestCycleLogApplicationService:
                 "log_date": date.today(),
                 "mortality_count": 5,
                 "feed_quantity": Decimal("2.5"),
+                "feed_reference": feed_reference,
             },
         )
 
@@ -45,15 +87,164 @@ class TestCycleLogApplicationService:
         assert result.log.id == existing_log.id
         assert existing_log.mortality_count == 5
 
+    def test_create_or_update_log_creates_unit_log_next_to_global_log(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=2,
+        )
+        allocation = create_cycle_unit_allocation(production_cycle, 'Bac 1')
+
+        result = CycleLogApplicationService.create_or_update_log(
+            user=authenticated_user,
+            validated_data={
+                "cycle": production_cycle,
+                "log_date": date.today(),
+                "cycle_unit_allocation": allocation,
+                "mortality_count": 7,
+            },
+        )
+
+        assert result.created is True
+        assert result.log.cycle_unit_allocation_id == allocation.id
+        assert CycleLog.objects.filter(cycle=production_cycle, log_date=date.today()).count() == 2
+
+    def test_create_or_update_log_updates_existing_unit_scoped_log(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        allocation = create_cycle_unit_allocation(production_cycle, 'Bac 1')
+        existing_log = CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date.today(),
+            mortality_count=2,
+        )
+
+        result = CycleLogApplicationService.create_or_update_log(
+            user=authenticated_user,
+            validated_data={
+                "cycle": production_cycle,
+                "log_date": date.today(),
+                "cycle_unit_allocation": allocation,
+                "mortality_count": 5,
+            },
+        )
+
+        existing_log.refresh_from_db()
+        assert result.created is False
+        assert result.log.id == existing_log.id
+        assert existing_log.mortality_count == 5
+
+    def test_create_or_update_log_replaces_nullable_snapshot_fields(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        allocation = create_cycle_unit_allocation(production_cycle, 'Bac snapshot')
+        original_client_uuid = uuid4()
+        existing_log = CycleLog.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            client_uuid=original_client_uuid,
+            log_date=date.today(),
+            mortality_count=2,
+            sample_count=20,
+            sample_total_weight=Decimal('1000.00'),
+            average_weight=Decimal('50.00'),
+            water_temperature=Decimal('28.00'),
+        )
+
+        result = CycleLogApplicationService.create_or_update_log(
+            user=authenticated_user,
+            validated_data={
+                "cycle": production_cycle,
+                "cycle_unit_allocation": allocation,
+                "client_uuid": uuid4(),
+                "log_date": date.today(),
+                "mortality_count": 0,
+                "sample_count": None,
+                "sample_total_weight": None,
+                "water_temperature": None,
+            },
+        )
+
+        existing_log.refresh_from_db()
+        assert result.created is False
+        assert existing_log.client_uuid == original_client_uuid
+        assert existing_log.sample_count is None
+        assert existing_log.sample_total_weight is None
+        assert existing_log.average_weight is None
+        assert existing_log.water_temperature is None
+
+    def test_update_log_triggers_analytics_and_cache_invalidation(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        log = CycleLog.objects.create(
+            cycle=production_cycle,
+            log_date=date.today(),
+            mortality_count=1,
+        )
+
+        with patch(
+            "aquaculture.services.log_application_service.AnalyticsService.update_cycle_metrics_data"
+        ) as mock_update_metrics, patch(
+            "aquaculture.tasks.invalidate_dashboard_cache"
+        ) as mock_invalidate_cache:
+            updated = CycleLogApplicationService.update_log(
+                user=authenticated_user,
+                log=log,
+                validated_data={"mortality_count": 3},
+            )
+
+        assert updated.mortality_count == 3
+        mock_update_metrics.assert_called_once_with(production_cycle)
+        mock_invalidate_cache.assert_called_once_with(str(authenticated_user.id))
+
+    def test_create_bulk_logs_triggers_analytics_and_cache_invalidation(
+        self,
+        authenticated_user,
+        production_cycle,
+    ):
+        logs_payload = [
+            {
+                "cycle": production_cycle,
+                "log_date": date.today(),
+                "mortality_count": 1,
+                "created_offline": True,
+            }
+        ]
+
+        with patch(
+            "aquaculture.services.log_application_service.AnalyticsService.update_cycle_metrics_data"
+        ) as mock_update_metrics, patch(
+            "aquaculture.tasks.invalidate_dashboard_cache"
+        ) as mock_invalidate_cache:
+            result = CycleLogApplicationService.create_bulk_logs(
+                user=authenticated_user,
+                logs_data=logs_payload,
+            )
+
+        assert result["created"] == 1
+        mock_update_metrics.assert_called_once_with(production_cycle)
+        mock_invalidate_cache.assert_called_once_with(str(authenticated_user.id))
+
 
 @pytest.mark.django_db
 class TestFeedingPlanApplicationService:
-    def test_generate_feeding_plans_rejects_unknown_cycle(self, authenticated_user):
-        with pytest.raises(FeedingCycleNotFoundError):
+    def test_generate_feeding_plans_rejects_unknown_allocation(self, authenticated_user):
+        with pytest.raises(FeedingPlanGenerationError):
             FeedingPlanApplicationService.generate_feeding_plans(
                 user=authenticated_user,
                 command=GenerateFeedingPlansCommand(
-                    cycle_id=str(uuid4()),
+                    cycle_unit_allocation_id=str(uuid4()),
                     weeks_ahead=1,
                 ),
             )

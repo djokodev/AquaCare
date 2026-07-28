@@ -121,12 +121,17 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         Filtre les notifications par utilisateur authentifié.
         Exclut les notifications futures (scheduled_for > now).
         """
-        is_read_param = self.request.query_params.get("is_read")
-        filters = NotificationQueryFilters(
-            is_read=is_read_param.lower() == "true" if is_read_param is not None else None,
-            notification_type=self.request.query_params.get("type"),
-        )
+        filters = self._build_filters(self.request)
         return NotificationInboxApplicationService.get_user_notifications(self.request.user, filters)
+
+    @staticmethod
+    def _build_filters(request: Request) -> NotificationQueryFilters:
+        is_read_param = request.query_params.get("is_read")
+        return NotificationQueryFilters(
+            is_read=is_read_param.lower() == "true" if is_read_param is not None else None,
+            notification_type=request.query_params.get("type"),
+            cycle_id=request.query_params.get("cycle_id"),
+        )
 
     def get_serializer_class(self) -> type[NotificationListSerializer] | type[NotificationSerializer]:
         """
@@ -190,7 +195,10 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         }
         ```
         """
-        count = NotificationInboxApplicationService.mark_all_notifications_as_read(request.user)
+        count = NotificationInboxApplicationService.mark_all_notifications_as_read_with_filters(
+            request.user,
+            self._build_filters(request),
+        )
 
         return self._build_mutation_response(
             status_text='success',
@@ -234,7 +242,10 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         }
         ```
         """
-        count = NotificationInboxApplicationService.delete_all_read_notifications(request.user)
+        count = NotificationInboxApplicationService.delete_all_read_notifications_with_filters(
+            request.user,
+            self._build_filters(request),
+        )
 
         return self._build_mutation_response(
             status_text='success',
@@ -265,6 +276,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         """
         data: NotificationStatsPayload = NotificationInboxApplicationService.get_notification_stats(
             request.user,
+            self._build_filters(request),
         )
 
         serializer = self.get_serializer(data)

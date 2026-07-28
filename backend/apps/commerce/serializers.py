@@ -1,5 +1,5 @@
 """
-Serializers Django REST Framework pour le module commerce MAVECAM AquaCare.
+Serializers Django REST Framework pour le module commerce AquaCare.
 
 Architecture minimaliste : Serializers pour validation/transformation données,
 logique métier déléguée aux Services.
@@ -44,9 +44,9 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     Affiche snapshot produit au moment de la commande.
     """
-    product_brand = serializers.CharField(source='product.brand', read_only=True)
+    product_brand = serializers.CharField(source='product_brand_snapshot', read_only=True)
     product_package_weight = serializers.IntegerField(
-        source='product.package_weight_kg',
+        source='product_package_weight_kg_snapshot',
         read_only=True
     )
 
@@ -68,6 +68,7 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     user_name = serializers.CharField(source='user.full_name', read_only=True)
     farm_name = serializers.CharField(source='farm_profile.farm_name', read_only=True)
+    production_cycle_id = serializers.UUIDField(read_only=True, allow_null=True)
     total_bags = serializers.IntegerField(read_only=True)
     is_free_delivery = serializers.BooleanField(read_only=True)
 
@@ -75,7 +76,9 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'order_number', 'status',
+            'delivered_at', 'ready_for_pickup_at', 'received_at',
             'user', 'user_name', 'farm_profile', 'farm_name',
+            'production_cycle_id',
             'delivery_method', 'pickup_location',
             'delivery_name', 'delivery_phone', 'delivery_region',
             'delivery_city', 'delivery_full_address',
@@ -87,6 +90,7 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'order_number', 'status', 'user', 'farm_profile',
+            'delivered_at', 'ready_for_pickup_at', 'received_at',
             'subtotal', 'delivery_fee', 'total',
             'created_at', 'updated_at', 'synced_at'
         ]
@@ -116,6 +120,12 @@ class CommerceErrorResponseSerializer(serializers.Serializer):
 
     error = serializers.CharField(read_only=True)
     message = serializers.CharField(read_only=True, required=False, allow_blank=True)
+    code = serializers.CharField(read_only=True, required=False)
+    missing_fields = serializers.ListField(
+        child=serializers.CharField(),
+        read_only=True,
+        required=False,
+    )
 
 
 class RecommendedProductQuerySerializer(serializers.Serializer):
@@ -166,6 +176,11 @@ class OrderCreateSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         help_text="Point de retrait si delivery_method='pickup'"
+    )
+    production_cycle_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="UUID du cycle de production associe a la commande",
     )
     client_uuid = serializers.UUIDField(
         required=False,

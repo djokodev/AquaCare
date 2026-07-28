@@ -1,45 +1,132 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
+import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useDispatch, useSelector } from 'react-redux';
+
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { ProductionCycle, FeedingPlan } from '@/types/aquaculture';
-import { RootStackParamList } from '@/navigation/MainNavigator';
-import { MAVECAM_COLORS } from '@/constants/colors';
-import { formatNumber, formatPercentage } from '@/utils';
-import logger from '@/utils/logger';
 import { useLocalFeedingAlarms } from '@/features/notifications/hooks/useLocalFeedingAlarms';
-import { AppDispatch, RootState } from '@/store/store';
-import { setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+import { FeedingPlan } from '@/types/aquaculture';
+import { formatDate, formatNumber, formatPercentage } from '@/utils';
+import logger from '@/utils/logger';
+import { parseApiError } from '@/utils/errorParser';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, InlineAlert, LoadingState, Screen } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 type FeedingPlanScreenNavigationProp = StackNavigationProp<RootStackParamList, 'FeedingPlan'>;
+type FeedingPlanScreenRouteProp = RouteProp<RootStackParamList, 'FeedingPlan'>;
 
 interface FeedingPlanScreenProps {
   navigation: FeedingPlanScreenNavigationProp;
+  route: FeedingPlanScreenRouteProp;
 }
 
-export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps) {
+interface StatRowProps {
+  label: string;
+  value: string;
+}
+
+interface StatSectionProps {
+  title: string;
+  items: StatRowProps[];
+}
+
+function StatRow({ label, value }: StatRowProps) {
+  return (
+    <Card variant="outlined" style={{ padding: spacing[3] }}>
+      <AppText variant="caption" color="muted">{label}</AppText>
+      <AppText variant="body" style={{ marginTop: spacing[1] }} numberOfLines={2}>
+        {value}
+      </AppText>
+    </Card>
+  );
+}
+
+function StatSection({ title, items }: StatSectionProps) {
+  return (
+    <View>
+      <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{title}</AppText>
+      <View style={{ gap: spacing[3] }}>
+        {items.map((item) => (
+          <StatRow key={item.label} label={item.label} value={item.value} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const formatMetricValue = (value: number | string | null | undefined, unit?: string, decimals = 1) => {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  return formatNumber(value, unit, decimals);
+};
+
+const formatMetricPercentage = (value: number | string | null | undefined, decimals = 1) => {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  return formatPercentage(value, decimals);
+};
+
+const formatMetricText = (value: string | null | undefined) => value?.trim() || '-';
+
+const getLocalDateIso = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScreenProps) {
   const { t, i18n } = useTranslation();
-  const dispatch = useDispatch<AppDispatch>();
   const {
     reconcileCycleAlarms,
     getFormattedMealTimes,
     setAlarmsEnabled,
   } = useLocalFeedingAlarms();
-  const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+
+  const routeParams = route.params;
+  const cycleId = routeParams?.cycleId ?? '';
+  const cycleUnitAllocationId = routeParams?.cycleUnitAllocationId ?? '';
+  const productionUnitId = routeParams?.productionUnitId ?? '';
+  const productionUnitName = routeParams?.productionUnitName?.trim() ?? '';
+  const hasValidUnitContext = Boolean(cycleId && cycleUnitAllocationId && productionUnitId);
+  const unitLabel = productionUnitName || t('feedingPlanUnitDefaultTitle');
+  const scopeKey = useMemo(
+    () => [cycleId, cycleUnitAllocationId].filter(Boolean).join(':'),
+    [cycleId, cycleUnitAllocationId]
+  );
 
   const [loading, setLoading] = useState(true);
-  const [generatingPlan, setGeneratingPlan] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCycle, setSelectedCycle] = useState<ProductionCycle | null>(null);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
   const [feedingPlans, setFeedingPlans] = useState<FeedingPlan[]>([]);
   const [alarmsReady, setAlarmsReady] = useState(false);
   const [alarmStatus, setAlarmStatus] = useState<'active' | 'pending' | 'permission_denied' | 'error'>('pending');
-  const isSchedulingRef = useRef(false);
   const [alarmInfo, setAlarmInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isSchedulingRef = useRef(false);
+  const todayIsoDate = useMemo(getLocalDateIso, []);
+  const displayedFeedingPlans = useMemo(
+    () =>
+      feedingPlans
+        .filter((plan) => plan.start_date <= todayIsoDate && todayIsoDate <= plan.end_date)
+        .sort((left, right) => left.week_number - right.week_number)
+        .slice(0, 1),
+    [feedingPlans, todayIsoDate]
+  );
 
   const alarmMessages = useMemo(
     () => ({
@@ -51,16 +138,114 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
     [t]
   );
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const syncAlarmsForCurrentUnit = useCallback(
+    async (plans: FeedingPlan[]) => {
+      if (!hasValidUnitContext || !alarmsReady || isSchedulingRef.current) {
+        return;
+      }
+
+      isSchedulingRef.current = true;
+      try {
+        const activePlans = plans.filter((plan) => plan.is_active);
+        const result = await reconcileCycleAlarms({
+          cycleId,
+          scopeId: scopeKey,
+          cycleName: unitLabel,
+          activePlans,
+          enabled: true,
+          messages: alarmMessages,
+        });
+
+        if (result.status === 'permission_denied') {
+          setAlarmStatus('permission_denied');
+          setAlarmInfo(t('alarmPermissionDenied'));
+          return;
+        }
+
+        if (result.status === 'error') {
+          setAlarmStatus('error');
+          setAlarmInfo(t('alarmScheduleError'));
+          return;
+        }
+
+        if (activePlans.length > 0) {
+          setAlarmStatus('active');
+          setAlarmInfo(t('alarmsScheduled', { times: getFormattedMealTimes(activePlans[0].meals_per_day).join(', ') }));
+        } else {
+          setAlarmStatus('pending');
+          setAlarmInfo(t('alarmsStatusPending'));
+        }
+      } finally {
+        isSchedulingRef.current = false;
+      }
+    },
+    [
+      alarmMessages,
+      alarmsReady,
+      cycleId,
+      getFormattedMealTimes,
+      hasValidUnitContext,
+      reconcileCycleAlarms,
+      scopeKey,
+      t,
+      unitLabel,
+    ]
+  );
+
+  const loadData = useCallback(
+    async (mode: 'initial' | 'refresh' = 'initial') => {
+      if (!hasValidUnitContext) {
+        setFeedingPlans([]);
+        setError(t('feedingPlanUnitContextIncompleteError'));
+        setAlarmInfo(null);
+        setAlarmStatus('pending');
+        if (mode === 'refresh') {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (mode === 'refresh') {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      try {
+        const plans = await aquacultureService.getFeedingPlansForAllocation(cycleUnitAllocationId, {
+          currentWeekOnly: true,
+        });
+        setFeedingPlans(plans);
+        setError(null);
+      } catch (err: unknown) {
+        logger.error("Erreur chargement plans d'alimentation de l'unite:", err);
+        setError(t('feedingPlanUnableToLoad'));
+      } finally {
+        if (mode === 'refresh') {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    [cycleUnitAllocationId, hasValidUnitContext, t]
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: productionUnitName
+        ? t('feedingPlanUnitTitle', { unitName: productionUnitName })
+        : t('feedingPlanUnitTitleFallback'),
+    });
+  }, [navigation, productionUnitName, t]);
 
   useEffect(() => {
     let mounted = true;
-
     setAlarmsEnabled(true)
       .catch((storageError) => {
-        logger.warn('Impossible de forcer les alarmes actives', storageError);
+        logger.warn("Impossible de forcer les alarmes d'alimentation actives", storageError);
       })
       .finally(() => {
         if (mounted) {
@@ -73,343 +258,187 @@ export default function FeedingPlanScreen({ navigation }: FeedingPlanScreenProps
     };
   }, [setAlarmsEnabled]);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
-      const cycles = await aquacultureService.getActiveCycles();
-      const cycleToUse = currentCycle?.id
-        ? cycles.find((c) => c.id === currentCycle.id) ?? cycles[0] ?? null
-        : cycles[0] ?? null;
+  const onRefresh = useCallback(async () => {
+    await loadData('refresh');
+  }, [loadData]);
 
-      if (cycleToUse) {
-        setSelectedCycle(cycleToUse);
-        dispatch(setCurrentCycle(cycleToUse));
-        const plans = await aquacultureService.getFeedingPlans(cycleToUse.id);
-        setFeedingPlans(plans);
-      } else {
-        setSelectedCycle(null);
-        setFeedingPlans([]);
-      }
-    } catch {
-      setError(t('feedingPlansLoadError'));
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!hasValidUnitContext || !alarmsReady) {
+      return;
     }
-  };
 
-  const onRefresh = React.useCallback(async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
-  }, []);
+    void syncAlarmsForCurrentUnit(displayedFeedingPlans);
+  }, [alarmsReady, displayedFeedingPlans, hasValidUnitContext, syncAlarmsForCurrentUnit]);
 
-  const syncAlarmsForCurrentCycle = useCallback(
-    async (plans: FeedingPlan[]) => {
-      if (!selectedCycle || !alarmsReady) {
-        return;
-      }
-      if (isSchedulingRef.current) return;
+  const generateFeedingPlan = useCallback(() => {
+    if (!hasValidUnitContext) {
+      return;
+    }
 
-      isSchedulingRef.current = true;
-      try {
-        const activePlans = plans.filter((plan) => plan.is_active);
-        const result = await reconcileCycleAlarms({
-          cycleId: selectedCycle.id,
-          cycleName: selectedCycle.cycle_name,
-          activePlans,
-          enabled: true,
-          messages: alarmMessages,
-        });
+    const hasExistingPlan = displayedFeedingPlans.length > 0;
+    const confirmMessage = hasExistingPlan
+      ? t('feedingPlanGenerateConfirmExisting', { unitName: unitLabel })
+      : t('feedingPlanGenerateConfirmEmpty', { unitName: unitLabel });
 
-        if (result.status === 'permission_denied') {
-          setAlarmStatus('permission_denied');
-          setAlarmInfo(t('alarmPermissionDenied'));
-          return;
-        }
-        if (result.status === 'error') {
-          setAlarmStatus('error');
-          setAlarmInfo(t('alarmScheduleError'));
-          return;
-        }
-        if (activePlans.length > 0) {
-          setAlarmStatus('active');
-          const times = getFormattedMealTimes(activePlans[0].meals_per_day).join(', ');
-          setAlarmInfo(t('alarmsScheduled', { times }));
-        } else {
-          setAlarmStatus('pending');
-          setAlarmInfo(t('alarmsStatusPending'));
-        }
-      } finally {
-        isSchedulingRef.current = false;
-      }
-    },
-    [
-      selectedCycle,
-      alarmsReady,
-      reconcileCycleAlarms,
-      alarmMessages,
-      t,
-      getFormattedMealTimes,
-    ]
-  );
-
-  const generateFeedingPlan = async () => {
-    if (!selectedCycle) return;
-
-    Alert.alert(t('generateFeedingPlan'), t('generateFeedingPlanConfirm'), [
+    Alert.alert(t('feedingPlanGenerateConfirmTitle'), confirmMessage, [
       { text: t('cancel'), style: 'cancel' },
       {
-        text: t('confirm'),
+        text: t('generatePlan'),
         onPress: async () => {
           try {
             setGeneratingPlan(true);
-            await aquacultureService.generateFeedingPlan(selectedCycle.id);
-            const updatedPlans = await aquacultureService.getFeedingPlans(selectedCycle.id);
+            await aquacultureService.generateFeedingPlanForAllocation({
+              cycleUnitAllocationId,
+              weeksAhead: 1,
+              cycleId,
+            });
+            const updatedPlans = await aquacultureService.getFeedingPlansForAllocation(cycleUnitAllocationId, {
+              currentWeekOnly: true,
+            });
             setFeedingPlans(updatedPlans);
-            await syncAlarmsForCurrentCycle(updatedPlans);
-
             Alert.alert(t('success'), t('feedingPlanGenerated'));
-          } catch (error: unknown) {
-            logger.error('Erreur generation plan:', error);
-            Alert.alert(t('error'), t('feedingPlanGenerationError'));
+          } catch (err: unknown) {
+            logger.error('Erreur generation plan unitaire:', err);
+            Alert.alert(t('error'), formatAquacultureErrorWithAction(parseApiError(err), t));
           } finally {
             setGeneratingPlan(false);
           }
         },
       },
     ]);
-  };
+  }, [cycleId, cycleUnitAllocationId, displayedFeedingPlans.length, hasValidUnitContext, t, unitLabel]);
 
-  useEffect(() => {
-    if (!selectedCycle || !alarmsReady) {
-      return;
-    }
-    syncAlarmsForCurrentCycle(feedingPlans);
-  }, [selectedCycle, feedingPlans, alarmsReady, syncAlarmsForCurrentCycle]);
+  const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 
-  const renderHeader = () => (
-    <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
-      <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
-      </TouchableOpacity>
-      <Text className="text-xl font-bold text-white flex-1">{t('feedingPlan')}</Text>
-    </View>
-  );
+  const headerTitle = productionUnitName
+    ? t('feedingPlanUnitTitle', { unitName: productionUnitName })
+    : t('feedingPlanUnitTitleFallback');
 
   if (loading) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center p-10">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="text-base text-gray-light mt-3">{t('loading')}</Text>
-        </View>
-      </View>
-    );
+    return <View style={styles.root}><AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.stateScreen}><LoadingState message={t('loading')} /></Screen></View>;
   }
 
-  if (!selectedCycle) {
-    return (
-      <View className="flex-1 bg-cream">
-        {renderHeader()}
-        <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          <View className="flex-1 items-center justify-center py-20 px-6">
-            <Ionicons name="restaurant-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text className="text-xl font-bold text-gray-dark mt-4 mb-2 text-center">{t('noActiveCycles')}</Text>
-            <Text className="text-sm text-gray-light text-center mb-6">{t('createCycleToGeneratePlan')}</Text>
-            <TouchableOpacity
-              className="bg-mavecam-primary px-6 py-3 rounded-lg"
-              onPress={() => navigation.navigate('NewCycle')}
-            >
-              <Text className="text-white text-base font-semibold">{t('newCycle')}</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
-    );
+  if (!hasValidUnitContext) {
+    return <View style={styles.root}><AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} /><Screen style={styles.stateScreen}><ErrorState message={t('feedingPlanUnitContextIncompleteError')} /></Screen></View>;
   }
 
   return (
-    <View className="flex-1 bg-cream">
-      {renderHeader()}
+    <View style={styles.root}>
+      <AppHeader title={headerTitle} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      <Screen style={styles.screenContent}>
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} contentContainerStyle={styles.scrollContent}>
+        <Card style={styles.planCard}>
+          <View style={{ gap: spacing[4] }}>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{t('feedingPlans')}</AppText>
+          <Button label={generatingPlan ? t('generating') : t('generateFeedingPlanShort')} onPress={generateFeedingPlan} disabled={generatingPlan} loading={generatingPlan} iconLeft="refresh" />
 
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View className="mx-4 mt-4 mb-3 flex-row items-start bg-[#ecfdf5] rounded-xl p-4 gap-3">
-          <Ionicons name="information-circle-outline" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginTop: 1 }} />
-          <Text className="flex-1 text-sm text-[#065f46] leading-5">
-            {t('feedingPlanScreenDescription')}
-          </Text>
-        </View>
+          <InlineAlert
+            tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'}
+            message={alarmInfo ?? (alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending'))}
+          />
 
-        <View className="bg-white mx-4 mb-6 p-4 rounded-xl">
-          <View className="mb-4">
-            <Text className="text-lg font-bold text-gray-dark mb-3">{t('feedingPlans')}</Text>
-            <View className="flex-row items-center">
-              <View
-                className={`flex-row items-center flex-1 mr-2 px-3 py-2 rounded-lg ${
-                  alarmStatus === 'active'
-                    ? 'bg-[#ecfdf3]'
-                    : alarmStatus === 'permission_denied'
-                      ? 'bg-[#fef2f2]'
-                      : alarmStatus === 'error'
-                        ? 'bg-[#fff7ed]'
-                        : 'bg-cream'
-                }`}
-              >
-                <Ionicons
-                  name={alarmStatus === 'active' ? 'notifications' : 'notifications-off'}
-                  size={16}
-                  color={
-                    alarmStatus === 'active'
-                      ? MAVECAM_COLORS.GREEN_PRIMARY
-                      : alarmStatus === 'permission_denied'
-                        ? '#dc2626'
-                        : MAVECAM_COLORS.GRAY_LIGHT
-                  }
-                />
-                <Text
-                  className={`text-xs font-semibold ml-2 ${
-                    alarmStatus === 'active'
-                      ? 'text-mavecam-primary'
-                      : alarmStatus === 'permission_denied'
-                        ? 'text-[#b91c1c]'
-                        : 'text-gray-light'
-                  }`}
-                  numberOfLines={1}
-                >
-                  {alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending')}
-                </Text>
-              </View>
+          {error ? (
+            <ErrorState message={error} actionLabel={t('retry')} onAction={() => void loadData('refresh')} compact />
+          ) : null}
 
-              <TouchableOpacity
-                className={`flex-row items-center justify-center px-4 py-2 rounded-lg bg-mavecam-primary min-w-[124px] ${
-                  generatingPlan ? 'opacity-60' : ''
-                }`}
-                onPress={generateFeedingPlan}
-                disabled={generatingPlan}
-              >
-                {generatingPlan ? (
-                  <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
-                ) : (
-                  <Ionicons name="refresh" size={16} color={MAVECAM_COLORS.WHITE} />
-                )}
-                <Text className="text-white text-sm font-semibold ml-2">
-                  {generatingPlan ? t('generating') : t('generatePlan')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {alarmInfo && (
-            <View
-              className={`rounded-lg p-3 mb-4 border ${
-                alarmStatus === 'active'
-                  ? 'bg-[#ecfdf3] border-[#86efac]'
-                  : alarmStatus === 'permission_denied'
-                    ? 'bg-[#fef2f2] border-[#fca5a5]'
-                    : alarmStatus === 'error'
-                      ? 'bg-[#fff7ed] border-[#fdba74]'
-                      : 'bg-cream border-[#e2e8f0]'
-              }`}
-            >
-              <Text
-                className={`text-xs ${
-                  alarmStatus === 'active'
-                    ? 'text-mavecam-primary'
-                    : alarmStatus === 'permission_denied'
-                      ? 'text-[#b91c1c]'
-                      : alarmStatus === 'error'
-                        ? 'text-[#c2410c]'
-                        : 'text-gray-light'
-                }`}
-              >
-                {alarmInfo}
-              </Text>
-            </View>
-          )}
-
-          {feedingPlans.length === 0 ? (
-            <View className="items-center py-10">
-              <Ionicons name="restaurant-outline" size={48} color={MAVECAM_COLORS.GRAY_LIGHT} />
-              <Text className="text-base font-bold text-gray-dark mt-3">{t('noFeedingPlans')}</Text>
-              <Text className="text-sm text-gray-light text-center mt-1">{t('generateFirstPlan')}</Text>
-            </View>
+          {displayedFeedingPlans.length === 0 ? (
+            <EmptyState title={t('noUnitFeedingPlans')} compact />
           ) : (
-            feedingPlans.map((plan) => (
-              <View key={plan.id} className="bg-cream rounded-lg p-4 mb-3 border-l-4 border-l-mavecam-primary">
-                <View className="flex-row justify-between items-center mb-3">
-                  <Text className="text-base font-bold text-gray-dark">
-                    {t('week')} {plan.week_number}
-                  </Text>
-                  <Text className="text-sm text-gray-light">
-                    {new Date(plan.start_date).toLocaleDateString(i18n.language === 'fr' ? 'fr-FR' : 'en-US')}
-                  </Text>
-                </View>
+            displayedFeedingPlans.map((plan) => {
+              const recommendedFeed = formatMetricText(plan.recommended_feed_type || plan.recommended_feed);
+              const dailyFeedAmount = Number(plan.daily_feed_amount ?? 0);
+              const hasInsufficientRationData = Number.isFinite(dailyFeedAmount) && dailyFeedAmount <= 0;
+              const temperatureValue = plan.temperature_used_c === null || plan.temperature_used_c === undefined
+                ? '-'
+                : `${formatNumber(plan.temperature_used_c, undefined, 1)}°C${
+                  plan.used_default_temperature ? ` ${t('feedingDefaultTemperatureSuffix')}` : ''
+                }`;
+              const proteinValue = plan.protein_percentage === null || plan.protein_percentage === undefined
+                ? '-'
+                : `${formatNumber(plan.protein_percentage, undefined, 0)} %`;
+              const referenceValue = (() => {
+                const source = (plan.data_source || '').trim().toUpperCase();
+                if (source === 'DIBAQ') {
+                  return t('feedingPlanReferenceDibaq');
+                }
 
-                <View className="gap-3">
-                  <View className="flex-row justify-between">
-                    <View className="flex-1 items-center">
-                      <Text className="text-xs text-gray-light mb-1">{t('dailyRation')}</Text>
-                      <Text className="text-sm font-semibold text-gray-dark">{formatNumber(plan.daily_feed_amount, 'kg/j')}</Text>
+                return t('feedingPlanReferenceAquacareEstimate');
+              })();
+
+              return (
+                <Card key={plan.id} testID="feeding-plan-card" variant="outlined" style={{ backgroundColor: colors.surface.page }}>
+                  <View style={{ marginBottom: spacing[4] }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing[3] }}>
+                      <View style={{ flex: 1 }}>
+                        <AppText variant="bodyStrong">
+                          {t('feedingPlanCurrentWeekLabel')} · {t('week')} {plan.week_number}
+                        </AppText>
+                        <AppText variant="caption" color="muted" style={{ marginTop: spacing[1] }}>
+                          {formatDate(plan.start_date, locale)} - {formatDate(plan.end_date, locale)}
+                        </AppText>
+                      </View>
                     </View>
-                    <View className="flex-1 items-center">
-                      <Text className="text-xs text-gray-light mb-1">{t('feedingPercentage')}</Text>
-                      <Text className="text-sm font-semibold text-gray-dark">{formatPercentage(plan.feeding_rate)}</Text>
-                    </View>
+                    <AppText variant="label" color="link" style={{ marginTop: spacing[2] }}>
+                      {plan.scope_label || t('feedingPlanUnitTitle', { unitName: unitLabel })}
+                    </AppText>
                   </View>
 
-                  <View className="flex-row justify-between">
-                    <View className="flex-1 items-center">
-                      <Text className="text-xs text-gray-light mb-1">{t('feedingFrequency')}</Text>
-                      <Text className="text-sm font-semibold text-gray-dark">
-                        {plan.meals_per_day}x/{t('day')}
-                      </Text>
-                    </View>
-                    <View className="flex-1 items-center">
-                      <Text className="text-xs text-gray-light mb-1">{t('feedPerMeal')}</Text>
-                      <Text className="text-sm font-semibold text-gray-dark">{formatNumber(plan.feed_per_meal, 'kg')}</Text>
-                    </View>
-                  </View>
-
-                  {plan.notes && (
-                    <View className="bg-white rounded-md p-3">
-                      <Text className="text-xs font-bold text-gray-dark mb-1">{t('notes')}:</Text>
-                      <Text className="text-sm text-gray-light">{plan.notes}</Text>
-                    </View>
-                  )}
-
-                  {plan.used_default_temperature ? (
-                    <View className="bg-[#fff7ed] rounded-md p-3 flex-row items-start">
-                      <Ionicons name="thermometer-outline" size={14} color="#f59e0b" style={{ marginTop: 1 }} />
-                      <Text className="text-xs text-[#92400e] ml-2 flex-1">
-                        {t('feedingPlanDefaultTemp')}
-                      </Text>
-                    </View>
-                  ) : plan.temperature_used_c != null ? (
-                    <View className="bg-[#ecfdf5] rounded-md p-3 flex-row items-start">
-                      <Ionicons name="thermometer-outline" size={14} color="#059669" style={{ marginTop: 1 }} />
-                      <Text className="text-xs text-[#065f46] ml-2 flex-1">
-                        {t('feedingPlanActualTemp', {
-                          temp: plan.temperature_used_c,
-                        })}
-                      </Text>
-                    </View>
+                  {hasInsufficientRationData ? (
+                    <InlineAlert tone="warning" message={t('feedingPlanInsufficientDataWarning')} />
                   ) : null}
 
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
+                  <View style={{ gap: spacing[4] }}>
+                    <StatSection
+                      title={t('feedingPlanRecommendationSection')}
+                      items={[
+                        { label: t('dailyRation'), value: formatMetricValue(plan.daily_feed_amount, 'kg/j', 2) },
+                        {
+                          label: t('feedingFrequency'),
+                          value: plan.meals_per_day === null || plan.meals_per_day === undefined
+                            ? '-'
+                            : `${plan.meals_per_day}x/${t('day')}`,
+                        },
+                        { label: t('feedPerMeal'), value: formatMetricValue(plan.feed_per_meal, 'kg', 2) },
+                        { label: t('feedingRecommendedRate'), value: formatMetricPercentage(plan.feeding_rate) },
+                      ]}
+                    />
 
-      {error && (
-        <View className="px-4 pb-4">
-          <Text className="text-sm text-error text-center">{error}</Text>
-        </View>
-      )}
+                    <StatSection
+                      title={t('feedingPlanFeedSection')}
+                      items={[
+                        { label: t('feedingFeedLabel'), value: recommendedFeed },
+                        { label: t('feedingProteinRate'), value: proteinValue },
+                      ]}
+                    />
+
+                    <StatSection
+                      title={t('feedingPlanDataSection')}
+                      items={[
+                        { label: t('feedingWaterTemperature'), value: temperatureValue },
+                        { label: t('feedingPlanReferenceUsed'), value: referenceValue },
+                      ]}
+                    />
+                  </View>
+                </Card>
+              );
+            })
+          )}
+          </View>
+        </Card>
+      </ScrollView>
+      </Screen>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  stateScreen: { justifyContent: 'center' },
+  screenContent: { padding: 0 },
+  scrollContent: { padding: spacing[4], paddingBottom: spacing[6] },
+  planCard: { gap: spacing[4] },
+});

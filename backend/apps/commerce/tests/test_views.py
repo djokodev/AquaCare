@@ -7,8 +7,9 @@ from decimal import Decimal
 
 import pytest
 from accounts.models import FarmProfile, User
-from aquaculture.models import ProductionCycle
+from aquaculture.models import NutritionalGuide, ProductionCycle
 from commerce.models import Order, Product
+from commerce.serializers import OrderSerializer
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -28,7 +29,11 @@ class TestProductViewSet:
             password="testpass123",
             first_name="Test",
             last_name="User",
-            age_group="26_35"
+            age_group="26_35",
+            region="littoral",
+            department="wouri",
+            city="Douala",
+            neighborhood="Bonamoussadi",
         )
 
     @pytest.fixture
@@ -48,7 +53,7 @@ class TestProductViewSet:
     def test_products(self):
         Product.objects.create(
             name="TILAPIA 3MM 20KG",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -88,12 +93,26 @@ class TestProductViewSet:
         assert len(response.data['results']) == 1
 
     def test_recommended_product_success(self, authenticated_client, test_products):
+        NutritionalGuide.objects.update_or_create(
+            species="tilapia",
+            min_weight=Decimal("0.00"),
+            source="AquaCare",
+            defaults={
+                "growth_stage": "alevin",
+                "max_weight": Decimal("10.00"),
+                "feed_size_mm": Decimal("2.0"),
+                "feeding_rate_percentage": Decimal("5.00"),
+                "protein_requirement": 45,
+                "meals_per_day": 3,
+                "expected_fcr": Decimal("1.05"),
+            },
+        )
         Product.objects.create(
-            name="TILAPIA 1MM 20KG",
-            brand="aller_aqua",
+            name="TILAPIA 2MM 20KG",
+            brand="dibaq",
             species="tilapia",
             phase="alevinage",
-            pellet_size_mm=Decimal("1.0"),
+            pellet_size_mm=Decimal("2.0"),
             protein_percentage=Decimal("45.0"),
             lipid_percentage=10,
             package_weight_kg=Decimal("20.0"),
@@ -108,6 +127,43 @@ class TestProductViewSet:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["species"] == "tilapia"
+        assert Decimal(response.data["pellet_size_mm"]) == Decimal("2.0")
+
+    def test_recommended_product_returns_404_without_exact_product(
+        self,
+        authenticated_client,
+    ):
+        NutritionalGuide.objects.update_or_create(
+            species="tilapia",
+            min_weight=Decimal("100.00"),
+            source="DIBAQ",
+            defaults={
+                "growth_stage": "grossissement",
+                "max_weight": Decimal("250.00"),
+                "feed_size_mm": Decimal("3.5"),
+                "feeding_rate_percentage": Decimal("4.00"),
+                "protein_requirement": 35,
+                "meals_per_day": 3,
+                "expected_fcr": Decimal("1.20"),
+            },
+        )
+        Product.objects.create(
+            name="TILAPIA 4MM 20KG",
+            brand="dibaq",
+            species="tilapia",
+            phase="grossissement",
+            pellet_size_mm=Decimal("4.0"),
+            package_weight_kg=20,
+            price_per_package=Decimal("30000.00"),
+        )
+
+        response = authenticated_client.get(
+            "/api/commerce/products/recommended/",
+            {"species": "tilapia", "weight_g": "100"},
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.data["error"] == "Aucun produit recommandé trouvé"
 
     def test_recommended_product_requires_query_params(self, authenticated_client, test_products):
         response = authenticated_client.get("/api/commerce/products/recommended/")
@@ -219,7 +275,11 @@ class TestOrderViewSet:
             password="testpass123",
             first_name="Test",
             last_name="User",
-            age_group="26_35"
+            age_group="26_35",
+            region="littoral",
+            department="wouri",
+            city="Douala",
+            neighborhood="Bonamoussadi",
         )
 
     @pytest.fixture
@@ -236,7 +296,7 @@ class TestOrderViewSet:
     def test_product(self):
         return Product.objects.create(
             name="Test Product Order",
-            brand="aller_aqua",
+            brand="dibaq",
             species="tilapia",
             phase="grossissement",
             pellet_size_mm=Decimal("3.0"),
@@ -261,6 +321,96 @@ class TestOrderViewSet:
         assert response.status_code == status.HTTP_201_CREATED
         assert "order_number" in response.data
 
+    def test_create_home_order_returns_structured_delivery_address_error(
+        self, authenticated_client, test_user, test_product
+    ):
+        test_user.city = ''
+        test_user.neighborhood = ''
+        test_user.save()
+
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+        }, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["code"] == "delivery_address_incomplete"
+        assert response.data["message"] == (
+            "Informations de livraison à domicile incomplètes"
+        )
+        assert response.data["missing_fields"] == [
+            "delivery_city",
+            "neighborhood",
+        ]
+
+    def test_create_order_with_production_cycle_link(self, authenticated_client, test_farm, test_product):
+        cycle = ProductionCycle.objects.create(
+            farm_profile=test_farm,
+            cycle_name="Cycle Vue",
+            species="tilapia",
+            pond_identifier="Pond V1",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=date.today(),
+            initial_count=1200,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("6.0"),
+            current_count=1200,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("6.0"),
+            status="active",
+        )
+
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+            "production_cycle_id": str(cycle.id),
+        }, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["production_cycle_id"] == str(cycle.id)
+
+    def test_create_order_rejects_foreign_production_cycle(self, authenticated_client, test_farm, test_product):
+        user_b = User.objects.create_user(
+            phone_number="+237909808707",
+            password="testpass123",
+            first_name="User",
+            last_name="CycleB",
+            age_group="26_35",
+        )
+        farm_b, _ = FarmProfile.objects.get_or_create(user=user_b, defaults={"farm_name": "Farm Cycle B"})
+        cycle_b = ProductionCycle.objects.create(
+            farm_profile=farm_b,
+            cycle_name="Cycle B",
+            species="tilapia",
+            pond_identifier="Pond B1",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=date.today(),
+            initial_count=1200,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("6.0"),
+            current_count=1200,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("6.0"),
+            status="active",
+        )
+
+        response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+            "production_cycle_id": str(cycle_b.id),
+        }, format="json")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["message"] == "Cycle de production introuvable ou inaccessible"
+
+    def test_mobile_order_serializer_keeps_fulfilment_actors_out_of_public_payload(self):
+        fields = set(OrderSerializer().fields)
+
+        assert "delivered_by" not in fields
+        assert "ready_for_pickup_by" not in fields
+        assert "delivered_at" in fields
+        assert "ready_for_pickup_at" in fields
+
     def test_list_user_orders(self, authenticated_client, test_farm, test_product):
         authenticated_client.post("/api/commerce/orders/", {
             "items": [{"product_id": str(test_product.id), "quantity": 1}],
@@ -279,6 +429,136 @@ class TestOrderViewSet:
         response = authenticated_client.get("/api/commerce/orders/statistics/")
         assert response.status_code == status.HTTP_200_OK
         assert "total_orders" in response.data
+
+    def test_cycle_filter_scopes_list_and_statistics(
+        self,
+        authenticated_client,
+        test_farm,
+        test_product,
+    ):
+        def create_cycle(name):
+            return ProductionCycle.objects.create(
+                farm_profile=test_farm,
+                cycle_name=name,
+                species="tilapia",
+                pond_identifier=name,
+                pond_surface_m2=Decimal("120.0"),
+                start_date=date.today(),
+                initial_count=1200,
+                initial_average_weight=Decimal("5.0"),
+                initial_biomass=Decimal("6.0"),
+                current_count=1200,
+                current_average_weight=Decimal("5.0"),
+                current_biomass=Decimal("6.0"),
+                status="active",
+            )
+
+        cycle_a = create_cycle("Cycle A")
+        cycle_b = create_cycle("Cycle B")
+        created_numbers = {}
+        for key, cycle, quantity in (
+            ("a1", cycle_a, 1),
+            ("a2", cycle_a, 2),
+            ("b1", cycle_b, 3),
+            ("n1", None, 4),
+        ):
+            payload = {
+                "items": [{"product_id": str(test_product.id), "quantity": quantity}],
+                "delivery_method": "home",
+            }
+            if cycle is not None:
+                payload["production_cycle_id"] = str(cycle.id)
+            response = authenticated_client.post(
+                "/api/commerce/orders/",
+                payload,
+                format="json",
+            )
+            assert response.status_code == status.HTTP_201_CREATED
+            created_numbers[key] = response.data["order_number"]
+
+        response_a = authenticated_client.get(
+            "/api/commerce/orders/",
+            {"production_cycle": str(cycle_a.id)},
+        )
+        numbers_a = {row["order_number"] for row in response_a.data["results"]}
+        assert numbers_a == {created_numbers["a1"], created_numbers["a2"]}
+
+        response_b = authenticated_client.get(
+            "/api/commerce/orders/",
+            {"production_cycle": str(cycle_b.id)},
+        )
+        assert [row["order_number"] for row in response_b.data["results"]] == [
+            created_numbers["b1"]
+        ]
+
+        stats_a = authenticated_client.get(
+            "/api/commerce/orders/statistics/",
+            {"production_cycle": str(cycle_a.id)},
+        ).data
+        stats_b = authenticated_client.get(
+            "/api/commerce/orders/statistics/",
+            {"production_cycle": str(cycle_b.id)},
+        ).data
+        assert stats_a["total_orders"] == len(numbers_a) == 2
+        assert stats_a["total_bags_ordered"] == 3
+        assert stats_b["total_orders"] == 1
+        assert stats_b["total_bags_ordered"] == 3
+
+    def test_cycle_filter_does_not_expose_foreign_cycle(
+        self,
+        authenticated_client,
+        test_product,
+    ):
+        foreign_user = User.objects.create_user(
+            phone_number="+237655000777",
+            password="testpass123",
+            first_name="Foreign",
+            last_name="Owner",
+            age_group="26_35",
+        )
+        foreign_farm = foreign_user.farm_profile
+        foreign_farm.farm_name = "Foreign Farm"
+        foreign_farm.save(update_fields=["farm_name"])
+        foreign_cycle = ProductionCycle.objects.create(
+            farm_profile=foreign_farm,
+            cycle_name="Foreign Cycle",
+            species="tilapia",
+            pond_identifier="Foreign Pond",
+            pond_surface_m2=Decimal("120.0"),
+            start_date=date.today(),
+            initial_count=1200,
+            initial_average_weight=Decimal("5.0"),
+            initial_biomass=Decimal("6.0"),
+            current_count=1200,
+            current_average_weight=Decimal("5.0"),
+            current_biomass=Decimal("6.0"),
+            status="active",
+        )
+
+        response = authenticated_client.get(
+            "/api/commerce/orders/",
+            {"production_cycle": str(foreign_cycle.id)},
+        )
+        stats = authenticated_client.get(
+            "/api/commerce/orders/statistics/",
+            {"production_cycle": str(foreign_cycle.id)},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["results"] == []
+        assert stats.data["total_orders"] == 0
+
+    def test_cycle_filter_rejects_malformed_uuid(self, authenticated_client):
+        list_response = authenticated_client.get(
+            "/api/commerce/orders/",
+            {"production_cycle": "not-a-uuid"},
+        )
+        stats_response = authenticated_client.get(
+            "/api/commerce/orders/statistics/",
+            {"production_cycle": "not-a-uuid"},
+        )
+
+        assert list_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert stats_response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_confirm_receipt_success_when_delivered(self, authenticated_client, test_farm, test_product):
         create_response = authenticated_client.post("/api/commerce/orders/", {
@@ -304,6 +584,56 @@ class TestOrderViewSet:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "message" in response.data
+
+    def test_confirm_receipt_pickup_ready_for_pickup(self, authenticated_client, test_farm, test_product):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "pickup",
+            "pickup_location": "ndogpasi",
+        }, format="json")
+        order_id = create_response.data["id"]
+        Order.objects.filter(id=order_id).update(status="ready_for_pickup")
+
+        response = authenticated_client.post(f"/api/commerce/orders/{order_id}/confirm_receipt/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "received"
+        assert response.data["received_at"] is not None
+
+    def test_confirm_receipt_received_replay_returns_200(self, authenticated_client, test_farm, test_product):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+        }, format="json")
+        order_id = create_response.data["id"]
+        Order.objects.filter(id=order_id).update(status="received")
+
+        response = authenticated_client.post(f"/api/commerce/orders/{order_id}/confirm_receipt/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "received"
+
+    def test_confirm_receipt_rejects_another_owner(
+        self, api_client, authenticated_client, test_farm, test_product
+    ):
+        create_response = authenticated_client.post("/api/commerce/orders/", {
+            "items": [{"product_id": str(test_product.id), "quantity": 1}],
+            "delivery_method": "home",
+        }, format="json")
+        order_id = create_response.data["id"]
+        Order.objects.filter(id=order_id).update(status="delivered")
+        other_user = User.objects.create_user(
+            phone_number="+237100200301",
+            password="testpass123",
+            first_name="Other",
+            last_name="Owner",
+            age_group="26_35",
+        )
+        api_client.force_authenticate(user=other_user)
+
+        response = api_client.post(f"/api/commerce/orders/{order_id}/confirm_receipt/")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_order_mutation_methods_are_blocked(self, authenticated_client, test_farm, test_product):
         create_response = authenticated_client.post("/api/commerce/orders/", {

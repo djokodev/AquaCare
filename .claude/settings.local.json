@@ -32,5 +32,38 @@
     ],
     "deny": [],
     "defaultMode": "acceptEdits"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'BRANCH=$(git -C \"$(pwd)\" rev-parse --abbrev-ref HEAD 2>/dev/null); if [[ \"$BRANCH\" == \"main\" || \"$BRANCH\" == \"develop\" ]]; then echo \"BLOQUE: Tu es sur la branche \\\"$BRANCH\\\". Cree une branche feature/* ou fix/* depuis develop avant d editer des fichiers. Commande : git checkout develop && git pull origin develop && git checkout -b feature/nom-feature\"; exit 2; fi'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'INPUT=$(cat); CMD=$(echo \"$INPUT\" | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get(\\\"command\\\",\\\"\\\"))\" 2>/dev/null || echo \"\"); if echo \"$CMD\" | grep -qE \"npm install (react-native-|@react-native-)\"; then echo \"BLOQUE: Utilise npx expo install au lieu de npm install pour les packages React Native. Lance /check-package {nom} pour verifier la compatibilite Expo Go d abord.\"; exit 2; fi'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'INPUT=$(cat); FILE=$(echo \"$INPUT\" | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get(\\\"file_path\\\", d.get(\\\"path\\\",\\\"\\\")))\" 2>/dev/null || echo \"\"); if echo \"$FILE\" | grep -qE \"frontend/src/.*\\.(ts|tsx)$\"; then cd /Users/jeotech/Desktop/projects/AquaCare/frontend && echo \"--- TypeScript check ---\" && npx tsc --noEmit 2>&1 && echo \"TypeScript OK: 0 erreurs\" || echo \"ERREURS TypeScript detectees ci-dessus — corriger avant de commiter\"; fi'"
+          }
+        ]
+      }
+    ]
   }
 }

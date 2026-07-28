@@ -1,5 +1,5 @@
 """
-Validateurs métier pour le module commerce MAVECAM AquaCare.
+Validateurs métier pour le module commerce AquaCare.
 
 Architecture Clean : Validations de règles métier pures,
 sans dépendances Django (utilisables hors contexte web).

@@ -13,8 +13,8 @@ class Migration(migrations.Migration):
             model_name='nutritionalguide',
             name='source',
             field=models.CharField(
-                choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('MAVECAM', 'MAVECAM')],
-                default='MAVECAM',
+                choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('AquaCare', 'AquaCare')],
+                default='AquaCare',
                 max_length=50,
                 verbose_name='Source des données',
             ),

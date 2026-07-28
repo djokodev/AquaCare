@@ -2,6 +2,10 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Notification } from '@/types/notifications';
 import { notificationsService } from '@/services/notificationsService';
 
+type NotificationScope = {
+  cycleId?: string | null;
+};
+
 // =================== ETAT INITIAL ===================
 
 interface NotificationState {
@@ -25,9 +29,9 @@ const initialState: NotificationState = {
  */
 export const fetchNotifications = createAsyncThunk(
   'notifications/fetchNotifications',
-  async (_, { rejectWithValue }) => {
+  async (scope: NotificationScope | undefined, { rejectWithValue }) => {
     try {
-      const notifications = await notificationsService.getNotifications();
+      const notifications = await notificationsService.getNotifications(scope);
       return notifications as Notification[];
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'loadError');
@@ -55,9 +59,9 @@ export const markNotificationAsRead = createAsyncThunk(
  */
 export const markAllNotificationsAsRead = createAsyncThunk(
   'notifications/markAllAsRead',
-  async (_, { rejectWithValue }) => {
+  async (scope: NotificationScope | undefined, { rejectWithValue }) => {
     try {
-      const result = await notificationsService.markAllNotificationsAsRead();
+      const result = await notificationsService.markAllNotificationsAsRead(scope);
       return result?.count ?? 0;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'markAllReadError');
@@ -85,9 +89,9 @@ export const deleteNotification = createAsyncThunk(
  */
 export const deleteAllReadNotifications = createAsyncThunk(
   'notifications/deleteAllRead',
-  async (_, { rejectWithValue }) => {
+  async (scope: NotificationScope | undefined, { rejectWithValue }) => {
     try {
-      await notificationsService.deleteAllReadNotifications();
+      await notificationsService.deleteAllReadNotifications(scope);
       return;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'deleteAllReadError');
@@ -210,9 +214,9 @@ export default notificationSlice.reducer;
  */
 export const fetchNotificationsSilent = createAsyncThunk(
   'notifications/fetchNotificationsSilent',
-  async (_, { rejectWithValue }) => {
+  async (scope: NotificationScope | undefined, { rejectWithValue }) => {
     try {
-      const notifications = await notificationsService.getNotifications();
+      const notifications = await notificationsService.getNotifications(scope);
       return notifications as Notification[];
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.detail || 'loadError');

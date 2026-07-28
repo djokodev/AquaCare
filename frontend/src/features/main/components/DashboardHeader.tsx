@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppText, IconButton } from '@/components/ui';
+import { getDashboardGreetingKey } from '@/features/main/utils/dashboardGreeting';
+import { colors, spacing } from '@/theme';
 
 /**
  * Props pour le composant DashboardHeader
@@ -34,7 +36,6 @@ interface DashboardHeaderProps {
  *
  * Affiche :
  * - Greeting personnalisé avec le nom de l'utilisateur
- * - Sous-titre "Heureux de vous revoir"
  * - 2 boutons d'action à droite :
  *   1. Cloche notifications avec badge count
  *   2. Bouton Settings
@@ -56,63 +57,48 @@ export default function DashboardHeader({
   onSettingsPress,
 }: DashboardHeaderProps) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
 
   // Extraire le prénom (premier mot) pour éviter les noms trop longs
   const firstName = displayName.split(' ')[0];
+  const greeting = t(getDashboardGreetingKey(new Date().getHours()));
 
   return (
-    <View className="bg-mavecam-primary px-5 pt-16 pb-5">
+    <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
       {/* Greeting Row */}
       <View className="flex-row justify-between items-start">
         <View className="flex-1 mr-4">
-          <Text className="text-2xl font-bold text-white mb-1">
-            {t('hello')}, {firstName}!
-          </Text>
-          <Text className="text-base text-white/80">{t('welcomeBoard')}</Text>
+          <AppText variant="screenTitle" color="inverse">
+            {t('dashboardGreetingWithName', { greeting, name: firstName })}
+          </AppText>
         </View>
 
         {/* Right Actions */}
         <View className="flex-row gap-3 items-center">
           {/* Notifications Bell */}
-          <TouchableOpacity
-            onPress={onNotificationsPress}
-            className="relative p-2 bg-white/20 rounded-lg"
+          <IconButton
+            icon="notifications-outline"
             accessibilityLabel={t('notificationsBell')}
-            accessibilityHint={
-              unreadCount > 0
-                ? `${unreadCount} ${t('unreadNotifications')}`
-                : t('noUnreadNotifications')
-            }
-            accessibilityRole="button"
-          >
-            <Ionicons name="notifications-outline" size={24} color={MAVECAM_COLORS.WHITE} />
-            {unreadCount > 0 && (
-              <View
-                className="absolute -top-1 -right-1 bg-error rounded-full items-center justify-center"
-                style={{
-                  minWidth: unreadCount > 9 ? 24 : 20,
-                  height: unreadCount > 9 ? 24 : 20,
-                  paddingHorizontal: unreadCount > 9 ? 4 : 2,
-                }}
-              >
-                <Text className="text-white text-[10px] font-bold">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+            onPress={onNotificationsPress}
+            variant="ghost"
+            tone="inverse"
+            badge={unreadCount}
+          />
 
           {/* Settings */}
-          <TouchableOpacity
-            onPress={onSettingsPress}
-            className="p-2 bg-white/20 rounded-lg"
+          <IconButton
+            icon="settings-outline"
             accessibilityLabel={t('settingsButton')}
-            accessibilityRole="button"
-          >
-            <Ionicons name="settings-outline" size={24} color={MAVECAM_COLORS.WHITE} />
-          </TouchableOpacity>
+            onPress={onSettingsPress}
+            variant="ghost"
+            tone="inverse"
+          />
         </View>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { backgroundColor: colors.brand.primary, paddingHorizontal: spacing[5], paddingBottom: spacing[5] },
+});

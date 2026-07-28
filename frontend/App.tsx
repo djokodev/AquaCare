@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { Platform, View, Text, StyleSheet } from 'react-native';
+import { Platform } from 'react-native';
 import { Provider } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
@@ -15,7 +15,8 @@ import ErrorBoundary from '@/components/common/ErrorBoundary';
 import i18n from '@/i18n/i18n';
 import logger from '@/utils/logger';
 import { getEnvironment } from '@/config/environment';
-import config from '@/config/environment';
+import { colors } from '@/theme';
+import { navigationTheme } from '@/theme/navigationTheme';
 
 // Sentry — actif uniquement dans les builds EAS (staging + production).
 // Désactivé en Expo Go (__DEV__) pour éviter les erreurs de module natif.
@@ -105,7 +106,7 @@ function App() {
             description: 'AquaCare reminders and alerts',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#059669',
+            lightColor: colors.brand.primary,
             sound: 'default',
             lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
           });
@@ -155,39 +156,14 @@ function App() {
     <Provider store={store}>
       <SafeAreaProvider>
         <ErrorBoundary>
-          <NavigationContainer>
+          <NavigationContainer theme={navigationTheme}>
             <AppNavigator />
             <StatusBar style="auto" />
           </NavigationContainer>
-          {config.environment === 'staging' && (
-            <View style={styles.stagingBanner} pointerEvents="none">
-              <Text style={styles.stagingBannerText}>⚠ BUILD DE TEST — STAGING</Text>
-            </View>
-          )}
         </ErrorBoundary>
       </SafeAreaProvider>
     </Provider>
   );
 }
-
-const styles = StyleSheet.create({
-  stagingBanner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#dc2626',
-    paddingTop: 44,
-    paddingBottom: 6,
-    alignItems: 'center',
-    zIndex: 9999,
-  },
-  stagingBannerText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-});
 
 export default Sentry.wrap(App);

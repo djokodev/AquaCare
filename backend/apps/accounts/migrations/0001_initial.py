@@ -48,8 +48,8 @@ class Migration(migrations.Migration):
                 ('user_permissions', models.ManyToManyField(blank=True, help_text='Specific permissions for this user.', related_name='user_set', related_query_name='user', to='auth.permission', verbose_name='user permissions')),
             ],
             options={
-                'verbose_name': 'Utilisateur MAVECAM',
-                'verbose_name_plural': 'Utilisateurs MAVECAM',
+                'verbose_name': 'Utilisateur AquaCare',
+                'verbose_name_plural': 'Utilisateurs AquaCare',
                 'db_table': 'accounts_user',
             },
         ),
@@ -58,7 +58,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, help_text='Identifiant unique UUID pour la synchronisation mobile', primary_key=True, serialize=False)),
                 ('farm_name', models.CharField(help_text="Nom commercial ou descriptif de l'exploitation", max_length=200, verbose_name='Nom de la ferme')),
-                ('certification_status', models.CharField(choices=[('pending', 'En attente'), ('certified', 'Certifiée'), ('suspended', 'Suspendue'), ('rejected', 'Rejetée')], default='pending', help_text='Statut de certification géré uniquement par les admins MAVECAM', max_length=20, verbose_name='Statut de certification')),
+                ('certification_status', models.CharField(choices=[('pending', 'En attente'), ('certified', 'Certifiée'), ('suspended', 'Suspendue'), ('rejected', 'Rejetée')], default='pending', help_text='Statut de certification géré uniquement par les admins AquaCare', max_length=20, verbose_name='Statut de certification')),
                 ('total_ponds', models.PositiveIntegerField(default=0, help_text="Nombre total de bassins d'élevage disponibles", verbose_name='Nombre total de bassins')),
                 ('total_area_m2', models.DecimalField(blank=True, decimal_places=2, help_text="Superficie totale de l'exploitation en mètres carrés", max_digits=10, null=True, verbose_name='Superficie totale (m²)')),
                 ('water_source', models.CharField(blank=True, help_text="Principale source d'approvisionnement en eau", max_length=100, verbose_name="Source d'eau")),

@@ -2,7 +2,13 @@ import { aquacultureService } from '../aquacultureService';
 import { apiService } from '@/services/api';
 import { API_CONFIG } from '@/constants/api';
 import logger from '@/utils/logger';
-import { CycleLog, ProductionCycle, SanitaryLogForm } from '@/types/aquaculture';
+import {
+  CycleHarvestResponse,
+  CycleLog,
+  ProductionCycle,
+  ProductionUnit,
+  SanitaryLogForm,
+} from '@/types/aquaculture';
 
 jest.mock('@/services/api', () => ({
   apiService: {
@@ -94,9 +100,107 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     await aquacultureService.getDashboardData();
     await aquacultureService.getDashboardData('cycle-session-1');
+    await aquacultureService.getDashboardData('cycle-session-1', { lightweight: true });
 
     expect(mockApi.get).toHaveBeenNthCalledWith(1, '/aquaculture/dashboard/');
     expect(mockApi.get).toHaveBeenNthCalledWith(2, '/aquaculture/dashboard/?cycle_id=cycle-session-1');
+    expect(mockApi.get).toHaveBeenNthCalledWith(
+      3,
+      '/aquaculture/dashboard/?cycle_id=cycle-session-1&lightweight=true'
+    );
+  });
+
+  it('compose correctement l URL du dashboard global d un cycle', async () => {
+    const dashboard = {
+      cycle: { id: 'cycle-1', cycle_name: 'Cycle A' },
+      summary: {
+        total_allocations: 1,
+        total_estimated_current_fish_count: 900,
+        total_mortality_count: 10,
+        total_feed_consumed_kg: '12.50',
+        estimated_current_biomass_kg: '18.75',
+        units_with_sanitary_issue_count: 1,
+        units_missing_today_log_count: 0,
+        has_allocations: true,
+        data_source: 'unit_allocations',
+      },
+      allocations: [],
+    };
+    mockApi.get.mockResolvedValueOnce({ data: dashboard } as never);
+
+    const result = await aquacultureService.getCycleDashboard('cycle-1');
+
+    expect(result).toEqual(dashboard);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/dashboard/');
+  });
+
+  it('retourne les unites de production avec le bon filtre de statut', async () => {
+    const units: ProductionUnit[] = [
+      {
+        id: 'unit-1',
+        farm_profile: 'farm-1',
+        name: 'Etang 1',
+        unit_type: 'pond',
+        surface_m2: 120,
+        status: 'active',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ];
+    mockApi.get.mockResolvedValueOnce({ data: units } as never);
+
+    const result = await aquacultureService.getProductionUnits({ status: 'active' });
+
+    expect(result).toEqual(units);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/production-units/?status=active');
+  });
+
+  it('dedoublonne les requetes dashboard concurrentes pour le meme scope et meme mode', async () => {
+    const payload = { active_cycles: [], active_cycles_count: 0 };
+    mockApi.get.mockReturnValueOnce(Promise.resolve({ data: payload }) as never);
+
+    const firstPromise = aquacultureService.getDashboardData('cycle-session-42');
+    const secondPromise = aquacultureService.getDashboardData('cycle-session-42');
+
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    await expect(firstPromise).resolves.toEqual(payload);
+    await expect(secondPromise).resolves.toEqual(payload);
+  });
+
+  it('ne dedoublonne pas entre mode full et lightweight', async () => {
+    const payload = { active_cycles: [], active_cycles_count: 0 };
+    mockApi.get.mockResolvedValue({ data: payload } as never);
+
+    await aquacultureService.getDashboardData('cycle-session-42');
+    await aquacultureService.getDashboardData('cycle-session-42', { lightweight: true });
+
+    expect(mockApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('dedoublonne les requetes dashboard de cycle concurrentes', async () => {
+    const payload = {
+      cycle: { id: 'cycle-42', cycle_name: 'Cycle 42' },
+      summary: {
+        total_allocations: 0,
+        total_estimated_current_fish_count: 0,
+        total_mortality_count: 0,
+        total_feed_consumed_kg: '0.00',
+        estimated_current_biomass_kg: '0.00',
+        units_with_sanitary_issue_count: 0,
+        units_missing_today_log_count: 0,
+        has_allocations: false,
+        data_source: 'legacy_cycle',
+      },
+      allocations: [],
+    };
+    mockApi.get.mockReturnValueOnce(Promise.resolve({ data: payload }) as never);
+
+    const firstPromise = aquacultureService.getCycleDashboard('cycle-42');
+    const secondPromise = aquacultureService.getCycleDashboard('cycle-42');
+
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    await expect(firstPromise).resolves.toEqual(payload);
+    await expect(secondPromise).resolves.toEqual(payload);
   });
 
   it('utilise PATCH pour la mise a jour partielle d un cycle', async () => {
@@ -132,17 +236,208 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/feeding-plans/?cycle=cycle-1');
   });
 
+  it('retourne les plans d alimentation pour une allocation', async () => {
+    const plan = { id: 'plan-1', cycle: 'cycle-1', cycle_unit_allocation: 'allocation-1' };
+    mockApi.get.mockResolvedValueOnce({ data: [plan] } as never);
+
+    const result = await aquacultureService.getFeedingPlansForAllocation('allocation-1');
+
+    expect(result).toEqual([plan]);
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/aquaculture/feeding-plans/?cycle_unit_allocation=allocation-1'
+    );
+  });
+
+  it('retourne les plans d alimentation courants pour une allocation', async () => {
+    const plan = { id: 'plan-1', cycle: 'cycle-1', cycle_unit_allocation: 'allocation-1' };
+    mockApi.get.mockResolvedValueOnce({ data: [plan] } as never);
+
+    const result = await aquacultureService.getFeedingPlansForAllocation('allocation-1', {
+      currentWeekOnly: true,
+    });
+
+    expect(result).toEqual([plan]);
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/aquaculture/feeding-plans/?cycle_unit_allocation=allocation-1&current_week_only=true'
+    );
+  });
+
+  it('genere les plans d alimentation pour une allocation', async () => {
+    const plans = [{ id: 'plan-1', cycle: 'cycle-1', cycle_unit_allocation: 'allocation-1' }];
+    mockApi.post.mockResolvedValueOnce({ data: plans } as never);
+
+    const result = await aquacultureService.generateFeedingPlanForAllocation({
+      cycleUnitAllocationId: 'allocation-1',
+      weeksAhead: 3,
+      cycleId: 'cycle-1',
+    });
+
+    expect(result).toEqual(plans);
+    expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/feeding-plans/generate/', {
+      cycle_unit_allocation_id: 'allocation-1',
+      weeks_ahead: 3,
+      cycle_id: 'cycle-1',
+    });
+  });
+
+  it('retourne la vraie forme API de recolte avec message et cycle', async () => {
+    const harvestResponse: CycleHarvestResponse = {
+      message: 'Cycle recolte avec succes',
+      cycle: { ...cycle, status: 'harvested', end_date: '2026-05-01' },
+      final_harvest: null,
+      final_harvests: [],
+      reconciliation_status: 'reconciled',
+      idempotent_replay: false,
+    };
+    mockApi.post.mockResolvedValueOnce({ data: harvestResponse } as never);
+
+    const result = await aquacultureService.harvestCycle('cycle-1', {
+      harvest_date: '2026-05-01',
+      final_harvested_at: '2026-05-01T12:00:00+01:00',
+      final_count: 850,
+      final_average_weight: 250,
+      client_uuid: '00000000-0000-4000-8000-000000000001',
+      total_harvested_weight: 212.5,
+      created_offline: false,
+    });
+
+    expect(result).toEqual(harvestResponse);
+    expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/harvest/', {
+      harvest_date: '2026-05-01',
+      final_harvested_at: '2026-05-01T12:00:00+01:00',
+      final_count: 850,
+      final_average_weight: 250,
+      client_uuid: '00000000-0000-4000-8000-000000000001',
+      total_harvested_weight: 212.5,
+      created_offline: false,
+    });
+  });
+
+  it('cree une unite de production avec le bon payload', async () => {
+    const createdUnit = {
+      id: 'unit-1',
+      farm_profile: 'farm-1',
+      name: 'Bac 1',
+      unit_type: 'tank',
+      volume_m3: 3,
+      surface_m2: null,
+      status: 'active',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockApi.post.mockResolvedValueOnce({ data: createdUnit } as never);
+
+    const result = await aquacultureService.createProductionUnit({
+      name: 'Bac 1',
+      unit_type: 'tank',
+      volume_m3: 3,
+      status: 'active',
+    });
+
+    expect(result).toEqual(createdUnit);
+    expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/production-units/', {
+      name: 'Bac 1',
+      unit_type: 'tank',
+      volume_m3: 3,
+      status: 'active',
+    });
+  });
+
+  it('cree une allocation de cycle avec le bon payload', async () => {
+    const createdAllocation = {
+      id: 'allocation-1',
+      cycle: 'cycle-1',
+      production_unit: 'unit-1',
+      initial_fish_count: 900,
+      current_fish_count: 900,
+      initial_biomass_kg: 0,
+      current_biomass_kg: 0,
+      expected_survival_rate_pct: 95,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockApi.post.mockResolvedValueOnce({ data: createdAllocation } as never);
+
+    const result = await aquacultureService.createCycleUnitAllocation({
+      cycle: 'cycle-1',
+      production_unit: 'unit-1',
+      initial_fish_count: 900,
+      current_fish_count: 900,
+      expected_survival_rate_pct: 95,
+    });
+
+    expect(result).toEqual(createdAllocation);
+    expect(mockApi.post).toHaveBeenCalledWith('/aquaculture/cycle-unit-allocations/', {
+      cycle: 'cycle-1',
+      production_unit: 'unit-1',
+      initial_fish_count: 900,
+      current_fish_count: 900,
+      expected_survival_rate_pct: 95,
+    });
+  });
+
+  it('charge les allocations de cycle avec le filtre cycle_id', async () => {
+    const allocation = {
+      id: 'allocation-1',
+      cycle: 'cycle-1',
+      production_unit: 'unit-1',
+      initial_fish_count: 900,
+      current_fish_count: 900,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockApi.get.mockResolvedValueOnce({ data: { results: [allocation] } } as never);
+
+    const result = await aquacultureService.getCycleUnitAllocations('cycle-1');
+
+    expect(result).toEqual([allocation]);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycle-unit-allocations/?cycle_id=cycle-1');
+  });
+
+  it('charge le dashboard d une allocation via le bon endpoint', async () => {
+    const dashboard = {
+      allocation: {
+        id: 'allocation-1',
+        cycle: 'cycle-1',
+        production_unit: 'unit-1',
+      },
+      summary: {
+        estimated_current_fish_count: 892,
+        total_mortality_count: 8,
+        mortality_rate_pct: '0.89',
+        total_feed_consumed_kg: '6.50',
+        latest_average_weight_g: '20.00',
+        estimated_current_biomass_kg: '17.84',
+        last_daily_log_date: '2026-06-28',
+        days_since_last_log: 0,
+        has_today_daily_log: true,
+        active_sanitary_issues_count: 1,
+        last_sanitary_event_date: '2026-06-27',
+        has_unresolved_sanitary_issue: true,
+      },
+      recent_daily_logs: [],
+      recent_sanitary_logs: [],
+    };
+    mockApi.get.mockResolvedValueOnce({ data: dashboard } as never);
+
+    const result = await aquacultureService.getProductionUnitDashboard('allocation-1');
+
+    expect(result).toEqual(dashboard);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycle-unit-allocations/allocation-1/dashboard/');
+  });
+
   it('retourne les rapports depuis une reponse paginee avec filtres', async () => {
-    const report = { id: 'report-1', report_type: 'daily' };
+    const report = { id: 'report-1', report_type: 'daily', scope_type: 'cycle' };
     mockApi.get.mockResolvedValueOnce({ data: { results: [report] } } as never);
 
     const result = await aquacultureService.getReports({
       report_type: 'daily',
       status: 'draft',
+      scope_type: 'cycle',
     });
 
     expect(result).toEqual([report]);
-    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?report_type=daily&status=draft');
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?report_type=daily&status=draft&scope_type=cycle');
   });
 
   it('ajoute cycle_id dans le filtre des rapports quand fourni', async () => {
@@ -153,11 +448,29 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/reports/?cycle_id=cycle-session-1');
   });
 
+  it('ajoute le contexte unitaire dans le filtre des rapports quand fourni', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: { results: [] } } as never);
+
+    await aquacultureService.getReports({
+      scope_type: 'unit',
+      cycle_id: 'cycle-session-1',
+      cycle_unit_allocation_id: 'allocation-1',
+    });
+
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/aquaculture/reports/?scope_type=unit&cycle_id=cycle-session-1&cycle_unit_allocation_id=allocation-1'
+    );
+  });
+
   it('appelle les endpoints de rapport (generate, validate, send, whatsapp)', async () => {
     const reportPayload = { id: 'report-1', status: 'draft' };
     mockApi.post.mockResolvedValue({ data: reportPayload } as never);
 
-    await aquacultureService.generateReport({ report_type: 'weekly' });
+    await aquacultureService.generateReport({
+      report_type: 'weekly',
+      scope_type: 'unit',
+      cycle_unit_allocation_id: 'allocation-1',
+    });
     await aquacultureService.validateReport('report-1');
     await aquacultureService.sendReportEmail('report-1');
     await aquacultureService.markReportWhatsAppShared('report-1', {
@@ -168,7 +481,11 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(mockApi.post).toHaveBeenNthCalledWith(
       1,
       '/aquaculture/reports/generate/',
-      { report_type: 'weekly' }
+      {
+        report_type: 'weekly',
+        scope_type: 'unit',
+        cycle_unit_allocation_id: 'allocation-1',
+      }
     );
     expect(mockApi.post).toHaveBeenNthCalledWith(2, '/aquaculture/reports/report-1/validate/');
     expect(mockApi.post).toHaveBeenNthCalledWith(3, '/aquaculture/reports/report-1/send-email/');
@@ -187,14 +504,36 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(url).toBe(`${API_CONFIG.baseURL}/aquaculture/reports/report-42/download/`);
   });
 
+  it('retourne les recoltes partielles depuis une reponse paginee', async () => {
+    const partialHarvest = {
+      id: 'ph-1',
+      harvest_date: '2026-02-10',
+      count_harvested: 40,
+      average_weight_g: 320,
+      total_weight_kg: 12.8,
+      created_at: '2026-02-10T08:00:00Z',
+    };
+    mockApi.get.mockResolvedValueOnce({ data: { count: 1, results: [partialHarvest] } } as never);
+
+    const result = await aquacultureService.getPartialHarvests('cycle-1');
+
+    expect(result).toEqual([partialHarvest]);
+    expect(mockApi.get).toHaveBeenCalledWith('/aquaculture/cycles/cycle-1/partial-harvests/');
+  });
+
   it('compose correctement l\'URL des cycle logs avec ou sans cycleId', async () => {
     mockApi.get.mockResolvedValue({ data: [] } as never);
 
     await aquacultureService.getCycleLogs();
     await aquacultureService.getCycleLogs('cycle-1');
+    await aquacultureService.getCycleLogs('cycle-1', { cycleUnitAllocationId: 'allocation-1' });
 
     expect(mockApi.get).toHaveBeenNthCalledWith(1, '/aquaculture/cycle-logs/');
     expect(mockApi.get).toHaveBeenNthCalledWith(2, '/aquaculture/cycle-logs/?cycle_id=cycle-1');
+    expect(mockApi.get).toHaveBeenNthCalledWith(
+      3,
+      '/aquaculture/cycle-logs/?cycle_id=cycle-1&cycle_unit_allocation=allocation-1'
+    );
   });
 
   it('ajoute cycle et client_uuid lors de la creation d\'un cycle log', async () => {
@@ -216,6 +555,44 @@ describe('features/aquaculture/services/aquacultureService', () => {
         cycle: 'cycle-1',
         mortality_count: 2,
         client_uuid: expect.any(String),
+      })
+    );
+  });
+
+  it('ajoute cycle_unit_allocation lors de la creation d\'un cycle log unitaire', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { id: 'log-unit' } } as never);
+
+    await aquacultureService.createCycleLog('cycle-1', {
+      log_date: '2026-01-10',
+      mortality_count: 2,
+      cycle_unit_allocation: 'allocation-1',
+    });
+
+    expect(mockApi.post).toHaveBeenCalledWith(
+      '/aquaculture/cycle-logs/',
+      expect.objectContaining({
+        cycle: 'cycle-1',
+        cycle_unit_allocation: 'allocation-1',
+        client_uuid: expect.any(String),
+      })
+    );
+  });
+
+  it('preserve le client_uuid fourni pour un retry de cycle log offline', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { id: 'log-retry' } } as never);
+
+    await aquacultureService.createCycleLog('cycle-1', {
+      log_date: '2026-01-10',
+      mortality_count: 2,
+      client_uuid: 'retry-uuid-1',
+      created_offline: true,
+    });
+
+    expect(mockApi.post).toHaveBeenCalledWith(
+      '/aquaculture/cycle-logs/',
+      expect.objectContaining({
+        client_uuid: 'retry-uuid-1',
+        created_offline: true,
       })
     );
   });
@@ -248,8 +625,54 @@ describe('features/aquaculture/services/aquacultureService', () => {
 
     const mockFormData = formDataArg as unknown as MockFormData;
     expect(mockFormData.append).toHaveBeenCalledWith('cycle', 'cycle-1');
+    expect(mockFormData.append).toHaveBeenCalledWith('client_uuid', expect.any(String));
+    expect(mockFormData.append).toHaveBeenCalledWith('created_offline', 'false');
     expect(mockFormData.append).toHaveBeenCalledWith('event_type', 'disease');
     expect(mockFormData.append).toHaveBeenCalledWith('photo', payload.photo);
+  });
+
+  it('ajoute cycle_unit_allocation dans le FormData sanitaire', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { id: 'san-unit' } } as never);
+
+    await aquacultureService.createSanitaryLog('cycle-1', {
+      event_date: '2026-01-10',
+      event_type: 'treatment',
+      symptoms: 'Poissons observes avec lesions legeres',
+      cycle_unit_allocation: 'allocation-1',
+    });
+
+    const [, formDataArg] = mockApi.post.mock.calls[0];
+    const mockFormData = formDataArg as unknown as MockFormData;
+    expect(mockFormData.append).toHaveBeenCalledWith('cycle_unit_allocation', 'allocation-1');
+  });
+
+  it('preserve les metadonnees offline dans le FormData sanitaire', async () => {
+    mockApi.post.mockResolvedValueOnce({ data: { id: 'san-offline' } } as never);
+
+    await aquacultureService.createSanitaryLog('cycle-1', {
+      event_date: '2026-01-10',
+      event_type: 'treatment',
+      symptoms: 'Poissons observes avec lesions legeres',
+      client_uuid: 'sanitary-retry-uuid',
+      created_offline: true,
+    });
+
+    const [, formDataArg] = mockApi.post.mock.calls[0];
+    const mockFormData = formDataArg as unknown as MockFormData;
+    expect(mockFormData.append).toHaveBeenCalledWith('client_uuid', 'sanitary-retry-uuid');
+    expect(mockFormData.append).toHaveBeenCalledWith('created_offline', 'true');
+  });
+
+  it('compose correctement l\'URL des logs sanitaires avec filtre allocation', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: [] } as never);
+
+    await aquacultureService.getSanitaryLogs('cycle-1', {
+      cycleUnitAllocationId: 'allocation-1',
+    });
+
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/aquaculture/sanitary-logs/?cycle_id=cycle-1&cycle_unit_allocation=allocation-1'
+    );
   });
 
   it('preserve les accents et convertit les champs numeriques en texte dans le FormData', async () => {
@@ -349,6 +772,14 @@ describe('features/aquaculture/services/aquacultureService', () => {
     expect(aquacultureService.canSynchronize([{ client_uuid: '' }, { client_uuid: 'uuid-2' }])).toBe(false);
     expect(aquacultureService.canSynchronize([{ client_uuid: 123 }])).toBe(false);
     expect(aquacultureService.canSynchronize([])).toBe(false);
+  });
+
+  it('propage les erreurs des phases aliments au lieu de retourner une liste vide', async () => {
+    const error = new Error('feed phases failed');
+    mockApi.get.mockRejectedValueOnce(error);
+
+    await expect(aquacultureService.getCycleFeedPhases('cycle-1')).rejects.toThrow('feed phases failed');
+    expect(mockLogger.error).toHaveBeenCalledWith('Erreur lors du chargement des phases aliments:', error);
   });
 
   it('rethrow les erreurs API et les log', async () => {

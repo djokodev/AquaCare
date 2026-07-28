@@ -4,7 +4,7 @@ Implemente le RBAC multi-niveau avec audit logging.
 
 Roles:
 - OWNER (is_superuser): Controle total
-- SUPPORT (mavecam_support): CRUD conversations et messages
+- SUPPORT (aquacare_support): CRUD conversations et messages
 - MANAGERS: Lecture seule pour contexte
 - COMMERCE: Pas d'acces
 """
@@ -140,6 +140,11 @@ class ConversationAdmin(ChatSecuredAdmin):
         return getattr(obj, '_message_count', obj.messages.count())
     message_count.short_description = _("Messages")
     message_count.admin_order_field = '_message_count'
+
+    def changelist_view(self, request, extra_context=None):
+        from django.core.cache import cache
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
 
 
 @admin.register(Message)
@@ -354,8 +359,13 @@ def support_inbox_view(request):
     )
 
 
-def get_admin_urls(urls):
-    """Expose custom inbox under /admin/chat/inbox/."""
+def get_admin_urls(original_get_urls):
+    """
+    Expose custom inbox under /admin/chat/inbox/.
+
+    NOTE: original_get_urls doit être la FONCTION (pas son résultat) pour éviter
+    de geler la liste d'URLs à l'import et d'exclure les apps enregistrées après.
+    """
     def _get_urls():
         custom_urls = [
             path(
@@ -364,9 +374,10 @@ def get_admin_urls(urls):
                 name="chat_support_inbox",
             ),
         ]
-        return custom_urls + urls
+        return custom_urls + original_get_urls()
 
     return _get_urls
 
 
-admin.site.get_urls = get_admin_urls(admin.site.get_urls())
+# Passer la référence de la fonction (pas son résultat) pour un appel paresseux
+admin.site.get_urls = get_admin_urls(admin.site.get_urls)

@@ -17,11 +17,11 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "backend/**/__init__.py" = ["F401"]
-"backend/mavecam_api/settings/__init__.py" = ["F403"]
-"backend/mavecam_api/settings/development.py" = ["F403", "F405"]
-"backend/mavecam_api/settings/production.py" = ["F403", "F405"]
-"backend/mavecam_api/settings/staging.py" = ["F403", "F405"]
-"backend/mavecam_api/settings/test.py" = ["F403", "F405"]
+"backend/aquacare_api/settings/__init__.py" = ["F403"]
+"backend/aquacare_api/settings/development.py" = ["F403", "F405"]
+"backend/aquacare_api/settings/production.py" = ["F403", "F405"]
+"backend/aquacare_api/settings/staging.py" = ["F403", "F405"]
+"backend/aquacare_api/settings/test.py" = ["F403", "F405"]
 
 [tool.ruff.format]
 quote-style = "double"

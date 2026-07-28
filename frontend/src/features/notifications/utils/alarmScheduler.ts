@@ -22,7 +22,7 @@ export interface FeedingAlarmScheduleResult {
 type MealTime = { hour: number; minute: number };
 
 /**
- * Mapping MAVECAM des horaires de repas selon meals_per_day
+ * Mapping AquaCare des horaires de repas selon meals_per_day
  * Source : spécifications backend (horaires fixes validés terrain)
  */
 export const getMealTimes = (mealsPerDay: number): MealTime[] => {

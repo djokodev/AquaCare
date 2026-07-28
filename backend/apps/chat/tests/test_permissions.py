@@ -67,7 +67,7 @@ class TestIsConversationOwnerOrAdmin:
         permission: IsConversationOwnerOrAdmin,
         request_factory: APIRequestFactory,
         user_factory,
-        mavecam_admin,
+        aquacare_admin,
     ) -> None:
         other_user = user_factory()
         conversation = ConversationService.get_or_create_conversation(other_user)
@@ -77,7 +77,7 @@ class TestIsConversationOwnerOrAdmin:
             content="Question support",
         )
         request = request_factory.get("/")
-        request.user = mavecam_admin
+        request.user = aquacare_admin
 
         assert permission.has_object_permission(request, view=None, obj=conversation) is True
         assert permission.has_object_permission(request, view=None, obj=message) is True

@@ -19,7 +19,7 @@ class IsOwnerOrReadOnly(BasePermission):
         return obj == request.user
 
 
-class IsMavecamAdmin(BasePermission):
+class IsAquaCareAdmin(BasePermission):
     def has_permission(self, request: Request, view: View) -> bool:
         return (
             request.user.is_authenticated and

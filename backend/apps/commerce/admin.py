@@ -1,10 +1,10 @@
 """
-Administration securisee du module commerce MAVECAM AquaCare.
+Administration securisee du module commerce AquaCare.
 Implemente le RBAC multi-niveau avec audit logging.
 
 Roles:
 - OWNER (is_superuser): Controle total
-- COMMERCE (mavecam_commerce): CRUD produits, view commandes, generer PDF
+- COMMERCE (aquacare_commerce): CRUD produits, view commandes, generer PDF
 - MANAGERS: Lecture seule pour contexte
 - SUPPORT: Pas d'acces
 """
@@ -19,13 +19,22 @@ from common.admin_mixins import (
 )
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
+from django.core.exceptions import PermissionDenied
+from django.db.models import IntegerField, Sum, Value
+from django.db.models.functions import Coalesce
 from django.http import FileResponse, HttpResponse
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import escape, format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 
+from .domain.exceptions import InvalidOrderError
 from .models import Order, OrderItem, Product
-from .services.pdf_service import generate_order_pdf
+from .services.order_application_service import OrderApplicationService
+from .services.pdf_service import OrderDocumentService, generate_order_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -61,17 +70,20 @@ class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
     readonly_fields = ['product', 'product_name', 'unit_price', 'quantity', 'line_total']
-    can_delete = False
 
     def has_add_permission(self, request, obj=None):
         """Empeche ajout items apres creation commande."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Les lignes historiques ne sont jamais supprimables dans l'admin."""
         return False
 
 
 @admin.register(Product)
 class ProductAdmin(CommerceSecuredAdmin):
     """
-    Administration securisee du catalogue produits MAVECAM.
+    Administration securisee du catalogue produits AquaCare.
     """
     list_display = [
         'name', 'brand_badge', 'species_badge', 'phase',
@@ -138,7 +150,6 @@ class ProductAdmin(CommerceSecuredAdmin):
     def brand_badge(self, obj):
         """Badge couleur pour marque."""
         colors = {
-            'aller_aqua': '#059669',
             'dibaq': '#3b82f6'
         }
         color = colors.get(obj.brand, '#6b7280')
@@ -185,61 +196,73 @@ class ProductAdmin(CommerceSecuredAdmin):
         available_badge = (
             '<span style="display:inline-block; min-width:110px; text-align:center; '
             'white-space:nowrap; background-color: #10b981; color: white; '
-            'padding: 4px 10px; border-radius: 6px;">Disponible</span>'
+            'padding: 4px 10px; border-radius: 6px;">{}</span>'
         )
         unavailable_badge = (
             '<span style="display:inline-block; min-width:120px; text-align:center; '
             'white-space:nowrap; background-color: #ef4444; color: white; '
-            'padding: 4px 10px; border-radius: 6px;">Indisponible</span>'
+            'padding: 4px 10px; border-radius: 6px;">{}</span>'
         )
         if obj.is_available:
-            return format_html(available_badge)
-        return format_html(unavailable_badge)
+            return format_html(available_badge, _('Disponible'))
+        return format_html(unavailable_badge, _('Indisponible'))
     availability_badge.short_description = _('Disponibilite')
 
 
 @admin.register(Order)
 class OrderAdmin(CommerceSecuredAdmin):
     """
-    Administration securisee des commandes MAVECAM.
+    Administration securisee des commandes AquaCare.
     """
     list_display = [
-        'order_number', 'user_link', 'farm_link', 'status_badge',
-        'delivery_method_badge', 'total_bags_display', 'total_display',
-        'created_at', 'pdf_download_link'
+        'order_column', 'farm_cycle_column', 'status_badge',
+        'delivery_summary', 'total_bags_display', 'total_display',
+        'created_at_compact', 'workflow_action_link', 'documents_compact',
     ]
+    list_select_related = ['user', 'farm_profile', 'production_cycle']
     list_filter = ['status', 'delivery_method', 'created_at', 'created_offline']
     search_fields = [
         'order_number', 'user__first_name', 'user__last_name',
-        'delivery_phone'
+        'delivery_phone', 'farm_profile__farm_name', 'production_cycle__cycle_name',
     ]
     readonly_fields = [
-        'id', 'order_number', 'user', 'farm_profile',
+        'id', 'order_number', 'status', 'user', 'farm_profile', 'production_cycle',
+        'delivery_method', 'pickup_location', 'delivery_name', 'delivery_phone',
+        'delivery_region', 'delivery_city', 'delivery_full_address',
+        'farm_name_snapshot', 'document_schema_version', 'issuer_snapshot',
+        'fulfilment_partner_snapshot', 'production_cycle_name_snapshot',
+        'pickup_location_display_fr_snapshot', 'pickup_location_display_en_snapshot',
         'subtotal', 'delivery_fee', 'total', 'total_bags',
-        'is_free_delivery', 'client_uuid', 'synced_at',
-        'created_at', 'updated_at', 'pdf_download_link', 'order_summary_display',
+        'is_free_delivery', 'client_uuid', 'created_offline', 'synced_at',
+        'delivered_at', 'delivered_by', 'ready_for_pickup_at',
+        'ready_for_pickup_by', 'received_at', 'created_at', 'updated_at',
+        'documents_display', 'workflow_history_display', 'workflow_action_display',
+        'items_summary_display', 'no_cycle_warning',
     ]
-    inlines = [OrderItemInline]
+    inlines = []
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
-    actions = ['generate_pdf_action']
+    actions = ['generate_pdf_fr_action', 'generate_pdf_en_action']
 
     fieldsets = (
-        (_('Récapitulatif'), {
-            'fields': ('order_summary_display',)
+        (_('Résumé de commande'), {
+            'fields': ('order_number', 'status', 'no_cycle_warning')
         }),
-        (_('Statut & téléchargement'), {
-            'fields': ('status', 'pdf_download_link')
+        (_('Workflow et statut'), {
+            'fields': ('workflow_action_display', 'workflow_history_display')
         }),
-        (_('Client'), {
-            'fields': ('user', 'farm_profile')
+        (_('Ferme, client et cycle'), {
+            'fields': ('farm_profile', 'user', 'production_cycle')
         }),
-        (_('Livraison'), {
+        (_('Livraison ou retrait'), {
             'fields': (
                 'delivery_method', 'pickup_location',
                 'delivery_name', 'delivery_phone', 'delivery_region',
                 'delivery_city', 'delivery_full_address'
             )
+        }),
+        (_('Articles'), {
+            'fields': ('items_summary_display',)
         }),
         (_('Montants'), {
             'fields': (
@@ -247,16 +270,17 @@ class OrderAdmin(CommerceSecuredAdmin):
                 'total_bags', 'is_free_delivery'
             )
         }),
-        (_('Identifiants'), {
-            'fields': ('id', 'order_number'),
-            'classes': ('collapse',)
+        (_('Documents'), {
+            'fields': ('documents_display',)
         }),
-        (_('Synchronisation Offline'), {
-            'fields': ('client_uuid', 'created_offline', 'synced_at'),
-            'classes': ('collapse',)
-        }),
-        (_('Metadonnees'), {
-            'fields': ('created_at', 'updated_at'),
+        (_('Synchronisation et métadonnées'), {
+            'fields': (
+                'id', 'client_uuid', 'created_offline', 'synced_at',
+                'farm_name_snapshot', 'document_schema_version', 'issuer_snapshot',
+                'fulfilment_partner_snapshot', 'production_cycle_name_snapshot',
+                'pickup_location_display_fr_snapshot',
+                'pickup_location_display_en_snapshot', 'created_at', 'updated_at',
+            ),
             'classes': ('collapse',)
         }),
     )
@@ -285,21 +309,37 @@ class OrderAdmin(CommerceSecuredAdmin):
                 self.admin_site.admin_view(self.download_pdf_view),
                 name='commerce_order_download_pdf',
             ),
+            path(
+                '<path:object_id>/fulfil/',
+                self.admin_site.admin_view(self.fulfil_order_view),
+                name='commerce_order_fulfil',
+            ),
         ]
         return custom + urls
+
+    def has_order_document_permission(self, request, obj=None):
+        return request.user.is_superuser or request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists()
+
+    @staticmethod
+    def _document_language(request):
+        language_code = request.GET.get('language', 'fr')
+        return language_code if language_code in {'fr', 'en'} else None
 
     def view_pdf_view(self, request, object_id):
         """Ouvre le bon de commande PDF directement dans le navigateur."""
         order = self.get_object(request, object_id)
         if order is None:
-            return HttpResponse("Commande introuvable.", status=404)
-        if not self.has_view_permission(request, order):
-            return HttpResponse("Accès refusé.", status=403)
+            return HttpResponse(_("Commande introuvable."), status=404)
+        language_code = self._document_language(request)
+        if language_code is None:
+            return HttpResponse(_("Langue invalide."), status=400)
+        if not self.has_order_document_permission(request, order):
+            return HttpResponse(_("Accès refusé."), status=403)
         try:
-            pdf_bytes = generate_order_pdf(order)
+            pdf_bytes = generate_order_pdf(order, language_code)
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = (
-                f'inline; filename="commande_{order.order_number}.pdf"'
+                f'inline; filename="{OrderDocumentService.filename(order, language_code)}"'
             )
             return response
         except Exception as exc:
@@ -308,20 +348,26 @@ class OrderAdmin(CommerceSecuredAdmin):
                 object_id,
                 exc_info=exc,
             )
-            return HttpResponse("Erreur interne lors de la génération du PDF.", status=500)
+            return HttpResponse(
+                _("Erreur interne lors de la génération du PDF."),
+                status=500,
+            )
 
     def download_pdf_view(self, request, object_id):
         """Télécharge le bon de commande PDF."""
         order = self.get_object(request, object_id)
         if order is None:
-            return HttpResponse("Commande introuvable.", status=404)
-        if not self.has_view_permission(request, order):
-            return HttpResponse("Accès refusé.", status=403)
+            return HttpResponse(_("Commande introuvable."), status=404)
+        language_code = self._document_language(request)
+        if language_code is None:
+            return HttpResponse(_("Langue invalide."), status=400)
+        if not self.has_order_document_permission(request, order):
+            return HttpResponse(_("Accès refusé."), status=403)
         try:
-            pdf_bytes = generate_order_pdf(order)
+            pdf_bytes = generate_order_pdf(order, language_code)
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = (
-                f'attachment; filename="commande_{order.order_number}.pdf"'
+                f'attachment; filename="{OrderDocumentService.filename(order, language_code)}"'
             )
             return response
         except Exception as exc:
@@ -331,7 +377,10 @@ class OrderAdmin(CommerceSecuredAdmin):
                 exc_info=exc,
             )
             messages.error(request, _("Erreur interne lors de la génération du PDF."))
-            return HttpResponse("Erreur interne lors de la génération du PDF.", status=500)
+            return HttpResponse(
+                _("Erreur interne lors de la génération du PDF."),
+                status=500,
+            )
 
     def get_search_fields(self, request):
         """Retire phone_number de la recherche pour non-commerce."""
@@ -347,6 +396,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     def get_actions(self, request):
         """Retire les actions selon le role."""
         actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
 
         if not request.user.is_superuser:
             # Seuls commerce operators peuvent generer PDF
@@ -355,28 +405,281 @@ class OrderAdmin(CommerceSecuredAdmin):
             ).exists()
 
             if not is_commerce:
-                if 'generate_pdf_action' in actions:
-                    del actions['generate_pdf_action']
+                actions.pop('generate_pdf_fr_action', None)
+                actions.pop('generate_pdf_en_action', None)
 
         return actions
+
+    def get_list_display(self, request):
+        fields = list(super().get_list_display(request))
+        if not self.has_workflow_permission(request):
+            fields.remove('workflow_action_link')
+        if not self.has_order_document_permission(request):
+            fields.remove('documents_compact')
+        return fields
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if self.has_order_document_permission(request):
+            return fieldsets
+        filtered = []
+        for title, options in fieldsets:
+            fields = tuple(
+                field
+                for field in options.get('fields', ())
+                if (field != 'documents_display' or self.has_order_document_permission(request))
+                and (field != 'workflow_action_display' or self.has_workflow_permission(request))
+            )
+            if fields:
+                filtered.append((title, {**options, 'fields': fields}))
+        return filtered
 
     def has_add_permission(self, request):
         """Empeche creation commande via admin (doit passer par API)."""
         return False
 
     def has_change_permission(self, request, obj=None):
-        """Commerce operators peuvent modifier le statut des commandes."""
-        if request.user.is_superuser:
-            return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_COMMERCE
-        ).exists()
+        """Les commandes sont immuables dans la change view standard.
 
-    def has_delete_permission(self, request, obj=None):
-        """Empeche suppression commande."""
+        Les transitions de fulfilment passent exclusivement par
+        ``fulfil_order_view`` et ``has_workflow_permission``.
+        """
         return False
 
+    def has_delete_permission(self, request, obj=None):
+        """Les commandes historiques ne sont jamais supprimables dans l'admin."""
+        return False
+
+    def get_queryset(self, request):
+        return (
+            super().get_queryset(request)
+            .select_related('user', 'farm_profile', 'production_cycle')
+            .prefetch_related('items__product')
+            .annotate(
+                admin_total_bags=Coalesce(
+                    Sum('items__quantity'),
+                    Value(0),
+                    output_field=IntegerField(),
+                )
+            )
+        )
+
+    def has_workflow_permission(self, request) -> bool:
+        return bool(
+            request.user.is_superuser
+            or request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists()
+        )
+
+    def fulfil_order_view(self, request, object_id):
+        """Page POST/CSRF de confirmation de la transition logistique."""
+        order = self.get_object(request, object_id)
+        if order is None:
+            return HttpResponse(_('Commande introuvable.'), status=404)
+        if not self.has_workflow_permission(request):
+            raise PermissionDenied
+        if order.status != 'confirmed':
+            messages.warning(request, _('Cette commande ne nécessite plus cette action.'))
+            return redirect('admin:commerce_order_change', object_id)
+
+        action_label = (
+            _('Marquer comme livrée')
+            if order.delivery_method == 'home'
+            else _('Marquer comme prête au retrait')
+        )
+        if request.method == 'POST':
+            try:
+                result = OrderApplicationService.mark_order_ready_for_customer_confirmation(
+                    order,
+                    request.user,
+                )
+            except InvalidOrderError as exc:
+                messages.error(request, str(exc))
+            else:
+                if result.transitioned:
+                    self.log_change(
+                        request,
+                        result.order,
+                        _('Transition logistique effectuée via le service métier.'),
+                    )
+                    messages.success(
+                        request,
+                        _(
+                            'La commande {} a été mise à jour. La notification client '
+                            'a été traitée selon ses préférences.'
+                        ).format(result.order.order_number),
+                    )
+                else:
+                    messages.info(
+                        request,
+                        _('La commande {} était déjà dans cet état.').format(
+                            result.order.order_number
+                        ),
+                    )
+            return redirect('admin:commerce_order_change', object_id)
+
+        context = {
+            **self.admin_site.each_context(request),
+            'opts': self.model._meta,
+            'order': order,
+            'items': order.items.all(),
+            'action_label': action_label,
+            'title': action_label,
+        }
+        return TemplateResponse(
+            request,
+            'admin/commerce/order/fulfil_confirmation.html',
+            context,
+        )
+
     # --- Display methods ---
+
+    def order_column(self, obj):
+        url = reverse('admin:commerce_order_change', args=[obj.pk])
+        return format_html('<a href="{}"><strong>{}</strong></a>', url, obj.order_number)
+    order_column.short_description = _('Commande')
+    order_column.admin_order_field = 'order_number'
+
+    def farm_cycle_column(self, obj):
+        cycle_name = obj.production_cycle.cycle_name if obj.production_cycle else _('Aucun cycle associé')
+        return format_html(
+            '<strong>{}</strong><small class="order-secondary"> · {}</small>',
+            obj.farm_profile.farm_name,
+            cycle_name,
+        )
+    farm_cycle_column.short_description = _('Ferme / cycle')
+
+    def delivery_summary(self, obj):
+        if obj.delivery_method == 'pickup':
+            return format_html(
+                '<strong>{}</strong><small class="order-secondary"> · {}</small>',
+                _('Retrait'),
+                obj.get_pickup_location_display() if obj.pickup_location else _('Point non renseigné'),
+            )
+        destination = ', '.join(part for part in (obj.delivery_city, obj.delivery_region) if part)
+        return format_html(
+            '<strong>{}</strong><small class="order-secondary"> · {}</small>',
+            _('Domicile'),
+            destination or _('Destination non renseignée'),
+        )
+    delivery_summary.short_description = _('Livraison')
+
+    def created_at_compact(self, obj):
+        return timezone.localtime(obj.created_at).strftime('%d/%m/%Y %H:%M')
+    created_at_compact.short_description = _('Créée le')
+    created_at_compact.admin_order_field = 'created_at'
+
+    def workflow_action_link(self, obj):
+        if obj.status != 'confirmed':
+            return '—'
+        label = (
+            _('Marquer comme livrée')
+            if obj.delivery_method == 'home'
+            else _('Marquer comme prête au retrait')
+        )
+        url = reverse('admin:commerce_order_fulfil', args=[obj.pk])
+        return format_html('<a class="button" href="{}">{}</a>', url, label)
+    workflow_action_link.short_description = _('Action')
+
+    def workflow_action_display(self, obj):
+        return self.workflow_action_link(obj)
+    workflow_action_display.short_description = _('Action opérateur')
+
+    def documents_compact(self, obj):
+        if not obj.pk:
+            return '—'
+        view_url = reverse('admin:commerce_order_view_pdf', args=[obj.pk])
+        return format_html(
+            '<a href="{}?language=fr" target="_blank">FR</a> · '
+            '<a href="{}?language=en" target="_blank">EN</a>',
+            view_url,
+            view_url,
+        )
+    documents_compact.short_description = _('Documents')
+
+    def documents_display(self, obj):
+        if not obj.pk:
+            return '—'
+        view_url = reverse('admin:commerce_order_view_pdf', args=[obj.pk])
+        download_url = reverse('admin:commerce_order_download_pdf', args=[obj.pk])
+        return format_html(
+            '<div style="display:flex;flex-wrap:wrap;gap:8px">'
+            '<a class="button" href="{}?language=fr" target="_blank">{}</a>'
+            '<a class="button" href="{}?language=fr">{}</a>'
+            '<a class="button" href="{}?language=en" target="_blank">{}</a>'
+            '<a class="button" href="{}?language=en">{}</a>'
+            '</div>',
+            view_url, _('Visualiser FR'),
+            download_url, _('Télécharger FR'),
+            view_url, _('View EN'),
+            download_url, _('Download EN'),
+        )
+    documents_display.short_description = _('Documents')
+
+    def no_cycle_warning(self, obj):
+        if obj.production_cycle_id:
+            return _('Cycle associé : {}').format(obj.production_cycle)
+        return format_html(
+            '<strong style="color:#b45309">{}</strong>',
+            _(
+                'Aucun cycle associé — cette commande ne générera pas '
+                "d'entrée automatique dans un magasin de cycle."
+            ),
+        )
+    no_cycle_warning.short_description = _('Magasin du cycle')
+
+    def workflow_history_display(self, obj):
+        operator = obj.delivered_by or obj.ready_for_pickup_by
+        intermediate_label = (
+            _('Livrée le') if obj.delivery_method == 'home' else _('Prête au retrait le')
+        )
+        intermediate_at = obj.delivered_at or obj.ready_for_pickup_at
+        confirmed_label = (
+            _('Réception confirmée le')
+            if obj.delivery_method == 'home'
+            else _('Retrait confirmé le')
+        )
+        rows = [
+            (_('Commandée le'), obj.created_at),
+            (intermediate_label, intermediate_at),
+            (_('Opérateur'), getattr(operator, 'display_name', None) or operator),
+            (confirmed_label, obj.received_at),
+        ]
+        rendered = []
+        for label, value in rows:
+            if hasattr(value, 'tzinfo') and value is not None:
+                value = timezone.localtime(value).strftime('%d/%m/%Y %H:%M')
+            rendered.append((label, value or '—'))
+        return format_html(
+            '<dl style="display:grid;grid-template-columns:max-content 1fr;gap:6px 16px">{}</dl>',
+            mark_safe(''.join(
+                f'<dt><strong>{escape(str(label))}</strong></dt><dd>{escape(str(value))}</dd>'
+                for label, value in rendered
+            )),
+        )
+    workflow_history_display.short_description = _('Historique du workflow')
+
+    def items_summary_display(self, obj):
+        items = list(obj.items.all())
+        if not items:
+            return _('Aucun article.')
+        rows = ''.join(
+            '<tr>'
+            f'<td style="padding:6px">{escape(item.product_name)}</td>'
+            f'<td style="padding:6px;text-align:center">{item.quantity}</td>'
+            f'<td style="padding:6px;text-align:right">{item.unit_price:,.0f} FCFA</td>'
+            f'<td style="padding:6px;text-align:right">{item.line_total:,.0f} FCFA</td>'
+            '</tr>'
+            for item in items
+        )
+        return format_html(
+            '<table style="width:100%;border-collapse:collapse">'
+            '<thead><tr><th>{}</th><th>{}</th>'
+            '<th>{}</th><th>{}</th></tr></thead>'
+            '<tbody>{}</tbody></table>',
+            _('Produit'), _('Quantité'), _('Prix unitaire'), _('Total'),
+            mark_safe(rows),
+        )
+    items_summary_display.short_description = _('Articles commandés')
 
     def order_summary_display(self, obj):
         """Aperçu visuel complet de la commande directement dans l'admin."""
@@ -385,9 +688,9 @@ class OrderAdmin(CommerceSecuredAdmin):
 
         order_number = escape(str(obj.order_number or '—'))
         status_labels = {
-            'confirmed': ('Confirmée', '#2563eb'),
-            'delivered': ('Livrée', '#f59e0b'),
-            'received': ('Reçue', '#059669'),
+            'confirmed': (_('Confirmée'), '#2563eb'),
+            'delivered': (_('Livrée'), '#f59e0b'),
+            'received': (_('Reçue'), '#059669'),
         }
         status_label, status_color = status_labels.get(obj.status, (escape(str(obj.status)), '#6b7280'))
 
@@ -426,11 +729,12 @@ class OrderAdmin(CommerceSecuredAdmin):
                 items_html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
                 items_html += (
                     '<tr style="background:#f3f4f6;">'
-                    '<th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">Produit</th>'
-                    '<th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">Qté (sacs)</th>'
-                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">Prix unit.</th>'
-                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">Total</th>'
+                    '<th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">{}</th>'
+                    '<th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">{}</th>'
+                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">{}</th>'
+                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">{}</th>'
                     '</tr>'
+                    .format(_('Produit'), _('Qté (sacs)'), _('Prix unit.'), _('Total'))
                 )
                 for item in items:
                     product_name = escape(str(item.product_name or '—'))
@@ -447,9 +751,15 @@ class OrderAdmin(CommerceSecuredAdmin):
                     )
                 items_html += '</table>'
             else:
-                items_html = '<em style="color:#6b7280;font-size:13px;">Aucun article.</em>'
+                items_html = (
+                    '<em style="color:#6b7280;font-size:13px;">{}</em>'
+                    .format(_('Aucun article.'))
+                )
         except Exception:
-            items_html = '<em style="color:#6b7280;">Articles non disponibles.</em>'
+            items_html = (
+                '<em style="color:#6b7280;">{}</em>'
+                .format(_('Articles non disponibles.'))
+            )
 
         card_wrapper_open = (
             '<div style="font-family:sans-serif;max-width:780px;'
@@ -468,7 +778,7 @@ class OrderAdmin(CommerceSecuredAdmin):
             [
                 card_wrapper_open,
                 card_header,
-                f"<strong>Commande #{order_number}</strong>",
+                f"<strong>{escape(str(_('Commande #')))}{order_number}</strong>",
                 status_badge,
                 "</div>",
                 '<div style="border-bottom:1px solid #e5e7eb;">',
@@ -476,20 +786,23 @@ class OrderAdmin(CommerceSecuredAdmin):
                 "</div>",
                 '<div style="display:flex;border-bottom:1px solid #e5e7eb;">',
                 '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                '<div style="font-size:12px;color:#6b7280;">Sous-total</div>',
+                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Sous-total")))}</div>',
                 f'<div style="font-weight:bold;">{escape(subtotal)} FCFA</div>',
                 "</div>",
                 '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                '<div style="font-size:12px;color:#6b7280;">Livraison</div>',
+                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Livraison")))}</div>',
                 f'<div style="font-weight:bold;">{escape(delivery_fee)} FCFA</div>',
                 "</div>",
                 '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                '<div style="font-size:12px;color:#6b7280;">Total</div>',
+                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Total")))}</div>',
                 f'<div style="font-weight:bold;color:#059669;font-size:16px;">{escape(total)} FCFA</div>',
                 "</div>",
                 '<div style="flex:1;padding:10px 16px;">',
-                '<div style="font-size:12px;color:#6b7280;">Sacs commandés</div>',
-                f'<div style="font-weight:bold;">{escape(bags)} sacs</div>',
+                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Sacs commandés")))}</div>',
+                (
+                    f'<div style="font-weight:bold;">{escape(bags)} '
+                    f'{escape(str(ngettext("sac", "sacs", obj.total_bags or 0)))}</div>'
+                ),
                 "</div>",
                 "</div>",
                 '<div style="padding:10px 16px;font-size:13px;background:#f9fafb;">',
@@ -510,7 +823,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     order_summary_display.short_description = _('Aperçu de la commande')
 
     def pdf_download_link(self, obj):
-        """Boutons Visualiser + Télécharger le bon de commande PDF."""
+        """Boutons PDF français et anglais."""
         if not obj.pk:
             return "—"
         view_url = reverse('admin:commerce_order_view_pdf', args=[obj.pk])
@@ -520,19 +833,27 @@ class OrderAdmin(CommerceSecuredAdmin):
             'text-decoration:none;font-weight:bold;font-size:13px;'
         )
         return format_html(
-            '<a href="{}" target="_blank" style="{}background:#3b82f6;color:white;">👁 Visualiser</a>'
+            '<a href="{}?language=fr" target="_blank" style="{}background:#3b82f6;color:white;">{}</a>'
             '&nbsp;&nbsp;'
-            '<a href="{}" style="{}background:#059669;color:white;">📄 Télécharger</a>',
-            view_url, btn_base, download_url, btn_base,
+            '<a href="{}?language=fr" style="{}background:#059669;color:white;">{}</a>'
+            '&nbsp;&nbsp;'
+            '<a href="{}?language=en" target="_blank" style="{}background:#3b82f6;color:white;">{}</a>'
+            '&nbsp;&nbsp;'
+            '<a href="{}?language=en" style="{}background:#059669;color:white;">{}</a>',
+            view_url, btn_base, _('Visualiser FR'),
+            download_url, btn_base, _('Télécharger FR'),
+            view_url, btn_base, _('Visualiser EN'),
+            download_url, btn_base, _('Télécharger EN'),
         )
     pdf_download_link.short_description = _('Bon de commande PDF')
 
     def user_link(self, obj):
         """Lien vers utilisateur."""
         return format_html(
-            '<a href="/admin/accounts/user/{}/change/">{}</a><br><small>Tel: ***</small>',
+            '<a href="/admin/accounts/user/{}/change/">{}</a><br><small>{}: ***</small>',
             obj.user.id,
-            obj.user.full_name
+            obj.user.full_name,
+            _('Tel'),
         )
     user_link.short_description = _('Client')
 
@@ -550,13 +871,24 @@ class OrderAdmin(CommerceSecuredAdmin):
         colors = {
             'confirmed': '#2563eb',
             'delivered': '#f59e0b',
+            'ready_for_pickup': '#f59e0b',
             'received': '#10b981',
+        }
+        labels = {
+            'confirmed': _('Commandée'),
+            'delivered': _('Livrée — confirmation attendue'),
+            'ready_for_pickup': _('Prête au retrait'),
+            'received': (
+                _('Réception confirmée')
+                if obj.delivery_method == 'home'
+                else _('Retrait confirmé')
+            ),
         }
         color = colors.get(obj.status, '#6b7280')
         return format_html(
             '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
             color,
-            obj.get_status_display()
+            labels.get(obj.status, obj.get_status_display())
         )
     status_badge.short_description = _('Statut')
 
@@ -579,11 +911,13 @@ class OrderAdmin(CommerceSecuredAdmin):
 
     def total_bags_display(self, obj):
         """Nombre total de sacs."""
+        bag_count = getattr(obj, 'admin_total_bags', obj.total_bags)
         return format_html(
-            '<strong>{}</strong> sacs',
-            obj.total_bags
+            '<strong>{}</strong> {}',
+            bag_count,
+            ngettext('sac', 'sacs', bag_count),
         )
-    total_bags_display.short_description = _('Quantite')
+    total_bags_display.short_description = _('Quantité')
 
     def total_display(self, obj):
         """Affichage formate du total."""
@@ -597,14 +931,11 @@ class OrderAdmin(CommerceSecuredAdmin):
 
     # --- Actions securisees ---
 
-    @admin.action(description=_("Generer PDF des commandes selectionnees"))
-    def generate_pdf_action(self, request, queryset):
+    def _generate_pdf_zip(self, request, queryset, language_code):
         """Genere PDF pour commandes selectionnees (max 10). Commerce only."""
         # Verifier permission
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists():
-                messages.error(request, _("Vous n'avez pas la permission de generer des PDF."))
-                return
+        if not self.has_order_document_permission(request):
+            return HttpResponse(_("Accès refusé."), status=403)
 
         count = queryset.count()
 
@@ -619,9 +950,10 @@ class OrderAdmin(CommerceSecuredAdmin):
         if count == 1:
             order = queryset.first()
             try:
-                pdf_bytes = generate_order_pdf(order)
+                pdf_bytes = generate_order_pdf(order, language_code)
                 response = HttpResponse(pdf_bytes, content_type='application/pdf')
-                response['Content-Disposition'] = f'attachment; filename="commande_{order.order_number}.pdf"'
+                filename = OrderDocumentService.filename(order, language_code)
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
                 # Audit
                 self.log_action(request, order, CHANGE, message="PDF bon de commande genere")
@@ -649,9 +981,9 @@ class OrderAdmin(CommerceSecuredAdmin):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                 for order in queryset:
-                    pdf_bytes = generate_order_pdf(order)
+                    pdf_bytes = generate_order_pdf(order, language_code)
                     zip_file.writestr(
-                        f"commande_{order.order_number}.pdf",
+                        OrderDocumentService.filename(order, language_code),
                         pdf_bytes
                     )
                     # Audit
@@ -659,7 +991,12 @@ class OrderAdmin(CommerceSecuredAdmin):
 
             zip_buffer.seek(0)
             response = FileResponse(zip_buffer, content_type='application/zip')
-            response['Content-Disposition'] = 'attachment; filename="commandes_aquacare.zip"'
+            filename = (
+                'bons-commande-aquacare-fr.zip'
+                if language_code == 'fr'
+                else 'purchase-orders-aquacare-en.zip'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
             messages.success(
                 request,
@@ -677,6 +1014,21 @@ class OrderAdmin(CommerceSecuredAdmin):
                 _("Erreur interne lors de la génération de l'archive ZIP.")
             )
 
+    @admin.action(description=_("Générer les bons de commande en français"))
+    def generate_pdf_fr_action(self, request, queryset):
+        return self._generate_pdf_zip(request, queryset, 'fr')
+
+    @admin.action(description=_("Generate purchase orders in English"))
+    def generate_pdf_en_action(self, request, queryset):
+        return self._generate_pdf_zip(request, queryset, 'en')
+
+    def changelist_view(self, request, extra_context=None):
+        from common.models import AdminViewState
+        from django.core.cache import cache
+        AdminViewState.mark_seen(request.user, AdminViewState.SECTION_ORDERS)
+        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        return super().changelist_view(request, extra_context)
+
 
 @admin.register(OrderItem)
 class OrderItemAdmin(CommerceSecuredAdmin):
@@ -684,11 +1036,20 @@ class OrderItemAdmin(CommerceSecuredAdmin):
     Administration securisee des lignes de commande (consultation uniquement).
     """
     list_display = [
-        'order_number', 'product_name', 'quantity', 'unit_price_display', 'line_total_display'
+        'order_number', 'farm_name', 'product_name', 'quantity',
+        'unit_price_display', 'line_total_display'
     ]
-    list_filter = ['order__created_at']
-    search_fields = ['order__order_number', 'product_name']
-    readonly_fields = ['order', 'product', 'product_name', 'unit_price', 'quantity', 'line_total']
+    list_filter = ['order__status', 'order__created_at', 'product__species', 'product__phase']
+    search_fields = [
+        'order__order_number', 'order__farm_profile__farm_name',
+        'order__user__first_name', 'order__user__last_name', 'product_name',
+    ]
+    list_select_related = ['order', 'order__farm_profile', 'order__user', 'product']
+    readonly_fields = [
+        'order', 'product', 'product_name', 'unit_price', 'quantity', 'line_total',
+        'product_brand_snapshot', 'product_species_snapshot', 'product_phase_snapshot',
+        'product_pellet_size_mm_snapshot', 'product_package_weight_kg_snapshot',
+    ]
 
     def order_number(self, obj):
         """Lien vers commande."""
@@ -698,6 +1059,10 @@ class OrderItemAdmin(CommerceSecuredAdmin):
             obj.order.order_number
         )
     order_number.short_description = _('Commande')
+
+    def farm_name(self, obj):
+        return obj.order.farm_profile.farm_name
+    farm_name.short_description = _('Ferme')
 
     def unit_price_display(self, obj):
         """Affichage formate prix unitaire."""
@@ -723,5 +1088,10 @@ class OrderItemAdmin(CommerceSecuredAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        """Empeche suppression item."""
+        """Les lignes historiques ne sont jamais supprimables dans l'admin."""
         return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions

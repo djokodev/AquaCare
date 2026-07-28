@@ -1,6 +1,6 @@
 ﻿import * as SecureStore from 'expo-secure-store';
 
-import { authService } from '../authService';
+import { AuthRequestError, authService } from '../authService';
 import { apiService } from '@/services/api';
 import { STORAGE_KEYS } from '@/constants/api';
 
@@ -48,17 +48,6 @@ describe('services/authService', () => {
     user: mockUser,
   };
 
-  const mockFarmProfile = {
-    id: '456',
-    farm_name: 'Ferme Test',
-    certification_status: 'pending' as const,
-    total_ponds: 5,
-    total_area_m2: 5000,
-    is_certified: false,
-    created_at: '2025-01-01T00:00:00Z',
-    updated_at: '2025-01-01T00:00:00Z',
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
     mockSecureStore.getItemAsync.mockReset();
@@ -99,6 +88,20 @@ describe('services/authService', () => {
 
       await expect(authService.login(mockCredentials)).rejects.toThrow();
     });
+
+    it('nettoie les suffixes techniques dans le message de connexion', async () => {
+      const errorResponse = {
+        response: {
+          status: 401,
+          data: { detail: "Aucun compte n'est associé à ce nom de connexion. 400 invalid" },
+        },
+      };
+      mockApiService.post.mockRejectedValueOnce(errorResponse as any);
+
+      await expect(authService.login(mockCredentials)).rejects.toMatchObject({
+        message: "Aucun compte n'est associé à ce nom de connexion.",
+      });
+    });
   });
 
   describe('register', () => {
@@ -116,12 +119,47 @@ describe('services/authService', () => {
       const errorResponse = {
         response: {
           status: 400,
-          data: { phone: ['Ce numéro existe déjà'] },
+          data: { phone_number: ['Ce numéro existe déjà'] },
         },
       };
       mockApiService.post.mockRejectedValueOnce(errorResponse as any);
 
-      await expect(authService.register(mockRegisterData)).rejects.toThrow();
+      await expect(authService.register(mockRegisterData)).rejects.toMatchObject(
+        {
+          fieldErrors: {
+            phone_number: 'Ce numéro existe déjà',
+          },
+        } as Partial<AuthRequestError>
+      );
+    });
+
+    it('retourne uniquement les erreurs de champ quand le backend ne fournit pas de message global', async () => {
+      const errorResponse = {
+        response: {
+          status: 400,
+          data: { phone_number: ['Ce numéro est déjà utilisé.'] },
+        },
+      };
+      mockApiService.post.mockRejectedValueOnce(errorResponse as any);
+
+      await expect(authService.register(mockRegisterData)).rejects.toMatchObject({
+        message: '',
+        fieldErrors: {
+          phone_number: 'Ce numéro est déjà utilisé.',
+        },
+      });
+    });
+
+    it('retourne une erreur générique si le backend envoie seulement un code technique', async () => {
+      const errorResponse = {
+        response: {
+          status: 400,
+          data: { code: 'invalid', status_code: 400 },
+        },
+      };
+      mockApiService.post.mockRejectedValueOnce(errorResponse as any);
+
+      await expect(authService.register(mockRegisterData)).rejects.toHaveProperty('message', '');
     });
   });
 
@@ -155,59 +193,6 @@ describe('services/authService', () => {
 
       expect(mockApiService.post).not.toHaveBeenCalled();
       expect(mockApiService.clearTokens).toHaveBeenCalled();
-    });
-  });
-
-  describe('getProfile', () => {
-    it('récupère profil utilisateur et met à jour storage', async () => {
-      mockApiService.get.mockResolvedValueOnce({ data: mockUser } as any);
-
-      const result = await authService.getProfile();
-
-      expect(mockApiService.get).toHaveBeenCalledWith(expect.stringContaining('/profile/'));
-      expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith(STORAGE_KEYS.USER_DATA, JSON.stringify(mockUser));
-      expect(result).toEqual(mockUser);
-    });
-
-    it('propage erreur en cas échec récupération', async () => {
-      mockApiService.get.mockRejectedValueOnce(new Error('Unauthorized'));
-
-      await expect(authService.getProfile()).rejects.toThrow();
-    });
-  });
-
-  describe('updateProfile', () => {
-    it('met à jour profil utilisateur', async () => {
-      const updatedUser = { ...mockUser, first_name: 'Jane' };
-      mockApiService.patch.mockResolvedValueOnce({ data: updatedUser } as any);
-
-      const result = await authService.updateProfile({ first_name: 'Jane' });
-
-      expect(mockApiService.patch).toHaveBeenCalledWith(expect.stringContaining('/profile/'), { first_name: 'Jane' });
-      expect(result).toEqual(updatedUser);
-    });
-  });
-
-  describe('getFarmProfile', () => {
-    it('récupère profil ferme', async () => {
-      mockApiService.get.mockResolvedValueOnce({ data: mockFarmProfile } as any);
-
-      const result = await authService.getFarmProfile();
-
-      expect(mockApiService.get).toHaveBeenCalledWith(expect.stringContaining('/farm/'));
-      expect(result).toEqual(mockFarmProfile);
-    });
-  });
-
-  describe('updateFarmProfile', () => {
-    it('met à jour profil ferme', async () => {
-      const updatedFarm = { ...mockFarmProfile, farm_name: 'Nouvelle Ferme' };
-      mockApiService.patch.mockResolvedValueOnce({ data: updatedFarm } as any);
-
-      const result = await authService.updateFarmProfile({ farm_name: 'Nouvelle Ferme' });
-
-      expect(mockApiService.patch).toHaveBeenCalledWith(expect.stringContaining('/farm/'), { farm_name: 'Nouvelle Ferme' });
-      expect(result).toEqual(updatedFarm);
     });
   });
 

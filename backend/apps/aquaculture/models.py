@@ -1,5 +1,5 @@
 """
-Modèles de données pour le module aquaculture de MAVECAM AquaCare.
+Modèles de données pour le module aquaculture de AquaCare.
 
 Ce fichier contient tous les modèles Django pour la gestion de l'aquaculture,
 basés sur les spécifications techniques et les meilleures pratiques du secteur.
@@ -13,20 +13,73 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.postgres.indexes import GinIndex
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import Prefetch
+from django.db.models import DecimalField, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum, Value
+from django.db.models.functions import Coalesce, Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from .constants import CYCLE_STATUS_CHOICES, GROWTH_STAGES, SANITARY_EVENT_TYPES, SPECIES_CHOICES
+from .constants import (
+    CYCLE_STATUS_CHOICES,
+    DEFAULT_FEED_PRICE_PER_KG,
+    GROWTH_STAGES,
+    MAX_INITIAL_FISH_COUNT,
+    SANITARY_EVENT_TYPES,
+    SPECIES_CHOICES,
+)
+from .domain.production_units import (
+    get_production_unit_capacity,
+    get_production_unit_density_unit,
+    get_production_unit_dimension_display,
+    normalize_production_unit_type,
+    validate_cycle_unit_allocation_counts,
+    validate_production_unit_dimensions,
+)
 
 
 class ProductionCycleQuerySet(models.QuerySet):
     """QuerySet optimisé pour les cycles de production."""
 
+    def user_visible(self):
+        """Cycles métier affichables dans les sélecteurs utilisateur.
+
+        Les sessions de calibrage restent des agrégats techniques autonomes pour
+        leur ledger, mais sont exposées comme unités du cycle source.
+        """
+        return self.filter(cycle_kind=ProductionCycle.CYCLE_KIND_STANDARD)
+
     def for_api(self):
-        return self.select_related('farm_profile', 'metrics')
+        incoming = CalibrationOperation.objects.filter(destination_allocation__cycle=OuterRef('pk')).values(
+            'destination_allocation__cycle'
+        )
+        outgoing = CalibrationOperation.objects.filter(source_allocation__cycle=OuterRef('pk')).values(
+            'source_allocation__cycle'
+        )
+        return self.select_related('farm_profile', 'farm_profile__production_plan', 'metrics').annotate(
+            calibration_in_count=Coalesce(
+                Subquery(incoming.annotate(total=Sum('transferred_count')).values('total')),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+            calibration_in_biomass=Coalesce(
+                Subquery(incoming.annotate(total=Sum('transferred_biomass_kg')).values('total')),
+                Value(Decimal('0')),
+                output_field=DecimalField(),
+            ),
+            calibration_out_count=Coalesce(
+                Subquery(outgoing.annotate(total=Sum('transferred_count')).values('total')),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+            calibration_out_biomass=Coalesce(
+                Subquery(outgoing.annotate(total=Sum('transferred_biomass_kg')).values('total')),
+                Value(Decimal('0')),
+                output_field=DecimalField(),
+            ),
+        )
 
     def for_statistics(self):
         return self.for_api().prefetch_related(
@@ -89,7 +142,12 @@ class FeedingPlanQuerySet(models.QuerySet):
     """QuerySet optimisé pour les plans d'alimentation."""
 
     def for_api(self):
-        return self.select_related('cycle')
+        return self.select_related(
+            'cycle',
+            'cycle__farm_profile',
+            'cycle_unit_allocation',
+            'cycle_unit_allocation__production_unit',
+        )
 
 
 class SanitaryLogQuerySet(models.QuerySet):
@@ -97,6 +155,47 @@ class SanitaryLogQuerySet(models.QuerySet):
 
     def for_api(self):
         return self.select_related('cycle')
+
+
+class ProductionUnitQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les unités de production."""
+
+    def for_api(self):
+        return self.select_related('farm_profile')
+
+
+class CycleUnitAllocationQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les allocations de cycle par unité."""
+
+    def for_api(self):
+        return self.select_related(
+            'cycle',
+            'cycle__farm_profile',
+            'production_unit',
+            'production_unit__farm_profile',
+        )
+
+
+class CycleFeedStockEntryQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les entrées du magasin du cycle."""
+
+    def for_api(self):
+        return self.select_related(
+            'cycle',
+            'feed_reference',
+            'feed_reference__catalog_product',
+            'product',
+            'order',
+            'order_item',
+            'order_item__product',
+        )
+
+
+class FarmFeedReferenceQuerySet(models.QuerySet):
+    """Référentiel d'aliments visible par ferme."""
+
+    def for_api(self):
+        return self.select_related('farm_profile', 'catalog_product')
 
 
 class ProductionReportQuerySet(models.QuerySet):
@@ -112,6 +211,801 @@ class ProductionReportQuerySet(models.QuerySet):
                 queryset=ReportDispatchLog.objects.select_related('dispatched_by'),
             )
         )
+
+
+class FarmProductionPlan(models.Model):
+    """
+    Parametres de production rattaches a une ferme.
+
+    Le profil ferme reste dans accounts pour l'identite, la certification et la
+    localisation. Les choix d'elevage et les hypotheses economiques vivent ici,
+    dans le bounded context aquaculture.
+    """
+
+    INFRASTRUCTURE_CHOICES = [
+        ('etang', _('Étang')),
+        ('cage_flottante', _('Cage flottante')),
+        ('bac_hors_sol', _('Bac hors sol')),
+        ('bac_en_sol', _('Bac en sol')),
+    ]
+
+    SETUP_SPECIES_CHOICES = [
+        *SPECIES_CHOICES,
+        ('autre', _('Autre espèce')),
+    ]
+
+    NUM_CYCLES_CHOICES = [
+        (2, _('2 cycles par an')),
+        (3, _('3 cycles par an')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    farm_profile = models.OneToOneField(
+        'accounts.FarmProfile',
+        on_delete=models.CASCADE,
+        related_name='production_plan',
+        verbose_name=_('Profil de ferme'),
+        help_text=_('Ferme propriétaire de ces paramètres de production'),
+    )
+    annual_production_target_kg = models.DecimalField(
+        _('Production cible annuelle (kg)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Objectif de production annuelle en kg'),
+    )
+    num_cycles_per_year = models.PositiveSmallIntegerField(
+        _('Nombre de cycles par an'),
+        null=True,
+        blank=True,
+        choices=NUM_CYCLES_CHOICES,
+        help_text=_('2 ou 3 cycles par an'),
+    )
+    setup_infrastructure_type = models.CharField(
+        _('Type d\'infrastructure'),
+        max_length=30,
+        blank=True,
+        choices=INFRASTRUCTURE_CHOICES,
+        help_text=_('Type principal d\'infrastructure d\'élevage'),
+    )
+    setup_unit_count = models.PositiveIntegerField(
+        _('Nombre d\'unités (bacs/étangs)'),
+        null=True,
+        blank=True,
+        help_text=_('Nombre de bacs, étangs ou cages'),
+    )
+    setup_unit_volume_m3 = models.DecimalField(
+        _('Volume par unité (m³)'),
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Volume de chaque bac ou cage en m³'),
+    )
+    setup_unit_surface_m2 = models.DecimalField(
+        _('Surface par unité (m²)'),
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Surface de chaque étang en m²'),
+    )
+    setup_species = models.CharField(
+        _('Espèce principale (setup)'),
+        max_length=20,
+        blank=True,
+        choices=SETUP_SPECIES_CHOICES,
+        help_text=_('Espèce choisie lors du flux de création d\'élevage'),
+    )
+    fingerlings_cost_per_unit_fcfa = models.DecimalField(
+        _('Coût par alevin (FCFA)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Prix unitaire d\'un alevin en FCFA'),
+    )
+    planned_selling_price_per_kg_fcfa = models.DecimalField(
+        _('Prix de vente estimé (FCFA/kg)'),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_('Prix de vente prévu du poisson en FCFA/kg'),
+    )
+    setup_completed = models.BooleanField(
+        _('Configuration élevage complétée'),
+        default=False,
+        help_text=_('True quand l\'utilisateur a terminé le flux Créer mon élevage'),
+    )
+    default_feed_price_per_kg = models.DecimalField(
+        _('Prix aliment par défaut (FCFA/kg)'),
+        max_digits=8,
+        decimal_places=2,
+        default=DEFAULT_FEED_PRICE_PER_KG,
+        help_text=_('Prix unitaire de l\'aliment en FCFA par kg'),
+    )
+    created_at = models.DateTimeField(_('Date de création'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('Dernière modification'), auto_now=True)
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_farm_production_plan'
+        verbose_name = _('Plan de production ferme')
+        verbose_name_plural = _('Plans de production ferme')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['setup_completed'], name='idx_farm_plan_completed'),
+        ]
+
+    def __str__(self):
+        return f"Plan production - {self.farm_profile_id}"
+
+
+class ProductionUnit(models.Model):
+    """Unité de production réelle sur une ferme aquacole."""
+
+    UNIT_TYPE_CHOICES = [
+        ('tank', _('Bac')),
+        ('pond', _('Étang')),
+        ('cage', _('Cage')),
+    ]
+
+    STATUS_CHOICES = [
+        ('active', _('Actif')),
+        ('inactive', _('Inactif')),
+        ('archived', _('Archivé')),
+    ]
+
+    PURPOSE_PRODUCTION = 'production'
+    PURPOSE_CALIBRATION = 'calibration'
+    PURPOSE_CHOICES = [
+        (PURPOSE_PRODUCTION, _('Production')),
+        (PURPOSE_CALIBRATION, _('Calibration')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile ou dérivé du lancement pour déduplication"),
+    )
+    farm_profile = models.ForeignKey(
+        'accounts.FarmProfile',
+        on_delete=models.CASCADE,
+        related_name='production_units',
+        verbose_name=_('Profil de ferme'),
+    )
+    name = models.CharField(
+        max_length=120,
+        verbose_name=_("Nom de l'unité"),
+        help_text=_("Ex: Bac 1, Étang principal, Cage A"),
+    )
+    unit_type = models.CharField(
+        max_length=20,
+        choices=UNIT_TYPE_CHOICES,
+        verbose_name=_("Type d'unité"),
+    )
+    purpose = models.CharField(
+        max_length=20,
+        choices=PURPOSE_CHOICES,
+        default=PURPOSE_PRODUCTION,
+        db_default=PURPOSE_PRODUCTION,
+        verbose_name=_("Usage de l'unité"),
+    )
+    volume_m3 = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_("Volume (m³)"),
+    )
+    surface_m2 = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_("Surface (m²)"),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active',
+        verbose_name=_("Statut"),
+    )
+    created_offline = models.BooleanField(default=False, verbose_name=_("Créée hors ligne"))
+    synced_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Synchronisée le"))
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = ProductionUnitQuerySet.as_manager()
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_production_unit'
+        ordering = ['name']
+        verbose_name = _("Unité de production")
+        verbose_name_plural = _("Unités de production")
+        indexes = [
+            models.Index(fields=['farm_profile', 'status']),
+            models.Index(fields=['farm_profile', 'unit_type']),
+            models.Index(fields=['farm_profile', 'purpose', 'status'], name='aq_unit_farm_purpose_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(purpose='production')
+                    | Q(
+                        purpose='calibration',
+                        unit_type='tank',
+                        volume_m3__gt=0,
+                        surface_m2__isnull=True,
+                    )
+                ),
+                name='unit_calibration_requires_tank_volume',
+            ),
+            models.UniqueConstraint(
+                Lower('name'),
+                'farm_profile',
+                name='uniq_production_unit_name_farm_ci',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} - {self.get_unit_type_display()}"
+
+    @property
+    def is_active(self):
+        return self.status == 'active'
+
+    @is_active.setter
+    def is_active(self, value):
+        self.status = 'active' if value else 'inactive'
+
+    @property
+    def recommended_capacity(self):
+        capacity = get_production_unit_capacity(
+            self.unit_type,
+            volume_m3=self.volume_m3,
+            surface_m2=self.surface_m2,
+        )
+        if capacity is None:
+            return None
+        return int(capacity)
+
+    @property
+    def capacity_density_unit(self):
+        return get_production_unit_density_unit(self.unit_type)
+
+    @property
+    def display_dimension(self):
+        return get_production_unit_dimension_display(
+            self.unit_type,
+            volume_m3=self.volume_m3,
+            surface_m2=self.surface_m2,
+        )
+
+    def clean(self):
+        self.unit_type = normalize_production_unit_type(self.unit_type) or self.unit_type
+        if self.purpose == self.PURPOSE_CALIBRATION:
+            if self.unit_type != 'tank':
+                raise ValidationError({'unit_type': _("Un bac de calibrage doit être de type bac.")})
+            if self.volume_m3 is None or self.volume_m3 <= 0:
+                raise ValidationError({'volume_m3': _("Le volume du bac de calibrage doit être positif.")})
+            if self.surface_m2 is not None:
+                raise ValidationError({'surface_m2': _("La surface ne s'applique pas à un bac de calibrage.")})
+        validate_production_unit_dimensions(
+            self.unit_type,
+            volume_m3=self.volume_m3,
+            surface_m2=self.surface_m2,
+        )
+
+    def save(self, *args, **kwargs):
+        self.unit_type = normalize_production_unit_type(self.unit_type) or self.unit_type
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class CycleUnitAllocation(models.Model):
+    """Allocation d'un cycle de production à une unité réelle."""
+
+    STATUS_ACTIVE = 'active'
+    STATUS_HARVESTED = 'harvested'
+    STATUS_INACTIVE = 'inactive'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, _('Actif')),
+        (STATUS_HARVESTED, _('Récolté')),
+        (STATUS_INACTIVE, _('Inactif')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile ou dérivé du lancement pour déduplication"),
+    )
+    cycle = models.ForeignKey(
+        'ProductionCycle',
+        on_delete=models.CASCADE,
+        related_name='unit_allocations',
+        verbose_name=_('Cycle de production'),
+    )
+    production_unit = models.ForeignKey(
+        ProductionUnit,
+        on_delete=models.PROTECT,
+        related_name='cycle_allocations',
+        verbose_name=_('Unité de production'),
+    )
+    initial_fish_count = models.PositiveIntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Effectif initial"),
+    )
+    current_fish_count = models.PositiveIntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Effectif actuel"),
+    )
+    initial_biomass_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name=_("Biomasse initiale (kg)"),
+    )
+    current_biomass_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name=_("Biomasse actuelle (kg)"),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        verbose_name=_("Statut"),
+    )
+    harvested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Récoltée le"),
+    )
+    final_harvested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Récolte finale effectuée le"),
+        help_text=_("Instant métier auquel la récolte finale a physiquement eu lieu."),
+    )
+    final_harvest_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_("Date métier de récolte"),
+    )
+    final_harvest_notes = models.TextField(
+        blank=True,
+        default='',
+        verbose_name=_("Notes de récolte finale"),
+    )
+    final_fish_count = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Nombre final de poissons"),
+    )
+    final_average_weight_g = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Poids moyen final (g)"),
+    )
+    final_biomass_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Biomasse finale (kg)"),
+    )
+    expected_survival_rate_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name=_("Taux de survie prévisionnel (%)"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    objects = CycleUnitAllocationQuerySet.as_manager()
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_unit_allocation'
+        ordering = ['cycle', 'production_unit__name']
+        verbose_name = _("Allocation de cycle par unité")
+        verbose_name_plural = _("Allocations de cycle par unité")
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cycle', 'production_unit'],
+                name='uniq_cycle_production_unit_allocation',
+            ),
+            models.UniqueConstraint(
+                fields=['production_unit'],
+                condition=Q(status='active'),
+                name='uniq_active_allocation_per_unit',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['cycle']),
+            models.Index(fields=['production_unit']),
+        ]
+
+    def __str__(self):
+        return f"{self.cycle.cycle_name} - {self.production_unit.name}"
+
+    @property
+    def survival_rate_pct(self):
+        if self.initial_fish_count <= 0:
+            return None
+        return (Decimal(self.current_fish_count) / Decimal(self.initial_fish_count) * Decimal('100')).quantize(
+            Decimal('0.01')
+        )
+
+    def clean(self):
+        validate_cycle_unit_allocation_counts(
+            initial_fish_count=self.initial_fish_count,
+            current_fish_count=self.current_fish_count,
+            initial_biomass_kg=self.initial_biomass_kg,
+            current_biomass_kg=self.current_biomass_kg,
+            expected_survival_rate_pct=self.expected_survival_rate_pct,
+        )
+
+        if self.cycle_id and self.production_unit_id:
+            cycle_farm_profile_id = getattr(self.cycle, 'farm_profile_id', None)
+            production_unit_farm_profile_id = getattr(self.production_unit, 'farm_profile_id', None)
+            if cycle_farm_profile_id and production_unit_farm_profile_id and (
+                cycle_farm_profile_id != production_unit_farm_profile_id
+            ):
+                raise ValidationError({
+                    'production_unit': _(
+                        "L'unité de production doit appartenir à la même ferme que le cycle"
+                    )
+                })
+
+    def save(self, *args, **kwargs):
+        if self.pk and not self._state.adding:
+            try:
+                final_harvest = FinalHarvestOperation.objects.get(allocation_id=self.pk)
+            except FinalHarvestOperation.DoesNotExist:
+                final_harvest = None
+            if final_harvest is not None:
+                expected_projection = {
+                    'final_harvested_at': final_harvest.harvested_at,
+                    'final_harvest_date': timezone.localtime(final_harvest.harvested_at).date(),
+                    'final_fish_count': final_harvest.declared_fish_count,
+                    'final_average_weight_g': final_harvest.declared_average_weight_g,
+                    'final_biomass_kg': final_harvest.declared_biomass_kg,
+                    'final_harvest_notes': final_harvest.notes,
+                }
+                if any(
+                    getattr(self, field) != value
+                    for field, value in expected_projection.items()
+                ):
+                    raise ValidationError(
+                        _('La projection de récolte finale doit rester identique à son opération.')
+                    )
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class FarmFeedReference(models.Model):
+    """Identité stable d'un aliment utilisé dans une ferme."""
+
+    SOURCE_CATALOG = 'aquacare_catalog'
+    SOURCE_EXTERNAL = 'external'
+    SOURCE_CHOICES = [
+        (SOURCE_CATALOG, _('Catalogue AquaCare')),
+        (SOURCE_EXTERNAL, _('Aliment externe')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(unique=True, null=True, blank=True, verbose_name=_('UUID client'))
+    farm_profile = models.ForeignKey(
+        'accounts.FarmProfile',
+        on_delete=models.CASCADE,
+        related_name='feed_references',
+        verbose_name=_('Ferme'),
+    )
+    source = models.CharField(max_length=24, choices=SOURCE_CHOICES, verbose_name=_('Origine'))
+    catalog_product = models.ForeignKey(
+        'commerce.Product',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='farm_feed_references',
+        verbose_name=_('Produit AquaCare'),
+    )
+    name = models.CharField(max_length=200, verbose_name=_("Nom de l'aliment"))
+    normalized_name = models.CharField(max_length=200, editable=False)
+    species = models.CharField(max_length=20, choices=SPECIES_CHOICES, verbose_name=_('Espèce cible'))
+    pellet_size_mm = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.1')), MaxValueValidator(Decimal('20.0'))],
+        verbose_name=_('Granulométrie (mm)'),
+    )
+    brand = models.CharField(max_length=100, blank=True, verbose_name=_('Marque'))
+    protein_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name=_('Taux de protéines (%)'),
+    )
+    lipid_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+        verbose_name=_('Taux de lipides (%)'),
+    )
+    package_weight_kg = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_('Poids du conditionnement (kg)'),
+    )
+    created_offline = models.BooleanField(default=False, verbose_name=_('Créé hors ligne'))
+    synced_at = models.DateTimeField(null=True, blank=True, verbose_name=_('Synchronisé le'))
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = FarmFeedReferenceQuerySet.as_manager()
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_farm_feed_reference'
+        ordering = ['name', 'pellet_size_mm']
+        constraints = [
+            models.UniqueConstraint(
+                condition=Q(source='external'),
+                fields=['farm_profile', 'normalized_name', 'species', 'pellet_size_mm'],
+                name='aq_external_feed_identity_uniq',
+            ),
+            models.UniqueConstraint(
+                condition=Q(source='aquacare_catalog'),
+                fields=[
+                    'farm_profile', 'catalog_product', 'normalized_name',
+                    'species', 'pellet_size_mm',
+                ],
+                name='aq_catalog_feed_identity_uniq',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(source='external', catalog_product__isnull=True)
+                    | Q(source='aquacare_catalog', catalog_product__isnull=False)
+                ),
+                name='aq_farm_feed_source_product_ck',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['farm_profile', 'species', 'pellet_size_mm'], name='aq_farm_feed_lookup_idx'),
+        ]
+        verbose_name = _('Référence aliment de ferme')
+        verbose_name_plural = _('Références aliments de ferme')
+
+    def clean(self):
+        super().clean()
+        if self.source == self.SOURCE_CATALOG and not self.catalog_product_id:
+            raise ValidationError({'catalog_product': _('Un produit AquaCare est requis.')})
+        if self.source == self.SOURCE_EXTERNAL and self.catalog_product_id:
+            raise ValidationError({'catalog_product': _('Un aliment externe ne peut pas référencer le catalogue.')})
+
+    def save(self, *args, **kwargs):
+        self.name = self.name.strip()
+        self.normalized_name = ' '.join(self.name.casefold().split())
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.name} · {self.pellet_size_mm} mm'
+
+
+class CycleFeedStockEntry(models.Model):
+    """Entrée du magasin rattachée à un cycle de production."""
+
+    SOURCE_MANUAL = 'manual'
+    SOURCE_ORDER = 'order'
+    SOURCE_CHOICES = [
+        (SOURCE_MANUAL, _('Manuel')),
+        (SOURCE_ORDER, _('Commande')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication"),
+    )
+    cycle = models.ForeignKey(
+        'ProductionCycle',
+        on_delete=models.CASCADE,
+        related_name='feed_stock_entries',
+        verbose_name=_("Cycle de production"),
+    )
+    feed_reference = models.ForeignKey(
+        FarmFeedReference,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='stock_entries',
+        verbose_name=_('Référence aliment'),
+    )
+    source = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES,
+        verbose_name=_("Source"),
+    )
+    label = models.CharField(
+        max_length=200,
+        verbose_name=_("Nom de l'aliment"),
+    )
+    feed_size_mm = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.1')), MaxValueValidator(Decimal('20.0'))],
+        verbose_name=_("Granulométrie (mm)"),
+        help_text=_("Diamètre des granulés de cette entrée de stock"),
+    )
+    quantity_kg = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_("Quantité (kg)"),
+    )
+    total_cost_fcfa = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0'),
+        validators=[MinValueValidator(Decimal('0'))],
+        verbose_name=_("Montant total (FCFA)"),
+    )
+    entry_date = models.DateField(
+        verbose_name=_("Date d'entrée"),
+    )
+    note = models.TextField(
+        blank=True,
+        verbose_name=_("Note"),
+    )
+    product = models.ForeignKey(
+        'commerce.Product',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cycle_feed_stock_entries',
+        verbose_name=_("Produit"),
+    )
+    order = models.ForeignKey(
+        'commerce.Order',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='feed_stock_entries',
+        verbose_name=_("Commande"),
+    )
+    order_item = models.OneToOneField(
+        'commerce.OrderItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='feed_stock_entry',
+        verbose_name=_("Article de commande"),
+    )
+    created_offline = models.BooleanField(
+        default=False,
+        verbose_name=_("Créé hors ligne"),
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = CycleFeedStockEntryQuerySet.as_manager()
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_feed_stock_entry'
+        ordering = ['-entry_date', '-created_at']
+        verbose_name = _("Entrée de stock du cycle")
+        verbose_name_plural = _("Entrées de stock du cycle")
+        indexes = [
+            models.Index(fields=['cycle', 'entry_date'], name='aq_feed_stock_cycle_date_idx'),
+            models.Index(fields=['cycle', 'source'], name='aq_feed_stock_cycle_source_idx'),
+            models.Index(fields=['client_uuid']),
+            models.Index(fields=['created_offline', 'synced_at'], name='aq_feed_stock_sync_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.cycle.cycle_name} - {self.label} ({self.quantity_kg} kg)"
+
+
+class CycleFeedPlan(models.Model):
+    """Instantané auditable du plan alimentaire initial d'un cycle."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    cycle = models.OneToOneField(
+        'ProductionCycle',
+        on_delete=models.CASCADE,
+        related_name='feed_plan_snapshot',
+        verbose_name=_('Cycle de production'),
+    )
+    version = models.PositiveSmallIntegerField(default=2, verbose_name=_('Version'))
+    parameters = models.JSONField(default=dict, verbose_name=_('Paramètres de simulation'))
+    phases = models.JSONField(default=list, verbose_name=_('Phases alimentaires'))
+    total_feed_kg = models.DecimalField(max_digits=14, decimal_places=2, verbose_name=_('Aliment total planifié (kg)'))
+    highest_reached_phase_sequence = models.PositiveSmallIntegerField(
+        default=0,
+        db_default=0,
+        verbose_name=_('Dernière phase atteinte'),
+    )
+    generated_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Calculé le'))
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_feed_plan'
+        verbose_name = _('Plan alimentaire du cycle')
+        verbose_name_plural = _('Plans alimentaires des cycles')
+
+    def __str__(self):
+        return f'{self.cycle.cycle_name} · v{self.version}'
+
+
+class CycleFeedStockAdjustment(models.Model):
+    """Ajustement immuable conservant un reliquat physique historique."""
+
+    REASON_LEGACY_CONSUMPTION = 'legacy_consumption'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stock_entry = models.OneToOneField(
+        CycleFeedStockEntry,
+        on_delete=models.CASCADE,
+        related_name='historical_adjustment',
+        verbose_name=_('Entrée de stock'),
+    )
+    quantity_kg = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_('Quantité déjà consommée (kg)'),
+    )
+    reason = models.CharField(
+        max_length=32,
+        default=REASON_LEGACY_CONSUMPTION,
+        editable=False,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = 'aquaculture'
+        db_table = 'aquaculture_cycle_feed_stock_adjustment'
+        verbose_name = _('Ajustement historique du stock')
+        verbose_name_plural = _('Ajustements historiques du stock')
 
 
 class ProductionCycle(models.Model):
@@ -130,11 +1024,40 @@ class ProductionCycle(models.Model):
         verbose_name_plural = _("Cycles de production")
         indexes = [
             models.Index(fields=['farm_profile', 'status']),
+            models.Index(fields=['farm_profile', 'updated_at'], name='aq_cycle_farm_updated_idx'),
             models.Index(fields=['start_date', 'end_date']),
             models.Index(fields=['species', 'status']),
+            models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_created_7d7f63_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    CYCLE_KIND_STANDARD = 'standard'
+    CYCLE_KIND_CALIBRATION = 'calibration'
+    CYCLE_KIND_CHOICES = [
+        (CYCLE_KIND_STANDARD, _('Standard')),
+        (CYCLE_KIND_CALIBRATION, _('Calibration')),
+    ]
+    cycle_kind = models.CharField(
+        max_length=20,
+        choices=CYCLE_KIND_CHOICES,
+        default=CYCLE_KIND_STANDARD,
+        db_default=CYCLE_KIND_STANDARD,
+    )
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication")
+    )
+    launch_payload_hash = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("Empreinte du lancement"),
+        help_text=_("Empreinte SHA-256 du payload de lancement transactionnel"),
+    )
     farm_profile = models.ForeignKey(
         'accounts.FarmProfile', 
         on_delete=models.CASCADE,
@@ -187,7 +1110,7 @@ class ProductionCycle(models.Model):
 
     initial_count = models.PositiveIntegerField(
         verbose_name=_("Nombre initial de poissons"),
-        validators=[MinValueValidator(1), MaxValueValidator(100000)]
+        validators=[MinValueValidator(1), MaxValueValidator(MAX_INITIAL_FISH_COUNT)]
     )
 
     initial_average_weight = models.DecimalField(
@@ -224,6 +1147,11 @@ class ProductionCycle(models.Model):
         null=True,
         blank=True,
         verbose_name=_("Date prévisionnelle de récolte")
+    )
+    planned_feed_bags = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Nombre de sacs d'aliments planifiés (simulation)")
     )
     expected_survival_rate_pct = models.DecimalField(
         max_digits=5,
@@ -332,6 +1260,15 @@ class ProductionCycle(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_offline = models.BooleanField(
+        default=False,
+        verbose_name=_("Créé hors ligne")
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le")
+    )
     objects = ProductionCycleQuerySet.as_manager()
 
     def __str__(self):
@@ -348,7 +1285,7 @@ class ProductionCycle(models.Model):
         if not self.start_date:
             return 0
 
-        end_date = self.end_date or timezone.now().date()
+        end_date = self.end_date or date.today()
         return (end_date - self.start_date).days
 
     def current_density_kg_m3(self):
@@ -363,6 +1300,143 @@ class ProductionCycle(models.Model):
             return self.current_biomass / self.pond_volume_m3
         return None
 
+    @property
+    def is_calibration_unit(self):
+        return self.cycle_kind == self.CYCLE_KIND_CALIBRATION
+
+
+class CalibrationOperation(models.Model):
+    """Mouvement immuable de stock vivant vers un bac de calibrage."""
+
+    SIZE_CHOICES = [('small', _('Petit')), ('medium', _('Moyen')), ('large', _('Grand')), ('other', _('Autre'))]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(unique=True)
+    source_allocation = models.ForeignKey(
+        CycleUnitAllocation,
+        on_delete=models.PROTECT,
+        related_name='calibration_operations_out',
+    )
+    destination_allocation = models.ForeignKey(
+        CycleUnitAllocation,
+        on_delete=models.PROTECT,
+        related_name='calibration_operations_in',
+    )
+    calibrated_at = models.DateTimeField()
+    transferred_count = models.PositiveIntegerField()
+    transferred_average_weight_g = models.DecimalField(max_digits=8, decimal_places=2)
+    transferred_biomass_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    sample_count = models.PositiveIntegerField(null=True, blank=True)
+    sample_total_weight_g = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    size_category = models.CharField(max_length=20, choices=SIZE_CHOICES, blank=True)
+    notes = models.CharField(max_length=1000, blank=True)
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_offline = models.BooleanField(default=False)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    source_count_before = models.PositiveIntegerField()
+    source_count_after = models.PositiveIntegerField()
+    source_average_weight_before_g = models.DecimalField(max_digits=8, decimal_places=2)
+    source_average_weight_after_g = models.DecimalField(max_digits=8, decimal_places=2)
+    source_biomass_before_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    source_biomass_after_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    destination_count_before = models.PositiveIntegerField()
+    destination_count_after = models.PositiveIntegerField()
+    destination_average_weight_before_g = models.DecimalField(max_digits=8, decimal_places=2)
+    destination_average_weight_after_g = models.DecimalField(max_digits=8, decimal_places=2)
+    destination_biomass_before_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    destination_biomass_after_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-calibrated_at', '-created_at']
+        indexes = [
+            models.Index(fields=['source_allocation', 'calibrated_at'], name='aq_cal_op_source_date_idx'),
+            models.Index(fields=['destination_allocation', 'calibrated_at'], name='aq_cal_op_dest_date_idx'),
+            models.Index(fields=['client_uuid'], name='aq_cal_op_client_idx'),
+        ]
+
+
+class FinalHarvestOperation(models.Model):
+    """Événement physique immuable clôturant une allocation de production."""
+
+    STATUS_RECONCILED = 'reconciled'
+    STATUS_PENDING = 'pending'
+    RECONCILIATION_STATUS_CHOICES = [
+        (STATUS_RECONCILED, _('Réconciliée')),
+        (STATUS_PENDING, _('Réconciliation en attente')),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    client_uuid = models.UUIDField(unique=True)
+    allocation = models.OneToOneField(
+        CycleUnitAllocation,
+        on_delete=models.PROTECT,
+        related_name='final_harvest_operation',
+    )
+    harvested_at = models.DateTimeField()
+    declared_fish_count = models.PositiveIntegerField()
+    declared_average_weight_g = models.DecimalField(max_digits=8, decimal_places=2)
+    declared_biomass_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.TextField(blank=True, default='')
+    reconciliation_status = models.CharField(
+        max_length=20,
+        choices=RECONCILIATION_STATUS_CHOICES,
+    )
+    computed_count_before_harvest = models.PositiveIntegerField(null=True, blank=True)
+    computed_biomass_before_harvest_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    created_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.PROTECT,
+        related_name='final_harvest_operations',
+    )
+    created_offline = models.BooleanField(default=False)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-harvested_at', '-created_at', '-id']
+        indexes = [
+            models.Index(
+                fields=['harvested_at', 'created_at'],
+                name='aq_final_harvest_dates_idx',
+            ),
+            models.Index(
+                fields=['reconciliation_status', 'created_at'],
+                name='aq_final_harvest_status_idx',
+            ),
+        ]
+
+    IMMUTABLE_FIELDS = (
+        'client_uuid',
+        'allocation_id',
+        'harvested_at',
+        'declared_fish_count',
+        'declared_average_weight_g',
+        'declared_biomass_kg',
+        'notes',
+        'created_by_id',
+        'created_offline',
+        'created_at',
+    )
+
+    def save(self, *args, **kwargs):
+        """Empêche toute mutation du constat physique après sa création."""
+        if self.pk and not self._state.adding:
+            previous = type(self).objects.filter(pk=self.pk).values(*self.IMMUTABLE_FIELDS).first()
+            if previous is not None and any(
+                previous[field] != getattr(self, field)
+                for field in self.IMMUTABLE_FIELDS
+            ):
+                raise ValidationError(
+                    _('Une récolte finale confirmée ne peut pas être modifiée.')
+                )
+        return super().save(*args, **kwargs)
+
 
 class CycleLog(models.Model):
     """
@@ -376,14 +1450,26 @@ class CycleLog(models.Model):
     """
     class Meta:
         app_label = 'aquaculture'
-        unique_together = ['cycle', 'log_date']
         ordering = ['-log_date']
         verbose_name = _("Journal quotidien")
         verbose_name_plural = _("Journaux quotidiens")
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cycle', 'log_date'],
+                condition=Q(cycle_unit_allocation__isnull=True),
+                name='uniq_cycle_log_global_per_day',
+            ),
+            models.UniqueConstraint(
+                fields=['cycle', 'cycle_unit_allocation', 'log_date'],
+                condition=Q(cycle_unit_allocation__isnull=False),
+                name='uniq_cycle_unit_log_per_day',
+            ),
+        ]
         indexes = [
             models.Index(fields=['cycle', 'log_date']),
             models.Index(fields=['client_uuid']),
             models.Index(fields=['created_offline', 'synced_at']),
+            models.Index(fields=['cycle', 'created_offline', 'created_at'], name='aq_log_cycle_sync_created_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -401,6 +1487,15 @@ class CycleLog(models.Model):
         on_delete=models.CASCADE, 
         related_name='logs',
         verbose_name=_("Cycle de production")
+    )
+
+    cycle_unit_allocation = models.ForeignKey(
+        'aquaculture.CycleUnitAllocation',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='daily_logs',
+        verbose_name=_("Allocation de cycle par unité"),
     )
 
     log_date = models.DateField(verbose_name=_("Date du log"))
@@ -459,7 +1554,15 @@ class CycleLog(models.Model):
         max_length=100, 
         blank=True,
         verbose_name=_("Type d'aliment"),
-        help_text=_("Référence produit MAVECAM")
+        help_text=_("Référence produit AquaCare")
+    )
+    feed_reference = models.ForeignKey(
+        'FarmFeedReference',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='cycle_logs',
+        verbose_name=_('Référence aliment'),
     )
     feed_size_mm = models.DecimalField(
         max_digits=3,
@@ -557,16 +1660,44 @@ class FeedingPlan(models.Model):
     """
     class Meta:
         app_label = 'aquaculture'
-        unique_together = ['cycle', 'week_number']
-        ordering = ['cycle', 'week_number']
+        ordering = ['cycle', 'cycle_unit_allocation', 'week_number']
         verbose_name = _("Plan d'alimentation")
         verbose_name_plural = _("Plans d'alimentation")
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cycle_unit_allocation', 'week_number'],
+                condition=Q(cycle_unit_allocation__isnull=False),
+                name='uniq_unit_feeding_plan_week',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['cycle', 'is_active', 'start_date', 'end_date'],
+                name='aq_feed_cycle_active_dates_idx',
+            ),
+            models.Index(
+                fields=['cycle', 'created_at'],
+                name='aq_feed_cycle_created_idx',
+            ),
+            models.Index(
+                fields=['cycle_unit_allocation', 'is_active', 'start_date', 'end_date'],
+                name='aq_feed_unit_active_dates_idx',
+            ),
+        ]
 
     cycle = models.ForeignKey(
         ProductionCycle, 
         on_delete=models.CASCADE, 
         related_name='feeding_plans',
         verbose_name=_("Cycle de production")
+    )
+    cycle_unit_allocation = models.ForeignKey(
+        'aquaculture.CycleUnitAllocation',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='feeding_plans',
+        verbose_name=_("Allocation de cycle par unité"),
     )
 
     week_number = models.PositiveIntegerField(
@@ -660,6 +1791,8 @@ class FeedingPlan(models.Model):
     objects = FeedingPlanQuerySet.as_manager()
 
     def __str__(self):
+        if self.cycle_unit_allocation and self.cycle_unit_allocation.production_unit:
+            return f"{self.cycle_unit_allocation.production_unit.name} - Semaine {self.week_number}"
         return f"{self.cycle.cycle_name} - Semaine {self.week_number}"
 
 
@@ -677,15 +1810,34 @@ class SanitaryLog(models.Model):
             models.Index(fields=['cycle', 'event_date']),
             models.Index(fields=['event_type', 'resolved']),
             models.Index(fields=['created_offline']),
+            models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_san_sync_idx'),
+            models.Index(fields=['cycle', 'created_offline', 'created_at'], name='aq_san_cycle_sync_created_idx'),
         ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication")
+    )
 
     cycle = models.ForeignKey(
         ProductionCycle, 
         on_delete=models.CASCADE, 
         related_name='sanitary_logs',
         verbose_name=_("Cycle de production")
+    )
+
+    cycle_unit_allocation = models.ForeignKey(
+        'aquaculture.CycleUnitAllocation',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='sanitary_logs',
+        verbose_name=_("Allocation de cycle par unité"),
     )
     
     event_date = models.DateField(verbose_name=_("Date de l'événement"))
@@ -759,12 +1911,134 @@ class SanitaryLog(models.Model):
         default=False,
         verbose_name=_("Créé hors ligne")
     )
-    
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le")
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     objects = SanitaryLogQuerySet.as_manager()
 
     def __str__(self):
         return f"{self.cycle.cycle_name} - {self.get_event_type_display()} ({self.event_date})"
+
+
+class PartialHarvestQuerySet(models.QuerySet):
+    """QuerySet optimisé pour les récoltes partielles."""
+
+    def for_api(self):
+        return self.select_related('cycle', 'cycle_unit_allocation__production_unit')
+
+
+class PartialHarvest(models.Model):
+    """
+    Enregistrement d'une récolte partielle sur un cycle actif.
+
+    Permet à l'éleveur de vendre une partie de ses poissons matures
+    tout en laissant le cycle se poursuivre. Chaque récolte partielle
+    diminue le current_count du cycle sans le clôturer.
+
+    Offline-first : client_uuid pour déduplication mobile.
+    """
+
+    class Meta:
+        app_label = 'aquaculture'
+        ordering = ['-harvest_date', '-created_at']
+        verbose_name = _("Récolte partielle")
+        verbose_name_plural = _("Récoltes partielles")
+        indexes = [
+            models.Index(fields=['cycle', 'harvest_date']),
+            models.Index(fields=['cycle_unit_allocation', 'harvest_date']),
+            models.Index(fields=['client_uuid']),
+            models.Index(fields=['created_offline', 'synced_at']),
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    client_uuid = models.UUIDField(
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name=_("UUID client"),
+        help_text=_("UUID généré côté mobile pour déduplication")
+    )
+
+    cycle = models.ForeignKey(
+        ProductionCycle,
+        on_delete=models.CASCADE,
+        related_name='partial_harvests',
+        verbose_name=_("Cycle de production")
+    )
+
+    cycle_unit_allocation = models.ForeignKey(
+        CycleUnitAllocation,
+        on_delete=models.SET_NULL,
+        related_name='unit_partial_harvests',
+        null=True,
+        blank=True,
+        verbose_name=_("Allocation d'unité de production"),
+    )
+
+    harvest_date = models.DateField(verbose_name=_("Date de récolte partielle"))
+
+    count_harvested = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        verbose_name=_("Nombre de poissons récoltés")
+    )
+
+    average_weight_g = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.1'))],
+        verbose_name=_("Poids moyen (g)")
+    )
+
+    total_weight_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        verbose_name=_("Poids total récolté (kg)"),
+        help_text=_("Calculé automatiquement : count × poids / 1000")
+    )
+
+    sale_price_fcfa_per_kg = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('1'))],
+        verbose_name=_("Prix de vente (FCFA/kg)")
+    )
+
+    notes = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name=_("Notes")
+    )
+
+    # Sync metadata
+    created_offline = models.BooleanField(
+        default=False,
+        verbose_name=_("Créé hors ligne")
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Synchronisé le")
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    objects = PartialHarvestQuerySet.as_manager()
+
+    def __str__(self):
+        unit_label = ''
+        if self.cycle_unit_allocation and self.cycle_unit_allocation.production_unit:
+            unit_label = f" — {self.cycle_unit_allocation.production_unit.name}"
+        return (
+            f"{self.cycle.cycle_name}{unit_label} — récolte partielle "
+            f"{self.harvest_date} ({self.count_harvested} poissons)"
+        )
 
 
 class NutritionalGuide(models.Model):
@@ -841,8 +2115,8 @@ class NutritionalGuide(models.Model):
     # Source and temperature-dependent data
     source = models.CharField(
         max_length=50,
-        default='MAVECAM',
-        choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('MAVECAM', 'MAVECAM')],
+        default='AquaCare',
+        choices=[('DIBAQ', 'DIBAQ'), ('ALLER_AQUA', 'Aller Aqua'), ('AquaCare', 'AquaCare')],
         verbose_name=_("Source des données")
     )
     temperature_rates = models.JSONField(
@@ -956,6 +2230,11 @@ class ProductionReport(models.Model):
     manuellement avant envoi. Le PDF est stocké pour audit et partage.
     """
 
+    REPORT_SCOPE_CHOICES = [
+        ('cycle', _('Cycle')),
+        ('unit', _('Unité')),
+    ]
+
     REPORT_TYPE_CHOICES = [
         ('daily', _('Journalier')),
         ('weekly', _('Hebdomadaire')),
@@ -991,6 +2270,19 @@ class ProductionReport(models.Model):
         max_length=20,
         choices=REPORT_TYPE_CHOICES,
         verbose_name=_("Type de rapport")
+    )
+    scope_type = models.CharField(
+        max_length=20,
+        choices=REPORT_SCOPE_CHOICES,
+        default='cycle',
+        verbose_name=_("Portée du rapport"),
+        help_text=_("Cycle ou unité de production ciblée"),
+    )
+    scope_object_id = models.UUIDField(
+        null=True,
+        blank=True,
+        verbose_name=_("UUID du contexte de rapport"),
+        help_text=_("UUID du cycle ou de l'allocation ciblée"),
     )
     period_start = models.DateField(verbose_name=_("Début période"))
     period_end = models.DateField(verbose_name=_("Fin période"))
@@ -1058,6 +2350,9 @@ class ProductionReport(models.Model):
         verbose_name=_("Partagé sur WhatsApp le")
     )
 
+    is_deleted = models.BooleanField(default=False, verbose_name=_("Supprimé"))
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Supprimé le"))
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Créé le"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Mis à jour le"))
     objects = ProductionReportQuerySet.as_manager()
@@ -1069,13 +2364,22 @@ class ProductionReport(models.Model):
         verbose_name_plural = _("Rapports de production")
         constraints = [
             models.UniqueConstraint(
-                fields=['farm_profile', 'report_type', 'period_start', 'period_end'],
-                name='uniq_report_period_per_farm'
+                fields=[
+                    'farm_profile',
+                    'report_type',
+                    'period_start',
+                    'period_end',
+                    'scope_type',
+                    'scope_object_id',
+                ],
+                name='uniq_report_period_per_farm_scope',
             )
         ]
         indexes = [
             models.Index(fields=['farm_profile', 'report_type', 'period_start'], name='rpt_farm_type_start_idx'),
             models.Index(fields=['status', 'generated_at'], name='rpt_status_generated_idx'),
+            models.Index(fields=['scope_type', 'scope_object_id'], name='rpt_scope_type_object_idx'),
+            GinIndex(fields=['payload'], name='rpt_payload_gin_idx'),
         ]
 
     def __str__(self):

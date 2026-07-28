@@ -6,11 +6,10 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AQUACARE_COLORS } from '@/constants/colors';
 
 /**
  * Props pour le composant QuickActionsSheet
@@ -36,6 +35,55 @@ interface QuickActionsSheetProps {
    * Navigation object pour naviguer vers les screens
    */
   navigation: any;
+
+  /**
+   * Définit si le sheet est affiché pour un cycle global ou pour une unité.
+   */
+  scope?: 'cycle' | 'unit';
+
+  /**
+   * Contexte unitaire pour les actions scoppées.
+   */
+  productionUnitContext?: {
+    cycleId: string;
+    cycleUnitAllocationId: string;
+    productionUnitId: string;
+    productionUnitName: string;
+    currentFishCount?: number;
+    currentBiomassKg?: number;
+  };
+
+  /**
+   * Contexte cycle pour les actions globales du cycle.
+   */
+  cycleContext?: {
+    cycleId: string;
+  };
+
+  /**
+   * Masque les actions opérationnelles globales quand des allocations existent.
+   */
+  hideGlobalCycleOperationalActions?: boolean;
+
+  /**
+   * Ouvre la modale de récolte partielle du cycle.
+   */
+  onPartialHarvestCycle?: () => void;
+
+  /**
+   * Ouvre la modale de récolte complète du cycle.
+   */
+  onHarvestCycle?: () => void;
+
+  /**
+   * Ouvre la modale de récolte partielle d'une unité.
+   */
+  onPartialHarvestUnit?: () => void;
+
+  /**
+   * Ouvre la modale de récolte complète d'une unité.
+   */
+  onHarvestUnit?: () => void;
 }
 
 /**
@@ -49,7 +97,23 @@ interface ActionItem {
   route: string;
   category: 'aquaculture' | 'commerce' | 'planning';
   badge?: number; // Nombre affiché dans le badge (ex: notifications)
+  params?: Record<string, unknown>;
+  onPress?: () => void;
 }
+
+const hasValidProductionUnitContext = (
+  productionUnitContext: QuickActionsSheetProps['productionUnitContext']
+): productionUnitContext is NonNullable<QuickActionsSheetProps['productionUnitContext']> =>
+  Boolean(
+    productionUnitContext?.cycleId &&
+      productionUnitContext?.cycleUnitAllocationId &&
+      productionUnitContext?.productionUnitId
+  );
+
+const hasValidCycleContext = (
+  cycleContext: QuickActionsSheetProps['cycleContext']
+): cycleContext is NonNullable<QuickActionsSheetProps['cycleContext']> =>
+  Boolean(cycleContext?.cycleId);
 
 /**
  * Composant QuickActionsSheet
@@ -77,117 +141,299 @@ export default function QuickActionsSheet({
   onClose,
   unreadCount,
   navigation,
+  scope = 'cycle',
+  productionUnitContext,
+  cycleContext,
+  onPartialHarvestCycle,
+  onHarvestCycle,
+  onPartialHarvestUnit,
+  onHarvestUnit,
+  hideGlobalCycleOperationalActions = false,
 }: QuickActionsSheetProps) {
   const { t } = useTranslation();
 
   /**
    * Configuration des actions Aquaculture
    */
-  const aquacultureActions = useMemo((): ActionItem[] => [
-    {
-      id: 'newCycle',
-      labelKey: 'newCycle',
-      icon: 'add-circle',
-      iconColor: MAVECAM_COLORS.GREEN_PRIMARY,
-      route: 'NewCycle',
-      category: 'aquaculture',
-    },
-    {
-      id: 'dailyLog',
-      labelKey: 'dailyLog',
-      icon: 'create',
-      iconColor: MAVECAM_COLORS.GREEN_LIGHT,
-      route: 'DailyLog',
-      category: 'aquaculture',
-    },
-    {
-      id: 'sanitaryLog',
-      labelKey: 'sanitaryLog',
-      icon: 'warning-outline',
-      iconColor: MAVECAM_COLORS.ERROR,
-      route: 'SanitaryLog',
-      category: 'aquaculture',
-    },
-    {
-      id: 'notifications',
-      labelKey: 'notifications',
-      icon: 'notifications-outline',
-      iconColor: MAVECAM_COLORS.WARNING,
-      route: 'Notifications',
-      category: 'aquaculture',
-      badge: unreadCount, // Badge dynamique
-    },
-    {
-      id: 'feedingPlan',
-      labelKey: 'feedingPlan',
-      icon: 'restaurant-outline',
-      iconColor: MAVECAM_COLORS.INFO,
-      route: 'FeedingPlan',
-      category: 'aquaculture',
-    },
-    {
-      id: 'reports',
-      labelKey: 'reports',
-      icon: 'document-text-outline',
-      iconColor: MAVECAM_COLORS.BLUE,
-      route: 'Reports',
-      category: 'aquaculture',
-    },
-  ], [unreadCount]);
+  const aquacultureActions = useMemo((): ActionItem[] => {
+    const isValidUnitContext = hasValidProductionUnitContext(productionUnitContext);
+
+    if (scope === 'unit') {
+      if (!isValidUnitContext) {
+        return [];
+      }
+
+      const unitContext = productionUnitContext;
+
+      return [
+        {
+          id: 'dailyLog',
+          labelKey: 'productionUnitDailyLogAction',
+          icon: 'create',
+          iconColor: AQUACARE_COLORS.GREEN_LIGHT,
+          route: 'DailyLog',
+          category: 'aquaculture',
+          params: unitContext,
+        },
+        {
+          id: 'sanitaryLog',
+          labelKey: 'productionUnitSanitaryLogAction',
+          icon: 'warning-outline',
+          iconColor: AQUACARE_COLORS.ERROR,
+          route: 'SanitaryLog',
+          category: 'aquaculture',
+          params: unitContext,
+        },
+        {
+          id: 'history',
+          labelKey: 'productionUnitLogHistoryAction',
+          icon: 'time-outline',
+          iconColor: AQUACARE_COLORS.GREEN_DARK,
+          route: 'DailyLogHistory',
+          category: 'aquaculture',
+          params: unitContext,
+        },
+        {
+          id: 'feedingPlan',
+          labelKey: 'feedingPlan',
+          icon: 'restaurant-outline',
+          iconColor: AQUACARE_COLORS.INFO,
+          route: 'FeedingPlan',
+          category: 'aquaculture',
+          params: {
+            cycleId: unitContext.cycleId,
+            cycleUnitAllocationId: unitContext.cycleUnitAllocationId,
+            productionUnitId: unitContext.productionUnitId,
+            productionUnitName: unitContext.productionUnitName,
+          },
+        },
+        {
+          id: 'report',
+          labelKey: 'productionUnitReportAction',
+          icon: 'document-text-outline',
+          iconColor: AQUACARE_COLORS.BLUE,
+          route: 'Reports',
+          category: 'aquaculture',
+          params: {
+            scope: 'unit',
+            cycleId: unitContext.cycleId,
+            cycleUnitAllocationId: unitContext.cycleUnitAllocationId,
+            productionUnitId: unitContext.productionUnitId,
+            productionUnitName: unitContext.productionUnitName,
+          },
+        },
+        {
+          id: 'calibrateUnit',
+          labelKey: 'gradeFish',
+          icon: 'git-compare-outline',
+          iconColor: AQUACARE_COLORS.INFO,
+          route: 'CalibrateCycle',
+          category: 'aquaculture',
+          params: {
+            sourceCycleId: unitContext.cycleId,
+            sourceCycleUnitAllocationId: unitContext.cycleUnitAllocationId,
+            sourceUnitName: unitContext.productionUnitName,
+            sourceCurrentCount: unitContext.currentFishCount,
+            sourceCurrentBiomassKg: unitContext.currentBiomassKg,
+          },
+        },
+        ...(onPartialHarvestUnit
+          ? [{
+              id: 'partialHarvestUnit',
+              labelKey: 'partialHarvestUnitAction',
+              icon: 'cut-outline' as const,
+              iconColor: AQUACARE_COLORS.WARNING,
+              route: '',
+              category: 'aquaculture' as const,
+              onPress: onPartialHarvestUnit,
+            }]
+          : []),
+        ...(onHarvestUnit
+          ? [{
+              id: 'harvestUnit',
+              labelKey: 'harvestThisUnitAction',
+              icon: 'checkmark-done-outline' as const,
+              iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+              route: '',
+              category: 'aquaculture' as const,
+              onPress: onHarvestUnit,
+            }]
+          : []),
+      ];
+    }
+
+    if (!hasValidCycleContext(cycleContext)) {
+      return [
+        {
+          id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+          iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+        },
+        {
+          id: 'sanitaryLog',
+          labelKey: 'sanitaryLog',
+          icon: 'warning-outline',
+          iconColor: AQUACARE_COLORS.ERROR,
+          route: 'SanitaryLog',
+          category: 'aquaculture',
+        },
+        {
+          id: 'notifications',
+          labelKey: 'notifications',
+          icon: 'notifications-outline',
+          iconColor: AQUACARE_COLORS.WARNING,
+          route: 'Notifications',
+          category: 'aquaculture',
+          badge: unreadCount,
+        },
+      ];
+    }
+
+    if (hideGlobalCycleOperationalActions) {
+      return [
+        {
+          id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+          iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+        },
+        {
+          id: 'notifications',
+          labelKey: 'notifications',
+          icon: 'notifications-outline',
+          iconColor: AQUACARE_COLORS.WARNING,
+          route: 'Notifications',
+          category: 'aquaculture',
+          badge: unreadCount,
+        },
+        {
+          id: 'reports',
+          labelKey: 'reports',
+          icon: 'document-text-outline',
+          iconColor: AQUACARE_COLORS.BLUE,
+          route: 'Reports',
+          category: 'aquaculture',
+          params: {
+            scope: 'cycle',
+            cycleId: cycleContext.cycleId,
+          },
+        },
+        ...(onHarvestCycle
+          ? [{
+              id: 'harvestCycle',
+              labelKey: 'harvestEntireCycleAction',
+              icon: 'checkmark-done-outline' as const,
+              iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+              route: '',
+              category: 'aquaculture' as const,
+              onPress: onHarvestCycle,
+            }]
+          : []),
+      ];
+    }
+
+    return [
+      {
+        id: 'calibrationTanks', labelKey: 'calibrationTanksTitle', icon: 'cube-outline',
+        iconColor: AQUACARE_COLORS.GREEN_PRIMARY, route: 'CalibrationTanks', category: 'aquaculture',
+      },
+      {
+        id: 'sanitaryLog',
+        labelKey: 'sanitaryLog',
+        icon: 'warning-outline',
+        iconColor: AQUACARE_COLORS.ERROR,
+        route: 'SanitaryLog',
+        category: 'aquaculture',
+      },
+      {
+        id: 'notifications',
+        labelKey: 'notifications',
+        icon: 'notifications-outline',
+        iconColor: AQUACARE_COLORS.WARNING,
+        route: 'Notifications',
+        category: 'aquaculture',
+        badge: unreadCount, // Badge dynamique
+      },
+      {
+        id: 'reports',
+        labelKey: 'reports',
+        icon: 'document-text-outline',
+        iconColor: AQUACARE_COLORS.BLUE,
+        route: 'Reports',
+        category: 'aquaculture',
+        params: {
+          scope: 'cycle',
+          cycleId: cycleContext.cycleId,
+        },
+      },
+      ...(onPartialHarvestCycle
+        ? [{
+            id: 'partialHarvestCycle',
+            labelKey: 'partialHarvestOption',
+            icon: 'cut-outline' as const,
+            iconColor: AQUACARE_COLORS.WARNING,
+            route: '',
+            category: 'aquaculture' as const,
+            onPress: onPartialHarvestCycle,
+          }]
+        : []),
+      ...(onHarvestCycle
+        ? [{
+            id: 'harvestCycle',
+            labelKey: 'harvestEntireCycleAction',
+            icon: 'checkmark-done-outline' as const,
+            iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
+            route: '',
+            category: 'aquaculture' as const,
+            onPress: onHarvestCycle,
+          }]
+        : []),
+    ];
+  }, [cycleContext, hideGlobalCycleOperationalActions, onHarvestCycle, onPartialHarvestCycle, onHarvestUnit, onPartialHarvestUnit, productionUnitContext, scope, unreadCount]);
 
   /**
    * Configuration des actions Commerce
    */
-  const commerceActions = useMemo((): ActionItem[] => [
-    {
+  const commerceActions = useMemo((): ActionItem[] => {
+    const actions: ActionItem[] = [
+      {
       id: 'productCatalog',
       labelKey: 'productCatalog',
       icon: 'storefront-outline',
-      iconColor: MAVECAM_COLORS.GREEN_PRIMARY,
+      iconColor: AQUACARE_COLORS.GREEN_PRIMARY,
       route: 'ProductCatalog',
       category: 'commerce',
     },
-    {
+      {
       id: 'cart',
       labelKey: 'cart',
       icon: 'cart-outline',
-      iconColor: MAVECAM_COLORS.WARNING,
+      iconColor: AQUACARE_COLORS.WARNING,
       route: 'Cart',
       category: 'commerce',
     },
-    {
-      id: 'ordersHistory',
-      labelKey: 'ordersHistory',
-      icon: 'receipt-outline',
-      iconColor: MAVECAM_COLORS.INFO,
-      route: 'OrdersHistory',
-      category: 'commerce',
-    },
-  ], []);
-
-  /**
-   * Configuration des actions Planification
-   */
-  const planningActions = useMemo((): ActionItem[] => [
-    {
-      id: 'cycleSimulator',
-      labelKey: 'cycleSimulator',
-      icon: 'analytics-outline',
-      iconColor: MAVECAM_COLORS.GREEN_DARK,
-      route: 'CycleSimulator',
-      category: 'planning',
-    },
-  ], []);
+    ];
+    if (hasValidCycleContext(cycleContext)) {
+      actions.push({
+        id: 'ordersHistory',
+        labelKey: 'cycleOrders',
+        icon: 'receipt-outline',
+        iconColor: AQUACARE_COLORS.INFO,
+        route: 'OrdersHistory',
+        category: 'commerce',
+        params: { cycleId: cycleContext.cycleId },
+      });
+    }
+    return actions;
+  }, [cycleContext]);
+  const showCommerceSection = scope !== 'unit';
 
   /**
    * Gère le clic sur une action
    * Ferme le sheet puis navigue après un petit délai pour une animation fluide
    */
-  const handleActionPress = (route: string) => {
-    onClose(); // Fermer d'abord le sheet
-    // Délai pour animation fluide
+  const handleActionPress = (route: string, params?: Record<string, unknown>) => {
     setTimeout(() => {
-      navigation.navigate(route);
+      if (route) {
+        navigation.navigate(route, params);
+      }
     }, 300);
   };
 
@@ -198,7 +444,16 @@ export default function QuickActionsSheet({
     <TouchableOpacity
       key={action.id}
       className="flex-row items-center p-4 bg-white mb-2 rounded-xl shadow-sm"
-      onPress={() => handleActionPress(action.route)}
+      onPress={() => {
+        onClose();
+        setTimeout(() => {
+          if (action.onPress) {
+            action.onPress();
+          } else {
+            handleActionPress(action.route, action.params);
+          }
+        }, 300);
+      }}
       activeOpacity={0.7}
     >
       {/* Icône dans un cercle coloré */}
@@ -222,7 +477,7 @@ export default function QuickActionsSheet({
       )}
 
       {/* Chevron de navigation */}
-      <Ionicons name="chevron-forward" size={20} color={MAVECAM_COLORS.GRAY_LIGHT} />
+      <Ionicons name="chevron-forward" size={20} color={AQUACARE_COLORS.GRAY_LIGHT} />
     </TouchableOpacity>
   );
 
@@ -244,7 +499,7 @@ export default function QuickActionsSheet({
               accessibilityLabel={t('close')}
               accessibilityRole="button"
             >
-              <Ionicons name="close" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
+              <Ionicons name="close" size={24} color={AQUACARE_COLORS.GRAY_DARK} />
             </TouchableOpacity>
           </View>
 
@@ -262,21 +517,15 @@ export default function QuickActionsSheet({
               {aquacultureActions.map(renderActionItem)}
             </View>
 
-            {/* Commerce Section */}
-            <View className="mb-4">
-              <Text className="text-lg font-bold text-gray-dark mb-3">
-                {t('categoryCommerce')}
-              </Text>
-              {commerceActions.map(renderActionItem)}
-            </View>
+            {showCommerceSection ? (
+              <View className="mb-4">
+                <Text className="text-lg font-bold text-gray-dark mb-3">
+                  {t('categoryCommerce')}
+                </Text>
+                {commerceActions.map(renderActionItem)}
+              </View>
+            ) : null}
 
-            {/* Planification Section */}
-            <View className="mb-2">
-              <Text className="text-lg font-bold text-gray-dark mb-3">
-                {t('categoryPlanning')}
-              </Text>
-              {planningActions.map(renderActionItem)}
-            </View>
           </ScrollView>
         </View>
       </View>
@@ -291,7 +540,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: MAVECAM_COLORS.CREAM,
+    backgroundColor: AQUACARE_COLORS.CREAM,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',

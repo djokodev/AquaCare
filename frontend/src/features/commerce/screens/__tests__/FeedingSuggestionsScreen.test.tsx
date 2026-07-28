@@ -1,5 +1,6 @@
 import React from 'react';
-import { Alert } from 'react-native';
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
+import { Alert, RefreshControl } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 import FeedingSuggestionsScreen from '../FeedingSuggestionsScreen';
@@ -8,6 +9,24 @@ const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 let mockState: any;
+let mockLanguage: 'keys' | 'fr' | 'en' = 'keys';
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      if (mockLanguage === 'keys') return key;
+      const translations: Record<string, string> =
+        mockLanguage === 'fr'
+          ? jest.requireActual('@/i18n/locales/fr').fr
+          : jest.requireActual('@/i18n/locales/en').en;
+      return translations[key] ?? key;
+    },
+  }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: jest.fn(),
+  },
+}));
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -90,6 +109,7 @@ describe('FeedingSuggestionsScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLanguage = 'keys';
     mockDispatch.mockResolvedValue(undefined);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     mockState = {
@@ -117,10 +137,14 @@ describe('FeedingSuggestionsScreen', () => {
   });
 
   it('affiche les suggestions, details phase et ajout cycle au panier', () => {
-    const { getByText } = render(<FeedingSuggestionsScreen />);
+    const { getByLabelText, getByText } = render(<FeedingSuggestionsScreen />);
 
-    fireEvent.press(getByText('Cycle Tilapia'));
-    fireEvent.press(getByText('Phase 1'));
+    expect(getByLabelText('Cycle Tilapia, details').props.accessibilityState.expanded).toBe(false);
+    fireEvent.press(getByLabelText('Cycle Tilapia, details'));
+    expect(getByLabelText('Cycle Tilapia, collapseActions').props.accessibilityState.expanded).toBe(true);
+    expect(getByLabelText('Phase 1, details').props.accessibilityState.expanded).toBe(false);
+    fireEvent.press(getByLabelText('Phase 1, details'));
+    expect(getByLabelText('Phase 1, collapseActions').props.accessibilityState.expanded).toBe(true);
     expect(getByText('recommendedProducts')).toBeTruthy();
 
     fireEvent.press(getByText('addAllToCart'));
@@ -129,6 +153,31 @@ describe('FeedingSuggestionsScreen', () => {
       'cycleProductsAddedToCart',
       expect.any(Array)
     );
+  });
+
+  it('ajoute un produit et signale un produit absent', () => {
+    const { getByLabelText } = render(<FeedingSuggestionsScreen />);
+    fireEvent.press(getByLabelText('Cycle Tilapia, details'));
+    fireEvent.press(getByLabelText('Phase 1, details'));
+    fireEvent.press(getByLabelText('addToCart Feed Smart'));
+    expect(mockDispatch).toHaveBeenCalled();
+
+    mockState.commerce.products.items = [];
+    const missing = render(<FeedingSuggestionsScreen />);
+    fireEvent.press(missing.getByLabelText('Cycle Tilapia, details'));
+    fireEvent.press(missing.getByLabelText('Phase 1, details'));
+    fireEvent.press(missing.getByLabelText('addToCart Feed Smart'));
+    expect(Alert.alert).toHaveBeenCalledWith('error', 'productNotFound');
+  });
+
+  it('rafraichit et conserve les suggestions en cas d erreur', async () => {
+    mockState.commerce.suggestions.error = 'refresh failed';
+    const { getByText, UNSAFE_getByType } = render(<FeedingSuggestionsScreen />);
+
+    expect(getByText('Cycle Tilapia')).toBeTruthy();
+    expect(getByText('refresh failed')).toBeTruthy();
+    await UNSAFE_getByType(RefreshControl).props.onRefresh();
+    expect(mockDispatch).toHaveBeenCalled();
   });
 
   it('affiche l etat vide et redirige vers nouveau cycle', () => {
@@ -142,7 +191,7 @@ describe('FeedingSuggestionsScreen', () => {
     const { getByText } = render(<FeedingSuggestionsScreen />);
     fireEvent.press(getByText('startNewCycle'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('NewCycle');
+    expect(mockNavigate).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('affiche l etat erreur et permet retry', () => {
@@ -165,6 +214,43 @@ describe('FeedingSuggestionsScreen', () => {
 
     expect(getByText('sessionCycleNotSelected')).toBeTruthy();
     fireEvent.press(getByText('sessionCycleConfirm'));
-    expect(mockNavigate).toHaveBeenCalledWith('CycleSessionEntry');
+    expect(mockNavigate).toHaveBeenCalledWith('CycleSessionEntry', {
+      showBackToDashboard: true,
+    });
+  });
+
+  it('traduit la phase pre_recolte pour le cycle et les phases futures', () => {
+    const preHarvestSuggestion = {
+      ...suggestionData,
+      suggestions: [
+        {
+          ...suggestionData.suggestions[0],
+          current_phase: 'pre_recolte',
+          phases: [
+            {
+              ...suggestionData.suggestions[0].phases[0],
+              phase_name: 'pre_recolte',
+              pellet_size_mm: 6,
+            },
+          ],
+        },
+      ],
+    };
+    mockState.commerce.suggestions.data = preHarvestSuggestion;
+
+    mockLanguage = 'fr';
+    const french = render(<FeedingSuggestionsScreen />);
+    expect(french.getByText(/Phase actuelle: Pré-récolte/)).toBeTruthy();
+    fireEvent.press(french.getByLabelText('Cycle Tilapia, Détails'));
+    expect(french.getByText('Pré-récolte')).toBeTruthy();
+    expect(french.queryByText(/pre_recolte/)).toBeNull();
+    french.unmount();
+
+    mockLanguage = 'en';
+    const english = render(<FeedingSuggestionsScreen />);
+    expect(english.getByText(/Current phase: Pre-harvest/)).toBeTruthy();
+    fireEvent.press(english.getByLabelText('Cycle Tilapia, Details'));
+    expect(english.getByText('Pre-harvest')).toBeTruthy();
+    expect(english.queryByText(/pre_recolte/)).toBeNull();
   });
 });

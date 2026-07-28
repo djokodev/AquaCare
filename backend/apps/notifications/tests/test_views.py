@@ -219,6 +219,95 @@ class TestNotificationViewSet:
         assert len(response.data['results']) == 1
         assert response.data['results'][0]['notification_type'] == 'order_confirmed'
 
+    def test_list_notifications_supports_cycle_filter(
+        self,
+        authenticated_client,
+        user,
+        production_cycle,
+    ):
+        other_cycle = production_cycle.__class__.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            cycle_name='Cycle Hors Scope',
+            species='clarias',
+            pond_identifier='Bassin B',
+            pond_surface_m2=production_cycle.pond_surface_m2,
+            start_date=production_cycle.start_date,
+            initial_count=700,
+            initial_average_weight=production_cycle.initial_average_weight,
+            initial_biomass=production_cycle.initial_biomass,
+            status='active',
+        )
+        Notification.objects.filter(user=user).delete()
+        Notification.objects.create(
+            user=user,
+            content_object=production_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle scope',
+            message='Visible',
+            scheduled_for=timezone.now(),
+        )
+        Notification.objects.create(
+            user=user,
+            content_object=other_cycle,
+            notification_type='feeding_reminder',
+            title='Other cycle',
+            message='Hidden',
+            scheduled_for=timezone.now(),
+        )
+
+        url = reverse('notifications:notification-list')
+        response = authenticated_client.get(url, {'cycle_id': str(production_cycle.id)})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data['results']) == 1
+        assert response.data['results'][0]['title'] == 'Cycle scope'
+
+    def test_mark_all_notifications_as_read_can_be_scoped_to_cycle(
+        self,
+        authenticated_client,
+        user,
+        production_cycle,
+    ):
+        other_cycle = production_cycle.__class__.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            cycle_name='Cycle B',
+            species='clarias',
+            pond_identifier='Bassin C',
+            pond_surface_m2=production_cycle.pond_surface_m2,
+            start_date=production_cycle.start_date,
+            initial_count=650,
+            initial_average_weight=production_cycle.initial_average_weight,
+            initial_biomass=production_cycle.initial_biomass,
+            status='active',
+        )
+        Notification.objects.filter(user=user).delete()
+        scoped = Notification.objects.create(
+            user=user,
+            content_object=production_cycle,
+            notification_type='alert',
+            title='Scoped',
+            message='Scoped message',
+            scheduled_for=timezone.now(),
+        )
+        other = Notification.objects.create(
+            user=user,
+            content_object=other_cycle,
+            notification_type='alert',
+            title='Other',
+            message='Other message',
+            scheduled_for=timezone.now(),
+        )
+
+        url = reverse('notifications:notification-mark-all-read')
+        response = authenticated_client.post(f'{url}?cycle_id={production_cycle.id}')
+
+        scoped.refresh_from_db()
+        other.refresh_from_db()
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['count'] == 1
+        assert scoped.is_read is True
+        assert other.is_read is False
+
 
 @pytest.mark.django_db
 class TestNotificationPreferenceViewSet:
@@ -475,3 +564,44 @@ class TestNotificationStatsEndpoint:
             response = authenticated_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
+
+    def test_stats_can_be_filtered_by_cycle(self, authenticated_client, user, production_cycle):
+        other_cycle = production_cycle.__class__.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            cycle_name='Cycle Stats B',
+            species='clarias',
+            pond_identifier='Bassin D',
+            pond_surface_m2=production_cycle.pond_surface_m2,
+            start_date=production_cycle.start_date,
+            initial_count=500,
+            initial_average_weight=production_cycle.initial_average_weight,
+            initial_biomass=production_cycle.initial_biomass,
+            status='active',
+        )
+        Notification.objects.filter(user=user).delete()
+        Notification.objects.create(
+            user=user,
+            content_object=production_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle A',
+            message='Visible',
+            is_read=False,
+            scheduled_for=timezone.now(),
+        )
+        Notification.objects.create(
+            user=user,
+            content_object=other_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle B',
+            message='Hidden',
+            is_read=True,
+            scheduled_for=timezone.now(),
+        )
+
+        url = reverse('notifications:notification-stats')
+        response = authenticated_client.get(url, {'cycle_id': str(production_cycle.id)})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['total_count'] == 1
+        assert response.data['unread_count'] == 1
+        assert response.data['read_count'] == 0

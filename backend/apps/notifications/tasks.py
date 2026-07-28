@@ -69,7 +69,7 @@ def _build_email_context(notification: Notification) -> EmailTemplateContext:
         "metadata": notification.metadata,
         "notification_type": notification.get_notification_type_display(),
         "created_at": notification.created_at,
-        "site_url": settings.FRONTEND_URL if hasattr(settings, "FRONTEND_URL") else "https://aquacare.mavecam.com",
+        "site_url": settings.FRONTEND_URL if hasattr(settings, "FRONTEND_URL") else "https://aquacare.tech",
     }
 
 
@@ -182,8 +182,11 @@ def send_email_notification_task(self, notification_id: str):
         logger.info("Email sent successfully for notification %s", notification_id)
 
     except Notification.DoesNotExist:
-        logger.warning("Email notification %s skipped: notification does not exist", notification_id)
-        return
+        logger.warning(
+            "Email notification %s is not visible yet; retrying delivery",
+            notification_id,
+        )
+        raise self.retry(exc=Notification.DoesNotExist(notification_id))
 
     except Exception as exc:
         logger.exception("Email delivery failed for notification %s", notification_id)
@@ -300,8 +303,11 @@ def send_push_notification_task(self, notification_id: str):
         )
 
     except Notification.DoesNotExist:
-        logger.warning("Push notification %s skipped: notification does not exist", notification_id)
-        return
+        logger.warning(
+            "Push notification %s is not visible yet; retrying delivery",
+            notification_id,
+        )
+        raise self.retry(exc=Notification.DoesNotExist(notification_id))
 
     except Exception as exc:
         logger.exception("Push delivery failed for notification %s", notification_id)

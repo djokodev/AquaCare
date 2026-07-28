@@ -29,6 +29,42 @@ describe('services/notificationsService', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/notifications/');
   });
 
+  it('passe cycle_id quand un scope cycle est fourni', async () => {
+    mockApi.get.mockResolvedValueOnce({ data: { results: [] } } as any);
+    mockApi.post.mockResolvedValueOnce({ data: { count: 0 } } as any);
+    mockApi.post.mockResolvedValueOnce({ data: {} } as any);
+
+    await notificationsService.getNotifications({ cycleId: 'cycle-1' });
+    await notificationsService.markAllNotificationsAsRead({ cycleId: 'cycle-1' });
+    await notificationsService.deleteAllReadNotifications({ cycleId: 'cycle-1' });
+
+    expect(mockApi.get).toHaveBeenCalledWith('/notifications/', {
+      params: {
+        cycle_id: 'cycle-1',
+      },
+    });
+    expect(mockApi.post).toHaveBeenNthCalledWith(
+      1,
+      '/notifications/mark_all_read/',
+      undefined,
+      {
+        params: {
+          cycle_id: 'cycle-1',
+        },
+      }
+    );
+    expect(mockApi.post).toHaveBeenNthCalledWith(
+      2,
+      '/notifications/delete_all_read/',
+      undefined,
+      {
+        params: {
+          cycle_id: 'cycle-1',
+        },
+      }
+    );
+  });
+
   it('markNotificationAsRead extrait notification ou data brut', async () => {
     mockApi.post
       .mockResolvedValueOnce({ data: { notification: { id: 'n1', is_read: true } } } as any)

@@ -64,6 +64,15 @@ export const CYCLE_DURATIONS = {
 } as const;
 
 /**
+ * Defaults de planification cycle-first utilisés par l'UX.
+ */
+export const CYCLE_PLANNING_DEFAULTS = {
+  expected_survival_rate_pct: 95,
+  other_costs_rate_pct: 5,
+  technical_pause_days: 14,
+} as const;
+
+/**
  * Stades de croissance.
  */
 export const GROWTH_STAGES = {
@@ -111,7 +120,7 @@ export const CYCLE_STATUS = {
 export type CycleStatus = typeof CYCLE_STATUS[keyof typeof CYCLE_STATUS];
 
 /**
- * Objectifs de performance MAVECAM (pour affichage).
+ * Objectifs de performance AquaCare (pour affichage).
  */
 export const PERFORMANCE_TARGETS = {
   fcr: {
@@ -167,7 +176,6 @@ export const INPUT_LIMITS = {
     max: 1000000, // nombre de poissons
   },
 } as const;
-
 
 
 

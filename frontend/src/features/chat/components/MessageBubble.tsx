@@ -6,22 +6,12 @@
  */
 
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import type { Message, MessageSenderType } from '../types/chat';
-
-/**
- * MAVECAM Design System Colors
- */
-const COLORS = {
-  GREEN_PRIMARY: '#059669',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-  BORDER_GRAY: '#e2e8f0',
-};
+import { AppText } from '@/components/ui';
+import { colors, radii, shadows, spacing, typography } from '@/theme';
 
 interface MessageBubbleProps {
   message: Message;
@@ -51,10 +41,10 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
   const getTextColor = (senderType: MessageSenderType) => {
     switch (senderType) {
       case 'user':
-        return COLORS.WHITE;
+        return colors.text.inverse;
       case 'admin':
       case 'system':
-        return COLORS.GRAY_DARK;
+        return colors.text.primary;
     }
   };
 
@@ -111,6 +101,10 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
         <TouchableOpacity
           onPress={() => onImagePress && onImagePress(message.media_url!)}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={t('chatOpenImage')}
+          accessibilityHint={t('chatOpenImageHint')}
+          hitSlop={spacing[2]}
         >
           <Image
             source={{ uri: message.media_url }}
@@ -124,8 +118,8 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
     if (message.media_type === 'video') {
       return (
         <View style={styles.videoPlaceholder}>
-          <Ionicons name="play-circle-outline" size={48} color={COLORS.WHITE} />
-          <Text style={styles.videoLabel}>{t('chatVideoMessage')}</Text>
+          <Ionicons name="play-circle-outline" size={48} color={colors.text.inverse} />
+          <AppText variant="caption" color="inverse" style={styles.videoLabel}>{t('chatVideoMessage')}</AppText>
         </View>
       );
     }
@@ -134,7 +128,9 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
   };
 
   const textColor = getTextColor(message.sender_type);
-  const timestampColor = message.sender_type === 'user' ? COLORS.WHITE : COLORS.GRAY_LIGHT;
+  const timestampColor = message.sender_type === 'user'
+    ? colors.text.inverse
+    : colors.text.muted;
 
   return (
     <View
@@ -149,15 +145,15 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
         {renderMedia()}
 
         {/* Text content */}
-        <Text style={[styles.messageText, { color: textColor }]}>
+        <AppText style={[styles.messageText, { color: textColor }]}>
           {message.content}
-        </Text>
+        </AppText>
 
         {/* Timestamp + status */}
         <View style={styles.footer}>
-          <Text style={[styles.timestamp, { color: timestampColor }]}>
+          <AppText variant="caption" style={[styles.timestamp, { color: timestampColor }]}>
             {formatTimestamp(message.created_at)}
-          </Text>
+          </AppText>
         </View>
       </View>
     </View>
@@ -166,8 +162,8 @@ export function MessageBubble({ message, onImagePress }: MessageBubbleProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 4,
-    marginHorizontal: 12,
+    marginVertical: spacing[1],
+    marginHorizontal: spacing[3],
   },
   containerUser: {
     alignItems: 'flex-end',
@@ -175,52 +171,39 @@ const styles = StyleSheet.create({
   containerOther: {
     alignItems: 'flex-start',
   },
-  senderLabel: {
-    fontSize: 11,
-    color: COLORS.GRAY_LIGHT,
-    marginBottom: 4,
-    marginHorizontal: 8,
-    fontWeight: '600',
-  },
   bubble: {
     maxWidth: '75%',
-    borderRadius: 16,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: radii.xl,
+    padding: spacing[3],
+    ...shadows.small,
   },
   bubbleUser: {
-    backgroundColor: COLORS.GREEN_PRIMARY,
+    backgroundColor: colors.brand.primary,
     borderBottomRightRadius: 4,
   },
   bubbleAdmin: {
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: colors.surface.card,
     borderWidth: 1,
-    borderColor: COLORS.BORDER_GRAY,
+    borderColor: colors.border.subtle,
     borderBottomLeftRadius: 4,
   },
   bubbleSystem: {
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: colors.surface.card,
     borderWidth: 1,
-    borderColor: COLORS.BORDER_GRAY,
+    borderColor: colors.border.subtle,
     borderBottomLeftRadius: 4,
   },
   messageText: {
-    fontSize: 15,
-    lineHeight: 20,
+    ...typography.body,
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: spacing[1],
     gap: 4,
   },
   timestamp: {
-    fontSize: 11,
-    color: COLORS.GRAY_LIGHT,
+    color: colors.text.muted,
   },
   statusIcon: {
     marginLeft: 2,
@@ -228,22 +211,20 @@ const styles = StyleSheet.create({
   mediaImage: {
     width: 200,
     height: 150,
-    borderRadius: 12,
-    marginBottom: 8,
+    borderRadius: radii.lg,
+    marginBottom: spacing[2],
   },
   videoPlaceholder: {
     width: 200,
     height: 150,
-    borderRadius: 12,
-    backgroundColor: COLORS.GRAY_DARK,
+    borderRadius: radii.lg,
+    backgroundColor: colors.text.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing[2],
   },
   videoLabel: {
-    color: COLORS.WHITE,
-    fontSize: 13,
-    marginTop: 8,
+    marginTop: spacing[2],
     fontWeight: '600',
   },
 });

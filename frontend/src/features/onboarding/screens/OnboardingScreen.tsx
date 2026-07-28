@@ -10,14 +10,10 @@ import {
   FlatList,
   StyleSheet,
   Dimensions,
-  TouchableOpacity,
-  Text,
   NativeSyntheticEvent,
   NativeScrollEvent,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -26,7 +22,8 @@ import SlideIndicators from '../components/SlideIndicators';
 import OnboardingButton from '../components/OnboardingButton';
 import OnboardingService from '../services/onboardingService';
 import { OnboardingSlideData } from '../types/onboarding';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AppText, Button, IconButton } from '@/components/ui';
+import { colors, sizing, spacing } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -109,12 +106,15 @@ const SLIDES: OnboardingSlideData[] = [
   },
 ];
 
+interface OnboardingScreenProps {
+  onCompleted: () => void | Promise<void>;
+}
+
 /**
  * Écran d'onboarding avec FlatList horizontal
  */
-export default function OnboardingScreen() {
+export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps) {
   const { t } = useTranslation();
-  const navigation = useNavigation<StackNavigationProp<any>>();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
@@ -141,11 +141,7 @@ export default function OnboardingScreen() {
     try {
       setIsProcessing(true);
       await OnboardingService.setCompleted();
-      // Reset de la navigation vers Main
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      await onCompleted();
     } catch (error) {
       Alert.alert(
         t('error'),
@@ -165,11 +161,7 @@ export default function OnboardingScreen() {
     try {
       setIsProcessing(true);
       await OnboardingService.setCompleted();
-      // Reset de la navigation vers Main
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      await onCompleted();
     } catch (error) {
       Alert.alert(
         t('error'),
@@ -204,28 +196,29 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.container}>
-        {/* Header avec bouton "Ignorer" (slides 1-4 uniquement) */}
-        {!isLastSlide && (
-          <View style={styles.header}>
-            <TouchableOpacity
+        <View style={styles.header}>
+          {currentIndex === 0 ? (
+            <Button
+              label={t('onboardingSkip')}
               onPress={handleSkip}
+              variant="ghost"
               disabled={isProcessing}
-              style={styles.skipButton}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel={t('onboardingSkip')}
-            >
-              <Text style={styles.skipText}>{t('onboardingSkip')}</Text>
-            </TouchableOpacity>
+              fullWidth={false}
+            />
+          ) : (
+            <IconButton
+              icon="arrow-back"
+              accessibilityLabel={t('onboardingBack')}
+              onPress={() => flatListRef.current?.scrollToIndex({ index: currentIndex - 1, animated: true })}
+              disabled={isProcessing}
+              variant="ghost"
+            />
+          )}
 
-            <Text style={styles.pageIndicator}>
-              {currentIndex + 1}/{SLIDES.length}
-            </Text>
-          </View>
-        )}
-
-        {/* Espace réservé pour header sur dernier slide */}
-        {isLastSlide && <View style={styles.headerPlaceholder} />}
+          <AppText variant="helper" color="muted" style={styles.pageIndicator}>
+            {currentIndex + 1}/{SLIDES.length}
+          </AppText>
+        </View>
 
         {/* FlatList horizontal avec slides */}
         <FlatList
@@ -268,48 +261,35 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: colors.surface.card,
   },
 
   container: {
     flex: 1,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: colors.surface.card,
   },
 
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3],
   },
 
   headerPlaceholder: {
-    height: 52,
-  },
-
-  skipButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-
-  skipText: {
-    fontSize: 17,
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: '700',
+    height: sizing.controlLarge,
   },
 
   pageIndicator: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
     fontWeight: '500',
   },
 
   footer: {
-    paddingBottom: 40,
-    paddingTop: 20,
+    paddingBottom: spacing[10],
+    paddingTop: spacing[5],
+    paddingHorizontal: spacing[4],
     alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    backgroundColor: colors.surface.card,
   },
 });

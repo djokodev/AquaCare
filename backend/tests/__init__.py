@@ -1,1 +1,1 @@
-# Tests package pour MAVECAM AquaCare
+# Tests package pour AquaCare

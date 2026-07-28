@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-
-from accounts.models import User
-from aquaculture.models import ProductionCycle
+from typing import TYPE_CHECKING, Any
 
 from ..models import Product
 from .cycle_simulation_service import CycleSimulationService
 from .feeding_suggestion_service import FeedingSuggestionService
+from .nutritional_guide_gateway import NutritionalGuideGateway
 from .product_service import ProductService
+from .production_cycle_gateway import ProductionCycleGateway
+
+if TYPE_CHECKING:
+    from accounts.models import User
 
 
 @dataclass(frozen=True)
@@ -61,7 +63,7 @@ class CatalogApplicationService:
     @staticmethod
     def get_products_for_user_cycle(user: User, cycle_id: str | None) -> Any:
         """Retourne les produits compatibles avec le cycle de l'utilisateur."""
-        cycle = ProductionCycle.objects.get(id=cycle_id, farm_profile__user=user)
+        cycle = ProductionCycleGateway.get_user_cycle(user_id=user.id, cycle_id=cycle_id)
         return ProductService.get_products_for_cycle(cycle)
 
     @staticmethod
@@ -97,4 +99,5 @@ class CatalogApplicationService:
             selling_price_per_kg_fcfa=command.selling_price_per_kg_fcfa,
             fingerlings_cost_fcfa=command.fingerlings_cost_fcfa,
             other_costs_fcfa=command.other_costs_fcfa,
+            nutritional_guide_rules=NutritionalGuideGateway.for_species(command.species),
         )

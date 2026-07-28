@@ -1,12 +1,15 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import NotificationsScreen from '../NotificationsScreen';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchNotifications,
   fetchNotificationsSilent,
   markNotificationAsRead,
+  markAllNotificationsAsRead,
+  deleteNotification,
+  deleteAllReadNotifications,
 } from '@/features/notifications/store/notificationSlice';
 import { Notification } from '@/types/notifications';
 
@@ -17,12 +20,18 @@ jest.mock('react-redux', () => ({
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: jest.fn(),
+  useRoute: jest.fn(() => ({ params: { cycleId: 'cycle-1' } })),
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('@/features/notifications/store/notificationSlice', () => ({
   fetchNotifications: jest.fn(() => ({ type: 'notifications/fetch' })),
   fetchNotificationsSilent: jest.fn(() => ({ type: 'notifications/fetchSilent' })),
   markNotificationAsRead: jest.fn((id: string) => ({ type: 'notifications/markRead', payload: id })),
+  markAllNotificationsAsRead: jest.fn(() => ({ type: 'notifications/markAllRead' })),
   deleteNotification: jest.fn((id: string) => ({ type: 'notifications/delete', payload: id })),
   deleteAllReadNotifications: jest.fn(() => ({ type: 'notifications/deleteAllRead' })),
 }));
@@ -59,6 +68,12 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
     mockUseSelector.mockImplementation((selector: (s: any) => unknown) =>
       selector({
         notifications: state,
+        aquaculture: {
+          currentCycle: {
+            id: 'cycle-1',
+            cycle_name: 'Cycle Tilapia 2026',
+          },
+        },
       })
     );
   };
@@ -86,7 +101,7 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
 
     expect(getByText('Erreur notifications')).toBeTruthy();
     fireEvent.press(getByText('retry'));
-    expect(fetchNotifications).toHaveBeenCalled();
+    expect(fetchNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
   });
 
   it('filtre les notifications par statut lu/non lu', () => {
@@ -114,6 +129,32 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
     expect(queryByText('Notif non lue')).toBeNull();
   });
 
+  it('conserve les données lors d une erreur de refresh', () => {
+    setSelectorState({ notifications: [makeNotification({ title: 'Notification conservée' })], loading: false, error: 'loadError', unreadCount: 1 });
+    const screen = render(<NotificationsScreen navigation={navigation} />);
+    expect(screen.getByText('Notification conservée')).toBeTruthy();
+    expect(screen.getByText('loadError')).toBeTruthy();
+  });
+
+  it('masque le contexte du cycle dans une notification', () => {
+    setSelectorState({
+      notifications: [
+        makeNotification({
+          id: 'n1',
+          title: 'Alerte sanitaire',
+          metadata: { cycle_name: 'Cycle Tilapia 2026' },
+        }),
+      ],
+      loading: false,
+      error: null,
+      unreadCount: 1,
+    });
+
+    const { queryByText } = render(<NotificationsScreen navigation={navigation} />);
+
+    expect(queryByText('notificationCycleContext')).toBeNull();
+  });
+
   it('marque une notification non lue comme lue', async () => {
     setSelectorState({
       notifications: [makeNotification({ id: 'n1', title: 'Notif non lue', is_read: false })],
@@ -129,5 +170,39 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
       expect(markNotificationAsRead).toHaveBeenCalledWith('n1');
       expect(mockDispatch).toHaveBeenCalled();
     });
+  });
+
+  it('marque tout comme lu et supprime les notifications', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    setSelectorState({ notifications: [makeNotification({ id: 'n1', is_read: false }), makeNotification({ id: 'n2', is_read: true })], loading: false, error: null, unreadCount: 1 });
+    const screen = render(<NotificationsScreen navigation={navigation} />);
+
+    fireEvent.press(screen.getByLabelText('markAllAsRead'));
+    let alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    await alertCall[2].find((action: { text: string }) => action.text === 'confirm').onPress();
+    expect(markAllNotificationsAsRead).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+
+    fireEvent.press(screen.getAllByLabelText('deleteNotification')[0]);
+    alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    await alertCall[2].find((action: { text: string }) => action.text === 'confirm').onPress();
+    expect(deleteNotification).toHaveBeenCalledWith('n1');
+
+    fireEvent.press(screen.getByLabelText('deleteAllRead'));
+    alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
+    await alertCall[2].find((action: { text: string }) => action.text === 'confirm').onPress();
+    expect(deleteAllReadNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+  });
+
+  it('charge et rafraichit les notifications selon le cycle de session', () => {
+    setSelectorState({
+      notifications: [],
+      loading: false,
+      error: null,
+      unreadCount: 0,
+    });
+
+    render(<NotificationsScreen navigation={navigation} />);
+
+    expect(fetchNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
   });
 });

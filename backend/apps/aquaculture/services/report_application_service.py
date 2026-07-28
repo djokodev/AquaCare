@@ -6,18 +6,63 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from ..models import ProductionCycle, ProductionReport
-from .report_service import ReportDispatchMetadata, ReportService
+from ..models import CycleUnitAllocation, ProductionCycle, ProductionReport
+from .report_service import (
+    ReportDispatchMetadata,
+    ReportService,
+    UnresolvableLegacyReportScopeError,
+)
 
 
-class InvalidReportCycleScopeError(ValueError):
+class InvalidReportScopeError(ValueError):
+    """La portée fournie pour un rapport est invalide ou inaccessible."""
+
+
+class InvalidReportCycleScopeError(InvalidReportScopeError):
     """Le cycle scope fourni pour un rapport est invalide ou inactif."""
+
+
+class InvalidReportUnitScopeError(InvalidReportScopeError):
+    """L'allocation d'unité fournie pour un rapport est invalide ou inaccessible."""
+
+
+class InaccessibleReportUnitScopeError(InvalidReportUnitScopeError):
+    """Une allocation existe peut-être, mais n'est pas accessible à l'utilisateur."""
 
 
 class MissingReportEmailError(ValueError):
     """L'utilisateur n'a pas d'adresse email disponible pour l'envoi du rapport."""
+
+
+class InvalidReportPeriodError(InvalidReportScopeError):
+    """La période demandée n'est pas disponible pour le cycle."""
+
+
+@dataclass(frozen=True)
+class ReportScope:
+    """Portée validée et prête à être transmise au moteur de rapport."""
+
+    scope_type: Literal["cycle", "unit"]
+    cycle: ProductionCycle
+    allocation: CycleUnitAllocation | None = None
+
+    @property
+    def production_unit(self):
+        return self.allocation.production_unit if self.allocation else None
+
+    @property
+    def cycle_name(self) -> str:
+        return self.cycle.cycle_name
+
+    @property
+    def scope_name(self) -> str:
+        if self.scope_type == "unit" and self.production_unit:
+            return self.production_unit.name
+        return self.cycle_name
 
 
 @dataclass(frozen=True)
@@ -26,7 +71,10 @@ class GenerateReportCommand:
 
     report_type: str
     reference_date: date | None = None
+    scope: Literal["cycle", "unit"] | None = None
     cycle_id: str | None = None
+    cycle_unit_allocation_id: str | None = None
+    scope_type: Literal["cycle", "unit"] | None = None
 
 
 @dataclass(frozen=True)
@@ -50,16 +98,31 @@ class ReportApplicationService:
 
     @staticmethod
     def _set_pending_status(report: ProductionReport) -> ProductionReport:
+        fields_to_update = []
         if report.status != "pending":
             report.status = "pending"
-            report.save(update_fields=["status", "updated_at"])
+            fields_to_update.append("status")
+        if report.is_deleted:
+            report.is_deleted = False
+            report.deleted_at = None
+            fields_to_update.extend(["is_deleted", "deleted_at"])
+        if fields_to_update:
+            report.save(update_fields=[*fields_to_update, "updated_at"])
         return report
 
     @staticmethod
-    def _dispatch_generation(report: ProductionReport, cycle_scope_id: str | None = None) -> None:
+    def _dispatch_generation(
+        report: ProductionReport,
+        restore_validation: bool = False,
+        allow_historical_scope: bool = False,
+    ) -> None:
         from ..tasks import generate_report_async_task
 
-        generate_report_async_task.delay(str(report.id), cycle_scope_id)
+        generate_report_async_task.delay(
+            str(report.id),
+            restore_validation=restore_validation,
+            allow_historical_scope=allow_historical_scope,
+        )
 
     @staticmethod
     def _extract_cycle_scope_id(report: ProductionReport) -> str | None:
@@ -68,44 +131,329 @@ class ReportApplicationService:
         return (report.payload.get("report_meta", {}) or {}).get("cycle_scope_id")
 
     @staticmethod
-    def _ensure_active_cycle_scope(user, cycle_id: str | None) -> None:
-        if not cycle_id:
-            return
+    def _extract_scope_type(report: ProductionReport) -> str:
+        if not isinstance(report.payload, dict):
+            return report.scope_type or "cycle"
+        meta = report.payload.get("report_meta", {}) or {}
+        if isinstance(meta, dict) and meta.get("scope_type"):
+            return str(meta.get("scope_type"))
+        return report.scope_type or "cycle"
 
-        cycle_exists = ProductionCycle.objects.filter(
-            id=cycle_id,
-            farm_profile=user.farm_profile,
-            status="active",
-        ).exists()
-        if not cycle_exists:
-            raise InvalidReportCycleScopeError(_("Cycle de session introuvable ou inactif."))
+    @staticmethod
+    def _ensure_active_cycle_scope(user, cycle_id: str | None) -> ProductionCycle:
+        if not cycle_id:
+            raise InvalidReportCycleScopeError(
+                _("Le cycle est obligatoire pour générer ce rapport.")
+            )
+
+        try:
+            cycle = ProductionCycle.objects.filter(
+                id=cycle_id,
+                farm_profile=user.farm_profile,
+                status="active",
+            ).first()
+        except (DjangoValidationError, TypeError, ValueError):
+            cycle = None
+        if cycle is None:
+            raise InvalidReportCycleScopeError(
+                _("Le cycle est introuvable, inaccessible ou inactif.")
+            )
+        return cycle
+
+    @staticmethod
+    def _ensure_unit_scope(
+        user,
+        cycle_unit_allocation_id: str | None,
+        cycle_id: str | None = None,
+        *,
+        require_active: bool = True,
+    ) -> CycleUnitAllocation:
+        if not cycle_unit_allocation_id:
+            raise InvalidReportUnitScopeError(_("Contexte d'unité incomplet."))
+
+        try:
+            allocation_queryset = CycleUnitAllocation.objects.select_related(
+                "cycle",
+                "production_unit",
+                "cycle__farm_profile",
+            ).filter(
+                id=cycle_unit_allocation_id,
+                cycle__farm_profile=user.farm_profile,
+                production_unit__farm_profile=user.farm_profile,
+            )
+            if cycle_id:
+                allocation_queryset = allocation_queryset.filter(cycle_id=cycle_id)
+            allocation = allocation_queryset.first()
+        except (DjangoValidationError, TypeError, ValueError):
+            allocation = None
+        if allocation is None or (require_active and allocation.cycle.status != "active"):
+            raise InaccessibleReportUnitScopeError(
+                _("Allocation d'unité introuvable ou inaccessible.")
+            )
+        return allocation
+
+    @staticmethod
+    def _ensure_active_unit_scope(
+        user,
+        cycle_unit_allocation_id: str | None,
+        cycle_id: str | None = None,
+    ) -> CycleUnitAllocation:
+        return ReportApplicationService._ensure_unit_scope(
+            user,
+            cycle_unit_allocation_id,
+            cycle_id,
+            require_active=True,
+        )
+
+    @staticmethod
+    def resolve_report_scope(
+        user,
+        *,
+        scope_type: Literal["cycle", "unit"],
+        cycle_id: str | None = None,
+        cycle_unit_allocation_id: str | None = None,
+    ) -> ReportScope:
+        """Résout une portée dans la ferme de l'utilisateur connecté."""
+        if scope_type == "unit":
+            allocation = ReportApplicationService._ensure_active_unit_scope(
+                user,
+                cycle_unit_allocation_id,
+                cycle_id,
+            )
+            return ReportScope(
+                scope_type="unit",
+                cycle=allocation.cycle,
+                allocation=allocation,
+            )
+
+        return ReportScope(
+            scope_type="cycle",
+            cycle=ReportApplicationService._ensure_active_cycle_scope(user, cycle_id),
+        )
+
+    @staticmethod
+    def resolve_report_listing_unit_scope(
+        user,
+        *,
+        cycle_id: str | None = None,
+        cycle_unit_allocation_id: str | None = None,
+    ) -> ReportScope:
+        """Résout une portée unitaire de lecture sans exiger un cycle actif."""
+        allocation = ReportApplicationService._ensure_unit_scope(
+            user,
+            cycle_unit_allocation_id,
+            cycle_id,
+            require_active=False,
+        )
+        return ReportScope(
+            scope_type="unit",
+            cycle=allocation.cycle,
+            allocation=allocation,
+        )
+
+    @staticmethod
+    def _set_scope_in_payload(
+        report: ProductionReport,
+        *,
+        scope: str,
+        scope_object_id: str | None,
+        cycle_id: str | None = None,
+        cycle_unit_allocation_id: str | None = None,
+        cycle_scope_name: str | None = None,
+        scope_name: str | None = None,
+        scope_label: str | None = None,
+    ) -> ProductionReport:
+        """Stocke la portée du rapport dans payload.report_meta avant la tâche async."""
+        if not scope_object_id and not cycle_id and not cycle_unit_allocation_id:
+            return report
+        payload = report.payload if isinstance(report.payload, dict) else {}
+        report_meta = dict(payload.get("report_meta", {}) or {})
+        metadata = {
+            "scope_type": scope,
+            "scope_object_id": scope_object_id,
+            "cycle_scope_id": cycle_id or (scope_object_id if scope == "cycle" else None),
+            "cycle_unit_allocation_id": cycle_unit_allocation_id,
+            "cycle_scope_name": cycle_scope_name,
+            "scope_name": scope_name,
+            "scope_label": scope_label,
+        }
+        changed = False
+        for key, value in metadata.items():
+            if key in {"cycle_scope_name", "scope_name", "scope_label"} and value is None and report_meta.get(key):
+                continue
+            if key not in report_meta or report_meta.get(key) != value:
+                report_meta[key] = value
+                changed = True
+        if changed:
+            report.payload = {**payload, "report_meta": report_meta}
+            report.save(update_fields=["payload", "updated_at"])
+        return report
 
     @staticmethod
     def request_report_generation(user, command: GenerateReportCommand) -> ProductionReport:
         """Cree ou recharge un rapport en attente puis declenche la generation async."""
-        period_start, period_end = ReportService.build_period_bounds(
-            command.report_type,
-            command.reference_date,
+        if command.scope and command.scope_type and command.scope != command.scope_type:
+            raise InvalidReportScopeError(_("Les portées fournies sont incohérentes."))
+        scope = command.scope_type or command.scope or "cycle"
+        cycle_id = command.cycle_id
+        cycle_unit_allocation_id = command.cycle_unit_allocation_id
+
+        resolved_scope = ReportApplicationService.resolve_report_scope(
+            user,
+            scope_type=scope,
+            cycle_id=cycle_id,
+            cycle_unit_allocation_id=cycle_unit_allocation_id,
         )
-        ReportApplicationService._ensure_active_cycle_scope(user, command.cycle_id)
+        language_code = ReportService._resolve_language_code(user)
+        reference_date = command.reference_date or timezone.localdate()
+        if reference_date > timezone.localdate():
+            raise InvalidReportPeriodError(
+                ReportService._pick_text(
+                    language_code,
+                    "La date du rapport ne peut pas être dans le futur.",
+                    "The report date cannot be in the future.",
+                )
+            )
+        if reference_date < resolved_scope.cycle.start_date:
+            raise InvalidReportPeriodError(
+                ReportService._pick_text(
+                    language_code,
+                    "La période sélectionnée est antérieure au démarrage du cycle.",
+                    "The selected period is before the cycle start date.",
+                )
+            )
+
+        period_bounds = ReportService.build_cycle_report_period_bounds(
+            command.report_type,
+            resolved_scope.cycle.start_date,
+            reference_date,
+        )
+        if period_bounds is None:
+            required_days = ReportService.get_cycle_report_period_length(command.report_type)
+            cycle_day = (reference_date - resolved_scope.cycle.start_date).days + 1
+            remaining_days = required_days - cycle_day
+            report_label = ReportService._pick_text(
+                language_code,
+                "hebdomadaire" if command.report_type == "weekly" else "mensuel",
+                "weekly" if command.report_type == "weekly" else "monthly",
+            )
+            day_label = ReportService._pick_text(
+                language_code,
+                "jour" if remaining_days == 1 else "jours",
+                "day" if remaining_days == 1 else "days",
+            )
+            raise InvalidReportPeriodError(
+                ReportService._pick_text(
+                    language_code,
+                    f"Le rapport {report_label} nécessite {required_days} jours de cycle. "
+                    f"Il sera disponible dans {remaining_days} {day_label}.",
+                    f"The {report_label} report requires {required_days} cycle days. "
+                    f"It will be available in {remaining_days} {day_label}.",
+                )
+            )
+        period_start, period_end = period_bounds
+
+        if scope == "unit":
+            allocation = resolved_scope.allocation
+            assert allocation is not None
+            cycle_id = str(resolved_scope.cycle.id)
+            cycle_unit_allocation_id = str(allocation.id)
+
+        scope_label = ReportService._resolve_scope_label(scope, language_code)
 
         report, _created = ProductionReport.objects.get_or_create(
             farm_profile=user.farm_profile,
             report_type=command.report_type,
             period_start=period_start,
             period_end=period_end,
+            scope_type=scope,
+            scope_object_id=cycle_unit_allocation_id if scope == "unit" else cycle_id,
             defaults={"status": "pending"},
         )
         report = ReportApplicationService._set_pending_status(report)
-        ReportApplicationService._dispatch_generation(report, command.cycle_id)
+        report = ReportApplicationService._set_scope_in_payload(
+            report,
+            scope=scope,
+            scope_object_id=cycle_unit_allocation_id if scope == "unit" else cycle_id,
+            cycle_id=cycle_id,
+            cycle_unit_allocation_id=cycle_unit_allocation_id,
+            cycle_scope_name=resolved_scope.cycle_name,
+            scope_name=resolved_scope.scope_name,
+            scope_label=scope_label,
+        )
+        ReportApplicationService._dispatch_generation(report)
         return report
 
     @staticmethod
     def request_report_regeneration(report: ProductionReport) -> ProductionReport:
         """Relance la generation async pour un rapport existant."""
-        cycle_scope_id = ReportApplicationService._extract_cycle_scope_id(report)
+        was_validated = report.status == "validated"
+        scope, scope_object_id = ReportService._resolve_report_scope_from_report(report)
+        if not scope_object_id:
+            raise UnresolvableLegacyReportScopeError(
+                ReportService._pick_text(
+                    ReportService._resolve_language_code(report.farm_profile.user),
+                    "Ce rapport historique ne peut pas être régénéré automatiquement, "
+                    "car son cycle d’origine n’est pas identifiable.",
+                    "This historical report cannot be regenerated automatically "
+                    "because its original cycle cannot be identified.",
+                )
+            )
+        language_code = ReportService._resolve_language_code(report.farm_profile.user)
+        cycle_scope_name: str | None = None
+        scope_name: str | None = None
+        scope_label = ReportService._resolve_scope_label(scope, language_code)
+        cycle_unit_allocation_id: str | None = None
+
+        if scope == "cycle":
+            cycle = ProductionCycle.objects.filter(
+                id=scope_object_id,
+                farm_profile=report.farm_profile,
+            ).first()
+            scope_is_valid = cycle is not None
+            if scope_is_valid:
+                cycle_scope_id = str(cycle.id)
+                cycle_scope_name = cycle.cycle_name
+                scope_name = cycle.cycle_name
+        else:
+            allocation = CycleUnitAllocation.objects.select_related(
+                "cycle",
+                "production_unit",
+                "cycle__farm_profile",
+                "production_unit__farm_profile",
+            ).filter(
+                id=scope_object_id,
+                cycle__farm_profile=report.farm_profile,
+                production_unit__farm_profile=report.farm_profile,
+            ).first()
+            scope_is_valid = allocation is not None
+            if scope_is_valid:
+                cycle_scope_id = str(allocation.cycle_id)
+                cycle_unit_allocation_id = str(allocation.id)
+                cycle_scope_name = allocation.cycle.cycle_name
+                scope_name = allocation.production_unit.name
+        if not scope_is_valid:
+            raise InvalidReportScopeError(_("La portée historique du rapport est introuvable ou inaccessible."))
+
+        if str(report.scope_object_id or "") != str(scope_object_id):
+            report.scope_object_id = scope_object_id
+            report.save(update_fields=["scope_object_id", "updated_at"])
+        ReportApplicationService._set_scope_in_payload(
+            report,
+            scope=scope,
+            scope_object_id=scope_object_id,
+            cycle_id=cycle_scope_id,
+            cycle_unit_allocation_id=cycle_unit_allocation_id,
+            cycle_scope_name=cycle_scope_name,
+            scope_name=scope_name,
+            scope_label=scope_label,
+        )
         report = ReportApplicationService._set_pending_status(report)
-        ReportApplicationService._dispatch_generation(report, cycle_scope_id)
+        ReportApplicationService._dispatch_generation(
+            report,
+            restore_validation=was_validated,
+            allow_historical_scope=True,
+        )
         return report
 
     @staticmethod

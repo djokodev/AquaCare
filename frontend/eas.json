@@ -63,7 +63,9 @@
   "submit": {
     "production": {},
     "testflight-staging": {
-      "ios": {}
+      "ios": {
+        "ascAppId": "6760118589"
+      }
     },
     "play-internal-staging": {
       "android": {

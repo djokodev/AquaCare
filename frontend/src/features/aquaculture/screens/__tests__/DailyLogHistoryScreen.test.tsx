@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import DailyLogHistoryScreen from '../DailyLogHistoryScreen';
 import { useSelector } from 'react-redux';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
@@ -8,6 +8,15 @@ import { CycleLog, ProductionCycle } from '@/types/aquaculture';
 jest.mock('react-redux', () => ({
   useSelector: jest.fn(),
 }));
+
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
 
 jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
   aquacultureService: {
@@ -32,6 +41,13 @@ describe('features/aquaculture/screens/DailyLogHistoryScreen', () => {
   const navigation = {
     goBack: jest.fn(),
     navigate: jest.fn(),
+  } as any;
+  const route = {
+    params: {
+      cycleId: 'cycle-1',
+      cycleUnitAllocationId: 'allocation-1',
+      productionUnitName: 'Bac 1',
+    },
   } as any;
 
   const activeCycle: ProductionCycle = {
@@ -69,6 +85,7 @@ describe('features/aquaculture/screens/DailyLogHistoryScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockService.getCycleLogs.mockReset();
   });
 
   it('charge les logs au demarrage et affiche une carte', async () => {
@@ -100,6 +117,24 @@ describe('features/aquaculture/screens/DailyLogHistoryScreen', () => {
     });
   });
 
+  it('filtre les logs par allocation quand le contexte unité est fourni', async () => {
+    setSelectorCycles([activeCycle], activeCycle);
+    mockService.getCycleLogs.mockResolvedValueOnce([]);
+
+    const { getByText, queryByText } = render(
+      <DailyLogHistoryScreen navigation={navigation} route={route} />
+    );
+
+    await waitFor(() => {
+      expect(mockService.getCycleLogs).toHaveBeenCalledWith('cycle-1', {
+        cycleUnitAllocationId: 'allocation-1',
+      });
+      expect(getByText('Cycle 1')).toBeTruthy();
+      expect(queryByText('productionUnitLogHistoryContextTitle')).toBeNull();
+      expect(queryByText('sessionActiveCycleLabel')).toBeNull();
+    });
+  });
+
   it('n appelle pas l API des logs si aucun cycle de session n est selectionne', async () => {
     setSelectorCycles([activeCycle], undefined);
     mockService.getCycleLogs.mockResolvedValueOnce([]);
@@ -122,5 +157,46 @@ describe('features/aquaculture/screens/DailyLogHistoryScreen', () => {
       expect(getByText('noLogsYet')).toBeTruthy();
       expect(getByText('startLoggingData')).toBeTruthy();
     });
+  });
+
+  it('navigue vers le detail de la saisie au clic sur une carte', async () => {
+    const logs: CycleLog[] = [
+      {
+        id: 'log-1',
+        cycle: 'cycle-1',
+        log_date: '2026-02-19',
+        sample_count: 10,
+        sample_total_weight: 1100,
+        mortality_count: 2,
+        water_temperature: 28.5,
+        ph_level: 7.2,
+        observations: 'RAS',
+        created_offline: false,
+        created_at: '2026-02-19T10:00:00Z',
+      },
+    ];
+
+    setSelectorCycles([activeCycle], activeCycle);
+    mockService.getCycleLogs.mockResolvedValueOnce(logs);
+
+    const { getByTestId } = render(<DailyLogHistoryScreen navigation={navigation} route={route} />);
+
+    await waitFor(() => {
+      expect(getByTestId('daily-log-card-log-1')).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId('daily-log-card-log-1'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'DailyLogDetail',
+      expect.objectContaining({
+        cycleId: 'cycle-1',
+        cycleUnitAllocationId: 'allocation-1',
+        productionUnitName: 'Bac 1',
+        log: expect.objectContaining({
+          id: 'log-1',
+        }),
+      })
+    );
   });
 });

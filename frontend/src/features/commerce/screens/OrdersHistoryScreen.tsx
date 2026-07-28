@@ -1,382 +1,350 @@
-﻿import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import {
+  clearOrderContext,
   confirmOrderReceipt,
   fetchOrders,
   fetchOrderStatistics,
 } from '@/features/commerce/store/commerceSlice';
-import { Order } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import {
+  canConfirmOrderReceipt,
+  getOrderReceiptActionLabelKey,
+  getOrderStatusLabelKey,
+  getOrderStatusTone,
+} from '@/features/commerce/utils/orderStatus';
+import { Order, OrderStatistics } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import {
+  AppHeader,
+  AppText,
+  Badge,
+  Button,
+  Card,
+  DashboardHeroCard,
+  DashboardMetricCard,
+  DashboardSection,
+  Divider,
+  EmptyState,
+  ErrorState,
+  IconButton,
+  InlineAlert,
+  LoadingState,
+  formatDashboardCurrency,
+  formatDashboardNumber,
+} from '@/components/ui';
+import { colors, spacing } from '@/theme';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import { useDashboardSyncStatus } from '@/hooks/useDashboardSyncStatus';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'OrdersHistory'>;
+type OrdersRouteProp = RouteProp<RootStackParamList, 'OrdersHistory'>;
+type OrdersLoadResult = 'success' | 'error' | 'stale';
 
 export default function OrdersHistoryScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<OrdersRouteProp>();
   const dispatch = useDispatch<AppDispatch>();
-
-  const { orders } = useSelector((state: RootState) => state.commerce);
-  const { items: ordersList, statistics, loading, error } = orders;
-
-  const [refreshing, setRefreshing] = useState(false);
+  const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const orderState = useSelector((state: RootState) => state.commerce.orders);
+  const routeCycleId = route.params?.cycleId;
+  const cycleId = routeCycleId ?? currentCycle?.id;
+  const cycleName = currentCycle && currentCycle.id === cycleId
+    ? currentCycle.cycle_name
+    : undefined;
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [displayItems, setDisplayItems] = useState<Order[]>(
+    orderState.contextCycleId === cycleId ? orderState.items : [],
+  );
+  const [displayStatistics, setDisplayStatistics] = useState<OrderStatistics | null>(
+    orderState.contextCycleId === cycleId ? orderState.statistics : null,
+  );
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
+  const confirmingOrderRef = useRef<string | null>(null);
+  const loadRequestRef = useRef(0);
+  const translationRef = useRef(t);
+  translationRef.current = t;
+  const { lastSyncedAt, refreshLastSyncedAt } = useDashboardSyncStatus('orders');
+  const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+
+  const loadOrders = useCallback(async (mode: 'initial' | 'refresh' = 'initial'): Promise<OrdersLoadResult> => {
+    if (!cycleId) return 'error';
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
+    if (mode === 'refresh') {
+      setDashboardRefreshing(true);
+    } else {
+      setDashboardLoading(true);
+    }
+    setDashboardError(null);
+    try {
+      const [ordersResult, statisticsResult] = await Promise.allSettled([
+        dispatch(fetchOrders({ productionCycleId: cycleId })).unwrap(),
+        dispatch(fetchOrderStatistics({ productionCycleId: cycleId })).unwrap(),
+      ]);
+      if (ordersResult.status !== 'fulfilled' || statisticsResult.status !== 'fulfilled') {
+        throw new Error(translationRef.current('ordersDashboardLoadError'));
+      }
+      if (requestId !== loadRequestRef.current) return 'stale';
+      setDisplayItems(ordersResult.value);
+      setDisplayStatistics(statisticsResult.value);
+      await dashboardSyncService.markSuccessful('orders');
+      if (requestId !== loadRequestRef.current) return 'stale';
+      await refreshLastSyncedAt();
+      return requestId === loadRequestRef.current ? 'success' : 'stale';
+    } catch {
+      if (requestId !== loadRequestRef.current) return 'stale';
+      setDashboardError(translationRef.current('ordersDashboardLoadError'));
+      return 'error';
+    } finally {
+      if (requestId === loadRequestRef.current) {
+        setDashboardLoading(false);
+        setDashboardRefreshing(false);
+      }
+    }
+  }, [cycleId, dispatch, refreshLastSyncedAt]);
 
   useEffect(() => {
-    dispatch(fetchOrders());
-    dispatch(fetchOrderStatistics());
-  }, []);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
-    setRefreshing(false);
-  };
-
-  const toggleOrderExpansion = (orderId: string) => {
-    setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
-  };
-
-  const getStatusConfig = (status: Order['status']) => {
-    if (status === 'received') {
-      return {
-        icon: 'checkmark-done-circle' as const,
-        color: MAVECAM_COLORS.SUCCESS,
-        label: t('orderStatusReceived'),
-      };
+    loadRequestRef.current += 1;
+    if (orderState.contextCycleId !== cycleId) {
+      setDisplayItems([]);
+      setDisplayStatistics(null);
     }
-
-    if (status === 'delivered') {
-      return {
-        icon: 'cube-outline' as const,
-        color: MAVECAM_COLORS.WARNING,
-        label: t('orderStatusDelivered'),
-      };
+    setDashboardError(null);
+    setExpandedOrderId(null);
+    if (!cycleId) {
+      dispatch(clearOrderContext());
+      setDashboardLoading(false);
+      setDashboardRefreshing(false);
+      return;
     }
+    void loadOrders();
+  }, [cycleId, dispatch, loadOrders]);
 
-    return {
-      icon: 'time-outline' as const,
-      color: MAVECAM_COLORS.GREEN_PRIMARY,
-      label: t('orderStatusConfirmed'),
-    };
-  };
+  const handleRefresh = useCallback(async () => {
+    await loadOrders('refresh');
+  }, [loadOrders]);
 
-  const handleConfirmReceipt = (order: Order) => {
-    Alert.alert(
-      t('confirmReceiptTitle'),
-      t('confirmReceiptMessage', { orderNumber: order.order_number }),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('confirm'),
-          onPress: async () => {
-            try {
-              setConfirmingOrderId(order.id);
-              await dispatch(confirmOrderReceipt(order.id)).unwrap();
-              await Promise.all([dispatch(fetchOrders()), dispatch(fetchOrderStatistics())]);
-              Alert.alert(t('success'), t('confirmReceiptSuccess'));
-            } catch {
-              Alert.alert(t('error'), t('confirmReceiptError'));
-            } finally {
-              setConfirmingOrderId(null);
-            }
-          },
-        },
-      ]
-    );
-  };
+  const sacksToReceive = useMemo(
+    () => displayItems.reduce((sum, order) => order.status === 'received' ? sum : sum + order.total_bags, 0),
+    [displayItems]
+  );
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  const formatDateTime = useCallback((value: string) => {
+    const date = new Date(value);
     const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
-    return date.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
-  };
+    return `${date.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })} · ${date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
+  }, [i18n.language]);
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
-    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-  };
+  const handleConfirmReceipt = useCallback((order: Order) => {
+    const isPickup = order.delivery_method === 'pickup';
+    const titleKey = isPickup ? 'confirmPickupTitle' : 'confirmReceiptTitle';
+    const messageKey = isPickup ? 'confirmPickupMessage' : 'confirmReceiptMessage';
+    const cycleMessage = order.production_cycle_id ? `\n\n${t('confirmOrderCycleStockMessage')}` : '';
+    Alert.alert(t(titleKey), `${t(messageKey, { orderNumber: order.order_number })}${cycleMessage}`, [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('confirm'), onPress: async () => {
+        if (confirmingOrderRef.current) return;
+        try {
+          confirmingOrderRef.current = order.id;
+          setConfirmingOrderId(order.id);
+          const updatedOrder = await dispatch(confirmOrderReceipt(order.id)).unwrap();
+          setDisplayItems((current) => current.map((item) => (
+            item.id === updatedOrder.id ? updatedOrder : item
+          )));
+          const refreshResult = await loadOrders('refresh');
+          if (refreshResult === 'stale') return;
+          if (refreshResult === 'error') {
+            setDashboardError(t('ordersDashboardLoadError'));
+          }
+          Alert.alert(t('success'), t(isPickup ? 'confirmPickupSuccess' : 'confirmReceiptSuccess'));
+        } catch (caughtError) {
+          const message = typeof caughtError === 'string' && caughtError.trim()
+            ? caughtError
+            : t('confirmReceiptError');
+          Alert.alert(t('error'), message);
+        }
+        finally {
+          confirmingOrderRef.current = null;
+          setConfirmingOrderId(null);
+        }
+      } },
+    ]);
+  }, [dispatch, loadOrders, t]);
 
-  const renderOrderCard = ({ item: order }: { item: Order }) => {
-    const isExpanded = expandedOrderId === order.id;
-    const subtotal = parseFloat(order.subtotal);
-    const deliveryFee = parseFloat(order.delivery_fee);
-    const total = parseFloat(order.total);
-    const statusConfig = getStatusConfig(order.status);
-    const isConfirming = confirmingOrderId === order.id;
-
+  const renderOrder = useCallback(({ item: order }: { item: Order }) => {
+    const expanded = expandedOrderId === order.id;
+    const deliveryFee = Number(order.delivery_fee);
     return (
-      <TouchableOpacity
-        className="bg-white rounded-xl p-4 mb-3"
-        onPress={() => toggleOrderExpansion(order.id)}
-        activeOpacity={0.8}
-      >
-        <View className="flex-row justify-between items-center mb-3">
-          <View className="flex-row items-center flex-1">
-            <Ionicons name="receipt-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <View className="ml-3 flex-1">
-              <Text className="text-base font-bold text-gray-dark">{order.order_number}</Text>
-              <Text className="text-xs text-gray-light mt-1">
-                {formatDate(order.created_at)} - {formatTime(order.created_at)}
-              </Text>
-            </View>
+      <Card variant="outlined" style={styles.orderCard}>
+        <View style={styles.rowBetween}>
+          <View style={styles.flex}>
+            <AppText variant="cardTitle">{order.order_number}</AppText>
+            <AppText variant="caption" color="muted">{formatDateTime(order.created_at)}</AppText>
           </View>
-          <Ionicons
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={24}
-            color={MAVECAM_COLORS.GRAY_LIGHT}
+          <IconButton
+            icon={expanded ? 'chevron-up' : 'chevron-down'}
+            accessibilityLabel={t(expanded ? 'collapseActions' : 'details')}
+            accessibilityState={{ expanded }}
+            onPress={() => setExpandedOrderId(expanded ? null : order.id)}
+            variant="ghost"
           />
         </View>
-
-        <View className="flex-row justify-between items-center mb-3">
-          <View className="flex-row items-center px-3 py-2 rounded-full bg-cream gap-2">
-            <Ionicons name={statusConfig.icon} size={16} color={statusConfig.color} />
-            <Text className="text-xs font-semibold text-mavecam-primary">{statusConfig.label}</Text>
-          </View>
-          <Text className="text-lg font-bold text-mavecam-primary">{total.toLocaleString()} FCFA</Text>
+        <View style={styles.rowBetween}>
+          <Badge
+            label={t(getOrderStatusLabelKey(order.status, order.delivery_method))}
+            tone={getOrderStatusTone(order)}
+          />
+          <AppText variant="sectionTitle" color="link">{Number(order.total).toLocaleString()} FCFA</AppText>
         </View>
-
-        {order.status === 'delivered' && (
-          <TouchableOpacity
-            className={`mb-3 py-2 rounded-lg items-center ${isConfirming ? 'bg-gray-300' : 'bg-mavecam-primary'}`}
-            disabled={isConfirming}
-            onPress={() => handleConfirmReceipt(order)}
-          >
-            {isConfirming ? (
-              <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
-            ) : (
-              <Text className="text-white text-sm font-semibold">{t('confirmReceiptAction')}</Text>
-            )}
-          </TouchableOpacity>
-        )}
-
-        <View className="flex-row flex-wrap gap-3">
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="cube-outline" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text className="text-sm text-gray-light">
-              {order.total_bags} {t(order.total_bags > 1 ? 'bags' : 'bag')}
-            </Text>
-          </View>
-          <View className="flex-row items-center gap-2">
-            <Ionicons
-              name={order.delivery_method === 'home' ? 'home-outline' : 'storefront-outline'}
-              size={16}
-              color={MAVECAM_COLORS.GRAY_LIGHT}
+        <View style={styles.badges}>
+          <Badge label={`${order.total_bags} ${t(order.total_bags > 1 ? 'bags' : 'bag')}`} />
+          <Badge label={t(order.delivery_method === 'home' ? 'homeDelivery' : 'pickupStore')} />
+          {order.is_free_delivery ? <Badge label={t('free')} tone="success" /> : null}
+        </View>
+        {canConfirmOrderReceipt(order) ? (
+          <View style={styles.confirmationAction}>
+            <AppText variant="helper" color="warning">{t('orderConfirmationPendingHelp')}</AppText>
+            <Button
+              label={t(getOrderReceiptActionLabelKey(order))}
+              loading={confirmingOrderId === order.id}
+              disabled={Boolean(confirmingOrderId) && confirmingOrderId !== order.id}
+              onPress={() => handleConfirmReceipt(order)}
             />
-            <Text className="text-sm text-gray-light">
-              {t(order.delivery_method === 'home' ? 'homeDelivery' : 'pickupStore')}
-            </Text>
           </View>
-          {order.is_free_delivery && (
-            <View className="flex-row items-center bg-cream px-2 py-1 rounded-full gap-1.5">
-              <Ionicons name="gift-outline" size={16} color={MAVECAM_COLORS.SUCCESS} />
-              <Text className="text-xs font-semibold text-mavecam-primary">{t('free')}</Text>
-            </View>
-          )}
-        </View>
+        ) : null}
 
-        {isExpanded && (
-          <View className="mt-3">
-            <View className="h-px bg-[#f1f5f9] my-4" />
-
-            <Text className="text-sm font-semibold text-gray-dark mb-3">{t('orderItems')}</Text>
-            {order.items.map((item, index) => (
-              <View key={index} className="flex-row justify-between mb-3">
-                <View className="flex-1 mr-3">
-                  <Text className="text-[10px] text-gray-light font-semibold mb-1">
-                    {item.product_brand.toUpperCase()}
-                  </Text>
-                  <Text className="text-sm text-gray-dark mb-1" numberOfLines={2}>
-                    {item.product_name}
-                  </Text>
-                  <Text className="text-xs text-gray-light">
-                    {item.product_package_weight}kg - {item.quantity}x
-                  </Text>
+        {expanded ? (
+          <View style={styles.details}>
+            <Divider />
+            <AppText variant="bodyStrong">{t('orderItems')}</AppText>
+            {order.items.map((line) => (
+              <View key={`${line.product_name}-${line.quantity}`} style={styles.rowBetween}>
+                <View style={styles.flex}>
+                  <AppText variant="caption" color="muted">{line.product_brand.toUpperCase()}</AppText>
+                  <AppText numberOfLines={2}>{getProductDisplayName(line.product_name, t('catfish'))}</AppText>
+                  <AppText variant="caption" color="muted">{line.product_package_weight}kg · {line.quantity}x</AppText>
                 </View>
-                <View className="items-end">
-                  <Text className="text-xs text-gray-light mb-1">
-                    {parseFloat(item.unit_price).toLocaleString()} FCFA
-                  </Text>
-                  <Text className="text-sm font-semibold text-mavecam-primary">
-                    {parseFloat(item.line_total).toLocaleString()} FCFA
-                  </Text>
-                </View>
+                <AppText variant="bodyStrong" color="link">{Number(line.line_total).toLocaleString()} FCFA</AppText>
               </View>
             ))}
-
-            <View className="h-px bg-[#f1f5f9] my-4" />
-
-            <View className="gap-2">
-              <View className="flex-row justify-between items-center">
-                <Text className="text-sm text-gray-dark">{t('subtotal')}</Text>
-                <Text className="text-sm font-semibold text-gray-dark">{subtotal.toLocaleString()} FCFA</Text>
-              </View>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-sm text-gray-dark">{t('deliveryFee')}</Text>
-                {deliveryFee === 0 ? (
-                  <Text className="text-sm font-semibold text-mavecam-primary">{t('free')}</Text>
-                ) : (
-                  <Text className="text-sm font-semibold text-gray-dark">{deliveryFee.toLocaleString()} FCFA</Text>
-                )}
-              </View>
-              <View className="flex-row justify-between items-center mt-2 pt-2 border-t border-[#f1f5f9]">
-                <Text className="text-base font-bold text-gray-dark">{t('total')}</Text>
-                <Text className="text-lg font-bold text-mavecam-primary">{total.toLocaleString()} FCFA</Text>
-              </View>
-            </View>
-
-            {order.delivery_method === 'home' && (
-              <View className="mt-4">
-                <View className="h-px bg-[#f1f5f9] my-3" />
-                <Text className="text-sm font-semibold text-gray-dark mb-2">{t('deliveryAddress')}</Text>
-                <View className="bg-cream p-3 rounded-lg">
-                  <Text className="text-sm font-semibold text-gray-dark mb-1">{order.delivery_name}</Text>
-                  <Text className="text-xs text-gray-light mb-2">{order.delivery_phone}</Text>
-                  <Text className="text-xs text-gray-dark">{order.delivery_full_address}, {order.delivery_city}</Text>
-                  <Text className="text-xs text-gray-dark">{order.delivery_region}</Text>
-                </View>
-              </View>
-            )}
-
-            {order.delivery_method === 'pickup' && order.pickup_location && (
-              <View className="mt-4">
-                <View className="h-px bg-[#f1f5f9] my-3" />
-                <Text className="text-sm font-semibold text-gray-dark mb-2">{t('pickupPoint')}</Text>
-                <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2">
-                  <Ionicons name="location" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-                  <Text className="text-sm font-semibold text-mavecam-primary">
-                    {t('pickupLocationPrefix')} {order.pickup_location === 'ndokoti' ? 'Ndokoti' : 'Ndogpasi'}
-                  </Text>
-                </View>
-              </View>
-            )}
+            <Divider />
+            <AmountRow label={t('subtotal')} value={`${Number(order.subtotal).toLocaleString()} FCFA`} />
+            <AmountRow label={t('deliveryFee')} value={deliveryFee === 0 ? t('free') : `${deliveryFee.toLocaleString()} FCFA`} />
+            <AmountRow label={t('total')} value={`${Number(order.total).toLocaleString()} FCFA`} strong />
+            {order.delivery_method === 'home' ? (
+              <Card style={styles.address}>
+                <AppText variant="bodyStrong">{t('deliveryAddress')}</AppText>
+                <AppText>{order.delivery_name}</AppText>
+                <AppText variant="caption" color="muted">{order.delivery_phone}</AppText>
+                <AppText variant="caption">{order.delivery_full_address}, {order.delivery_city}</AppText>
+                <AppText variant="caption">{order.delivery_region}</AppText>
+              </Card>
+            ) : order.pickup_location ? (
+              <Card style={styles.address}>
+                <AppText variant="bodyStrong">{t('pickupPoint')}</AppText>
+                <AppText color="link">{t('pickupLocationPrefix')} {order.pickup_location === 'ndokoti' ? 'Ndokoti' : 'Ndogpasi'}</AppText>
+              </Card>
+            ) : null}
           </View>
-        )}
-      </TouchableOpacity>
+        ) : null}
+      </Card>
     );
-  };
+  }, [expandedOrderId, confirmingOrderId, formatDateTime, handleConfirmReceipt, t]);
 
-  const renderStatisticsHeader = () => {
-    if (!statistics) return null;
-
-    const totalSpent = parseFloat(statistics.total_spent);
-    const avgOrderValue = parseFloat(statistics.average_order_value);
-
-    return (
-      <View className="bg-white rounded-xl p-4 mb-4">
-        <Text className="text-lg font-bold text-gray-dark mb-3">{t('orderStatistics')}</Text>
-        <View className="flex-row flex-wrap gap-3">
-          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="receipt-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-mavecam-primary mt-2">{statistics.total_orders}</Text>
-            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalOrders')}</Text>
+  const listHeader = (
+    <View style={styles.listHeader}>
+      {dashboardError && displayItems.length > 0 ? <InlineAlert tone="error" message={dashboardError} /> : null}
+      {displayStatistics ? (
+        <DashboardSection title={t('orderStatistics')} lastSyncedAt={lastSyncedAt}>
+          <DashboardHeroCard
+            label={t('totalSpent')}
+            value={formatDashboardCurrency(displayStatistics.total_spent, locale)}
+            unit={t('dashboardDirectProductionCostUnit')}
+            unavailableLabel={t('dashboardDataUnavailable')}
+          />
+          <View style={styles.metricGrid}>
+            <DashboardMetricCard
+              value={formatDashboardNumber(displayStatistics.total_orders, locale, { maximumFractionDigits: 0 })}
+              label={t('totalOrders')}
+              tone="neutral"
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
+            <DashboardMetricCard
+              value={formatDashboardNumber(sacksToReceive, locale, { maximumFractionDigits: 0 })}
+              label={t('sacksToReceive')}
+              tone="attention"
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
+            <DashboardMetricCard
+              value={formatDashboardNumber(displayStatistics.total_bags_ordered, locale, { maximumFractionDigits: 0 })}
+              label={t('totalBags')}
+              tone="info"
+              layout="fullWidthCompact"
+              unavailableLabel={t('dashboardDataUnavailable')}
+            />
           </View>
-          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="wallet-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-mavecam-primary mt-2">{totalSpent.toLocaleString()}</Text>
-            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalSpent')}</Text>
-          </View>
-          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-mavecam-primary mt-2">{statistics.total_bags_ordered}</Text>
-            <Text className="text-xs text-gray-light mt-1 text-center">{t('totalBags')}</Text>
-          </View>
-          <View className="flex-1 min-w-[45%] bg-cream rounded-lg p-4 items-center">
-            <Ionicons name="trending-up-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-xl font-bold text-mavecam-primary mt-2">{avgOrderValue.toLocaleString()}</Text>
-            <Text className="text-xs text-gray-light mt-1 text-center">{t('averageOrder')}</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderEmptyState = () => (
-    <View className="py-16 items-center">
-      <Ionicons name="receipt-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
-      <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noOrdersYet')}</Text>
-      <Text className="mt-3 text-base text-gray-light text-center px-10">{t('noOrdersDescription')}</Text>
-      <TouchableOpacity
-        className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-        onPress={() => navigation.navigate('ProductCatalog')}
-      >
-        <Ionicons name="albums-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-        <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
-      </TouchableOpacity>
+        </DashboardSection>
+      ) : null}
     </View>
   );
 
   return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View className="flex-1 items-center">
-          <Text className="text-2xl font-bold text-gray-dark">{t('ordersHistory')}</Text>
-          <Text className="text-sm text-gray-light mt-1">
-            {ordersList.length} {t(ordersList.length > 1 ? 'orders' : 'order')}
-          </Text>
-        </View>
-        <View className="w-10" />
-      </View>
-
-      {loading && !refreshing ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-base text-gray-light">{t('loading')}</Text>
-        </View>
-      ) : error ? (
-        <View className="flex-1 items-center justify-center px-10 py-10">
-          <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
-          <TouchableOpacity
-            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
-            onPress={() => {
-              dispatch(fetchOrders());
-              dispatch(fetchOrderStatistics());
-            }}
-          >
-            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
-          </TouchableOpacity>
-        </View>
+    <View style={styles.screen}>
+      <AppHeader
+        title={t('cycleOrders')}
+        subtitle={cycleName ?? (cycleId ? t('orderCount', { count: displayItems.length }) : undefined)}
+        onBack={() => navigation.goBack()}
+        backLabel={t('back')}
+      />
+      {!cycleId ? (
+        <EmptyState
+          title={t('noCycleSelected')}
+          message={t('ordersRequireCycle')}
+          actionLabel={t('back')}
+          onAction={() => navigation.goBack()}
+        />
+      ) : dashboardLoading && displayItems.length === 0 ? <LoadingState message={t('loading')} /> : dashboardError && displayItems.length === 0 ? (
+        <ErrorState title={dashboardError} actionLabel={t('retry')} onAction={() => void loadOrders('refresh')} />
       ) : (
         <FlatList
-          data={ordersList}
-          renderItem={renderOrderCard}
+          data={displayItems}
+          renderItem={renderOrder}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
-          ListHeaderComponent={renderStatisticsHeader}
-          ListEmptyComponent={renderEmptyState}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[MAVECAM_COLORS.GREEN_PRIMARY]}
-              tintColor={MAVECAM_COLORS.GREEN_PRIMARY}
-            />
-          }
-          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={<EmptyState title={t('noOrdersYet')} message={t('noOrdersDescription')} actionLabel={t('browseCatalog')} onAction={() => navigation.navigate('ProductCatalog')} />}
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={dashboardRefreshing} onRefresh={handleRefresh} colors={[colors.brand.primary]} tintColor={colors.brand.primary} />}
         />
       )}
     </View>
   );
 }
 
+function AmountRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return <View style={styles.rowBetween}><AppText variant={strong ? 'bodyStrong' : 'body'}>{label}</AppText><AppText variant={strong ? 'cardTitle' : 'bodyStrong'} color={strong ? 'link' : 'primary'}>{value}</AppText></View>;
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surface.dashboard },
+  content: { padding: spacing[4], gap: spacing[3] },
+  flex: { flex: 1 },
+  orderCard: { marginBottom: spacing[3], gap: spacing[3] },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  confirmationAction: { gap: spacing[2] },
+  details: { gap: spacing[3] },
+  address: { backgroundColor: colors.surface.selected, gap: spacing[1] },
+  listHeader: { gap: spacing[3], marginBottom: spacing[4] },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+});

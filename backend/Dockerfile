@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-2.0-dev \
     libffi-dev \
     libcairo2-dev \
+    fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -41,7 +42,7 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DJANGO_SETTINGS_MODULE=mavecam_api.settings.production
+    DJANGO_SETTINGS_MODULE=aquacare_api.settings.production
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
@@ -52,6 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangocairo-1.0-0 \
     libgdk-pixbuf-2.0-0 \
     libcairo2 \
+    fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 

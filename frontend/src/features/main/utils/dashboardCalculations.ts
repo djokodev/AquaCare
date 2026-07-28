@@ -5,7 +5,7 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 // Terrain-validated selling prices (FCFA/kg) — source: Yaoundé field audit 2026-02
 const SELLING_PRICE_BY_SPECIES: Record<string, number> = {
-  tilapia: 1800,
+  tilapia: 2800,
   clarias: 2000,
 };
 

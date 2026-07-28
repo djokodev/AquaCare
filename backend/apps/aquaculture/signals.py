@@ -1,5 +1,5 @@
 """
-Signaux Django pour le module aquaculture de MAVECAM AquaCare.
+Signaux Django pour le module aquaculture de AquaCare.
 
 Architecture événementielle légère : ce fichier sert uniquement de DÉCLENCHEUR.
 TOUTE la logique métier est déléguée aux services appropriés.
@@ -27,6 +27,19 @@ from .services.sync_service import is_sync_in_progress
 # =============================================================================
 # SIGNALS PRODUCTIONCY CLE
 # =============================================================================
+
+@receiver(pre_save, sender=ProductionCycle)
+def track_previous_cycle_status(sender, instance, **kwargs):
+    """
+    Memorise le statut precedent pour detecter une vraie transition vers `harvested`.
+    """
+    previous_status = None
+    if instance.pk:
+        previous_status = ProductionCycle.objects.filter(id=instance.pk).values_list(
+            'status', flat=True
+        ).first()
+    instance._previous_status = previous_status
+
 
 @receiver(pre_save, sender=ProductionCycle)
 def calculate_initial_biomass(sender, instance, **kwargs):
@@ -77,10 +90,10 @@ def create_cycle_metrics(sender, instance, created, **kwargs):
         NotificationService.create_notification(
             user=instance.farm_profile.user,
             notification_type='cycle_milestone',
-            title=f"Nouveau cycle demarre - {instance.cycle_name}",
+            title=f"Nouveau cycle démarré, {instance.cycle_name}",
             message=(
-                f"Votre cycle {instance.cycle_name} a ete cree avec succes. "
-                f"Nous vous accompagnerons tout au long de ces {instance.species}."
+                f"Votre cycle {instance.cycle_name} a été créé avec succès. "
+                f"Nous vous accompagnerons tout au long de cette production."
             ),
             content_object=instance,
             metadata={'cycle_id': str(instance.id)},
@@ -94,7 +107,7 @@ def create_cycle_metrics(sender, instance, created, **kwargs):
             NotificationService.create_notification(
                 user=instance.farm_profile.user,
                 notification_type='sampling_reminder',
-                title=f"Échantillonnage - {instance.cycle_name}",
+                title=f"Échantillonnage, {instance.cycle_name}",
                 message="Planifiez la première pesée pour suivre la croissance.",
                 content_object=instance,
                 metadata={'cycle_id': str(instance.id)},
@@ -112,12 +125,14 @@ def check_cycle_completion(sender, instance, **kwargs):
 
     DÉLÉGATION : NotificationService pour notifications
     """
-    if instance.status == 'harvested' and instance.end_date:
+    previous_status = getattr(instance, '_previous_status', None)
+    just_harvested = previous_status != 'harvested'
+    if instance.status == 'harvested' and instance.end_date and just_harvested:
         # Notification de clôture du cycle
         NotificationService.create_notification(
             user=instance.farm_profile.user,
             notification_type='cycle_milestone',
-            title=f"Cycle terminé - {instance.cycle_name}",
+            title=f"Cycle terminé, {instance.cycle_name}",
             message=(
                 f"Félicitations ! Cycle {instance.cycle_name} récolté. "
                 f"Taux de survie: {float(instance.survival_rate or 0):.1f}%, FCR: {float(instance.fcr or 0):.2f}."
@@ -185,6 +200,9 @@ def recalculate_cycle_on_log_delete(sender, instance, **kwargs):
     PROTECTION : Évite le recalcul si le cycle est en cours de suppression
     (cas de suppression CASCADE depuis ProductionCycle).
     """
+    if getattr(instance, "_skip_automatic_metrics_recalculation", False):
+        return
+
     try:
         cycle = instance.cycle
 

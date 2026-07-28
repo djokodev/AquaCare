@@ -1,8 +1,7 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Alert, FlatList, Image, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -16,8 +15,8 @@ import {
   fetchDeliveryFeePreview,
   createOrder,
 } from '@/features/commerce/store/commerceSlice';
-import { CartItem, DeliveryMethod, PickupLocation } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { loadUserProfile } from '@/features/auth/store/authSlice';
+import { CartItem, DeliveryAddressIncompleteError, DeliveryMethod, PickupLocation } from '@/types/commerce';
 import {
   DELIVERY_METHODS,
   FREE_DELIVERY_THRESHOLD,
@@ -26,8 +25,27 @@ import {
 import SelectField from '@/components/SelectField';
 import logger from '@/utils/logger';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import { RouteProp, useRoute } from '@react-navigation/native';
+import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import { parseApiError, sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
+import {
+  AppHeader,
+  AppText,
+  Badge,
+  Button,
+  Card,
+  Divider,
+  EmptyState,
+  IconButton,
+  InlineAlert,
+  LoadingState,
+  SelectableCard,
+} from '@/components/ui';
+import { colors, radii, spacing } from '@/theme';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Cart'>;
+type RoutePropType = RouteProp<RootStackParamList, 'Cart'>;
 
 interface AxiosApiError {
   response?: { data?: { message?: string; error?: string; detail?: string } };
@@ -35,34 +53,106 @@ interface AxiosApiError {
 }
 
 const extractErrorMessage = (error: unknown, fallback: string): string => {
-  if (typeof error === 'string') return error;
+  if (typeof error === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(error);
+    return sanitized === 'UNKNOWN_ERROR' || sanitized.startsWith('AUTH_') ? fallback : sanitized;
+  }
   const err = error as AxiosApiError;
   const data = err?.response?.data;
-  if (typeof data?.message === 'string') return data.message;
-  if (typeof data?.error === 'string') return data.error;
-  if (typeof data?.detail === 'string') return data.detail;
-  if (typeof err?.message === 'string') return err.message;
+  const shouldUseFallback = (message: string): boolean =>
+    message === 'UNKNOWN_ERROR' || message.startsWith('AUTH_');
+  if (typeof data?.message === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(data.message);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
+  }
+  if (typeof data?.error === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(data.error);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
+  }
+  if (typeof data?.detail === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(data.detail);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
+  }
+  if (typeof err?.message === 'string') {
+    const sanitized = sanitizeUserFacingErrorMessage(err.message);
+    return shouldUseFallback(sanitized) ? fallback : sanitized;
+  }
   return fallback;
+};
+
+const DELIVERY_ADDRESS_FIELD_LABELS: Record<string, string> = {
+  delivery_name: 'deliveryRecipientName',
+  delivery_phone: 'deliveryPhone',
+  delivery_region: 'deliveryRegion',
+  delivery_city: 'deliveryCity',
+  neighborhood: 'deliveryNeighborhood',
 };
 
 export default function CartScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RoutePropType>();
   const dispatch = useDispatch<AppDispatch>();
   const generateClientUuid = (): string => {
-    return (globalThis.crypto as Crypto).randomUUID();
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID();
+    }
+    // Fallback UUID v4 (RFC 4122) pour React Native / Expo Go
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+    });
   };
 
   const { cart } = useSelector((state: RootState) => state.commerce);
   const { user, farmProfile } = useSelector((state: RootState) => state.auth);
+  const currentCycle = useSelector((state: RootState) => state.aquaculture.currentCycle);
+  const routeCycleId = route.params?.cycleId;
+  const storeNavigationParams = routeCycleId ? { cycleId: routeCycleId, source: 'store' as const } : undefined;
+  const storeCycleId = routeCycleId || currentCycle?.id;
   const { items: cartItems, delivery_method, pickup_location, deliveryPreview, previewLoading } = cart;
 
+  useFocusEffect(
+    useCallback(() => {
+      void dispatch(loadUserProfile());
+    }, [dispatch])
+  );
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = React.useRef(false);
 
   const cartItemsCount = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
     [cartItems]
   );
+
+  const homeDeliveryMissingFields = useMemo(() => {
+    if (delivery_method !== 'home' || !user) {
+      return [];
+    }
+
+    const fields = [
+      ['delivery_name', user.full_name || user.display_name],
+      ['delivery_phone', user.phone_number],
+      ['delivery_region', user.region],
+      ['delivery_city', user.city],
+      ['neighborhood', user.neighborhood],
+    ] as const;
+
+    return fields
+      .filter(([, value]) => !String(value || '').trim())
+      .map(([field]) => t(DELIVERY_ADDRESS_FIELD_LABELS[field] || field));
+  }, [delivery_method, t, user]);
+
+  const handleCompleteDeliveryAddress = useCallback(() => {
+    navigation.push('MainTabs', {
+      screen: 'ProfileStack',
+      params: {
+        screen: 'ProfileMain',
+        params: { startEditing: true, returnToCart: true },
+      },
+    });
+  }, [navigation]);
 
   const handleFetchPreview = useCallback(async () => {
     if (cartItems.length === 0) return;
@@ -125,6 +215,11 @@ export default function CartScreen() {
       return;
     }
 
+    if (delivery_method === 'home' && homeDeliveryMissingFields.length > 0) {
+      handleCompleteDeliveryAddress();
+      return;
+    }
+
     Alert.alert(
       t('confirmOrder'),
       t('confirmOrderMessage', {
@@ -136,12 +231,15 @@ export default function CartScreen() {
         {
           text: t('confirm'),
           onPress: async () => {
+            if (submittingRef.current) return;
+            submittingRef.current = true;
             setIsSubmitting(true);
             try {
               const orderData = {
                 items: cartItems.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
                 delivery_method,
                 pickup_location: delivery_method === 'pickup' ? pickup_location : undefined,
+                ...(storeCycleId ? { production_cycle_id: storeCycleId } : {}),
                 client_uuid: generateClientUuid(),
                 created_offline: false,
               };
@@ -154,21 +252,46 @@ export default function CartScreen() {
                   text: t('viewOrder'),
                   onPress: () => {
                     dispatch(clearCart());
-                    navigation.navigate('OrdersHistory');
+                    navigation.navigate('OrdersHistory', storeNavigationParams);
                   },
                 },
                 {
                   text: t('ok'),
                   onPress: () => {
                     dispatch(clearCart());
-                    navigation.navigate('ProductCatalog');
+                    navigation.navigate('ProductCatalog', storeNavigationParams);
                   },
                 },
               ]);
             } catch (error) {
-              logger.error('[CartScreen] Order error');
-              Alert.alert(t('error'), extractErrorMessage(error, t('orderCreationError')));
+              const structuredError = error as Partial<DeliveryAddressIncompleteError>;
+              const parsedError = parseApiError(error);
+              const rawError = parsedError.rawError as Record<string, unknown> | null;
+              const missingFields = structuredError.code === 'delivery_address_incomplete'
+                ? structuredError.missing_fields
+                : parsedError.code === 'delivery_address_incomplete'
+                  ? rawError?.missing_fields
+                  : null;
+              if (Array.isArray(missingFields)) {
+                const labels = missingFields
+                  .filter((field): field is string => typeof field === 'string')
+                  .map((field) => t(DELIVERY_ADDRESS_FIELD_LABELS[field] || field))
+                  .join(', ');
+                Alert.alert(
+                  t('deliveryAddressIncompleteTitle'),
+                  t('deliveryAddressIncompleteMessage', { fields: labels }),
+                  [
+                    { text: t('cancel'), style: 'cancel' },
+                    { text: t('completeDeliveryAddress'), onPress: handleCompleteDeliveryAddress },
+                  ],
+                );
+                return;
+              }
+              const msg = extractErrorMessage(error, t('orderCreationError'));
+              logger.warn('[CartScreen] Order error:', msg);
+              Alert.alert(t('error'), msg);
             } finally {
+              submittingRef.current = false;
               setIsSubmitting(false);
             }
           },
@@ -178,270 +301,170 @@ export default function CartScreen() {
   };
 
   const handleBackToCatalog = useCallback(() => {
-    navigation.navigate('ProductCatalog');
-  }, [navigation]);
+    navigation.navigate('ProductCatalog', storeNavigationParams);
+  }, [navigation, storeNavigationParams]);
 
   const renderCartItem = useCallback(({ item }: { item: CartItem }) => {
     const { product, quantity } = item;
-    const lineTotal = parseFloat(product.price_per_package) * quantity;
-
+    const lineTotal = Number(product.price_per_package) * quantity;
     return (
-      <View className="bg-white rounded-xl p-4 mb-3">
-        <View className="w-14 h-14 bg-cream rounded-lg items-center justify-center mb-3">
-          <Ionicons name="cube-outline" size={32} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+      <Card variant="outlined" style={styles.itemCard}>
+        <View style={styles.itemHeader}>
+          <View style={styles.brandAsset}><Image source={getProductBrandAsset(product.brand)} style={styles.image} resizeMode="contain" /></View>
+          <View style={styles.flex}>
+            <AppText variant="caption" color="muted">{product.brand.toUpperCase()}</AppText>
+            <AppText variant="bodyStrong" numberOfLines={2}>{getProductDisplayName(product.name, t('catfish'))}</AppText>
+            <AppText variant="caption" color="muted">
+              {product.pellet_size_mm}mm · {product.package_weight_kg}kg
+              {product.protein_percentage ? ` · ${product.protein_percentage}% ${t('protein')}` : ''}
+            </AppText>
+            {item.recommendation_breakdown?.length ? (
+              <AppText variant="caption" color="muted">
+                {t('feedRecommendationBreakdown', {
+                  phases: item.recommendation_breakdown
+                    .map((entry) => `${entry.phase_name}: ${entry.suggested_bags}`)
+                    .join(' · '),
+                })}
+              </AppText>
+            ) : null}
+          </View>
+          <IconButton icon="trash-outline" accessibilityLabel={`${t('remove')} ${product.name}`} variant="danger" onPress={() => handleRemoveItem(product.id, product.name)} />
         </View>
-
-        <View className="mb-3">
-          <Text className="text-xs text-gray-light font-semibold mb-1">{product.brand.toUpperCase()}</Text>
-          <Text className="text-base font-bold text-gray-dark mb-1" numberOfLines={2}>
-            {product.name}
-          </Text>
-          <Text className="text-xs text-gray-light mb-1">
-            {product.pellet_size_mm}mm - {product.package_weight_kg}kg
-            {product.protein_percentage && ` - ${product.protein_percentage}% ${t('protein')}`}
-          </Text>
-          <Text className="text-sm text-mavecam-primary font-semibold">
-            {parseFloat(product.price_per_package).toLocaleString()} FCFA / {t('bag')}
-          </Text>
+        <Divider />
+        <View style={styles.itemFooter}>
+          <View style={styles.quantityRow}>
+            <IconButton icon="remove" accessibilityLabel={t('decreaseQuantity')} disabled={quantity <= 1} onPress={() => handleUpdateQuantity(product.id, quantity - 1)} />
+            <AppText variant="bodyStrong" style={styles.quantity}>{quantity}</AppText>
+            <IconButton icon="add" accessibilityLabel={t('increaseQuantity')} onPress={() => handleUpdateQuantity(product.id, quantity + 1)} />
+          </View>
+          <AppText variant="cardTitle" color="link">{lineTotal.toLocaleString()} FCFA</AppText>
         </View>
-
-        <TouchableOpacity
-          className="absolute top-4 right-4"
-          onPress={() => handleRemoveItem(product.id, product.name)}
-        >
-          <Ionicons name="trash-outline" size={20} color={MAVECAM_COLORS.ERROR} />
-        </TouchableOpacity>
-
-        <View className="flex-row items-center justify-between mb-3">
-          <TouchableOpacity
-            className="p-1"
-            onPress={() => handleUpdateQuantity(product.id, Math.max(1, quantity - 1))}
-            disabled={quantity <= 1}
-          >
-            <Ionicons
-              name="remove-circle-outline"
-              size={28}
-              color={quantity <= 1 ? MAVECAM_COLORS.GRAY_LIGHT : MAVECAM_COLORS.GREEN_PRIMARY}
-            />
-          </TouchableOpacity>
-
-          <Text className="text-lg font-bold text-gray-dark min-w-[40px] text-center">{quantity}</Text>
-
-          <TouchableOpacity
-            className="p-1"
-            onPress={() => handleUpdateQuantity(product.id, quantity + 1)}
-          >
-            <Ionicons name="add-circle-outline" size={28} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          </TouchableOpacity>
-        </View>
-
-        <Text className="text-lg font-bold text-mavecam-primary text-right">{lineTotal.toLocaleString()} FCFA</Text>
-      </View>
+      </Card>
     );
   }, [handleRemoveItem, handleUpdateQuantity, t]);
 
-  const renderListHeader = useCallback(
-    () => (
-      <View className="px-4 py-4">
-        <Text className="text-lg font-bold text-gray-dark mb-3">{t('myProducts')}</Text>
-      </View>
-    ),
-    [t]
-  );
-
-  const renderListFooter = useCallback(
-    () => (
-      <>
-        <View className="bg-white px-4 py-4 mb-3">
-          <Text className="text-lg font-bold text-gray-dark mb-3">{t('deliveryMethod')}</Text>
-
+  const renderListFooter = useCallback(() => (
+    <View style={styles.footerContent}>
+      <Card variant="outlined" style={styles.sectionCard}>
+        <AppText variant="sectionTitle">{t('deliveryMethod')}</AppText>
+        <View style={styles.optionList}>
           {DELIVERY_METHODS.map((method) => (
-            <TouchableOpacity
+            <SelectableCard
               key={method.value}
-              className={`flex-row items-center p-4 rounded-lg border-2 mb-3 gap-3 ${
-                delivery_method === method.value ? 'border-mavecam-primary bg-cream' : 'border-gray-light'
-              }`}
+              selected={delivery_method === method.value}
+              primaryBorder
+              layout="row"
+              accessibilityLabel={t(method.labelKey)}
               onPress={() => handleDeliveryMethodChange(method.value)}
             >
-              <Ionicons
-                name={method.value === 'home' ? 'home-outline' : 'storefront-outline'}
-                size={24}
-                color={
-                  delivery_method === method.value
-                    ? MAVECAM_COLORS.GREEN_PRIMARY
-                    : MAVECAM_COLORS.GRAY_LIGHT
-                }
-              />
-              <Text
-                className={`flex-1 text-base ${
-                  delivery_method === method.value
-                    ? 'text-mavecam-primary font-semibold'
-                    : 'text-gray-dark'
-                }`}
-              >
-                {t(method.labelKey)}
-              </Text>
-              {delivery_method === method.value && (
-                <Ionicons name="checkmark-circle" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-              )}
-            </TouchableOpacity>
+              <AppText variant="bodyStrong" color={delivery_method === method.value ? 'link' : 'primary'}>{t(method.labelKey)}</AppText>
+            </SelectableCard>
           ))}
-
-          {delivery_method === 'pickup' && (
-            <View className="mt-2">
-              <SelectField
-                label={t('selectPickupPoint')}
-                value={pickup_location}
-                onChange={(value) => handlePickupLocationChange(value as PickupLocation)}
-                options={PICKUP_LOCATIONS.map((loc) => ({ label: loc.label, value: loc.value }))}
-                placeholder={t('selectOption')}
-                required
-              />
-            </View>
-          )}
         </View>
-
-        {previewLoading ? (
-          <View className="flex-row items-center justify-center p-5 gap-3">
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <Text className="text-sm text-gray-light">{t('calculatingFees')}</Text>
-          </View>
-        ) : deliveryPreview ? (
-          <View className="bg-white px-4 py-4 mb-3">
-            <Text className="text-lg font-bold text-gray-dark mb-3">{t('orderSummary')}</Text>
-
-            <View className="flex-row justify-between items-center mb-3">
-              <Text className="text-base text-gray-dark">{t('subtotal')}</Text>
-              <Text className="text-base font-semibold text-gray-dark">
-                {parseFloat(deliveryPreview.subtotal).toLocaleString()} FCFA
-              </Text>
-            </View>
-
-            <View className="flex-row justify-between items-center mb-3">
-              <Text className="text-base text-gray-dark">{t('deliveryFee')}</Text>
-              {parseFloat(deliveryPreview.delivery_fee) === 0 ? (
-                <Text className="text-base font-semibold text-mavecam-primary">{t('free')}</Text>
-              ) : (
-                <Text className="text-base font-semibold text-gray-dark">
-                  {parseFloat(deliveryPreview.delivery_fee).toLocaleString()} FCFA
-                </Text>
-              )}
-            </View>
-
-            {deliveryPreview.free_delivery_threshold_reached && (
-              <View className="flex-row items-center bg-cream p-3 rounded-lg gap-2 mb-3">
-                <Ionicons name="checkmark-circle" size={20} color={MAVECAM_COLORS.SUCCESS} />
-                <Text className="text-sm font-semibold text-mavecam-primary">
-                  {t('freeDeliveryApplied')}
-                </Text>
-              </View>
-            )}
-
-            {user?.region?.trim().toLowerCase() === 'littoral' &&
-              delivery_method === 'home' &&
-              !deliveryPreview.free_delivery_threshold_reached &&
-              deliveryPreview.total_bags < FREE_DELIVERY_THRESHOLD && (
-                <View className="flex-row items-center bg-[#e0f2fe] p-3 rounded-lg gap-2 mb-3">
-                  <Ionicons name="information-circle" size={20} color={MAVECAM_COLORS.INFO} />
-                  <Text className="flex-1 text-sm text-mavecam-primary">
-                    {t('freeDeliveryEncouragement', {
-                      remaining: FREE_DELIVERY_THRESHOLD - deliveryPreview.total_bags,
-                    })}
-                  </Text>
-                </View>
-              )}
-
-            <View className="h-px bg-gray-light my-3" />
-
-            <View className="flex-row justify-between items-center mb-2">
-              <Text className="text-lg font-bold text-gray-dark">{t('total')}</Text>
-              <Text className="text-xl font-bold text-mavecam-primary">
-                {parseFloat(deliveryPreview.total).toLocaleString()} FCFA
-              </Text>
-            </View>
-
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="cube-outline" size={16} color={MAVECAM_COLORS.GRAY_LIGHT} />
-              <Text className="text-sm text-gray-light">
-                {deliveryPreview.total_bags} {t(deliveryPreview.total_bags > 1 ? 'bags' : 'bag')}
-              </Text>
-            </View>
-          </View>
+        {delivery_method === 'home' && homeDeliveryMissingFields.length > 0 ? (
+          <>
+            <InlineAlert
+              tone="warning"
+              title={t('deliveryAddressIncompleteTitle')}
+              message={t('deliveryAddressIncompleteMessage', {
+                fields: homeDeliveryMissingFields.join(', '),
+              })}
+            />
+            <Button
+              label={t('completeDeliveryAddress')}
+              variant="outline"
+              onPress={handleCompleteDeliveryAddress}
+            />
+          </>
         ) : null}
-      </>
-    ),
-    [
-      deliveryPreview,
-      delivery_method,
-      pickup_location,
-      previewLoading,
-      t,
-      user?.region,
-    ]
-  );
+        {delivery_method === 'pickup' ? (
+          <SelectField
+            label={t('selectPickupPoint')}
+            value={pickup_location}
+            onChange={(value) => handlePickupLocationChange(value as PickupLocation)}
+            options={PICKUP_LOCATIONS.map((location) => ({ label: location.label, value: location.value }))}
+            placeholder={t('selectOption')}
+            required
+          />
+        ) : null}
+      </Card>
 
-  if (cartItems.length === 0) {
-    return (
-      <View className="flex-1 bg-cream">
-        <View className="flex-1 justify-center items-center px-10">
-          <Ionicons name="cart-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
-          <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('emptyCart')}</Text>
-          <Text className="mt-3 text-base text-gray-light text-center">{t('emptyCartDescription')}</Text>
-          <TouchableOpacity
-            className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-            onPress={handleBackToCatalog}
-          >
-            <Ionicons name="albums-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-            <Text className="text-white text-base font-semibold">{t('browseCatalog')}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+      {previewLoading ? <LoadingState compact message={t('calculatingFees')} /> : deliveryPreview ? (
+        <Card variant="outlined" style={styles.sectionCard}>
+          <AppText variant="sectionTitle">{t('orderSummary')}</AppText>
+          <SummaryRow label={t('subtotal')} value={`${Number(deliveryPreview.subtotal).toLocaleString()} FCFA`} />
+          <SummaryRow label={t('deliveryFee')} value={Number(deliveryPreview.delivery_fee) === 0 ? t('free') : `${Number(deliveryPreview.delivery_fee).toLocaleString()} FCFA`} />
+          {deliveryPreview.free_delivery_threshold_reached ? <InlineAlert tone="success" message={t('freeDeliveryApplied')} /> : null}
+          {user?.region?.trim().toLowerCase() === 'littoral' && delivery_method === 'home' && !deliveryPreview.free_delivery_threshold_reached && deliveryPreview.total_bags < FREE_DELIVERY_THRESHOLD ? (
+            <InlineAlert compact tone="info" message={t('freeDeliveryEncouragement', { remaining: FREE_DELIVERY_THRESHOLD - deliveryPreview.total_bags })} />
+          ) : null}
+          <Divider />
+          <SummaryRow label={t('total')} value={`${Number(deliveryPreview.total).toLocaleString()} FCFA`} prominent />
+          <AppText variant="caption" color="muted">{deliveryPreview.total_bags} {t(deliveryPreview.total_bags > 1 ? 'bags' : 'bag')}</AppText>
+        </Card>
+      ) : null}
+    </View>
+  ), [
+    deliveryPreview,
+    delivery_method,
+    handleCompleteDeliveryAddress,
+    homeDeliveryMissingFields,
+    pickup_location,
+    previewLoading,
+    t,
+    user?.region,
+  ]);
 
   return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View className="flex-1 items-center">
-          <Text className="text-2xl font-bold text-gray-dark">{t('cart')}</Text>
-          <Text className="text-sm text-gray-light mt-1">
-            {cartItems.length} {t(cartItems.length > 1 ? 'products' : 'product')}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={handleClearCart}>
-          <Ionicons name="trash-outline" size={24} color={MAVECAM_COLORS.ERROR} />
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={cartItems}
-        keyExtractor={(item) => item.product.id}
-        renderItem={renderCartItem}
-        ListHeaderComponent={renderListHeader}
-        ListFooterComponent={renderListFooter}
-        contentContainerStyle={{ paddingBottom: 16 }}
-        showsVerticalScrollIndicator={false}
+    <View style={styles.screen}>
+      <AppHeader
+        title={t('cart')}
+        subtitle={cartItems.length > 0 ? `${cartItems.length} ${t(cartItems.length > 1 ? 'products' : 'product')}` : undefined}
+        onBack={() => navigation.goBack()}
+        backLabel={t('back')}
+        rightAction={cartItems.length > 0 ? <IconButton icon="trash-outline" accessibilityLabel={t('clear')} variant="ghost" tone="inverse" onPress={handleClearCart} /> : undefined}
       />
-
-      <View className="bg-white p-4 shadow">
-        <TouchableOpacity
-          className={`flex-row items-center justify-center py-4 rounded-lg gap-3 ${
-            isSubmitting || !deliveryPreview ? 'bg-mavecam-primary/60' : 'bg-mavecam-primary'
-          }`}
-          onPress={handleConfirmOrder}
-          disabled={isSubmitting || !deliveryPreview}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
-          ) : (
-            <Ionicons name="checkmark-circle-outline" size={24} color={MAVECAM_COLORS.WHITE} />
-          )}
-          <Text className="text-white text-lg font-bold">{t('confirmOrder')}</Text>
-        </TouchableOpacity>
-      </View>
+      {cartItems.length === 0 ? (
+        <EmptyState title={t('emptyCart')} message={t('emptyCartDescription')} actionLabel={t('browseCatalog')} onAction={handleBackToCatalog} />
+      ) : (
+        <>
+          <FlatList
+            data={cartItems}
+            keyExtractor={(item) => item.product.id}
+            renderItem={renderCartItem}
+            ListHeaderComponent={<AppText variant="sectionTitle" style={styles.listTitle}>{t('myProducts')}</AppText>}
+            ListFooterComponent={renderListFooter}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+          />
+          <View style={styles.stickyFooter}>
+            <Button label={t('confirmOrder')} iconLeft="checkmark-circle-outline" loading={isSubmitting} disabled={!deliveryPreview} onPress={handleConfirmOrder} />
+          </View>
+        </>
+      )}
     </View>
   );
 }
+
+function SummaryRow({ label, value, prominent = false }: { label: string; value: string; prominent?: boolean }) {
+  return <View style={styles.summaryRow}><AppText variant={prominent ? 'bodyStrong' : 'body'}>{label}</AppText><AppText variant={prominent ? 'cardTitle' : 'bodyStrong'} color={prominent ? 'link' : 'primary'}>{value}</AppText></View>;
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surface.page },
+  flex: { flex: 1 },
+  list: { padding: spacing[4], paddingBottom: spacing[6] },
+  listTitle: { marginBottom: spacing[3] },
+  itemCard: { marginBottom: spacing[3] },
+  itemHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginBottom: spacing[3] },
+  brandAsset: { width: 56, height: 56, borderRadius: radii.md, backgroundColor: colors.surface.selected, alignItems: 'center', justifyContent: 'center' },
+  image: { width: 40, height: 40 },
+  itemFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing[3] },
+  quantityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  quantity: { minWidth: 28, textAlign: 'center' },
+  footerContent: { gap: spacing[3], marginTop: spacing[3] },
+  sectionCard: { gap: spacing[3] },
+  optionList: { gap: spacing[2] },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  stickyFooter: { padding: spacing[4], backgroundColor: colors.surface.card, borderTopWidth: 1, borderTopColor: colors.border.subtle },
+});

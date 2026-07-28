@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, AppState, TouchableOpacity } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
@@ -145,10 +145,27 @@ describe('features/chat/screens/ChatScreen', () => {
     expect(getByText('chatFetchConversationError')).toBeTruthy();
   });
 
+  it('relance le chargement initial depuis erreur', async () => {
+    mockState.chat.conversation = null;
+    mockState.chat.conversationError = 'chatFetchConversationError';
+    const screen = render(<ChatScreen />);
+    const callsBeforeRetry = (fetchConversation as unknown as jest.Mock).mock.calls.length;
+    fireEvent.press(screen.getByText('retry'));
+    await waitFor(() => expect(fetchConversation).toHaveBeenCalledTimes(callsBeforeRetry + 1));
+  });
+
+  it('conserve les messages visibles pendant une erreur de refresh', () => {
+    mockState.chat.messages = [{ id: 'msg-visible', conversation: 'conv-1', sender_type: 'admin', content: 'Message conservé', media_type: 'none', media_url: null, is_read: false, created_offline: false, created_at: '2026-02-22T10:00:00Z', updated_at: '2026-02-22T10:00:00Z' }];
+    mockState.chat.messagesError = 'chatFetchMessagesError';
+    const screen = render(<ChatScreen />);
+    expect(screen.getByText('Message conservé')).toBeTruthy();
+    expect(screen.getByText('chatFetchMessagesError')).toBeTruthy();
+  });
+
   it('envoie un message texte avec état offline', async () => {
-    const { getByPlaceholderText, UNSAFE_getAllByType } = render(<ChatScreen />);
+    const { getByPlaceholderText, getByLabelText } = render(<ChatScreen />);
     fireEvent.changeText(getByPlaceholderText('chatPlaceholder'), 'Salut support');
-    fireEvent.press(UNSAFE_getAllByType(TouchableOpacity)[1]);
+    fireEvent.press(getByLabelText('chatSendMessage'));
 
     await waitFor(() => {
       expect(sendTextMessage).toHaveBeenCalledWith({
@@ -238,9 +255,9 @@ describe('features/chat/screens/ChatScreen', () => {
       return { type: `${action?.type || 'unknown'}/fulfilled` };
     });
 
-    const { getByPlaceholderText, UNSAFE_getAllByType } = render(<ChatScreen />);
+    const { getByPlaceholderText, getByLabelText } = render(<ChatScreen />);
     fireEvent.changeText(getByPlaceholderText('chatPlaceholder'), 'Message test');
-    fireEvent.press(UNSAFE_getAllByType(TouchableOpacity)[1]);
+    fireEvent.press(getByLabelText('chatSendMessage'));
 
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith('chatSendError', 'chatSendErrorGeneric');

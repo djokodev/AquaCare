@@ -1,0 +1,39 @@
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+
+import { AppText } from '@/components/ui/AppText';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { spacing } from '@/theme';
+
+interface DashboardDataNoticeProps {
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
+export function DashboardDataNotice({ title, description, actionLabel, onAction }: DashboardDataNoticeProps) {
+  return (
+    <Card variant="outlined" style={styles.card} testID="dashboard-data-notice">
+      <View style={styles.content}>
+        <View
+          accessible
+          accessibilityLabel={`${title}. ${description}`}
+          testID="dashboard-data-notice-copy"
+        >
+          <AppText variant="bodyStrong">{title}</AppText>
+          <AppText variant="helper" color="muted">{description}</AppText>
+        </View>
+        {actionLabel && onAction ? (
+          <Button label={actionLabel} variant="outline" size="small" fullWidth={false} onPress={onAction} />
+        ) : null}
+      </View>
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { width: '100%', padding: spacing[3] },
+  content: { gap: spacing[2] },
+});

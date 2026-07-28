@@ -20,6 +20,7 @@ describe('features/auth/screens/LoginScreen', () => {
       login: mockLogin,
       isLoading: false,
       error: null,
+      fieldErrors: {},
       clearAuthError: mockClearAuthError,
     });
   });
@@ -55,7 +56,7 @@ describe('features/auth/screens/LoginScreen', () => {
     mockLogin.mockResolvedValueOnce({} as any);
     const { getAllByText, getByPlaceholderText, getByText } = render(<LoginScreen navigation={mockNavigation} />);
 
-    fireEvent.press(getAllByText('phoneNumber')[0]);
+    fireEvent.press(getAllByText('loginPhoneLabel')[0]);
     fireEvent.changeText(getByPlaceholderText('placeholderPhoneExample'), '670000000');
     fireEvent.changeText(getByPlaceholderText('********'), 'password123');
     fireEvent.press(getByText('signIn'));
@@ -74,5 +75,21 @@ describe('features/auth/screens/LoginScreen', () => {
     fireEvent.press(getByText('signUp'));
 
     expect(mockNavigation.navigate).toHaveBeenCalledWith('Register');
+  });
+
+  it('affiche les erreurs backend sur le bon champ de connexion', () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      login: mockLogin,
+      isLoading: false,
+      error: null,
+      fieldErrors: {
+        login_name: "Aucun compte n'est associé à ce nom de connexion.",
+      },
+      clearAuthError: mockClearAuthError,
+    });
+
+    const { getByText } = render(<LoginScreen navigation={mockNavigation} />);
+
+    expect(getByText("Aucun compte n'est associé à ce nom de connexion.")).toBeTruthy();
   });
 });

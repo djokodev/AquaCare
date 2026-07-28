@@ -1,43 +1,94 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Alert, Image, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, AppDispatch } from '@/store/store';
 import { fetchDashboardData, setCurrentCycle } from '@/features/aquaculture/store/aquacultureSlice';
-import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { offlineService } from '@/services/offlineService';
 import { ReactNativeUploadFile, SanitaryLogForm, SanitaryEventType } from '@/types/aquaculture';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import * as ImagePicker from 'expo-image-picker';
-import { MAVECAM_COLORS } from '@/constants/colors';
 import logger from '@/utils/logger';
-import { isNetworkError, getApiErrorMessage } from '@/utils/errorParser';
+import { getApiErrorMessage, parseApiError } from '@/utils/errorParser';
 import CycleSelector from '@/components/common/CycleSelector';
+import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
+import {
+  createSanitaryLogWithOfflineFallback,
+  runSilentOfflineSync,
+} from '@/features/aquaculture/services/aquacultureWorkflowService';
+import { AppHeader, AppText, Button, Card, IconButton, InlineAlert, Screen, SelectableCard, TextField } from '@/components/ui';
+import { colors, spacing } from '@/theme';
+import { getBusinessIsoDate } from '@/utils/businessDate';
+
+type VisibleSanitaryEventType = 'disease' | 'treatment' | 'abnormal_mortality' | 'other';
 
 const SANITARY_EVENT_TYPES: Array<{
-  value: SanitaryEventType;
+  value: VisibleSanitaryEventType;
   labelKey: string;
-  icon: keyof typeof Ionicons.glyphMap;
 }> = [
-  { value: 'disease', labelKey: 'sanitaryEventDisease', icon: 'medical' },
-  { value: 'treatment', labelKey: 'sanitaryEventTreatment', icon: 'medical-outline' },
-  { value: 'vaccination', labelKey: 'sanitaryEventVaccination', icon: 'shield-checkmark' },
-  { value: 'abnormal_mortality', labelKey: 'sanitaryEventAbnormalMortality', icon: 'skull' },
-  { value: 'water_quality', labelKey: 'sanitaryEventWaterQuality', icon: 'water' },
-  { value: 'other', labelKey: 'sanitaryEventOther', icon: 'help-circle' },
+  { value: 'disease', labelKey: 'sanitaryEventDisease' },
+  { value: 'treatment', labelKey: 'sanitaryEventTreatment' },
+  { value: 'abnormal_mortality', labelKey: 'sanitaryEventAbnormalMortality' },
+  { value: 'other', labelKey: 'sanitaryEventOther' },
 ];
 
+const SANITARY_EVENT_LAYOUT: Record<
+  VisibleSanitaryEventType,
+  {
+    firstFieldLabelKey: string;
+    firstFieldPlaceholderKey: string;
+    countFieldLabelKey: string;
+    countFieldPlaceholderKey: string;
+    showTreatmentFields: boolean;
+    infoMessageKey?: string;
+  }
+> = {
+  disease: {
+    firstFieldLabelKey: 'symptoms',
+    firstFieldPlaceholderKey: 'symptomsPlaceholder',
+    countFieldLabelKey: 'affectedCount',
+    countFieldPlaceholderKey: 'exampleAffectedCount',
+    showTreatmentFields: false,
+  },
+  treatment: {
+    firstFieldLabelKey: 'symptoms',
+    firstFieldPlaceholderKey: 'symptomsPlaceholder',
+    countFieldLabelKey: 'affectedCount',
+    countFieldPlaceholderKey: 'exampleAffectedCount',
+    showTreatmentFields: true,
+    infoMessageKey: 'treatmentFieldsInfo',
+  },
+  abnormal_mortality: {
+    firstFieldLabelKey: 'mortalityReason',
+    firstFieldPlaceholderKey: 'mortalityReasonPlaceholder',
+    countFieldLabelKey: 'mortality',
+    countFieldPlaceholderKey: 'mortalityPlaceholder',
+    showTreatmentFields: false,
+    infoMessageKey: 'noTreatmentRequired',
+  },
+  other: {
+    firstFieldLabelKey: 'observations',
+    firstFieldPlaceholderKey: 'observationsPlaceholder',
+    countFieldLabelKey: 'affectedCount',
+    countFieldPlaceholderKey: 'exampleAffectedCount',
+    showTreatmentFields: false,
+    infoMessageKey: 'noTreatmentRequired',
+  },
+};
+
 type SanitaryLogScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SanitaryLog'>;
+type SanitaryLogScreenRouteProp = RouteProp<RootStackParamList, 'SanitaryLog'>;
 
 interface SanitaryLogScreenProps {
   navigation: SanitaryLogScreenNavigationProp;
+  route?: SanitaryLogScreenRouteProp;
 }
 
 interface SanitaryLogData {
   cycle_id: string;
-  event_type: string;
+  event_type: VisibleSanitaryEventType | '';
   symptoms: string;
   treatment_applied: string;
   medication_used: string;
@@ -49,18 +100,23 @@ interface SanitaryLogData {
 }
 
 
-export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps) {
+export default function SanitaryLogScreen({ navigation, route }: SanitaryLogScreenProps) {
   const { t } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const { dashboardData, currentCycle } = useSelector((state: RootState) => state.aquaculture);
   const activeCycles = dashboardData?.active_cycles || [];
-  const sessionScopedCycles = currentCycle?.id
-    ? activeCycles.filter((cycle) => cycle.id === currentCycle.id)
+  const routeParams = route?.params;
+  const routeCycleId = routeParams?.cycleId;
+  const unitAllocationId = routeParams?.cycleUnitAllocationId;
+  const sessionScopedCycles = routeCycleId
+    ? activeCycles.filter((cycle) => cycle.id === routeCycleId)
+    : currentCycle?.id
+      ? activeCycles.filter((cycle) => cycle.id === currentCycle.id)
     : activeCycles;
 
-  const [selectedCycle, setSelectedCycle] = useState<string>('');
+  const [selectedCycle, setSelectedCycle] = useState<string>(routeCycleId || '');
   const [formData, setFormData] = useState<SanitaryLogData>({
-    cycle_id: '',
+    cycle_id: routeCycleId || '',
     event_type: '',
     symptoms: '',
     treatment_applied: '',
@@ -73,7 +129,9 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
   });
   const [saving, setSaving] = useState(false);
 
-  const shouldShowTreatmentFields = ['treatment', 'vaccination', 'disease'].includes(formData.event_type);
+  const selectedEventLayout = formData.event_type
+    ? SANITARY_EVENT_LAYOUT[formData.event_type as VisibleSanitaryEventType]
+    : SANITARY_EVENT_LAYOUT.disease;
 
   const getSuccessMessage = (eventType: string) => {
     switch (eventType) {
@@ -81,12 +139,8 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
         return t('sanitarySuccessDisease');
       case 'treatment':
         return t('sanitarySuccessTreatment');
-      case 'vaccination':
-        return t('sanitarySuccessVaccination');
       case 'abnormal_mortality':
         return t('sanitarySuccessAbnormalMortality');
-      case 'water_quality':
-        return t('sanitarySuccessWaterQuality');
       case 'other':
         return t('sanitarySuccessOther');
       default:
@@ -95,7 +149,11 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
   };
 
   useEffect(() => {
-    dispatch(fetchDashboardData(undefined));
+    const bootstrap = async () => {
+      await runSilentOfflineSync();
+      dispatch(fetchDashboardData({ lightweight: true }));
+    };
+    bootstrap();
   }, [dispatch]);
 
   useEffect(() => {
@@ -103,16 +161,18 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
       return;
     }
 
-    const preferredCycle = sessionScopedCycles[0];
+    const preferredCycle = routeCycleId
+      ? sessionScopedCycles.find((cycle) => cycle.id === routeCycleId) || sessionScopedCycles[0]
+      : sessionScopedCycles[0];
 
     if (selectedCycle !== preferredCycle.id) {
       setSelectedCycle(preferredCycle.id);
       setFormData((prev) => ({ ...prev, cycle_id: preferredCycle.id }));
     }
-  }, [sessionScopedCycles, selectedCycle]);
+  }, [routeCycleId, sessionScopedCycles, selectedCycle]);
 
   useEffect(() => {
-    if (!shouldShowTreatmentFields) {
+    if (!selectedEventLayout.showTreatmentFields) {
       setFormData((prev) => ({
         ...prev,
         treatment_applied: '',
@@ -121,7 +181,7 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
         treatment_duration_days: '',
       }));
     }
-  }, [shouldShowTreatmentFields]);
+  }, [selectedEventLayout.showTreatmentFields]);
 
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -218,7 +278,8 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
     setSaving(true);
     try {
       const sanitaryData: SanitaryLogForm = {
-        event_date: new Date().toISOString().split('T')[0],
+        event_date: getBusinessIsoDate(),
+        ...(unitAllocationId ? { cycle_unit_allocation: unitAllocationId } : {}),
         event_type: formData.event_type as SanitaryEventType,
         symptoms: formData.symptoms,
         affected_count: formData.affected_count ? parseInt(formData.affected_count, 10) : undefined,
@@ -241,26 +302,26 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
       }
 
       try {
-        await aquacultureService.createSanitaryLog(selectedCycle, sanitaryData);
-        dispatch(fetchDashboardData(undefined));
-
-        Alert.alert(t('success'), getSuccessMessage(formData.event_type), [
+        const creationResult = await createSanitaryLogWithOfflineFallback(selectedCycle, sanitaryData);
+        dispatch(fetchDashboardData({ lightweight: true }));
+        const successMessage = creationResult.mode === 'online'
+          ? getSuccessMessage(formData.event_type)
+          : `${getSuccessMessage(formData.event_type)}\n\n${t('offlineSaveMessage')}`;
+        Alert.alert(t('success'), successMessage, [
           { text: t('ok'), onPress: () => navigation.goBack() },
         ]);
       } catch (apiError: unknown) {
-        if (isNetworkError(apiError)) {
-          await offlineService.saveSanitaryLogOffline(selectedCycle, sanitaryData);
-
-          Alert.alert(t('success'), `${getSuccessMessage(formData.event_type)}\n\n${t('offlineSaveMessage')}`, [
-            { text: t('ok'), onPress: () => navigation.goBack() },
-          ]);
-        } else {
-          throw apiError;
-        }
+        throw apiError;
       }
     } catch (error: unknown) {
       logger.error('Error creating sanitary log:', error);
-      Alert.alert(t('error'), getApiErrorMessage(error, t('sanitaryRecordSaveError')));
+      const parsedError = parseApiError(error);
+      const fallbackMessage = getApiErrorMessage(error, t('sanitaryRecordSaveError'));
+      const actionableMessage =
+        parsedError.status > 0 || parsedError.details.length > 0
+          ? formatAquacultureErrorWithAction(parsedError, t)
+          : fallbackMessage;
+      Alert.alert(t('error'), actionableMessage);
     } finally {
       setSaving(false);
     }
@@ -268,27 +329,23 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
 
   if (sessionScopedCycles.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center bg-cream px-5">
-        <Ionicons name="medical-outline" size={64} color={MAVECAM_COLORS.GRAY_LIGHT} />
-        <Text className="text-lg font-bold text-gray-dark mt-4">{t('noActiveCycles')}</Text>
-        <Text className="text-sm text-gray-light text-center mt-2 mb-6">{t('createCycleToStart')}</Text>
-        <TouchableOpacity className="bg-mavecam-primary px-5 py-3 rounded-lg" onPress={() => navigation.navigate('NewCycle')}>
-          <Text className="text-white text-base font-semibold">{t('createCycle')}</Text>
-        </TouchableOpacity>
+      <View style={styles.root}>
+        <AppHeader title={t('sanitaryLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+        <Screen style={styles.emptyScreen}>
+          <Ionicons name="medical-outline" size={64} color={colors.text.muted} />
+          <AppText variant="cardTitle" style={{ marginTop: spacing[4] }}>{t('noActiveCycles')}</AppText>
+          <AppText variant="body" color="muted" style={{ marginTop: spacing[2], marginBottom: spacing[6], textAlign: 'center' }}>{t('createCycleToStart')}</AppText>
+          <Button label={t('createCycle')} onPress={() => navigation.navigate('CreateFarm')} fullWidth={false} />
+        </Screen>
       </View>
     );
   }
 
   return (
-    <ScrollView className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary flex-row items-center pt-14 pb-4 px-4">
-        <TouchableOpacity className="mr-4" onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.WHITE} />
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-white">{t('sanitaryLogTitle')}</Text>
-      </View>
-
-      <View className="p-4">
+    <View style={styles.root}>
+      <AppHeader title={t('sanitaryLogTitle')} onBack={() => navigation.goBack()} backLabel={t('back')} />
+      <Screen scroll style={styles.scrollContent}>
+      <View style={{ gap: spacing[5] }}>
         <CycleSelector
           cycles={sessionScopedCycles}
           selectedCycleId={selectedCycle}
@@ -300,112 +357,86 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
               dispatch(setCurrentCycle(cycle));
             }
           }}
+          showTitle={false}
+          displayMode="cycle_name"
         />
 
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('eventType')}</Text>
-          <View className="flex-row flex-wrap">
+        <Card>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('eventType')}</AppText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }}>
             {SANITARY_EVENT_TYPES.map((type) => {
               const isSelected = formData.event_type === type.value;
               return (
-                <View key={type.value} style={{ width: '31%', marginRight: '2%', marginBottom: 8 }}>
-                  <TouchableOpacity
-                    className={`p-3 rounded-lg border items-center ${
-                      isSelected ? 'bg-mavecam-primary border-mavecam-primary' : 'bg-white border-gray-200'
-                    }`}
+                <View key={type.value} style={{ width: '48%' }}>
+                  <SelectableCard
+                    testID={`sanitary-event-${type.value}`}
+                    selected={isSelected}
+                    primaryBorder={isSelected}
+                    layout="column"
+                    accessibilityLabel={t(type.labelKey)}
                     onPress={() => setFormData((prev) => ({ ...prev, event_type: type.value }))}
                   >
-                    <Ionicons
-                      name={type.icon}
-                      size={32}
-                      color={isSelected ? MAVECAM_COLORS.WHITE : MAVECAM_COLORS.GRAY_LIGHT}
-                    />
-                    <Text className={`text-xs text-center mt-2 ${isSelected ? 'text-white' : 'text-gray-dark'}`}>
+                    <AppText variant="label" color="primary" style={{ textAlign: 'center' }}>
                       {t(type.labelKey)}
-                    </Text>
-                  </TouchableOpacity>
+                    </AppText>
+                  </SelectableCard>
                 </View>
               );
             })}
           </View>
 
-          {formData.event_type && (
-            <View
-              className={`flex-row items-center p-3 mt-4 rounded-lg border ${
-                shouldShowTreatmentFields ? 'bg-[#f0fdf4] border-green-200' : 'bg-[#eff6ff] border-blue-200'
-              }`}
-            >
-              <Ionicons
-                name={shouldShowTreatmentFields ? 'medical' : 'information-circle'}
-                size={16}
-                color={shouldShowTreatmentFields ? MAVECAM_COLORS.GREEN_PRIMARY : MAVECAM_COLORS.BLUE}
-              />
-              <Text
-                className={`ml-2 text-sm flex-1 ${
-                  shouldShowTreatmentFields ? 'text-green-700' : 'text-blue-700'
-                }`}
-              >
-                {shouldShowTreatmentFields ? t('treatmentFieldsInfo') : t('noTreatmentRequired')}
-              </Text>
-            </View>
-          )}
-        </View>
+          {selectedEventLayout.infoMessageKey ? (
+            <InlineAlert
+              tone={selectedEventLayout.infoMessageKey === 'treatmentFieldsInfo' ? 'success' : 'info'}
+              message={t(selectedEventLayout.infoMessageKey)}
+            />
+          ) : null}
+        </Card>
 
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('details')}</Text>
+        <Card>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('details')}</AppText>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('symptoms')}</Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
+          <TextField
+              label={t(selectedEventLayout.firstFieldLabelKey)}
               value={formData.symptoms}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, symptoms: value }))}
-              placeholder={t('symptomsPlaceholder')}
+              placeholder={t(selectedEventLayout.firstFieldPlaceholderKey)}
               multiline
               numberOfLines={3}
-            />
-          </View>
+          />
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('affectedCount')}</Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+          <TextField
+              label={t(selectedEventLayout.countFieldLabelKey)}
               value={formData.affected_count}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, affected_count: value }))}
-              placeholder={t('exampleAffectedCount')}
+              placeholder={t(selectedEventLayout.countFieldPlaceholderKey)}
               keyboardType="numeric"
-            />
-          </View>
+          />
 
-          {shouldShowTreatmentFields && (
+          {selectedEventLayout.showTreatmentFields && (
             <>
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-dark mb-2">{t('treatmentApplied')}</Text>
-                <TextInput
-                  className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
+              <TextField
+                  label={t('treatmentApplied')}
                   value={formData.treatment_applied}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_applied: value }))}
                   placeholder={t('treatmentAppliedPlaceholder')}
                   multiline
                   numberOfLines={3}
-                />
-              </View>
+              />
 
-              <View className="flex-row mb-4">
-                <View className="flex-1" style={{ marginRight: 12 }}>
-                  <Text className="text-sm font-medium text-gray-dark mb-2">{t('medicationUsed')}</Text>
-                  <TextInput
-                    className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label={t('medicationUsed')}
                     value={formData.medication_used}
                     onChangeText={(value) => setFormData((prev) => ({ ...prev, medication_used: value }))}
                     placeholder={t('exampleMedication')}
                   />
                 </View>
 
-                <View className="flex-1">
-                  <Text className="text-sm font-medium text-gray-dark mb-2">{t('dosage')}</Text>
-                  <TextInput
-                    className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+                <View style={{ flex: 1 }}>
+                  <TextField
+                    label={t('dosage')}
                     value={formData.dosage}
                     onChangeText={(value) => setFormData((prev) => ({ ...prev, dosage: value }))}
                     placeholder={t('exampleDosage')}
@@ -413,68 +444,48 @@ export default function SanitaryLogScreen({ navigation }: SanitaryLogScreenProps
                 </View>
               </View>
 
-              <View className="mb-4">
-                <Text className="text-sm font-medium text-gray-dark mb-2">{t('treatmentDurationDays')}</Text>
-                <TextInput
-                  className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark"
+              <TextField
+                  label={t('treatmentDurationDays')}
                   value={formData.treatment_duration_days}
                   onChangeText={(value) => setFormData((prev) => ({ ...prev, treatment_duration_days: value }))}
                   placeholder={t('exampleTreatmentDuration')}
                   keyboardType="numeric"
-                />
-              </View>
+              />
             </>
           )}
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-dark mb-2">{t('additionalComments')}</Text>
-            <TextInput
-              className="bg-white border border-gray-200 rounded-lg px-3 py-3 text-base text-gray-dark h-20"
+          <TextField
+              label={t('additionalComments')}
               value={formData.comments}
               onChangeText={(value) => setFormData((prev) => ({ ...prev, comments: value }))}
               placeholder={t('commentsPlaceholder')}
               multiline
               numberOfLines={3}
-            />
-          </View>
-        </View>
+          />
+        </Card>
 
-        <View className="mb-6">
-          <Text className="text-base font-bold text-gray-dark mb-3">{t('photo')}</Text>
+        <Card>
+          <AppText variant="sectionTitle" style={{ marginBottom: spacing[4] }}>{t('photo')}</AppText>
 
           {!formData.photo ? (
-            <TouchableOpacity
-              className="bg-white border-2 border-dashed border-mavecam-primary rounded-lg p-5 items-center justify-center flex-row mb-4"
-              onPress={chooseImageSource}
-            >
-              <Ionicons name="camera" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} style={{ marginRight: 8 }} />
-              <Text className="text-mavecam-primary text-base font-semibold">{t('addPhoto')}</Text>
-            </TouchableOpacity>
+            <Button label={t('addPhoto')} onPress={chooseImageSource} variant="outline" iconLeft="camera" />
           ) : (
-            <View className="relative mt-3">
-              <Image source={{ uri: formData.photo }} className="w-full h-52 rounded-lg bg-cream" />
-              <TouchableOpacity className="absolute top-2 right-2 bg-white rounded-full shadow p-1" onPress={removePhoto}>
-                <Ionicons name="close-circle" size={24} color={MAVECAM_COLORS.ERROR} />
-              </TouchableOpacity>
+            <View style={{ position: 'relative' }}>
+              <Image source={{ uri: formData.photo }} style={{ width: '100%', height: 208, borderRadius: 12, backgroundColor: colors.surface.page }} />
+              <IconButton icon="close-circle" accessibilityLabel={t('removePhoto')} onPress={removePhoto} variant="surface" tone="danger" style={{ position: 'absolute', top: spacing[2], right: spacing[2] }} />
             </View>
           )}
-        </View>
+        </Card>
 
-        <TouchableOpacity
-          className={`bg-mavecam-primary flex-row items-center justify-center py-4 rounded-lg mt-2 ${saving ? 'opacity-60' : ''}`}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={MAVECAM_COLORS.WHITE} />
-          ) : (
-            <>
-              <Ionicons name="checkmark" size={20} color={MAVECAM_COLORS.WHITE} style={{ marginRight: 8 }} />
-              <Text className="text-white text-base font-semibold">{t('save')}</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <Button label={t('save')} onPress={handleSave} disabled={saving} loading={saving} iconLeft="checkmark" />
       </View>
-    </ScrollView>
+      </Screen>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  emptyScreen: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[5] },
+  scrollContent: { paddingTop: spacing[4], paddingBottom: spacing[6] },
+});

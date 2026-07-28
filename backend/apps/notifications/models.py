@@ -7,6 +7,7 @@ import uuid
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -18,6 +19,13 @@ class NotificationQuerySet(models.QuerySet["Notification"]):
 
     def with_display_context(self) -> models.QuerySet["Notification"]:
         return self.select_related('content_type')
+
+    def scoped_to_cycle(self, cycle_id: str) -> models.QuerySet["Notification"]:
+        return self.filter(
+            Q(content_type__app_label='aquaculture', content_type__model='productioncycle', object_id=cycle_id)
+            | Q(metadata__cycle_id=cycle_id)
+            | Q(metadata__production_cycle_id=cycle_id)
+        )
 
     def visible_for_user(
         self,
@@ -392,6 +400,7 @@ class NotificationPreference(models.Model):
             'order_confirmed': 'order_confirmations',
             'order_shipped': 'order_status_updates',
             'order_delivered': 'order_status_updates',
+            'order_ready_for_pickup': 'order_status_updates',
             'order_cancelled': 'order_status_updates',
             'payment_received': 'order_confirmations',
             'delivery_scheduled': 'delivery_notifications',

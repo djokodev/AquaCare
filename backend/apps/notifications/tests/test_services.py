@@ -12,6 +12,7 @@ from datetime import time, timedelta
 from unittest.mock import patch
 
 import pytest
+from django.db import transaction
 from django.test import override_settings
 from django.utils import timezone
 from notifications.application_services import (
@@ -55,6 +56,9 @@ class TestNotificationServiceCreate:
         )
 
         assert notif.content_object == production_cycle
+        assert notif.metadata['cycle_id'] == str(production_cycle.id)
+        assert notif.metadata['production_cycle_id'] == str(production_cycle.id)
+        assert notif.metadata['cycle_name'] == production_cycle.cycle_name
 
     def test_create_notification_with_metadata(self, user):
         """Test création avec métadonnées."""
@@ -152,11 +156,16 @@ class TestNotificationServiceCreate:
         assert notif is not None
         assert notif.channels == ['in_app']
 
-    def test_create_notification_logs_dispatch_failure_without_aborting(self, user):
+    def test_create_notification_logs_dispatch_failure_without_aborting(
+        self,
+        user,
+        django_capture_on_commit_callbacks,
+    ):
         with patch(
             'notifications.tasks.send_email_notification_task.delay',
             side_effect=RuntimeError('queue unavailable'),
-        ), patch('notifications.services.logger.exception') as mock_logger:
+        ), patch('notifications.services.logger.exception') as mock_logger, \
+                django_capture_on_commit_callbacks(execute=True):
             notif = NotificationService.create_notification(
                 user=user,
                 notification_type='system_update',
@@ -169,6 +178,43 @@ class TestNotificationServiceCreate:
         assert notif is not None
         assert Notification.objects.filter(id=notif.id).exists()
         mock_logger.assert_called_once()
+
+    def test_immediate_dispatch_waits_for_commit_and_never_dispatches_rolled_back_rows(
+        self,
+        user,
+        django_capture_on_commit_callbacks,
+    ):
+        with patch('notifications.tasks.send_email_notification_task.delay') as mock_delay:
+            with django_capture_on_commit_callbacks(execute=True):
+                with transaction.atomic():
+                    notif = NotificationService.create_notification(
+                        user=user,
+                        notification_type='system_update',
+                        title='After commit',
+                        message='Only dispatch after commit',
+                        channels=['email'],
+                        send_immediately=True,
+                    )
+                    mock_delay.assert_not_called()
+
+            mock_delay.assert_called_once_with(str(notif.id))
+
+        mock_delay.reset_mock()
+        with django_capture_on_commit_callbacks(execute=True):
+            with pytest.raises(RuntimeError, match='rollback'):
+                with transaction.atomic():
+                    rolled_back = NotificationService.create_notification(
+                        user=user,
+                        notification_type='system_update',
+                        title='Rollback',
+                        message='Must not dispatch',
+                        channels=['email'],
+                        send_immediately=True,
+                    )
+                    raise RuntimeError('rollback')
+
+        mock_delay.assert_not_called()
+        assert not Notification.objects.filter(id=rolled_back.id).exists()
 
 
 @pytest.mark.django_db
@@ -317,6 +363,87 @@ class TestNotificationInboxApplicationService:
 
         assert queryset.count() == 1
         assert queryset.first().notification_type == 'order_confirmed'
+
+    def test_get_user_notifications_filters_by_cycle(self, user, production_cycle):
+        other_cycle = production_cycle.__class__.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            cycle_name='Cycle Test Clarias',
+            species='clarias',
+            pond_identifier='Bassin B',
+            pond_surface_m2=production_cycle.pond_surface_m2,
+            start_date=production_cycle.start_date,
+            initial_count=800,
+            initial_average_weight=production_cycle.initial_average_weight,
+            initial_biomass=production_cycle.initial_biomass,
+            status='active',
+        )
+        Notification.objects.filter(user=user).delete()
+        Notification.objects.create(
+            user=user,
+            content_object=production_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle A',
+            message='Scoped A',
+            scheduled_for=timezone.now(),
+        )
+        Notification.objects.create(
+            user=user,
+            content_object=other_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle B',
+            message='Scoped B',
+            scheduled_for=timezone.now(),
+        )
+
+        queryset = NotificationInboxApplicationService.get_user_notifications(
+            user,
+            NotificationQueryFilters(cycle_id=str(production_cycle.id)),
+        )
+
+        assert queryset.count() == 1
+        assert queryset.first().title == 'Cycle A'
+
+    def test_mark_all_notifications_as_read_with_filters_scopes_to_cycle(self, user, production_cycle):
+        other_cycle = production_cycle.__class__.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            cycle_name='Cycle Test Clarias',
+            species='clarias',
+            pond_identifier='Bassin C',
+            pond_surface_m2=production_cycle.pond_surface_m2,
+            start_date=production_cycle.start_date,
+            initial_count=600,
+            initial_average_weight=production_cycle.initial_average_weight,
+            initial_biomass=production_cycle.initial_biomass,
+            status='active',
+        )
+        Notification.objects.filter(user=user).delete()
+        target = Notification.objects.create(
+            user=user,
+            content_object=production_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle A',
+            message='Unread A',
+            scheduled_for=timezone.now(),
+        )
+        untouched = Notification.objects.create(
+            user=user,
+            content_object=other_cycle,
+            notification_type='feeding_reminder',
+            title='Cycle B',
+            message='Unread B',
+            scheduled_for=timezone.now(),
+        )
+
+        count = NotificationInboxApplicationService.mark_all_notifications_as_read_with_filters(
+            user,
+            NotificationQueryFilters(cycle_id=str(production_cycle.id)),
+        )
+
+        target.refresh_from_db()
+        untouched.refresh_from_db()
+        assert count == 1
+        assert target.is_read is True
+        assert untouched.is_read is False
 
     def test_mark_notification_as_read_rejects_foreign_owner(self, user, user2):
         notification = Notification.objects.create(

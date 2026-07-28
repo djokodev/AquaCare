@@ -1,12 +1,11 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Alert,
+  Pressable,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +16,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/store/store';
 import { fetchFeedingSuggestions, addToCart } from '@/features/commerce/store/commerceSlice';
 import { CycleSuggestion, FeedingPhase, SuggestedProduct } from '@/types/commerce';
-import { MAVECAM_COLORS } from '@/constants/colors';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
+import { colors, opacity, sizing, spacing } from '@/theme';
+import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
+import { DashboardMetricCard } from '@/components/ui';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -78,6 +80,14 @@ export default function FeedingSuggestionsScreen() {
     }));
   }, []);
 
+  const getPhaseLabel = useCallback((phaseName: string) => {
+    const directTranslation = t(phaseName);
+    if (directTranslation !== phaseName) return directTranslation;
+    const nestedKey = `phase.${phaseName}`;
+    const nestedTranslation = t(nestedKey);
+    return nestedTranslation !== nestedKey ? nestedTranslation : phaseName;
+  }, [t]);
+
   const handleAddToCart = useCallback((productId: string, quantity: number) => {
     const product = products.items.find((p) => p.id === productId);
     if (!product) {
@@ -117,37 +127,37 @@ export default function FeedingSuggestionsScreen() {
     const { confidence_score, cycles_with_data, total_cycles } = suggestionsData.analysis;
     const scoreColor =
       confidence_score >= 80
-        ? MAVECAM_COLORS.SUCCESS
+        ? colors.status.success
         : confidence_score >= 60
-        ? MAVECAM_COLORS.WARNING
-        : MAVECAM_COLORS.ERROR;
+        ? colors.status.warning
+        : colors.status.error;
 
     return (
-      <View className="bg-white rounded-xl p-4 mb-4">
-        <View className="flex-row items-center mb-3 gap-2">
+      <Card variant="outlined" style={styles.sectionCard}>
+        <View style={styles.sectionHeading}>
           <Ionicons name="analytics-outline" size={24} color={scoreColor} />
-          <Text className="text-base font-bold text-gray-dark">{t('dataQuality')}</Text>
+          <AppText variant="cardTitle">{t('dataQuality')}</AppText>
         </View>
-        <View className="flex-row gap-4">
-          <View className="items-center px-4">
-            <Text className="text-3xl font-bold" style={{ color: scoreColor }}>
+        <View style={styles.confidenceContent}>
+          <View style={styles.confidenceScore}>
+            <AppText variant="metric" style={{ color: scoreColor }}>
               {confidence_score}%
-            </Text>
-            <Text className="text-xs text-gray-light mt-1">{t('confidenceScore')}</Text>
+            </AppText>
+            <AppText variant="caption" color="muted">{t('confidenceScore')}</AppText>
           </View>
-          <View className="flex-1 justify-center gap-1">
-            <Text className="text-sm text-gray-dark">
+          <View style={styles.analysisDetails}>
+            <AppText variant="caption">
               {t('cyclesAnalyzed')}: {cycles_with_data}/{total_cycles}
-            </Text>
-            <Text className="text-sm text-gray-dark">
+            </AppText>
+            <AppText variant="caption">
               {t('analysisPeriod')}: {suggestionsData.analysis.analysis_period_days} {t('days')}
-            </Text>
-            <Text className="text-sm text-gray-dark">
+            </AppText>
+            <AppText variant="caption">
               {t('safetyBuffer')}: +{suggestionsData.analysis.safety_buffer_days} {t('days')}
-            </Text>
+            </AppText>
           </View>
         </View>
-      </View>
+      </Card>
     );
   }, [suggestionsData?.analysis, t]);
 
@@ -155,28 +165,27 @@ export default function FeedingSuggestionsScreen() {
     const totalPrice = suggestedProduct.total_price;
 
     return (
-      <View key={suggestedProduct.product_id} className="flex-row justify-between bg-white p-3 rounded-lg mb-2">
-        <View className="flex-1 mr-3">
-          <Text className="text-[10px] text-gray-light font-semibold mb-1">{suggestedProduct.brand.toUpperCase()}</Text>
-          <Text className="text-sm text-gray-dark mb-1" numberOfLines={2}>
-            {suggestedProduct.product_name}
-          </Text>
-          <Text className="text-xs text-gray-light">
-            {suggestedProduct.quantity_bags} {t('bags')} - {suggestedProduct.total_kg}kg
-          </Text>
+      <Card key={suggestedProduct.product_id} variant="outlined" style={styles.productCard}>
+        <View style={styles.flex}>
+          <AppText variant="caption" color="muted">{suggestedProduct.brand.toUpperCase()}</AppText>
+          <AppText numberOfLines={2}>
+            {getProductDisplayName(suggestedProduct.product_name, t('catfish'))}
+          </AppText>
+          <AppText variant="caption" color="muted">
+            {suggestedProduct.quantity_bags} {t('bags')} · {suggestedProduct.total_kg} kg
+          </AppText>
         </View>
-        <View className="items-end justify-between">
-          <Text className="text-sm font-semibold text-mavecam-primary">
+        <View style={styles.productActions}>
+          <AppText variant="label" color="link">
             {totalPrice.toLocaleString()} FCFA
-          </Text>
-          <TouchableOpacity
-            className="bg-mavecam-primary w-8 h-8 rounded-full items-center justify-center"
+          </AppText>
+          <IconButton
+            icon="cart-outline"
+            accessibilityLabel={`${t('addToCart')} ${getProductDisplayName(suggestedProduct.product_name, t('catfish'))}`}
             onPress={() => handleAddToCart(suggestedProduct.product_id, suggestedProduct.quantity_bags)}
-          >
-            <Ionicons name="cart-outline" size={16} color={MAVECAM_COLORS.WHITE} />
-          </TouchableOpacity>
+          />
         </View>
-      </View>
+      </Card>
     );
   }, [handleAddToCart, t]);
 
@@ -185,207 +194,139 @@ export default function FeedingSuggestionsScreen() {
     const totalBags = phase.products.reduce((sum, p) => sum + p.quantity_bags, 0);
 
     return (
-      <View key={index} className="bg-cream rounded-lg p-3 mb-3">
-        <TouchableOpacity
-          className="flex-row justify-between items-center"
+      <Card key={index} variant="outlined" style={styles.phaseCard}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${getPhaseLabel(phase.phase_name)}, ${t(isExpanded ? 'collapseActions' : 'details')}`}
+          accessibilityState={{ expanded: isExpanded }}
           onPress={() => togglePhaseExpansion(cycleId, index)}
-          activeOpacity={0.8}
+          style={({ pressed }) => [styles.expandableControl, pressed && styles.pressed]}
         >
-          <View className="flex-row items-center flex-1 gap-3">
-            <View className="w-10 h-10 bg-white rounded-full items-center justify-center">
-              <Ionicons name="fast-food-outline" size={20} color={MAVECAM_COLORS.GREEN_PRIMARY} />
+          <View style={styles.expandableHeading}>
+            <View style={styles.phaseIcon}>
+              <Ionicons name="fast-food-outline" size={20} color={colors.brand.primary} />
             </View>
-            <View>
-              <Text className="text-sm font-semibold text-gray-dark">{phase.phase_name}</Text>
-              <Text className="text-xs text-gray-light">
-                {phase.pellet_size_mm}mm - {phase.weight_range_g[0]}-{phase.weight_range_g[1]}g
-              </Text>
+            <View style={styles.flex}>
+              <AppText variant="label">{getPhaseLabel(phase.phase_name)}</AppText>
+              <AppText variant="caption" color="muted">
+                {phase.pellet_size_mm} mm · {phase.weight_range_g[0]}-{phase.weight_range_g[1]} g
+              </AppText>
             </View>
           </View>
-          <View className="items-end gap-1">
-            <Text className="text-sm font-semibold text-mavecam-primary">
+          <View style={styles.expandableTrailing}>
+            <AppText variant="label" color="link">
               {phase.total_price.toLocaleString()} FCFA
-            </Text>
+            </AppText>
             <Ionicons
               name={isExpanded ? 'chevron-up' : 'chevron-down'}
               size={20}
-              color={MAVECAM_COLORS.GRAY_LIGHT}
+              color={colors.text.muted}
             />
           </View>
-        </TouchableOpacity>
+        </Pressable>
 
-        <View className="flex-row mt-3 gap-4">
-          <View className="flex-row items-center gap-1">
-            <Ionicons name="calendar-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text className="text-xs text-gray-light">{phase.days_coverage} {t('days')}</Text>
+        <View style={styles.phaseMeta}>
+          <View style={styles.metaItem}>
+            <Ionicons name="calendar-outline" size={14} color={colors.text.muted} />
+            <AppText variant="caption" color="muted">{phase.days_coverage} {t('days')}</AppText>
           </View>
-          <View className="flex-row items-center gap-1">
-            <Ionicons name="scale-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text className="text-xs text-gray-light">{phase.estimated_need_kg}kg</Text>
+          <View style={styles.metaItem}>
+            <Ionicons name="scale-outline" size={14} color={colors.text.muted} />
+            <AppText variant="caption" color="muted">{phase.estimated_need_kg} kg</AppText>
           </View>
-          <View className="flex-row items-center gap-1">
-            <Ionicons name="cube-outline" size={14} color={MAVECAM_COLORS.GRAY_LIGHT} />
-            <Text className="text-xs text-gray-light">{totalBags} {t('bags')}</Text>
-          </View>
+          <Badge label={`${totalBags} ${t('bags')}`} />
         </View>
 
         {isExpanded && (
-          <View className="mt-3 pt-3 border-t border-[#e5e7eb]">
-            <Text className="text-xs font-semibold text-gray-dark mb-2">{t('recommendedProducts')}</Text>
+          <View style={styles.expandedSection}>
+            <Divider />
+            <AppText variant="label">{t('recommendedProducts')}</AppText>
             {phase.products.map((product) => renderSuggestedProduct(product))}
           </View>
         )}
-      </View>
+      </Card>
     );
-  }, [expandedPhaseIndex, renderSuggestedProduct, t, togglePhaseExpansion]);
+  }, [expandedPhaseIndex, getPhaseLabel, renderSuggestedProduct, t, togglePhaseExpansion]);
 
   const renderCycleSuggestion = useCallback(({ item: cycle }: { item: CycleSuggestion }) => {
     const isExpanded = expandedCycleId === cycle.cycle_id;
 
     return (
-      <View className="bg-white rounded-xl p-4 mb-4">
-        <TouchableOpacity
-          className="flex-row items-center justify-between"
+      <Card variant="outlined" style={styles.cycleCard}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${cycle.cycle_name}, ${t(isExpanded ? 'collapseActions' : 'details')}`}
+          accessibilityState={{ expanded: isExpanded }}
           onPress={() => toggleCycleExpansion(cycle.cycle_id)}
-          activeOpacity={0.8}
+          style={({ pressed }) => [styles.expandableControl, pressed && styles.pressed]}
         >
-          <View className="flex-row items-center flex-1 gap-3">
-            <Ionicons name="water-outline" size={28} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-            <View className="flex-1">
-              <Text className="text-base font-bold text-gray-dark">{cycle.cycle_name}</Text>
-              <Text className="text-sm text-mavecam-primary">{t(cycle.species)}</Text>
-              <Text className="text-xs text-gray-light mt-1">
-                {t('currentPhase')}: {cycle.current_phase} - {cycle.current_avg_weight_g}g - {cycle.days_remaining} {t('daysRemaining')}
-              </Text>
+          <View style={styles.expandableHeading}>
+            <Ionicons name="water-outline" size={28} color={colors.brand.primary} />
+            <View style={styles.flex}>
+              <AppText variant="cardTitle">{cycle.cycle_name}</AppText>
+              <Badge label={t(cycle.species)} tone="success" />
+              <AppText variant="caption" color="muted">
+                {t('currentPhase')}: {getPhaseLabel(cycle.current_phase)} · {cycle.current_avg_weight_g} g · {cycle.days_remaining} {t('daysRemaining')}
+              </AppText>
             </View>
           </View>
           <Ionicons
             name={isExpanded ? 'chevron-up' : 'chevron-down'}
             size={24}
-            color={MAVECAM_COLORS.GRAY_LIGHT}
+            color={colors.text.muted}
           />
-        </TouchableOpacity>
+        </Pressable>
 
-        <View className="flex-row flex-wrap bg-cream rounded-lg p-3 mt-3 gap-3">
-          <View className="flex-1 min-w-[45%] items-center">
-            <Text className="text-xs text-gray-light">{t('totalNeeded')}</Text>
-            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.total_needed_kg}kg</Text>
-          </View>
-          <View className="flex-1 min-w-[45%] items-center">
-            <Text className="text-xs text-gray-light">{t('totalBags')}</Text>
-            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.total_bags}</Text>
-          </View>
-          <View className="flex-1 min-w-[45%] items-center">
-            <Text className="text-xs text-gray-light">{t('totalCost')}</Text>
-            <Text className="text-sm font-bold text-mavecam-primary">
-              {cycle.summary.total_price.toLocaleString()} FCFA
-            </Text>
-          </View>
-          <View className="flex-1 min-w-[45%] items-center">
-            <Text className="text-xs text-gray-light">{t('coverage')}</Text>
-            <Text className="text-sm font-bold text-gray-dark">{cycle.summary.coverage_days} {t('days')}</Text>
-          </View>
+        <View style={styles.metricGrid}>
+          <DashboardMetricCard value={`${cycle.summary.total_needed_kg} kg`} label={t('totalNeeded')} unavailableLabel={t('dashboardDataUnavailable')} />
+          <DashboardMetricCard value={cycle.summary.total_bags} label={t('totalBags')} unavailableLabel={t('dashboardDataUnavailable')} />
+          <DashboardMetricCard value={`${cycle.summary.total_price.toLocaleString()} FCFA`} label={t('totalCost')} unavailableLabel={t('dashboardDataUnavailable')} />
+          <DashboardMetricCard value={`${cycle.summary.coverage_days} ${t('days')}`} label={t('coverage')} unavailableLabel={t('dashboardDataUnavailable')} />
         </View>
 
-        <TouchableOpacity
-          className="bg-mavecam-primary flex-row items-center justify-center py-3 rounded-lg mt-3 gap-2"
-          onPress={() => handleAddCycleToCart(cycle)}
-        >
-          <Ionicons name="cart" size={20} color={MAVECAM_COLORS.WHITE} />
-          <Text className="text-white text-base font-semibold">{t('addAllToCart')}</Text>
-        </TouchableOpacity>
+        <Button label={t('addAllToCart')} iconLeft="cart" onPress={() => handleAddCycleToCart(cycle)} style={styles.buttonSpacing} />
 
         {isExpanded && (
-          <View className="mt-4">
-            <Text className="text-sm font-bold text-gray-dark mb-3">{t('feedingPhases')}</Text>
+          <View style={styles.cyclePhases}>
+            <Divider />
+            <AppText variant="cardTitle">{t('feedingPhases')}</AppText>
             {cycle.phases.map((phase, index) => renderFeedingPhase(phase, cycle.cycle_id, index))}
           </View>
         )}
-      </View>
+      </Card>
     );
-  }, [expandedCycleId, handleAddCycleToCart, renderFeedingPhase, t, toggleCycleExpansion]);
+  }, [expandedCycleId, getPhaseLabel, handleAddCycleToCart, renderFeedingPhase, t, toggleCycleExpansion]);
 
   const renderListHeader = useCallback(
     () =>
       suggestionCycles.length > 0 ? (
         <>
-          <View className="flex-row bg-[#dbeafe] p-3 rounded-lg mb-4 gap-3">
-            <Ionicons name="information-circle" size={24} color={MAVECAM_COLORS.INFO} />
-            <Text className="flex-1 text-sm text-mavecam-primary">{t('suggestionsInfoBanner')}</Text>
-          </View>
+          {error ? <InlineAlert tone="error" message={error} /> : null}
+          <InlineAlert tone="info" message={t('suggestionsInfoBanner')} />
 
           {renderConfidenceScore()}
         </>
       ) : null,
-    [renderConfidenceScore, suggestionCycles.length, t]
+    [error, renderConfidenceScore, suggestionCycles.length, t]
   );
 
   const renderEmptyState = useCallback(
     () => (
-      <View className="py-16 items-center">
-        <Ionicons name="bulb-outline" size={100} color={MAVECAM_COLORS.GRAY_LIGHT} />
-        <Text className="mt-5 text-2xl font-bold text-gray-dark">{t('noSuggestionsYet')}</Text>
-        <Text className="mt-3 text-base text-gray-light text-center px-8">
-          {t('noSuggestionsDescription')}
-        </Text>
-        <TouchableOpacity
-          className="mt-6 bg-mavecam-primary flex-row items-center px-6 py-3 rounded-lg gap-2"
-          onPress={() => navigation.navigate('NewCycle')}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-          <Text className="text-white text-base font-semibold">{t('startNewCycle')}</Text>
-        </TouchableOpacity>
-      </View>
+      <EmptyState title={t('noSuggestionsYet')} message={t('noSuggestionsDescription')} actionLabel={t('startNewCycle')} onAction={() => navigation.navigate('CreateFarm')} />
     ),
     [navigation, t]
   );
 
   return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-white px-5 pt-16 pb-5 flex-row items-center justify-between shadow">
-        <TouchableOpacity onPress={() => navigation.goBack()} className="w-10">
-          <Ionicons name="arrow-back" size={24} color={MAVECAM_COLORS.GRAY_DARK} />
-        </TouchableOpacity>
-        <View className="flex-1 items-center">
-          <Text className="text-xl font-bold text-gray-dark">{t('feedingSuggestions')}</Text>
-          <Text className="text-xs text-gray-light mt-1">{t('intelligentRecommendations')}</Text>
-        </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Cart')} className="relative">
-          <Ionicons name="cart-outline" size={24} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          {cartItemsCount > 0 && (
-            <View className="absolute -top-2 -right-2 bg-[#dc2626] rounded-full min-w-[20px] h-5 items-center justify-center px-1">
-              <Text className="text-white text-[10px] font-bold">
-                {cartItemsCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+    <View style={styles.screen}>
+      <AppHeader title={t('feedingSuggestions')} subtitle={t('intelligentRecommendations')} onBack={() => navigation.goBack()} backLabel={t('back')} rightAction={<IconButton icon="cart-outline" variant="ghost" tone="inverse" accessibilityLabel={`${t('cart')} ${cartItemsCount}`} badge={cartItemsCount} onPress={() => navigation.navigate('Cart')} />} />
 
       {!currentCycle?.id ? (
-        <View className="flex-1 items-center justify-center px-8">
-          <Ionicons name="information-circle-outline" size={48} color={MAVECAM_COLORS.WARNING} />
-          <Text className="mt-3 text-base text-gray-dark text-center">{t('sessionCycleNotSelected')}</Text>
-          <Text className="mt-2 text-sm text-gray-light text-center">{t('sessionCyclePickerDescription')}</Text>
-          <TouchableOpacity
-            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
-            onPress={() => navigation.navigate('CycleSessionEntry')}
-          >
-            <Text className="text-white text-base font-semibold">{t('sessionCycleConfirm')}</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState title={t('sessionCycleNotSelected')} message={t('sessionCyclePickerDescription')} actionLabel={t('sessionCycleConfirm')} onAction={() => navigation.navigate('CycleSessionEntry', { showBackToDashboard: true })} />
       ) : loading && !refreshing ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-          <Text className="mt-3 text-base text-gray-light">{t('analyzingCycles')}</Text>
-        </View>
-      ) : error ? (
-        <View className="flex-1 items-center justify-center px-10 py-10">
-          <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
-          <Text className="mt-3 text-base text-[#dc2626] text-center">{error}</Text>
-          <TouchableOpacity
-            className="mt-5 bg-mavecam-primary px-6 py-3 rounded-lg"
-            onPress={() =>
+        <LoadingState message={t('analyzingCycles')} />
+      ) : error && suggestionCycles.length === 0 ? (
+        <ErrorState title={error} actionLabel={t('retry')} onAction={() =>
               farmProfile?.id &&
               currentCycle?.id &&
               dispatch(
@@ -394,11 +335,7 @@ export default function FeedingSuggestionsScreen() {
                   cycleId: currentCycle.id,
                 })
               )
-            }
-          >
-            <Text className="text-white text-base font-semibold">{t('retry')}</Text>
-          </TouchableOpacity>
-        </View>
+            } />
       ) : (
         <FlatList
           data={suggestionCycles}
@@ -406,13 +343,13 @@ export default function FeedingSuggestionsScreen() {
           renderItem={renderCycleSuggestion}
           ListHeaderComponent={renderListHeader}
           ListEmptyComponent={renderEmptyState}
-          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          contentContainerStyle={styles.content}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              colors={[MAVECAM_COLORS.GREEN_PRIMARY]}
-              tintColor={MAVECAM_COLORS.GREEN_PRIMARY}
+              colors={[colors.brand.primary]}
+              tintColor={colors.brand.primary}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -422,3 +359,28 @@ export default function FeedingSuggestionsScreen() {
   );
 }
 
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surface.page },
+  content: { padding: spacing[4], paddingBottom: spacing[6] },
+  expandableControl: { minHeight: sizing.touchTargetMinimum, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
+  pressed: { opacity: opacity.pressed },
+  sectionCard: { marginBottom: spacing[4] },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: spacing[3] },
+  confidenceContent: { flexDirection: 'row', gap: spacing[4] },
+  confidenceScore: { alignItems: 'center', paddingHorizontal: spacing[4] },
+  analysisDetails: { flex: 1, justifyContent: 'center', gap: spacing[1] },
+  flex: { flex: 1 },
+  productCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing[3], marginBottom: spacing[2] },
+  productActions: { alignItems: 'flex-end', justifyContent: 'space-between' },
+  expandedSection: { gap: spacing[2] },
+  cycleCard: { marginBottom: spacing[4], gap: spacing[3] },
+  phaseCard: { marginBottom: spacing[3], gap: spacing[3] },
+  expandableHeading: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: spacing[3] },
+  expandableTrailing: { alignItems: 'flex-end', gap: spacing[1] },
+  phaseIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface.page, alignItems: 'center', justifyContent: 'center' },
+  phaseMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[1] },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  cyclePhases: { gap: spacing[3] },
+  buttonSpacing: { marginTop: spacing[3] },
+});

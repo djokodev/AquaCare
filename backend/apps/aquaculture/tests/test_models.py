@@ -5,7 +5,15 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from aquaculture.models import CycleLog, FeedingPlan, NutritionalGuide, ProductionCycle, SanitaryLog
+from aquaculture.models import (
+    CycleLog,
+    CycleUnitAllocation,
+    FeedingPlan,
+    NutritionalGuide,
+    ProductionCycle,
+    ProductionUnit,
+    SanitaryLog,
+)
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 
@@ -246,10 +254,25 @@ class TestFeedingPlan:
         assert str(plan) == expected
     
     def test_unique_plan_per_week(self, production_cycle):
-        """Test contrainte unicité plan par semaine."""
-        # Premier plan semaine 2
+        """Test contrainte unicité plan par semaine et par allocation."""
+        production_unit = ProductionUnit.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            name="Bac 1",
+            unit_type="tank",
+            volume_m3=Decimal('4.5'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=production_unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg=Decimal('22.5'),
+            current_biomass_kg=Decimal('22.5'),
+        )
+
         FeedingPlan.objects.create(
             cycle=production_cycle,
+            cycle_unit_allocation=allocation,
             week_number=2,
             estimated_fish_count=900,
             average_weight=Decimal('25'),
@@ -264,11 +287,12 @@ class TestFeedingPlan:
             start_date=date.today(),
             end_date=date.today() + timedelta(days=6)
         )
-        
-        # Deuxième plan même semaine -> erreur
+
+        # Deuxième plan même allocation et même semaine -> erreur
         with pytest.raises(IntegrityError):
             FeedingPlan.objects.create(
                 cycle=production_cycle,
+                cycle_unit_allocation=allocation,
                 week_number=2,
                 estimated_fish_count=900,
                 average_weight=Decimal('26'),
@@ -359,7 +383,7 @@ class TestNutritionalGuide:
             expected_fcr=Decimal('1.0')
         )
         
-        assert str(guide) == "Tilapia - Croissance (50-150g) (MAVECAM)"
+        assert str(guide) == "Tilapia - Croissance (50-150g) (AquaCare)"
 
     def test_unique_species_stage(self):
         """Test contrainte unicité (species, min_weight, source)."""

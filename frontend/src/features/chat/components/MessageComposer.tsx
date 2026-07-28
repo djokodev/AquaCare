@@ -5,16 +5,12 @@
  * Supports text + media (image/video) with validation
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
-  TextInput,
-  TouchableOpacity,
   Image,
-  Text,
   StyleSheet,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -29,19 +25,8 @@ import {
   MAX_MESSAGE_LENGTH,
 } from '../domain/constants';
 import type { MediaType } from '../types/chat';
-
-/**
- * MAVECAM Design System Colors
- */
-const COLORS = {
-  GREEN_PRIMARY: '#059669',
-  WHITE: '#ffffff',
-  CREAM: '#f8fafc',
-  GRAY_LIGHT: '#64748b',
-  GRAY_DARK: '#1e293b',
-  BORDER_GRAY: '#e2e8f0',
-  ERROR: '#dc2626',
-};
+import { AppText, IconButton, MultilineTextField } from '@/components/ui';
+import { colors, radii, sizing, spacing } from '@/theme';
 
 interface MediaFile {
   uri: string;
@@ -67,6 +52,7 @@ export function MessageComposer({
   const [mediaFile, setMediaFile] = useState<MediaFile | null>(null);
   const [mediaType, setMediaType] = useState<MediaType>('none');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
 
   /**
    * Request media library permissions
@@ -194,6 +180,8 @@ export function MessageComposer({
    * Send message
    */
   const handleSend = async () => {
+    if (sendingRef.current || disabled) return;
+
     // Validate content
     const validation = validateMessageContent(content);
     if (!validation.isValid) {
@@ -204,6 +192,7 @@ export function MessageComposer({
       return;
     }
 
+    sendingRef.current = true;
     setSending(true);
 
     try {
@@ -217,6 +206,7 @@ export function MessageComposer({
       const message = error instanceof Error ? error.message : t('chatSendErrorGeneric');
       Alert.alert(t('chatSendError'), message);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -230,10 +220,10 @@ export function MessageComposer({
       {/* Offline indicator */}
       {offlinePendingCount > 0 && (
         <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={16} color={COLORS.GRAY_LIGHT} />
-          <Text style={styles.offlineText}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.text.muted} />
+          <AppText variant="caption" color="muted">
             {t('chatOfflinePending', { count: offlinePendingCount })}
-          </Text>
+          </AppText>
         </View>
       )}
 
@@ -245,78 +235,59 @@ export function MessageComposer({
           )}
           {mediaType === 'video' && (
             <View style={styles.previewVideo}>
-              <Ionicons name="play-circle-outline" size={48} color={COLORS.WHITE} />
-              <Text style={styles.videoText}>{t('chatVideoSelected')}</Text>
+              <Ionicons name="play-circle-outline" size={48} color={colors.text.inverse} />
+              <AppText variant="caption" color="inverse">{t('chatVideoSelected')}</AppText>
             </View>
           )}
-          <TouchableOpacity
+          <IconButton
             onPress={removeMedia}
+            icon="close-circle"
+            variant="danger"
+            accessibilityLabel={t('close')}
             style={styles.removeMediaButton}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close-circle" size={24} color={COLORS.ERROR} />
-          </TouchableOpacity>
+          />
         </View>
       )}
 
       {/* Input area */}
       <View style={styles.inputContainer}>
         {/* Media button */}
-        <TouchableOpacity
+        <IconButton
           onPress={showMediaPicker}
-          style={styles.mediaButton}
+          icon="image-outline"
+          accessibilityLabel={t('chatSelectMedia')}
+          variant="ghost"
           disabled={disabled || sending}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="image-outline"
-            size={24}
-            color={disabled ? COLORS.GRAY_LIGHT : COLORS.GREEN_PRIMARY}
-          />
-        </TouchableOpacity>
+        />
 
         {/* Text input */}
-        <TextInput
-          style={styles.textInput}
+        <MultilineTextField
           value={content}
           onChangeText={setContent}
           placeholder={t('chatPlaceholder')}
-          placeholderTextColor={COLORS.GRAY_LIGHT}
-          multiline
           maxLength={MAX_MESSAGE_LENGTH}
           editable={!disabled && !sending}
           returnKeyType="default"
         />
 
         {/* Send button */}
-        <TouchableOpacity
+        <IconButton
           onPress={handleSend}
-          style={[
-            styles.sendButton,
-            canSend ? styles.sendButtonActive : styles.sendButtonDisabled,
-          ]}
+          icon="send"
+          accessibilityLabel={t('chatSendMessage')}
+          tone="inverse"
+          style={[styles.sendButton, canSend ? styles.sendButtonActive : styles.sendButtonDisabled]}
           disabled={!canSend}
-          activeOpacity={0.7}
-        >
-          {sending ? (
-            <ActivityIndicator size="small" color={COLORS.WHITE} />
-          ) : (
-            <Ionicons name="send" size={20} color={COLORS.WHITE} />
-          )}
-        </TouchableOpacity>
+          accessibilityState={{ busy: sending }}
+        />
       </View>
 
       {/* Character count */}
       {isNearLimit && (
         <View style={styles.characterCountContainer}>
-          <Text
-            style={[
-              styles.characterCount,
-              characterCount >= MAX_MESSAGE_LENGTH && styles.characterCountError,
-            ]}
-          >
+          <AppText variant="caption" style={characterCount >= MAX_MESSAGE_LENGTH ? styles.characterCountError : styles.characterCount}>
             {characterCount}/{MAX_MESSAGE_LENGTH}
-          </Text>
+          </AppText>
         </View>
       )}
     </View>
@@ -325,97 +296,72 @@ export function MessageComposer({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.WHITE,
+    backgroundColor: colors.surface.card,
     borderTopWidth: 1,
-    borderTopColor: COLORS.BORDER_GRAY,
-    paddingBottom: 8,
+    borderTopColor: colors.border.subtle,
+    paddingBottom: spacing[2],
   },
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: COLORS.CREAM,
-  },
-  offlineText: {
-    fontSize: 12,
-    color: COLORS.GRAY_LIGHT,
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    backgroundColor: colors.surface.page,
   },
   mediaPreview: {
-    marginHorizontal: 12,
-    marginTop: 12,
+    marginHorizontal: spacing[3],
+    marginTop: spacing[3],
     position: 'relative',
   },
   previewImage: {
-    width: 120,
-    height: 90,
-    borderRadius: 8,
+    width: sizing.avatarLarge * 2,
+    height: sizing.inputHeight * 2,
+    borderRadius: radii.md,
   },
   previewVideo: {
-    width: 120,
-    height: 90,
-    borderRadius: 8,
-    backgroundColor: COLORS.GRAY_DARK,
+    width: sizing.avatarLarge * 2,
+    height: sizing.inputHeight * 2,
+    borderRadius: radii.md,
+    backgroundColor: colors.text.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  videoText: {
-    color: COLORS.WHITE,
-    fontSize: 11,
-    marginTop: 4,
-  },
   removeMediaButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: COLORS.WHITE,
-    borderRadius: 12,
+    top: -spacing[2],
+    right: -spacing[2],
+    backgroundColor: colors.surface.card,
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    gap: 8,
-  },
-  mediaButton: {
-    padding: 8,
-  },
-  textInput: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 100,
-    backgroundColor: COLORS.CREAM,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: COLORS.GRAY_DARK,
+    alignItems: 'center',
+    paddingHorizontal: spacing[3],
+    paddingTop: spacing[3],
+    gap: spacing[2],
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: sizing.touchTargetMinimum,
+    height: sizing.touchTargetMinimum,
+    borderRadius: radii.full,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sendButtonActive: {
-    backgroundColor: COLORS.GREEN_PRIMARY,
+    backgroundColor: colors.brand.primary,
   },
   sendButtonDisabled: {
-    backgroundColor: COLORS.GRAY_LIGHT,
+    backgroundColor: colors.surface.disabled,
   },
   characterCountContainer: {
     alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingTop: 4,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[1],
   },
   characterCount: {
-    fontSize: 11,
-    color: COLORS.GRAY_LIGHT,
+    color: colors.text.muted,
   },
   characterCountError: {
-    color: COLORS.ERROR,
+    color: colors.status.error,
   },
 });

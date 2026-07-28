@@ -1,168 +1,248 @@
 # PROJECT_CONTEXT.md
 
-Etat actuel du projet et decisions cles. A lire quand on reprend apres une pause.
+## Purpose
 
-## Etat actuel (Janvier 2026)
+This file is the living memory of AquaCare. Update it when major product, technical, architecture, release, or business decisions change.
 
-### Modules termines (100%)
-| Module | Backend | Frontend | Notes |
-|--------|---------|----------|-------|
-| **accounts** | OK | OK | Auth JWT, profils, validation +237 |
-| **aquaculture** | OK | OK | Cycles, logs, plans, recolte, stats, guides |
-| **commerce** | OK | OK | Catalogue, commandes, suggestions IA, simulation ROI |
-| **notifications** | OK | OK | Alertes, filtrage, marquage |
-| **chat** | OK | OK | Support technicien |
-| **onboarding hormozi** | - | OK | 5 ecrans activation avec valeur FCFA |
+## Calibration tanks and autonomous sessions
 
-### En cours / A faire
-- [ ] RBAC + Jazzmin admin (branche `feature/rbac-jazzmin-admin`)
-- [ ] Push notifications (Expo)
+A calibration tank is a permanent physical `ProductionUnit` (`unit_type=tank`,
+`purpose=calibration`). Its first live arrival opens an autonomous rearing session,
+represented by a `ProductionCycle(cycle_kind=calibration)` and one active allocation.
+The transfer is a ledger movement: source stock decreases and destination stock is
+then independent. Harvesting or closing the source never cascades to the destination.
 
-## Mise a jour campagne Skills Quality (Mars 2026)
+A partial harvest subtracts the actual harvested count and biomass, then replays the
+ledger. Harvesting the last active allocation closes the technical destination
+session in the same transaction, preserves its history and makes the physical tank
+available. A later arrival creates a new session rather than reopening the old one.
 
-### Statut
-- Campagne de qualite complete sur la branche `feature/codebase-improvements-skills`
-- 10 skills appliques et clotures
-- warnings backend de reference elimines
+Unit mutation and deletion rules are centralized across specialized and generic APIs
+and Django admin. Occupied calibration tanks protect volume, type, purpose and
+status; empty tanks with history cannot be deleted. Unit names are case-insensitively
+unique within a farm.
 
-### Perimetre couvert
-- Backend:
-  - `python-code-style`
-  - `python-best-practices`
-  - `django-security`
-  - `django-orm-patterns`
-  - `python-design-patterns`
-  - `django-rest-framework`
-  - `python-testing-patterns`
-  - `python-performance-optimization`
-  - `clean-ddd-hexagonal`
-- Frontend:
-  - `react-native-best-practices`
+Replay orders events by business timestamp, `created_at`, UUID. Session resolution
+uses the first arrival datetime as its inclusive lower bound and the final-harvest
+business datetime as its exclusive upper bound. A backdated offline movement is
+accepted only when the complete timeline stays coherent; otherwise the transaction
+is rolled back.
+Transfers, harvests and replay re-aggregate cycle metrics. Reports expose incoming
+and outgoing movements and their origins separately from growth and mortality.
 
-### Resultats techniques
-- baseline Ruff active sur tout le backend Python avec job CI dedie
-- contrats Python, frontieres DRF et orchestration applicative renforces
-- modules backend coeur refactores en profondeur:
-  - `accounts`
-  - `chat`
-  - `commerce`
-  - `notifications`
-  - `aquaculture`
-- frontend optimise sur:
-  - `main/navigation`
-  - `aquaculture`
-  - `commerce`
-  - `chat + notifications`
-- warnings backend supprimes:
-  - deprecation admin Django
-  - `CacheKeyWarning`
-  - `UnorderedObjectListWarning`
-  - warnings `pydyf`
+Offline tanks and operations remain in `AsyncStorage`, merge with server data by
+`client_uuid`, and stay visible as pending. Local destinations use
+`destination_production_unit_client_uuid`; only server-confirmed items are marked as
+synchronized.
 
-### Validation de reference
-```bash
-docker-compose exec api env DJANGO_SETTINGS_MODULE=mavecam_api.settings.test pytest -q
-# 873 passed
+## Project snapshot
 
-cd frontend && npx tsc --noEmit
-cd frontend && npm test -- --watchAll=false
-# 52 suites passees, 547 tests passes
-```
+AquaCare is a bilingual French and English aquaculture management mobile application for fish farmers in Cameroon. It is designed for intermittent connectivity and follows an offline-first approach.
 
-### Commits de campagne
-- `bb468fa` `chore: establish backend python code style baseline`
-- `cbcec7a` `refactor: strengthen backend python best practices`
-- `2cd24b4` `security: harden backend django surfaces`
-- `4790f88` `refactor: optimize backend django orm patterns`
-- `cb05cb8` `refactor: apply backend python design patterns`
-- `7f5105c` `refactor: standardize backend drf contracts`
-- `e177f36` `test: strengthen backend testing patterns`
-- `8ca6605` `test: complete backend testing patterns campaign`
-- `678a858` `perf: optimize backend hotspots`
-- `b326f1f` `refactor: align backend clean ddd boundaries`
-- `0c9c514` `refactor: optimize react native app surfaces`
-- `ca87b05` `chore: eliminate backend test warnings`
+Current stack:
 
-## Decisions techniques (le WHY)
+- Backend, Django REST Framework, PostgreSQL, Redis, Celery
+- Frontend, React Native, Expo, TypeScript, Redux Toolkit
+- Product areas, accounts/auth, aquaculture, commerce, support/chat, notifications, onboarding/profile
 
-### Offline-first avec UUID
-**Choix :** UUID genere cote mobile, backend deduplique via `client_uuid`
-**Pourquoi :** Zones rurales Cameroun = reseau 2G intermittent. Sans ca, perte de donnees terrain.
+## Current status
 
-### Telephone au lieu d'email
-**Choix :** +237 comme identifiant unique
-**Pourquoi :** 90% penetration mobile vs 30% email au Cameroun. Email = barriere a l'adoption.
+| Area | Status | Notes |
+| --- | --- | --- |
+| Accounts/Auth | Implemented | JWT auth, phone-based login, farm profile flows, backend service layering |
+| Aquaculture | Implemented | Cycles, logs, feeding, sanitary tracking, reporting, offline sync |
+| Commerce | Implemented | Product catalogue, orders, feed-related commerce logic |
+| Notifications | Implemented | Notification flows and device registration are present |
+| Chat/Support | Implemented | Support module exists and is wired into the backend |
+| Mobile frontend | Implemented | Expo/TypeScript app with feature folders and i18n |
+| Deployment | Implemented | Docker Compose stacks and GitHub Actions workflows exist |
+| Agent documentation | Implemented | Root agent files plus docs strategy and path-specific rules |
 
-### Fixtures JSON pour guides nutritionnels
-**Choix :** `python manage.py load_nutritional_data` plutot qu'API externe
-**Pourquoi :** Doit marcher offline en zone rurale. Donnees MAVECAM stables, pas besoin temps reel.
+## Major technical decisions
 
-### Frontend = estimations temporaires, Backend = verite
-**Choix :** Calculs metier UNIQUEMENT backend, frontend affiche seulement
-**Pourquoi :** Evite divergence FCR/biomasse entre app et rapports. Single source of truth.
+### Calibration tanks and grading transfers
 
-### Redux au lieu de Context
-**Choix :** Redux Toolkit pour etat global
-**Pourquoi :** Dashboard + Stats + Commerce = state complexe. DevTools essentiels pour debug mobile.
+A calibration tank reuses the existing physical `ProductionUnit` aggregate. `unit_type` remains the physical shape (`tank`, `pond`, `cage`), while `purpose` distinguishes `production` from `calibration`; calibration units must be tanks with a positive volume and no surface. There is no parallel `CalibrationTank` database model. The `/calibration-tanks/` API is a filtered compatibility facade over `ProductionUnit`.
 
-## Gotchas (pieges connus)
+Grading starts from one precise `CycleUnitAllocation`. The first arrival into an empty calibration unit creates a `ProductionCycle(cycle_kind="calibration")` and a zero-initialized destination allocation. Later arrivals reuse its single active allocation. `CalibrationOperation` is an immutable ledger movement between `source_allocation` and `destination_allocation`, with before/after snapshots and idempotent `client_uuid` replay. The canonical endpoint is `POST /aquaculture/cycle-unit-allocations/{id}/calibrate/`; the cycle endpoint is only a compatibility adapter when exactly one active source allocation exists.
 
-1. **Erreur "0 sur 0 guides"** → Oubli `load_nutritional_data` apres migration
-2. **Erreur "0 produits"** → Oubli `load_products` apres migration
-3. **TypeScript undefined** → Toujours `(value || default)` pour props optionnelles
-4. **Traductions manquantes** → Verifier fr.ts ET en.ts apres chaque nouveau texte
-5. **Expo Go crash** → Package avec code natif installe par erreur
+Allocation stock is replayed in deterministic business-time order from incoming movements, unit logs, outgoing movements, partial harvests and final state. Mortality preserves the previous average weight and recomputes biomass. Cycle survival and FCR recognize live transfers and harvested stock, so an arrival is not growth and a departure is not mortality. Backdated offline movements replay later snapshots transactionally.
 
-## Chiffres cles metier
+Cycle launch optionally accepts `calibration_units`; these physical units are created atomically but remain empty and unallocated. Bulk sync normalizes UUID, datetime and decimal values, resolves allocations and units by server ID or client UUID, returns per-item errors, and always includes calibration server updates during full sync. The mobile queue marks only confirmed items as synchronized and includes calibration tanks and operations in unit fallback results.
 
-```
-Prix poisson : 1800 FCFA/kg
-Prix aliment : 1250 FCFA/kg
-FCR baseline : 1.3 (sans suivi)
-FCR cible    : 0.7 (avec AquaCare)
-Livraison gratuite Douala : >= 20 sacs
-```
+Migration `aquaculture.0032_calibration_allocations` creates the calibration ledger,
+adds the unit purpose and sync fields, audits duplicate active allocations, then adds
+the single-active-allocation index. It also creates the calibration lookup and
+movement indexes and installs the calibration-unit check constraint with PostgreSQL
+`NOT VALID`, followed by `VALIDATE CONSTRAINT`. Migration
+`aquaculture.0033_global_production_unit_name` audits legacy names, removes the
+temporary calibration-only name constraint and adds global case-insensitive name
+uniqueness per farm. These migrations currently use regular index creation: they do
+not use `CONCURRENTLY`, and they do not set a PostgreSQL `lock_timeout`.
 
-## Commandes post-migration
+Confirmed movements cannot be edited or deleted. Mixing species, transferring an entire source allocation and redistributing historical costs remain out of scope.
 
-```bash
-docker-compose exec api python manage.py migrate
-docker-compose exec api python manage.py load_nutritional_data  # 8 guides
-docker-compose exec api python manage.py load_products           # 22 produits
-docker-compose exec api python manage.py setup_rbac              # Roles admin
-```
+### Final harvest operations and reconciliation
 
-## Mise a jour audit Commerce (Fevrier 2026)
+Migration `aquaculture.0035_final_harvest_operation` introduces the immutable,
+offline-first `FinalHarvestOperation` event. Its UUID and unique `client_uuid`
+make retries idempotent, while the one-to-one protected allocation relation
+guarantees one physical final harvest per session. `harvested_at` is the
+timezone-aware business instant; `CycleUnitAllocation.harvested_at` remains the
+technical server timestamp. The legacy final-harvest fields on the allocation
+are compatibility projections of the event.
 
-### Backend Commerce
-- Hardening API commandes: `OrderViewSet` restreint a `GET/POST` et `GET detail` (mutations `PUT/PATCH/DELETE` bloquees en 405).
-- Gestion d'erreurs metier durcie: mapping exceptions metier vers 400 propres; suppression d'exposition brute des erreurs internes dans `cycle_simulation` (message generique client + logs serveur).
-- Idempotence offline renforcee via `client_uuid` dans `OrderService`:
-  - meme `client_uuid` + meme utilisateur => reutilisation de la commande existante;
-  - `client_uuid` reutilise par un autre utilisateur => erreur metier controlee.
-- Creation de commande robuste en concurrence: retry sur `IntegrityError` pour collisions `order_number/client_uuid`.
-- Normalisation region (`trim/lower`) appliquee au calcul de livraison pour eviter les ecarts de casse (`Littoral`, `littoral`, etc.).
-- Contrat suggestions aligne frontend: ajout `cycle_name` dans `feeding_suggestions`.
-- Taxonomie commerce etendue pour compatibilite legacy/catalogue (`species/phase`) sans rupture d'API.
-- Settings de test stabilises: cache force en `LocMemCache` (`mavecam_api.settings.test`) pour supprimer la dependance Redis en tests.
-- Test PDF rendu deterministe: skip explicite si dependances systeme WeasyPrint absentes.
+A final harvest is `reconciled` when the ledger immediately matches the declared
+physical count. With an explicit offline/reconciliation mode it may instead be
+stored as `pending`: the session is still physically closed, its current stock is
+zero, and the tank is free for a new, distinct session. Historical calibration
+events are valid only inside the half-open interval
+`session_started_at <= calibrated_at < final_harvested_at`. Events affecting a
+reconciled harvest are rolled back if they invalidate it. Events affecting a
+pending source or destination harvest are accepted only when they move its
+computed pre-harvest stock toward the declared stock, and automatically resolve
+the status when equality is reached.
 
-### Frontend Commerce
-- Nettoyage encodage/texte Commerce (suppression mojibake) sur types/domain/services.
-- Contrats TS alignes sur payload API reel:
-  - simulation en numerique (`unit_price`, `total_price`);
-  - `CycleSuggestion` enrichi (`cycle_name`, `avg_daily_consumption_kg`);
-  - phases/species alignees avec backend.
-- Gestion d'erreurs centralisee dans `commerceSlice` (`message | error | detail | non_field_errors | fallback`).
-- `OrdersHistoryScreen`: locale date/heure basee sur `i18n.language` (plus de `fr-FR` force), branding pickup neutralise via i18n (`pickupLocationPrefix`).
-- `CartScreen`: suppression logs sensibles en flux commande, fallbacks d'erreur robustes, normalisation region cote UI.
-- Logger production durci: logs desactives par defaut en release (`ENABLE_PROD_LOGS=false`).
-- Ajouts i18n FR/EN Commerce:
-  - correction `confirmClearCartMessage`;
-  - nouvelles cles phases backend (`alevinage`, `pre_grossissement`, `grossissement`);
-  - `pickupLocationPrefix`.
-- Config Jest dediee Commerce (`jest.commerce.config.js`) + scripts `test:commerce` et `test:commerce:coverage`.
+Frontend harvests keep their local date, local time, generated `client_uuid` and
+exact business datetime in `aquacare_offline_final_harvests`. Full sync combines
+calibration and final-harvest events in business-time order; delta sync exposes
+new harvests and pending-to-reconciled changes. Legacy same-day HTTP clients may
+have a datetime constructed by the serializer, but domain services always
+require an explicit aware datetime. A new arrival after a final harvest always
+opens or uses a later session and never reopens the closed one.
 
-### Tests et couverture Commerce valides
-- Backend Commerce: tests passes en mode deterministe (`pytest apps/commerce/tests -n 0`), avec couverture core Commerce a 76% (objectif >=75 atteint).
-- Frontend Commerce: tests ecrans/services/store/domain completes, couverture module Commerce a 77.6% statements et 79.9% lines (objectif >=70 atteint).
+A global cycle harvest is also an idempotent command. Its mobile-generated UUID
+is a command UUID; each active allocation receives a deterministic child UUID,
+`uuid5(global_client_uuid, allocation_id)`. A complete identical replay returns
+the existing events, while a missing or incompatible child is a business
+conflict. The global endpoint preserves `message` and `cycle`, and additionally
+returns `final_harvest`, the complete `final_harvests` list, the aggregate
+`reconciliation_status`, and `idempotent_replay`. The aggregate is `pending` if
+at least one child is pending, otherwise it is `reconciled`. Historical cycles
+without allocations use their persisted final projection as an explicit legacy
+replay rule because they have no event on which to persist a command UUID.
+
+Harvest idempotency compares only the immutable physical payload: allocation,
+business harvest datetime, declared count, declared average weight, declared
+biomass and notes. `created_offline` is provenance metadata, not business data.
+This deliberately supports the mobile timeout case where an online command was
+committed with `created_offline=false`, its response was lost, then the same
+`client_uuid` and physical payload were retried from the offline queue with
+`created_offline=true`. A replay never rewrites the persisted provenance,
+`synced_at`, creation timestamp or creator.
+
+All harvest and calibration transactions use one canonical lock order to avoid
+cross-command deadlocks: production units by UUID, cycle allocations by UUID,
+existing final-harvest operations by UUID, then production cycles by UUID. The
+shared lock-context helper is used before global harvest, unit harvest and
+calibration mutations; PostgreSQL exercises global harvest and calibration on
+the same stock concurrently.
+
+For global commands, the mobile queue stores both the global command UUID and
+the server IDs and deterministic UUIDs of every child operation. Delta matching
+accepts a direct unit UUID, a stored child UUID or a stored child server ID. The
+global local status remains pending while any known child is pending and becomes
+reconciled only when every child is reconciled. Accepted pending commands remain
+local; cleanup removes only entries that are both synced and reconciled.
+
+Full sync resolves a final harvest by allocation when an allocation identifier
+is present, or by cycle when only `cycle_id` or `cycle_client_uuid` is present.
+A single-allocation cycle follows the global command path. A multi-allocation
+cycle is accepted only when the declared count matches the current aggregate;
+otherwise the API returns `final_harvest_requires_allocation_breakdown` and the
+client must harvest each unit explicitly. `processed.final_harvests` counts
+accepted commands, including idempotent replays. Partial-success responses expose
+accepted client UUIDs and per-item outcomes so the mobile client only removes
+confirmed queue entries and retains failed ones for retry.
+
+The `accepted` full-sync contract covers cycles, cycle logs, sanitary logs,
+calibration tanks, calibration operations and final harvests. `items` provides
+the corresponding client UUID and server reference when available. A command
+without a client UUID is never ambiguously acknowledged, and any command that
+produced an error is excluded. On `partial_success`, the client marks only these
+explicitly accepted UUIDs as synced and leaves every rejected item pending.
+
+Before an online harvest, the mobile client synchronizes only pending calibration
+events relevant to the target allocation or cycle and earlier than the harvest
+instant; unrelated cycles do not block the command. Allocation responses expose
+the ledger-derived, timezone-aware `session_started_at`, which the form uses as
+the exact lower business-time bound while keeping the backend authoritative.
+
+Migration `0035` intentionally does not invent `FinalHarvestOperation` rows for
+legacy harvested allocations: older records do not contain a precise business
+time or a client idempotency UUID. They remain readable through the allocation
+snapshot fallback. Every harvest confirmed after `0035` creates the event first,
+then writes a guarded compatibility projection; later model saves cannot silently
+diverge those physical values from the immutable event.
+
+- Offline-first behavior is a core product constraint.
+- UUID primary keys are used where offline-created data needs safe synchronization.
+- `client_uuid` deduplication is required for retry-safe creation paths where supported.
+- The backend is the source of truth for business calculations and final values.
+- FR/EN i18n is mandatory for visible UI text.
+- React Native UI must not hardcode visible copy.
+- Expo compatibility matters for all frontend dependencies.
+- Backend code should keep business logic in services and domain helpers.
+- Order documents are admin-only operational artifacts. Their document inputs
+  are immutable snapshots; no mobile PDF delivery is provided.
+- Path-specific rules live in `backend/AGENTS.md` and `frontend/AGENTS.md`.
+
+## Product and business context
+
+- Primary users are fish farmers and farm managers in Cameroon.
+- Rural connectivity can be unstable, so sync and retry behavior matters.
+- Aquaculture concepts that matter here include feed, biomass, FCR, mortality, harvest, and cycle tracking.
+- Commerce is tied to feed and product purchasing rather than general retail.
+
+Deeper references:
+
+- [`docs/product/PRODUCT_OVERVIEW.md`](docs/product/PRODUCT_OVERVIEW.md)
+- [`docs/product/BUSINESS_RULES.md`](docs/product/BUSINESS_RULES.md)
+- [`docs/product/AQUACULTURE_DOMAIN.md`](docs/product/AQUACULTURE_DOMAIN.md)
+- [`docs/product/COMMERCE_DOMAIN.md`](docs/product/COMMERCE_DOMAIN.md)
+
+## Documentation map
+
+- [`AGENTS.md`](AGENTS.md), shared agent rules
+- [`CLAUDE.md`](CLAUDE.md), Claude Code import and guidance
+- [`docs/agents/AGENT_DOCUMENTATION_STRATEGY.md`](docs/agents/AGENT_DOCUMENTATION_STRATEGY.md), agent loading strategy
+- [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md), architecture entry point
+- [`docs/workflows/DEVELOPMENT_WORKFLOW.md`](docs/workflows/DEVELOPMENT_WORKFLOW.md), development flow
+- [`docs/design/DESIGN_SYSTEM.md`](docs/design/DESIGN_SYSTEM.md), UI rules
+- [`backend/AGENTS.md`](backend/AGENTS.md), backend-specific rules
+- [`frontend/AGENTS.md`](frontend/AGENTS.md), frontend-specific rules
+
+## Current priorities
+
+- Offline sync hardening, to confirm.
+- Support and chat improvements, to confirm.
+- Push notification completion, to confirm.
+- Deployment and release readiness, to confirm.
+- Documentation quality maintenance, confirmed.
+
+## Known risks and cautions
+
+- Do not expose secrets, DSNs, tokens, or private IPs in docs.
+- Avoid stale module names, always verify the runtime source tree first.
+- Do not change application source code during docs-only refactors unless a reference is broken.
+- Verify frontend runtime constants before editing `frontend/src/constants/*`.
+- Keep root docs short and use selective docs for details.
+
+## Update policy
+
+Update this file when:
+
+- a major feature lands
+- a major architecture decision changes
+- the deployment or release process changes
+- the product scope changes
+- a new module is added
+- significant technical debt is identified or resolved
+
+Do not put here:
+
+- full architecture details
+- full workflow instructions
+- full design tokens
+- temporary task notes
+- long PR checklists

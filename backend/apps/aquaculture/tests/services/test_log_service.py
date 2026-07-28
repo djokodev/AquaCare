@@ -7,10 +7,39 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from aquaculture.domain.exceptions import BusinessRuleViolation, InsufficientFishCountError, InvalidDateRangeError
+from aquaculture.domain.exceptions import (
+    BusinessRuleViolation,
+    CycleLogCycleImmutableError,
+    InsufficientFishCountError,
+    InvalidDateRangeError,
+)
+from aquaculture.models import (
+    CycleFeedStockEntry,
+    CycleLog,
+    CycleUnitAllocation,
+    FarmFeedReference,
+    ProductionUnit,
+)
 from aquaculture.services.log_service import CycleLogService
 
 from tests.fixtures.factories import ProductionCycleFactory, UserFactory
+
+
+def create_cycle_unit_allocation(cycle, name='Bac 1'):
+    unit = ProductionUnit.objects.create(
+        farm_profile=cycle.farm_profile,
+        name=name,
+        unit_type='tank',
+        volume_m3=Decimal('3.00'),
+    )
+    return CycleUnitAllocation.objects.create(
+        cycle=cycle,
+        production_unit=unit,
+        initial_fish_count=500,
+        current_fish_count=500,
+        initial_biomass_kg=Decimal('5.00'),
+        current_biomass_kg=Decimal('5.00'),
+    )
 
 
 @pytest.mark.django_db
@@ -23,10 +52,30 @@ class TestCycleLogServiceCreateLog:
             current_count=5000,
             current_biomass=Decimal('75.00')
         )
+        feed_reference = FarmFeedReference.objects.create(
+            farm_profile=cycle.farm_profile,
+            source=FarmFeedReference.SOURCE_EXTERNAL,
+            name='Stock test',
+            species=cycle.species,
+            pellet_size_mm=Decimal('2.00'),
+        )
+        CycleFeedStockEntry.objects.create(
+            cycle=cycle,
+            feed_reference=feed_reference,
+            source='manual',
+            label='Stock test',
+            feed_size_mm=Decimal('2.00'),
+            quantity_kg=Decimal('20.00'),
+            total_cost_fcfa=Decimal('10000.00'),
+            entry_date=date.today(),
+        )
         log_data = {
             'log_date': date.today(),
             'mortality_count': 10,
             'feed_quantity': Decimal('5.0'),
+            'feed_type': 'Stock test',
+            'feed_size_mm': Decimal('2.0'),
+            'feed_reference': feed_reference,
             'water_temperature': Decimal('28.5'),
             'ph_level': Decimal('7.2'),
             'dissolved_oxygen': Decimal('6.5'),
@@ -88,6 +137,92 @@ class TestCycleLogServiceCreateLog:
         with pytest.raises(BusinessRuleViolation, match="existe déjà"):
             CycleLogService.create_log(cycle, {'log_date': log_date})
 
+    def test_create_log_allows_global_and_unit_same_day(self):
+        """Un log global et un log unitaire peuvent coexister le même jour."""
+        cycle = ProductionCycleFactory()
+        allocation = create_cycle_unit_allocation(cycle, 'Bac 1')
+        log_date = date.today()
+
+        global_log = CycleLogService.create_log(cycle, {'log_date': log_date})
+        unit_log = CycleLogService.create_log(
+            cycle,
+            {
+                'log_date': log_date,
+                'cycle_unit_allocation': allocation,
+            },
+        )
+
+        assert global_log.id != unit_log.id
+        assert CycleLog.objects.filter(cycle=cycle, log_date=log_date).count() == 2
+        assert CycleLog.objects.filter(cycle=cycle, log_date=log_date, cycle_unit_allocation__isnull=True).count() == 1
+        assert CycleLog.objects.filter(cycle=cycle, log_date=log_date, cycle_unit_allocation=allocation).count() == 1
+
+    def test_create_log_allows_same_day_logs_for_different_units(self):
+        """Deux unités différentes peuvent avoir un log le même jour."""
+        cycle = ProductionCycleFactory()
+        allocation_1 = create_cycle_unit_allocation(cycle, 'Bac 1')
+        allocation_2 = create_cycle_unit_allocation(cycle, 'Bac 2')
+        log_date = date.today()
+
+        first_log = CycleLogService.create_log(
+            cycle,
+            {
+                'log_date': log_date,
+                'cycle_unit_allocation': allocation_1,
+            },
+        )
+        second_log = CycleLogService.create_log(
+            cycle,
+            {
+                'log_date': log_date,
+                'cycle_unit_allocation': allocation_2,
+            },
+        )
+
+        assert first_log.id != second_log.id
+        assert CycleLog.objects.filter(cycle=cycle, log_date=log_date).count() == 2
+        assert CycleLog.objects.filter(cycle=cycle, log_date=log_date, cycle_unit_allocation=allocation_1).count() == 1
+        assert CycleLog.objects.filter(cycle=cycle, log_date=log_date, cycle_unit_allocation=allocation_2).count() == 1
+
+    def test_create_unit_log_updates_allocation_current_stock(self):
+        """Un log unitaire met a jour le stock courant reel de l'allocation."""
+        cycle = ProductionCycleFactory(current_count=500, current_biomass=Decimal('5.00'))
+        allocation = create_cycle_unit_allocation(cycle, 'Bac stock reel')
+
+        log = CycleLogService.create_log(
+            cycle,
+            {
+                'log_date': date.today(),
+                'cycle_unit_allocation': allocation,
+                'mortality_count': 20,
+                'average_weight': Decimal('20.00'),
+            },
+        )
+
+        allocation.refresh_from_db()
+        cycle.refresh_from_db()
+
+        assert log.cycle_unit_allocation_id == allocation.id
+        assert allocation.current_fish_count == 480
+        assert allocation.current_biomass_kg == Decimal('9.60')
+        assert cycle.current_count == 480
+        assert cycle.current_biomass == Decimal('9.60')
+
+    def test_create_unit_log_rejects_mortality_above_unit_stock(self):
+        """La mortalite unitaire ne peut pas depasser le stock reel de l'unite."""
+        cycle = ProductionCycleFactory(current_count=500, current_biomass=Decimal('5.00'))
+        allocation = create_cycle_unit_allocation(cycle, 'Bac validation')
+
+        with pytest.raises(InsufficientFishCountError):
+            CycleLogService.create_log(
+                cycle,
+                {
+                    'log_date': date.today(),
+                    'cycle_unit_allocation': allocation,
+                    'mortality_count': 501,
+                },
+            )
+
     def test_create_log_with_client_uuid_for_sync(self):
         """Test création log avec client_uuid pour sync offline."""
         import uuid
@@ -144,6 +279,38 @@ class TestCycleLogServiceBulkLogs:
         assert len(result['errors']) == 0
         assert len(result['logs']) == 2
 
+    def test_create_bulk_logs_allows_same_day_logs_for_different_units(self):
+        """Le bulk doit accepter plusieurs logs unitaires le même jour."""
+        user = UserFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile__user=user,
+            start_date=date.today() - timedelta(days=10)
+        )
+        allocation_1 = create_cycle_unit_allocation(cycle, 'Bac 1')
+        allocation_2 = create_cycle_unit_allocation(cycle, 'Bac 2')
+
+        logs_data = [
+            {
+                'cycle': str(cycle.id),
+                'log_date': date.today(),
+                'mortality_count': 2,
+                'cycle_unit_allocation': allocation_1,
+            },
+            {
+                'cycle': str(cycle.id),
+                'log_date': date.today(),
+                'mortality_count': 3,
+                'cycle_unit_allocation': allocation_2,
+            },
+        ]
+
+        result = CycleLogService.create_bulk_logs(logs_data, user)
+
+        assert result['created'] == 2
+        assert result['updated'] == 0
+        assert len(result['errors']) == 0
+        assert CycleLog.objects.filter(cycle=cycle, log_date=date.today()).count() == 2
+
     def test_create_bulk_logs_deduplicates_by_uuid(self):
         """Test déduplication par client_uuid."""
         import uuid
@@ -175,10 +342,12 @@ class TestCycleLogServiceBulkLogs:
         result = CycleLogService.create_bulk_logs(logs_data, user)
 
         assert result['created'] == 0
-        assert result['updated'] == 1
+        assert result['updated'] == 0
+        assert len(result['errors']) == 1
+        assert 'autre journal quotidien' in result['errors'][0]['error']
 
         existing_log.refresh_from_db()
-        assert existing_log.mortality_count == 10  # Mis à jour
+        assert existing_log.mortality_count == 5
 
     def test_create_bulk_logs_handles_errors_gracefully(self):
         """Test gestion gracieuse des erreurs individuelles."""
@@ -253,6 +422,20 @@ class TestCycleLogServiceUpdateLog:
         with pytest.raises(InsufficientFishCountError):
             CycleLogService.update_log(log, update_data)
 
+    def test_update_log_rejects_cycle_change(self):
+        cycle = ProductionCycleFactory()
+        other_cycle = ProductionCycleFactory(farm_profile=cycle.farm_profile)
+        log = CycleLogService.create_log(
+            cycle,
+            {'log_date': date.today(), 'mortality_count': 0},
+        )
+
+        with pytest.raises(CycleLogCycleImmutableError):
+            CycleLogService.update_log(log, {'cycle': other_cycle})
+
+        log.refresh_from_db()
+        assert log.cycle_id == cycle.id
+
 
 @pytest.mark.django_db
 class TestCycleLogServiceDeduplication:
@@ -287,7 +470,8 @@ class TestCycleLogServiceDeduplication:
         result = CycleLogService.create_bulk_logs([log_data], user)
 
         assert result['created'] == 0
-        assert result['updated'] == 1
+        assert result['updated'] == 0
+        assert len(result['errors']) == 1
 
     def test_deduplicate_creates_new_log_if_not_exists(self):
         """Test déduplication crée nouveau log si inexistant."""
@@ -479,9 +663,10 @@ class TestBulkLogsCrossUserConflict:
 
         result = CycleLogService.create_bulk_logs(logs_data, user)
 
-        # Should create 1, update 1 — not create 2
+        # Le premier payload gagne, le second est un conflit explicite.
         assert result['created'] == 1
-        assert result['updated'] == 1
+        assert result['updated'] == 0
+        assert len(result['errors']) == 1
         assert len(result['logs']) == 1  # No duplicate in logs list
 
     def test_bulk_logs_with_user_none_still_processes(self):

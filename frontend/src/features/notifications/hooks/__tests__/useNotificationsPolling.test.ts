@@ -24,6 +24,7 @@ describe('features/notifications/hooks/useNotificationsPolling', () => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({
         auth: { isAuthenticated },
+        aquaculture: { currentCycle: null },
       })
     );
   };

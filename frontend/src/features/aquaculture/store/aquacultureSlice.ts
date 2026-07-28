@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import {
   AquacultureState,
+  CycleFeedStatus,
   ProductionCycle,
   CycleLog,
   FeedingPlan,
@@ -9,54 +10,18 @@ import {
   DailyLogForm,
   SanitaryLogForm,
   HarvestData,
-  SyncPayload,
+  SyncResponse,
+  PartialHarvestData,
+  PartialHarvest,
 } from '@/types/aquaculture';
+import { apiService } from '@/services/api';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import { offlineService } from '@/services/offlineService';
 import { logoutUser } from '@/features/auth/store/authSlice';
-
-interface ApiErrorPayload {
-  detail?: string;
-  message?: string;
-}
-
-interface ApiErrorShape {
-  response?: {
-    data?: ApiErrorPayload | string;
-  };
-  message?: string;
-}
-
-type PendingSyncAction =
-  | { type: 'cycleLogs'; data: Partial<CycleLog> }
-  | { type: 'sanitaryLogs'; data: Partial<SanitaryLog> }
-  | { type: 'newCycles'; data: Partial<ProductionCycle> };
+import { getApiErrorMessage } from '@/utils/errorParser';
 
 const extractErrorMessage = (error: unknown, fallback: string): string => {
-  if (!error || typeof error !== 'object') {
-    return fallback;
-  }
-
-  const candidate = error as ApiErrorShape;
-  const responseData = candidate.response?.data;
-
-  if (typeof responseData === 'string' && responseData.trim()) {
-    return responseData;
-  }
-
-  if (responseData && typeof responseData === 'object') {
-    if (responseData.detail) {
-      return responseData.detail;
-    }
-    if (responseData.message) {
-      return responseData.message;
-    }
-  }
-
-  if (candidate.message) {
-    return candidate.message;
-  }
-
-  return fallback;
+  return getApiErrorMessage(error, fallback);
 };
 
 // =================== ETAT INITIAL ===================
@@ -69,6 +34,13 @@ const initialState: AquacultureState = {
   feedingPlans: [],
   sanitaryLogs: [],
   dashboardData: undefined,
+  cycleFeedStatus: {
+    data: null,
+    loading: false,
+    error: null,
+    requestedCycleId: null,
+    currentRequestId: null,
+  },
   loading: {
     dashboard: false,
     cycles: false,
@@ -76,29 +48,36 @@ const initialState: AquacultureState = {
     sync: false,
   },
   error: null,
-  pendingSync: {
-    cycleLogs: [],
-    sanitaryLogs: [],
-    newCycles: [],
-  },
-  lastSyncTime: undefined,
 };
 
 // =================== ACTIONS ASYNC ===================
 
+// Marker rejet silencieux : utilise quand un thunk est appele apres logout
+// (tokens supprimes, isAuthenticated=false). Le reducer ignore ce payload pour
+// ne pas afficher d'erreur a l'utilisateur post-deconnexion.
+export const ABORTED_UNAUTHENTICATED = 'ABORTED_UNAUTHENTICATED';
+
 export const fetchDashboardData = createAsyncThunk(
   'aquaculture/fetchDashboardData',
   async (
-    options: { cycleId?: string; forceAllCycles?: boolean } | undefined,
+    options: { cycleId?: string; forceAllCycles?: boolean; lightweight?: boolean } | undefined,
     { getState, rejectWithValue }
   ) => {
+    const state = getState() as {
+      aquaculture: AquacultureState;
+      auth: { isAuthenticated: boolean };
+    };
+    if (!state.auth.isAuthenticated) {
+      return rejectWithValue(ABORTED_UNAUTHENTICATED);
+    }
     try {
-      const state = getState() as { aquaculture: AquacultureState };
       const sessionCycleId = state.aquaculture.currentCycle?.id;
       const cycleIdToUse = options?.forceAllCycles
         ? undefined
         : options?.cycleId || sessionCycleId;
-      const data = await aquacultureService.getDashboardData(cycleIdToUse);
+      const data = await aquacultureService.getDashboardData(cycleIdToUse, {
+        lightweight: options?.lightweight === true,
+      });
       return data;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement du dashboard'));
@@ -126,6 +105,22 @@ export const fetchProductionCycle = createAsyncThunk(
       return cycle;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors du chargement du cycle'));
+    }
+  }
+);
+
+export const fetchCycleFeedStatus = createAsyncThunk(
+  'aquaculture/fetchCycleFeedStatus',
+  async (cycleId: string, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get<CycleFeedStatus>(
+        `/aquaculture/cycles/${cycleId}/feed-status/`
+      );
+      return response.data;
+    } catch (error: unknown) {
+      return rejectWithValue(
+        extractErrorMessage(error, 'Erreur lors du chargement du statut des aliments')
+      );
     }
   }
 );
@@ -170,10 +165,55 @@ export const harvestCycle = createAsyncThunk(
   'aquaculture/harvestCycle',
   async ({ id, harvestData }: { id: string; harvestData: HarvestData }, { rejectWithValue }) => {
     try {
-      const cycle = await aquacultureService.harvestCycle(id, harvestData);
-      return cycle;
+      const response = await aquacultureService.harvestCycle(id, harvestData);
+      return response;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la recolte du cycle'));
+    }
+  }
+);
+
+export const createPartialHarvest = createAsyncThunk(
+  'aquaculture/createPartialHarvest',
+  async (
+    { id, data }: { id: string; data: PartialHarvestData },
+    { rejectWithValue }
+  ) => {
+    try {
+      const result = await aquacultureService.partialHarvestCycle(id, data);
+      return result;
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la récolte partielle'));
+    }
+  }
+);
+
+export const harvestCycleUnitAllocation = createAsyncThunk(
+  'aquaculture/harvestCycleUnitAllocation',
+  async (
+    { allocationId, harvestData }: { allocationId: string; harvestData: HarvestData },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await aquacultureService.harvestProductionUnitAllocation(allocationId, harvestData);
+      return response;
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, "Erreur lors de la récolte de l'unité"));
+    }
+  }
+);
+
+export const createPartialHarvestForUnit = createAsyncThunk(
+  'aquaculture/createPartialHarvestForUnit',
+  async (
+    { allocationId, data }: { allocationId: string; data: PartialHarvestData },
+    { rejectWithValue }
+  ) => {
+    try {
+      const result = await aquacultureService.partialHarvestProductionUnitAllocation(allocationId, data);
+      return result;
+    } catch (error: unknown) {
+      return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la récolte partielle de l’unité'));
     }
   }
 );
@@ -291,20 +331,45 @@ export const resolveSanitaryIssue = createAsyncThunk(
 
 export const synchronizeData = createAsyncThunk(
   'aquaculture/synchronizeData',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const state = getState() as { aquaculture: AquacultureState };
-      const { pendingSync, lastSyncTime } = state.aquaculture;
+      const syncResult = await offlineService.syncAllOfflineData();
+      const status: SyncResponse['status'] =
+        syncResult.failed === 0
+          ? 'success'
+          : syncResult.success > 0
+            ? 'partial_success'
+            : 'error';
 
-      const payload: SyncPayload = {
-        cycle_logs: pendingSync.cycleLogs,
-        sanitary_logs: pendingSync.sanitaryLogs,
-        new_cycles: pendingSync.newCycles,
-        last_sync: lastSyncTime,
-        device_id: 'mobile-app',
+      const response: SyncResponse = {
+        status,
+        timestamp: new Date().toISOString(),
+        processed: {
+          cycles: syncResult.details.newCycles.success,
+          cycle_logs: syncResult.details.cycleLogs.success,
+          sanitary_logs: syncResult.details.sanitaryLogs.success,
+          calibration_tanks: syncResult.details.calibrationTanks?.success ?? 0,
+          calibration_operations: syncResult.details.calibrationOperations?.success ?? 0,
+        },
+        errors:
+          syncResult.failed > 0
+            ? [
+                {
+                  type: 'general',
+                  error: extractErrorMessage(
+                    null,
+                    'Synchronisation partielle, certains éléments seront réessayés automatiquement'
+                  ),
+                },
+              ]
+            : [],
+        server_updates: {
+          cycles: [],
+          cycle_logs: [],
+          feeding_plans: [],
+          sanitary_logs: [],
+        },
       };
-
-      const response = await aquacultureService.synchronize(payload);
       return response;
     } catch (error: unknown) {
       return rejectWithValue(extractErrorMessage(error, 'Erreur lors de la synchronisation'));
@@ -320,6 +385,13 @@ export const aquacultureSlice = createSlice({
   reducers: {
     clearError: (state) => {
       state.error = null;
+    },
+
+    addCreatedProductionCycle: (state, action: PayloadAction<ProductionCycle>) => {
+      state.cycles.unshift(action.payload);
+      if (action.payload.status === 'active') {
+        state.activeCycles.unshift(action.payload);
+      }
     },
 
     setCurrentCycle: (state, action: PayloadAction<ProductionCycle | undefined>) => {
@@ -344,33 +416,6 @@ export const aquacultureSlice = createSlice({
       state.currentCycle = cycle;
     },
 
-    addToPendingSync: (state, action: PayloadAction<PendingSyncAction>) => {
-      const payload = action.payload;
-      switch (payload.type) {
-        case 'cycleLogs':
-          state.pendingSync.cycleLogs.push(payload.data);
-          break;
-        case 'sanitaryLogs':
-          state.pendingSync.sanitaryLogs.push(payload.data);
-          break;
-        case 'newCycles':
-          state.pendingSync.newCycles.push(payload.data);
-          break;
-      }
-    },
-
-    clearPendingSync: (state) => {
-      state.pendingSync = {
-        cycleLogs: [],
-        sanitaryLogs: [],
-        newCycles: [],
-      };
-    },
-
-    updateLastSyncTime: (state, action: PayloadAction<string>) => {
-      state.lastSyncTime = action.payload;
-    },
-
     resetAquacultureState: () => initialState,
   },
 
@@ -387,7 +432,9 @@ export const aquacultureSlice = createSlice({
       })
       .addCase(fetchDashboardData.rejected, (state, action) => {
         state.loading.dashboard = false;
-        state.error = action.payload as string;
+        if (action.payload !== ABORTED_UNAUTHENTICATED) {
+          state.error = action.payload as string;
+        }
       })
 
       .addCase(fetchProductionCycles.pending, (state) => {
@@ -448,7 +495,7 @@ export const aquacultureSlice = createSlice({
       })
 
       .addCase(harvestCycle.fulfilled, (state, action) => {
-        const harvestedCycle = action.payload;
+        const harvestedCycle = action.payload.cycle;
 
         const cycleIndex = state.cycles.findIndex((cycle) => cycle.id === harvestedCycle.id);
         if (cycleIndex !== -1) {
@@ -460,6 +507,50 @@ export const aquacultureSlice = createSlice({
         if (state.currentCycle?.id === harvestedCycle.id) {
           state.currentCycle = harvestedCycle;
         }
+      })
+
+      .addCase(createPartialHarvest.fulfilled, (state, action) => {
+        const { cycle: updatedCycle } = action.payload;
+        // Met à jour le cycle dans les listes (il reste actif)
+        const idx = state.cycles.findIndex((c) => c.id === updatedCycle.id);
+        if (idx !== -1) state.cycles[idx] = updatedCycle;
+        const activeIdx = state.activeCycles.findIndex((c) => c.id === updatedCycle.id);
+        if (activeIdx !== -1) state.activeCycles[activeIdx] = updatedCycle;
+        if (state.currentCycle?.id === updatedCycle.id) state.currentCycle = updatedCycle;
+      })
+
+      .addCase(createPartialHarvestForUnit.fulfilled, (state, action) => {
+        const { cycle: updatedCycle } = action.payload;
+        const idx = state.cycles.findIndex((c) => c.id === updatedCycle.id);
+        if (idx !== -1) state.cycles[idx] = updatedCycle;
+
+        const activeIdx = state.activeCycles.findIndex((c) => c.id === updatedCycle.id);
+        if (activeIdx !== -1) {
+          if (updatedCycle.status === 'active') {
+            state.activeCycles[activeIdx] = updatedCycle;
+          } else {
+            state.activeCycles.splice(activeIdx, 1);
+          }
+        }
+
+        if (state.currentCycle?.id === updatedCycle.id) state.currentCycle = updatedCycle;
+      })
+
+      .addCase(harvestCycleUnitAllocation.fulfilled, (state, action) => {
+        const { cycle: updatedCycle } = action.payload;
+        const idx = state.cycles.findIndex((c) => c.id === updatedCycle.id);
+        if (idx !== -1) state.cycles[idx] = updatedCycle;
+
+        const activeIdx = state.activeCycles.findIndex((c) => c.id === updatedCycle.id);
+        if (activeIdx !== -1) {
+          if (updatedCycle.status === 'active') {
+            state.activeCycles[activeIdx] = updatedCycle;
+          } else {
+            state.activeCycles.splice(activeIdx, 1);
+          }
+        }
+
+        if (state.currentCycle?.id === updatedCycle.id) state.currentCycle = updatedCycle;
       })
 
       .addCase(fetchCycleLogs.pending, (state) => {
@@ -525,15 +616,6 @@ export const aquacultureSlice = createSlice({
       .addCase(synchronizeData.fulfilled, (state, action) => {
         state.loading.sync = false;
 
-        if (action.payload.status === 'success') {
-          state.pendingSync = {
-            cycleLogs: [],
-            sanitaryLogs: [],
-            newCycles: [],
-          };
-          state.lastSyncTime = action.payload.timestamp;
-        }
-
         const { server_updates } = action.payload;
         if (server_updates.cycles.length > 0) {
           server_updates.cycles.forEach((cycle) => {
@@ -585,11 +667,35 @@ export const aquacultureSlice = createSlice({
         state.loading.sync = false;
         state.error = action.payload as string;
       })
-      .addCase(logoutUser.fulfilled, (state) => {
-        state.currentCycle = undefined;
+      // Reset complet au logout : evite spinner fantome (loading.dashboard) et
+      // donnees du compte precedent affichees apres re-login.
+      .addCase(logoutUser.fulfilled, () => initialState)
+      .addCase(logoutUser.rejected, () => initialState)
+
+      .addCase(fetchCycleFeedStatus.pending, (state, action) => {
+        state.cycleFeedStatus.loading = true;
+        state.cycleFeedStatus.error = null;
+        state.cycleFeedStatus.requestedCycleId = action.meta.arg;
+        state.cycleFeedStatus.currentRequestId = action.meta.requestId;
       })
-      .addCase(logoutUser.rejected, (state) => {
-        state.currentCycle = undefined;
+      .addCase(fetchCycleFeedStatus.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.cycleFeedStatus.currentRequestId) {
+          return;
+        }
+        if (action.payload.cycle_id !== state.cycleFeedStatus.requestedCycleId) {
+          state.cycleFeedStatus.loading = false;
+          state.cycleFeedStatus.error = 'Cycle feed status response mismatch';
+          return;
+        }
+        state.cycleFeedStatus.loading = false;
+        state.cycleFeedStatus.data = action.payload;
+      })
+      .addCase(fetchCycleFeedStatus.rejected, (state, action) => {
+        if (action.meta.requestId !== state.cycleFeedStatus.currentRequestId) {
+          return;
+        }
+        state.cycleFeedStatus.loading = false;
+        state.cycleFeedStatus.error = action.payload as string;
       });
   },
 });
@@ -598,12 +704,10 @@ export const aquacultureSlice = createSlice({
 
 export const {
   clearError,
+  addCreatedProductionCycle,
   setCurrentCycle,
   clearCurrentCycle,
   setCurrentCycleById,
-  addToPendingSync,
-  clearPendingSync,
-  updateLastSyncTime,
   resetAquacultureState,
 } = aquacultureSlice.actions;
 

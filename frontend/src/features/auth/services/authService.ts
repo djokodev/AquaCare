@@ -3,13 +3,42 @@ import * as SecureStore from 'expo-secure-store';
 import { apiService } from '@/services/api';
 import logger from '@/utils/logger';
 import { API_ENDPOINTS, STORAGE_KEYS } from '@/constants/api';
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import {
+  AuthFieldErrors,
   LoginRequest,
   RegisterRequest,
   AuthResponse,
   User,
-  FarmProfile,
-} from '@/types/auth';
+} from '@/features/auth/types/auth';
+
+const AUTH_META_FIELDS = new Set(['code', 'status_code']);
+
+const toFieldMessage = (value: unknown): string | null => {
+  if (typeof value === 'string' && value.trim()) {
+    const sanitized = sanitizeUserFacingErrorMessage(value);
+    return sanitized === 'UNKNOWN_ERROR' ? null : sanitized;
+  }
+  if (Array.isArray(value) && value.length > 0) {
+    const firstValue = value[0];
+    if (typeof firstValue === 'string' && firstValue.trim()) {
+      const sanitized = sanitizeUserFacingErrorMessage(firstValue);
+      return sanitized === 'UNKNOWN_ERROR' ? null : sanitized;
+    }
+    return null;
+  }
+  return null;
+};
+
+export class AuthRequestError extends Error {
+  fieldErrors: AuthFieldErrors;
+
+  constructor(message: string, fieldErrors: AuthFieldErrors = {}) {
+    super(message);
+    this.name = 'AuthRequestError';
+    this.fieldErrors = fieldErrors;
+  }
+}
 
 class AuthService {
   /**
@@ -82,74 +111,6 @@ class AuthService {
       }
       await apiService.clearTokens();
       // Ne pas propager l'erreur car la déconnexion locale est réussie
-    }
-  }
-
-  /**
-   * Récupérer le profil utilisateur
-   */
-  async getProfile(): Promise<User> {
-    try {
-      const response = await apiService.get<User>(API_ENDPOINTS.AUTH.PROFILE);
-
-      // Mettre à jour les données utilisateur stockées
-      await SecureStore.setItemAsync(
-        STORAGE_KEYS.USER_DATA,
-        JSON.stringify(response.data)
-      );
-
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
-    }
-  }
-
-  /**
-   * Mettre à jour le profil utilisateur
-   */
-  async updateProfile(profileData: Partial<User>): Promise<User> {
-    try {
-      const response = await apiService.patch<User>(
-        API_ENDPOINTS.AUTH.PROFILE,
-        profileData
-      );
-
-      // Mettre à jour les données utilisateur stockées
-      await SecureStore.setItemAsync(
-        STORAGE_KEYS.USER_DATA,
-        JSON.stringify(response.data)
-      );
-
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
-    }
-  }
-
-  /**
-   * Récupérer le profil ferme
-   */
-  async getFarmProfile(): Promise<FarmProfile> {
-    try {
-      const response = await apiService.get<FarmProfile>(API_ENDPOINTS.AUTH.FARM_PROFILE);
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
-    }
-  }
-
-  /**
-   * Mettre à jour le profil ferme
-   */
-  async updateFarmProfile(farmData: Partial<FarmProfile>): Promise<FarmProfile> {
-    try {
-      const response = await apiService.patch<FarmProfile>(
-        API_ENDPOINTS.AUTH.FARM_PROFILE,
-        farmData
-      );
-      return response.data;
-    } catch (error: unknown) {
-      throw this.handleAuthError(error);
     }
   }
 
@@ -248,9 +209,11 @@ class AuthService {
 
     if (axiosErr.response) {
       const { status, data } = axiosErr.response;
+      const responseMessage = typeof data?.detail === 'string' ? data.detail : typeof data?.message === 'string' ? data.message : '';
+      const sanitizedResponseMessage = responseMessage ? sanitizeUserFacingErrorMessage(responseMessage) : 'UNKNOWN_ERROR';
 
       const HTTP_ERROR_CODES: Record<number, string> = {
-        401: data?.detail as string || data?.message as string || 'AUTH_INVALID_CREDENTIALS',
+        401: sanitizedResponseMessage !== 'UNKNOWN_ERROR' ? sanitizedResponseMessage : 'AUTH_INVALID_CREDENTIALS',
         403: 'AUTH_FORBIDDEN',
         404: 'AUTH_NOT_FOUND',
         429: 'AUTH_RATE_LIMITED',
@@ -258,29 +221,57 @@ class AuthService {
       };
 
       if (status === 400 && data && typeof data === 'object') {
-        // Field-level errors — messages come from the backend in the user's language
-        for (const field of ['phone_number', 'email', 'password', 'non_field_errors', 'message'] as const) {
-          const val = data[field];
-          if (val) return new Error(Array.isArray(val) ? String(val[0]) : String(val));
+        const fieldErrors: AuthFieldErrors = {};
+        let generalMessage: string | null = null;
+
+        for (const [field, value] of Object.entries(data)) {
+          if (AUTH_META_FIELDS.has(field)) {
+            continue;
+          }
+
+          const message = toFieldMessage(value);
+          if (!message) {
+            continue;
+          }
+
+          if (field === 'message') {
+            generalMessage = message;
+            continue;
+          }
+
+          if (field === 'non_field_errors') {
+            generalMessage = generalMessage || message;
+            continue;
+          }
+
+          fieldErrors[field] = message;
         }
-        const errorMessages = Object.values(data)
-          .map((v) => (Array.isArray(v) ? String(v[0]) : String(v)))
-          .join(' ');
-        return new Error(errorMessages || JSON.stringify(data));
+
+        return new AuthRequestError(
+          generalMessage || '',
+          fieldErrors
+        );
       }
 
       if (status in HTTP_ERROR_CODES) {
-        return new Error(HTTP_ERROR_CODES[status]);
+        return new AuthRequestError(HTTP_ERROR_CODES[status]);
       }
 
-      return new Error(data?.message as string || `HTTP_${status}`);
+      const fallbackMessage = typeof data?.message === 'string'
+        ? sanitizeUserFacingErrorMessage(data.message)
+        : `HTTP_${status}`;
+
+      return new AuthRequestError(
+        fallbackMessage === 'UNKNOWN_ERROR' ? `HTTP_${status}` : fallbackMessage
+      );
     }
 
     if (axiosErr.request) {
-      return new Error('AUTH_NETWORK_ERROR');
+      return new AuthRequestError('AUTH_NETWORK_ERROR');
     }
 
-    return new Error(axiosErr.message || 'AUTH_UNKNOWN_ERROR');
+    const fallbackMessage = axiosErr.message ? sanitizeUserFacingErrorMessage(axiosErr.message) : 'AUTH_UNKNOWN_ERROR';
+    return new AuthRequestError(fallbackMessage === 'UNKNOWN_ERROR' ? 'AUTH_UNKNOWN_ERROR' : fallbackMessage);
   }
 }
 

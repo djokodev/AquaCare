@@ -1,13 +1,23 @@
 import { apiService } from '@/services/api';
-import { API_CONFIG } from '@/constants/api';
+import { API_CONFIG, API_ENDPOINTS } from '@/constants/api';
+import { normalizeFarmProfile } from '@/features/profile/services/farmProfileMapper';
 import logger from '@/utils/logger';
 import {
   ProductionCycle,
   CycleLog,
   FeedingPlan,
+  FeedPhase,
   SanitaryLog,
   DashboardData,
+  CycleDashboard,
+  CycleStore,
+  CycleStoreManualStockPayload,
+  CycleFeedRecommendation,
+  FarmFeedReference,
+  FarmFeedReferenceCreatePayload,
+  ExternalFeedPayload,
   ProductionReport,
+  ReportScope,
   ReportType,
   SyncPayload,
   SyncResponse,
@@ -18,6 +28,27 @@ import {
   NutritionalGuide,
   Species,
   ReactNativeUploadFile,
+  PartialHarvest,
+  PartialHarvestData,
+  CycleHarvestResponse,
+  CycleUnitHarvestResponse,
+  CycleUnitPartialHarvestResponse,
+  ActiveSanitaryIssueGroup,
+  ProductionUnit,
+  ProductionUnitStatus,
+  ProductionUnitType,
+  CycleUnitAllocation,
+  ProductionUnitDashboard,
+  ProductionUnitCreatePayload,
+  CycleUnitAllocationCreatePayload,
+  CycleLaunchRequest,
+  CycleLaunchResponse,
+  ReportScopeType,
+  CalibrationTank,
+  CalibrationOperation,
+  CalibrationRequest,
+  CalibrationResponse,
+  CreateCalibrationTankForm,
 } from '@/types/aquaculture';
 
 interface PaginatedResponse<T> {
@@ -35,6 +66,11 @@ const extractResults = <T>(data: ListResponse<T>): T[] => {
   return data.results ?? [];
 };
 
+const isUnauthorizedError = (error: unknown): boolean => {
+  const axiosErr = error as { response?: { status?: number } };
+  return axiosErr?.response?.status === 401;
+};
+
 const isReactNativeUploadFile = (photo: unknown): photo is ReactNativeUploadFile => {
   if (!photo || typeof photo !== 'object') {
     return false;
@@ -49,24 +85,186 @@ const isReactNativeUploadFile = (photo: unknown): photo is ReactNativeUploadFile
 };
 
 /**
- * Service API pour le module aquaculture MAVECAM AquaCare
+ * Service API pour le module aquaculture AquaCare
  *
  * Gere toutes les interactions avec le backend Django aquaculture.
  */
 class AquacultureService {
   private readonly baseUrl = '/aquaculture';
+  private readonly inFlightDashboardRequests = new Map<string, Promise<DashboardData>>();
+  private readonly inFlightCycleDashboardRequests = new Map<string, Promise<CycleDashboard>>();
+
+  async getCalibrationTanks(): Promise<CalibrationTank[]> {
+    const response = await apiService.get<ListResponse<CalibrationTank>>(`${this.baseUrl}/calibration-tanks/`);
+    return extractResults(response.data);
+  }
+
+  async getCalibrationTank(id: string): Promise<CalibrationTank> {
+    const response = await apiService.get<CalibrationTank>(`${this.baseUrl}/calibration-tanks/${id}/`);
+    return response.data;
+  }
+
+  async createCalibrationTank(payload: CreateCalibrationTankForm): Promise<CalibrationTank> {
+    const response = await apiService.post<CalibrationTank>(`${this.baseUrl}/calibration-tanks/`, payload);
+    return response.data;
+  }
+
+  async updateCalibrationTank(id: string, payload: Partial<CreateCalibrationTankForm>): Promise<CalibrationTank> {
+    const response = await apiService.patch<CalibrationTank>(`${this.baseUrl}/calibration-tanks/${id}/`, payload);
+    return response.data;
+  }
+
+  async deleteCalibrationTank(id: string): Promise<void> {
+    await apiService.delete(`${this.baseUrl}/calibration-tanks/${id}/`);
+  }
+
+  async getCalibrationOperations(tankId?: string): Promise<CalibrationOperation[]> {
+    const query = tankId ? `?unit_id=${encodeURIComponent(tankId)}` : '';
+    const response = await apiService.get<ListResponse<CalibrationOperation>>(`${this.baseUrl}/calibration-operations/${query}`);
+    return extractResults(response.data);
+  }
+
+  async calibrateAllocation(sourceAllocationId: string, payload: CalibrationRequest): Promise<CalibrationResponse> {
+    const response = await apiService.post<CalibrationResponse>(
+      `${this.baseUrl}/cycle-unit-allocations/${sourceAllocationId}/calibrate/`,
+      payload,
+    );
+    return response.data;
+  }
 
   // =================== DASHBOARD ===================
 
-  async getDashboardData(cycleId?: string): Promise<DashboardData> {
+  async getDashboardData(
+    cycleId?: string,
+    options?: { lightweight?: boolean }
+  ): Promise<DashboardData> {
+    const lightweight = options?.lightweight === true;
+    const requestKey = `${cycleId || '__all_cycles__'}:${lightweight ? 'lite' : 'full'}`;
+    const inFlightRequest = this.inFlightDashboardRequests.get(requestKey);
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
+
+    const requestPromise = (async () => {
+      try {
+        const query = new URLSearchParams();
+        if (cycleId) {
+          query.append('cycle_id', cycleId);
+        }
+        if (lightweight) {
+          query.append('lightweight', 'true');
+        }
+        const queryString = query.toString();
+        const params = queryString ? `?${queryString}` : '';
+        const response = await apiService.get<DashboardData>(`${this.baseUrl}/dashboard/${params}`);
+        return response.data;
+      } catch (error) {
+        // 401 deja gere par l'interceptor axios (refresh + auto-logout) — eviter de
+        // declencher la LogBox d'Expo pendant la transition logout.
+        if (!isUnauthorizedError(error)) {
+          logger.error('Erreur lors de la recuperation du dashboard:', error);
+        }
+        throw error;
+      } finally {
+        this.inFlightDashboardRequests.delete(requestKey);
+      }
+    })();
+
+    this.inFlightDashboardRequests.set(requestKey, requestPromise);
+
     try {
-      const params = cycleId ? `?cycle_id=${cycleId}` : '';
-      const response = await apiService.get<DashboardData>(`${this.baseUrl}/dashboard/${params}`);
+      return await requestPromise;
+    } finally {
+      // Garantit un nettoyage même si un caller abandonne la promesse.
+      this.inFlightDashboardRequests.delete(requestKey);
+    }
+  }
+
+  async getCycleDashboard(cycleId: string): Promise<CycleDashboard> {
+    const requestKey = cycleId;
+    const inFlightRequest = this.inFlightCycleDashboardRequests.get(requestKey);
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
+
+    const requestPromise = (async () => {
+      try {
+        const response = await apiService.get<CycleDashboard>(
+          `${this.baseUrl}/cycles/${cycleId}/dashboard/`
+        );
+        return response.data;
+      } catch (error) {
+        if (!isUnauthorizedError(error)) {
+          logger.error(`Erreur lors de la recuperation du dashboard du cycle ${cycleId}:`, error);
+        }
+        throw error;
+      } finally {
+        this.inFlightCycleDashboardRequests.delete(requestKey);
+      }
+    })();
+
+    this.inFlightCycleDashboardRequests.set(requestKey, requestPromise);
+
+    try {
+      return await requestPromise;
+    } finally {
+      this.inFlightCycleDashboardRequests.delete(requestKey);
+    }
+  }
+
+  async getCycleStore(cycleId: string): Promise<CycleStore> {
+    try {
+      const response = await apiService.get<CycleStore>(`${this.baseUrl}/cycles/${cycleId}/store/`);
       return response.data;
     } catch (error) {
-      logger.error('Erreur lors de la recuperation du dashboard:', error);
+      if (!isUnauthorizedError(error)) {
+        logger.error(`Erreur lors de la recuperation du Magasin du cycle ${cycleId}:`, error);
+      }
       throw error;
     }
+  }
+
+  async declareCycleStoreManualStock(
+    cycleId: string,
+    payload: CycleStoreManualStockPayload
+  ): Promise<CycleStore> {
+    try {
+      const response = await apiService.post<CycleStore>(
+        `${this.baseUrl}/cycles/${cycleId}/store/manual-stock/`,
+        payload
+      );
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la declaration de stock du cycle ${cycleId}:`, error);
+      throw error;
+    }
+  }
+
+  async getFarmFeedReferences(farmProfileId: string): Promise<FarmFeedReference[]> {
+    const response = await apiService.get<ListResponse<FarmFeedReference>>(
+      `${this.baseUrl}/feed-references/?farm_profile=${farmProfileId}`
+    );
+    return extractResults(response.data);
+  }
+
+  async createFarmFeedReference(payload: FarmFeedReferenceCreatePayload): Promise<FarmFeedReference> {
+    const response = await apiService.post<FarmFeedReference>(
+      `${this.baseUrl}/feed-references/`,
+      payload
+    );
+    return response.data;
+  }
+
+  async classifyCycleStoreEntry(
+    cycleId: string,
+    entryId: string,
+    feedReferenceId: string
+  ): Promise<CycleStore> {
+    const response = await apiService.post<CycleStore>(
+      `${this.baseUrl}/cycles/${cycleId}/store/classify/`,
+      { entry_id: entryId, feed_reference_id: feedReferenceId }
+    );
+    return response.data;
   }
 
   // =================== REPORTS ===================
@@ -74,7 +272,10 @@ class AquacultureService {
   async getReports(params?: {
     report_type?: ReportType;
     status?: 'draft' | 'validated';
+    scope?: ReportScopeType;
+    scope_type?: ReportScopeType;
     cycle_id?: string;
+    cycle_unit_allocation_id?: string;
   }): Promise<ProductionReport[]> {
     try {
       const query = new URLSearchParams();
@@ -84,8 +285,16 @@ class AquacultureService {
       if (params?.status) {
         query.append('status', params.status);
       }
+      if (params?.scope_type) {
+        query.append('scope_type', params.scope_type);
+      } else if (params?.scope) {
+        query.append('scope', params.scope);
+      }
       if (params?.cycle_id) {
         query.append('cycle_id', params.cycle_id);
+      }
+      if (params?.cycle_unit_allocation_id) {
+        query.append('cycle_unit_allocation_id', params.cycle_unit_allocation_id);
       }
 
       const queryString = query.toString();
@@ -112,8 +321,7 @@ class AquacultureService {
   async generateReport(payload: {
     report_type: ReportType;
     reference_date?: string;
-    cycle_id?: string;
-  }): Promise<ProductionReport> {
+  } & ReportScope): Promise<ProductionReport> {
     try {
       const response = await apiService.post<ProductionReport>(
         `${this.baseUrl}/reports/generate/`,
@@ -176,6 +384,15 @@ class AquacultureService {
     return `${API_CONFIG.baseURL}${this.baseUrl}/reports/${id}/download/`;
   }
 
+  async deleteReport(id: string): Promise<void> {
+    try {
+      await apiService.delete(`${this.baseUrl}/reports/${id}/delete/`);
+    } catch (error) {
+      logger.error(`Erreur lors de la suppression du rapport ${id}:`, error);
+      throw error;
+    }
+  }
+
   // =================== PRODUCTION CYCLES ===================
 
   async getProductionCycles(): Promise<ProductionCycle[]> {
@@ -200,10 +417,124 @@ class AquacultureService {
 
   async createProductionCycle(cycleData: CreateCycleForm): Promise<ProductionCycle> {
     try {
-      const response = await apiService.post<ProductionCycle>(`${this.baseUrl}/cycles/`, cycleData);
+      const payload: CreateCycleForm = {
+        ...cycleData,
+        client_uuid: cycleData.client_uuid ?? this.generateClientUUID(),
+      };
+      const response = await apiService.post<ProductionCycle>(`${this.baseUrl}/cycles/`, payload);
       return response.data;
     } catch (error) {
       logger.error('Erreur lors de la creation du cycle:', error);
+      throw error;
+    }
+  }
+
+  async launchProductionCycle(payload: CycleLaunchRequest): Promise<CycleLaunchResponse> {
+    try {
+      const response = await apiService.post<{
+        launch_uuid: string;
+        idempotent_replay: boolean;
+        farm_profile: Parameters<typeof normalizeFarmProfile>[0];
+        production_cycle: ProductionCycle;
+        production_units: ProductionUnit[];
+        cycle_unit_allocations: CycleUnitAllocation[];
+        production_unit_id_by_local_id: Record<string, string>;
+      }>(API_ENDPOINTS.AQUACULTURE.CYCLE_LAUNCH, payload);
+
+      return {
+        launchUuid: response.data.launch_uuid,
+        idempotentReplay: response.data.idempotent_replay,
+        farmProfile: normalizeFarmProfile(response.data.farm_profile),
+        productionCycle: response.data.production_cycle,
+        productionUnits: response.data.production_units,
+        cycleUnitAllocations: response.data.cycle_unit_allocations,
+        productionUnitIdByLocalId: response.data.production_unit_id_by_local_id,
+      };
+    } catch (error) {
+      logger.error('Erreur lors du lancement transactionnel du cycle:', error);
+      throw error;
+    }
+  }
+
+  async getProductionUnits(params?: {
+    status?: ProductionUnitStatus;
+    unitType?: ProductionUnitType;
+    purpose?: 'production' | 'calibration';
+  }): Promise<ProductionUnit[]> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.status) {
+        query.append('status', params.status);
+      }
+      if (params?.unitType) {
+        query.append('unit_type', params.unitType);
+      }
+      if (params?.purpose) {
+        query.append('purpose', params.purpose);
+      }
+
+      const queryString = query.toString();
+      const paramsSuffix = queryString ? `?${queryString}` : '';
+      const response = await apiService.get<ListResponse<ProductionUnit>>(
+        `${this.baseUrl}/production-units/${paramsSuffix}`
+      );
+      return extractResults(response.data);
+    } catch (error) {
+      logger.error('Erreur lors de la recuperation des unites de production:', error);
+      throw error;
+    }
+  }
+
+  async createProductionUnit(unitData: ProductionUnitCreatePayload): Promise<ProductionUnit> {
+    try {
+      const response = await apiService.post<ProductionUnit>(
+        `${this.baseUrl}/production-units/`,
+        unitData
+      );
+      return response.data;
+    } catch (error) {
+      logger.error('Erreur lors de la creation de l\'unite de production:', error);
+      throw error;
+    }
+  }
+
+  async createCycleUnitAllocation(
+    allocationData: CycleUnitAllocationCreatePayload
+  ): Promise<CycleUnitAllocation> {
+    try {
+      const response = await apiService.post<CycleUnitAllocation>(
+        `${this.baseUrl}/cycle-unit-allocations/`,
+        allocationData
+      );
+      return response.data;
+    } catch (error) {
+      logger.error("Erreur lors de la creation de l'allocation de cycle:", error);
+      throw error;
+    }
+  }
+
+  async getCycleUnitAllocations(cycleId: string): Promise<CycleUnitAllocation[]> {
+    try {
+      const response = await apiService.get<ListResponse<CycleUnitAllocation>>(
+        `${this.baseUrl}/cycle-unit-allocations/?cycle_id=${cycleId}`
+      );
+      return extractResults(response.data);
+    } catch (error) {
+      logger.error(`Erreur lors de la recuperation des allocations du cycle ${cycleId}:`, error);
+      throw error;
+    }
+  }
+
+  async getProductionUnitDashboard(allocationId: string): Promise<ProductionUnitDashboard> {
+    try {
+      const response = await apiService.get<ProductionUnitDashboard>(
+        `${this.baseUrl}/cycle-unit-allocations/${allocationId}/dashboard/`
+      );
+      return response.data;
+    } catch (error) {
+      if (!isUnauthorizedError(error)) {
+        logger.error(`Erreur lors de la recuperation du dashboard de l'allocation ${allocationId}:`, error);
+      }
       throw error;
     }
   }
@@ -241,18 +572,101 @@ class AquacultureService {
     id: string,
     harvestData: {
       harvest_date: string;
+      final_harvested_at: string;
       final_count: number;
       final_average_weight: number;
+      client_uuid: string;
+      total_harvested_weight: number;
+      harvest_notes?: string;
+      created_offline: boolean;
+      allow_pending_reconciliation?: boolean;
     }
-  ): Promise<ProductionCycle> {
+  ): Promise<CycleHarvestResponse> {
     try {
-      const response = await apiService.post<ProductionCycle>(
+      const response = await apiService.post<CycleHarvestResponse>(
         `${this.baseUrl}/cycles/${id}/harvest/`,
         harvestData
       );
       return response.data;
     } catch (error) {
       logger.error(`Erreur lors de la recolte du cycle ${id}:`, error);
+      throw error;
+    }
+  }
+
+  async harvestProductionUnitAllocation(
+    allocationId: string,
+    harvestData: {
+      harvest_date: string;
+      final_harvested_at: string;
+      final_count: number;
+      final_average_weight: number;
+      client_uuid: string;
+      total_harvested_weight: number;
+      harvest_notes?: string;
+      created_offline: boolean;
+      allow_pending_reconciliation?: boolean;
+    }
+  ): Promise<CycleUnitHarvestResponse> {
+    try {
+      const response = await apiService.post<CycleUnitHarvestResponse>(
+        `${this.baseUrl}/cycle-unit-allocations/${allocationId}/harvest/`,
+        harvestData
+      );
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la récolte de l'unité ${allocationId}:`, error);
+      throw error;
+    }
+  }
+
+  async partialHarvestCycle(
+    id: string,
+    data: PartialHarvestData
+  ): Promise<{ cycle: ProductionCycle; partial_harvest: PartialHarvest; message: string }> {
+    try {
+      const payload: PartialHarvestData = {
+        ...data,
+        client_uuid: data.client_uuid ?? this.generateClientUUID(),
+      };
+      const response = await apiService.post<{ cycle: ProductionCycle; partial_harvest: PartialHarvest; message: string }>(
+        `${this.baseUrl}/cycles/${id}/partial-harvest/`,
+        payload
+      );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async partialHarvestProductionUnitAllocation(
+    allocationId: string,
+    data: PartialHarvestData
+  ): Promise<CycleUnitPartialHarvestResponse> {
+    try {
+      const payload: PartialHarvestData = {
+        ...data,
+        client_uuid: data.client_uuid ?? this.generateClientUUID(),
+      };
+      const response = await apiService.post<CycleUnitPartialHarvestResponse>(
+        `${this.baseUrl}/cycle-unit-allocations/${allocationId}/partial-harvest/`,
+        payload
+      );
+      return response.data;
+    } catch (error) {
+      logger.error(`Erreur lors de la récolte partielle de l'unité ${allocationId}:`, error);
+      throw error;
+    }
+  }
+
+  async getPartialHarvests(id: string): Promise<PartialHarvest[]> {
+    try {
+      const response = await apiService.get<ListResponse<PartialHarvest>>(
+        `${this.baseUrl}/cycles/${id}/partial-harvests/`
+      );
+      return extractResults(response.data);
+    } catch (error) {
+      logger.error(`Erreur lors de la récupération des récoltes partielles du cycle ${id}:`, error);
       throw error;
     }
   }
@@ -289,9 +703,19 @@ class AquacultureService {
 
   // =================== DAILY LOGS ===================
 
-  async getCycleLogs(cycleId?: string): Promise<CycleLog[]> {
+  async getCycleLogs(
+    cycleId?: string,
+    options?: { cycleUnitAllocationId?: string }
+  ): Promise<CycleLog[]> {
     try {
-      const params = cycleId ? `?cycle_id=${cycleId}` : '';
+      const query = new URLSearchParams();
+      if (cycleId) {
+        query.append('cycle_id', cycleId);
+      }
+      if (options?.cycleUnitAllocationId) {
+        query.append('cycle_unit_allocation', options.cycleUnitAllocationId);
+      }
+      const params = query.toString() ? `?${query.toString()}` : '';
       const response = await apiService.get<ListResponse<CycleLog>>(`${this.baseUrl}/cycle-logs/${params}`);
       return extractResults(response.data);
     } catch (error) {
@@ -305,7 +729,7 @@ class AquacultureService {
       const payload = {
         cycle: cycleId,
         ...logData,
-        client_uuid: this.generateClientUUID(),
+        client_uuid: logData.client_uuid ?? this.generateClientUUID(),
       };
 
       const response = await apiService.post<CycleLog>(`${this.baseUrl}/cycle-logs/`, payload);
@@ -350,9 +774,19 @@ class AquacultureService {
 
   // =================== SANITARY LOGS ===================
 
-  async getSanitaryLogs(cycleId?: string): Promise<SanitaryLog[]> {
+  async getSanitaryLogs(
+    cycleId?: string,
+    options?: { cycleUnitAllocationId?: string }
+  ): Promise<SanitaryLog[]> {
     try {
-      const params = cycleId ? `?cycle_id=${cycleId}` : '';
+      const query = new URLSearchParams();
+      if (cycleId) {
+        query.append('cycle_id', cycleId);
+      }
+      if (options?.cycleUnitAllocationId) {
+        query.append('cycle_unit_allocation', options.cycleUnitAllocationId);
+      }
+      const params = query.toString() ? `?${query.toString()}` : '';
       const response = await apiService.get<ListResponse<SanitaryLog>>(`${this.baseUrl}/sanitary-logs/${params}`);
       return extractResults(response.data);
     } catch (error) {
@@ -363,11 +797,17 @@ class AquacultureService {
 
   async createSanitaryLog(cycleId: string, logData: SanitaryLogForm): Promise<SanitaryLog> {
     try {
+      const clientUuid = logData.client_uuid ?? this.generateClientUUID();
       const formData = new FormData();
       formData.append('cycle', cycleId);
       formData.append('event_date', logData.event_date);
       formData.append('event_type', logData.event_type);
       formData.append('symptoms', logData.symptoms);
+      formData.append('client_uuid', clientUuid);
+      formData.append('created_offline', logData.created_offline ? 'true' : 'false');
+      if (logData.cycle_unit_allocation) {
+        formData.append('cycle_unit_allocation', logData.cycle_unit_allocation);
+      }
 
       if (logData.affected_count !== undefined) {
         formData.append('affected_count', logData.affected_count.toString());
@@ -420,9 +860,9 @@ class AquacultureService {
     }
   }
 
-  async getActiveSanitaryIssues(): Promise<Record<string, { cycle: string; issues: SanitaryLog[] }>> {
+  async getActiveSanitaryIssues(): Promise<ActiveSanitaryIssueGroup[]> {
     try {
-      const response = await apiService.get<Record<string, { cycle: string; issues: SanitaryLog[] }>>(
+      const response = await apiService.get<ActiveSanitaryIssueGroup[]>(
         `${this.baseUrl}/sanitary-logs/active_issues/`
       );
       return response.data;
@@ -456,12 +896,46 @@ class AquacultureService {
     }
   }
 
-  async getFeedingPlans(cycleId: string): Promise<FeedingPlan[]> {
+  async getFeedingPlans(
+    cycleId: string,
+    options?: { currentWeekOnly?: boolean }
+  ): Promise<FeedingPlan[]> {
     try {
-      const response = await apiService.get<ListResponse<FeedingPlan>>(`${this.baseUrl}/feeding-plans/?cycle=${cycleId}`);
+      const query = options?.currentWeekOnly ? '&current_week_only=true' : '';
+      const response = await apiService.get<ListResponse<FeedingPlan>>(
+        `${this.baseUrl}/feeding-plans/?cycle=${cycleId}${query}`
+      );
       return extractResults(response.data);
     } catch (error) {
       logger.error("Erreur lors de la recuperation des plans d'alimentation:", error);
+      throw error;
+    }
+  }
+
+  async getFeedingPlansForAllocation(
+    cycleUnitAllocationId: string,
+    options?: { currentWeekOnly?: boolean }
+  ): Promise<FeedingPlan[]> {
+    try {
+      const query = options?.currentWeekOnly ? '&current_week_only=true' : '';
+      const response = await apiService.get<ListResponse<FeedingPlan>>(
+        `${this.baseUrl}/feeding-plans/?cycle_unit_allocation=${cycleUnitAllocationId}${query}`
+      );
+      return extractResults(response.data);
+    } catch (error) {
+      logger.error("Erreur lors de la recuperation des plans d'alimentation de l'unité:", error);
+      throw error;
+    }
+  }
+
+  async getCycleFeedPhases(cycleId: string): Promise<CycleFeedRecommendation> {
+    try {
+      const response = await apiService.get<CycleFeedRecommendation>(
+        `${this.baseUrl}/cycles/${cycleId}/feed-phases/`
+      );
+      return response.data;
+    } catch (error) {
+      logger.error('Erreur lors du chargement des phases aliments:', error);
       throw error;
     }
   }
@@ -474,6 +948,24 @@ class AquacultureService {
       return response.data;
     } catch (error) {
       logger.error("Erreur lors de la generation du plan d'alimentation:", error);
+      throw error;
+    }
+  }
+
+  async generateFeedingPlanForAllocation(payload: {
+    cycleUnitAllocationId: string;
+    weeksAhead?: number;
+    cycleId?: string;
+  }): Promise<FeedingPlan[]> {
+    try {
+      const response = await apiService.post<FeedingPlan[]>(`${this.baseUrl}/feeding-plans/generate/`, {
+        cycle_unit_allocation_id: payload.cycleUnitAllocationId,
+        weeks_ahead: payload.weeksAhead ?? 4,
+        ...(payload.cycleId ? { cycle_id: payload.cycleId } : {}),
+      });
+      return response.data;
+    } catch (error) {
+      logger.error("Erreur lors de la generation du plan d'alimentation de l'unité:", error);
       throw error;
     }
   }

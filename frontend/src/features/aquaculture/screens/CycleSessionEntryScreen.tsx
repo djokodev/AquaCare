@@ -1,20 +1,29 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Image, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { StackNavigationProp } from '@react-navigation/stack';
 
-import { AppDispatch } from '@/store/store';
-import { RootStackParamList } from '@/navigation/MainNavigator';
+import {
+  AppHeader,
+  AppText,
+  Button,
+  ErrorState,
+  LoadingState,
+  Screen,
+} from '@/components/ui';
 import {
   clearCurrentCycle,
   fetchDashboardData,
+  fetchProductionCycles,
   setCurrentCycle,
 } from '@/features/aquaculture/store/aquacultureSlice';
+import CyclePicker from '@/features/aquaculture/components/CyclePicker';
+import { RootStackParamList } from '@/navigation/MainNavigator';
+import { AppDispatch, RootState } from '@/store/store';
+import { colors, spacing } from '@/theme';
 import { ProductionCycle } from '@/types/aquaculture';
-import { MAVECAM_COLORS } from '@/constants/colors';
-import CyclePicker from '../components/CyclePicker';
 
 type CycleSessionEntryNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -23,12 +32,22 @@ type CycleSessionEntryNavigationProp = StackNavigationProp<
 
 interface Props {
   navigation: CycleSessionEntryNavigationProp;
+  route: {
+    params?: {
+      showBackToDashboard?: boolean;
+    };
+  };
 }
 
-export default function CycleSessionEntryScreen({ navigation }: Props) {
+export default function CycleSessionEntryScreen({ navigation, route }: Props) {
   const dispatch = useDispatch<AppDispatch>();
+  const isAuthenticated = useSelector(
+    (state: RootState) => state.auth.isAuthenticated,
+  );
+  const allCycles = useSelector((state: RootState) => state.aquaculture.cycles) ?? [];
   const { t } = useTranslation();
   const isMounted = useRef(true);
+  const showBackToDashboard = route.params?.showBackToDashboard === true;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,116 +76,170 @@ export default function CycleSessionEntryScreen({ navigation }: Props) {
       setActiveCycles(cycles);
       setSelectedCycleId(null);
     },
-    [dispatch, navigation]
+    [dispatch, navigation],
   );
 
   const loadCycles = useCallback(async () => {
-    if (!isMounted.current) return;
+    if (!isMounted.current || !isAuthenticated) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    const result = await dispatch(fetchDashboardData({ forceAllCycles: true }));
+    const result = await dispatch(
+      fetchDashboardData({ forceAllCycles: true, lightweight: true }),
+    );
 
-    if (!isMounted.current) return;
+    if (!isMounted.current) {
+      return;
+    }
 
     if (fetchDashboardData.fulfilled.match(result)) {
-      const cycles = result.payload.active_cycles || [];
-      handleEntryLogic(cycles);
-      // Set loading=false after handleEntryLogic in same microtask to minimize intermediate renders
-      if (isMounted.current) setLoading(false);
-    } else {
-      if (isMounted.current) {
-        setError((result.payload as string) || 'sessionCycleLoadError');
-        setLoading(false);
-      }
+      handleEntryLogic(result.payload.active_cycles ?? []);
+      void dispatch(fetchProductionCycles());
+      setLoading(false);
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, handleEntryLogic]);
+
+    setError((result.payload as string) || 'sessionCycleLoadError');
+    setLoading(false);
+  }, [dispatch, handleEntryLogic, isAuthenticated]);
 
   useEffect(() => {
-    loadCycles();
+    void loadCycles();
   }, [loadCycles]);
 
+  const handleBackToDashboard = () => {
+    navigation.navigate('MainTabs');
+  };
+
   const handleConfirm = () => {
-    if (!selectedCycleId) return;
+    if (!selectedCycleId) {
+      return;
+    }
+
     const selectedCycle = activeCycles.find((cycle) => cycle.id === selectedCycleId);
-    if (!selectedCycle) return;
+    if (!selectedCycle) {
+      return;
+    }
+
     dispatch(setCurrentCycle(selectedCycle));
     navigation.replace('MainTabs');
   };
 
+  const header = (
+    <AppHeader
+      title={t('sessionCycleTitle')}
+      onBack={showBackToDashboard ? handleBackToDashboard : undefined}
+      backLabel={t('backToDashboard')}
+      titleAlignment="left"
+    />
+  );
+
   if (loading) {
     return (
-      <View className="flex-1 bg-cream items-center justify-center px-6">
-        <ActivityIndicator size="large" color={MAVECAM_COLORS.GREEN_PRIMARY} />
-        <Text className="text-base text-gray-light mt-3">{t('sessionCycleLoading')}</Text>
+      <View style={styles.root}>
+        {header}
+        <Screen style={styles.stateScreen}>
+          <LoadingState message={t('sessionCycleLoading')} />
+        </Screen>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View className="flex-1 bg-cream items-center justify-center px-6">
-        <Ionicons name="alert-circle-outline" size={48} color={MAVECAM_COLORS.ERROR} />
-        <Text className="text-base text-error text-center mt-3 mb-5">{error}</Text>
-        <TouchableOpacity className="bg-mavecam-primary px-6 py-3 rounded-lg" onPress={loadCycles}>
-          <Text className="text-white font-semibold text-base">{t('retry')}</Text>
-        </TouchableOpacity>
+      <View style={styles.root}>
+        {header}
+        <Screen style={styles.stateScreen}>
+          <ErrorState
+            message={t(error)}
+            actionLabel={t('retry')}
+            onAction={() => void loadCycles()}
+          />
+        </Screen>
       </View>
     );
   }
 
-  // 0 active cycles — show CTA to create a cycle
   if (activeCycles.length === 0) {
     return (
-      <View className="flex-1 bg-cream items-center justify-center px-6">
-        <Ionicons name="water-outline" size={64} color={MAVECAM_COLORS.GREEN_PRIMARY} />
-        <Text className="text-xl font-bold text-gray-dark text-center mt-4 mb-2">
-          {t('noCycles')}
-        </Text>
-        <Text className="text-sm text-gray-light text-center mb-8">
-          {t('sessionNoCyclesHint', { defaultValue: 'Créez votre premier cycle pour commencer le suivi.' })}
-        </Text>
-        <TouchableOpacity
-          className="bg-mavecam-primary px-8 py-4 rounded-xl flex-row items-center gap-2"
-          onPress={() => navigation.replace('MainTabs')}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={MAVECAM_COLORS.WHITE} />
-          <Text className="text-white text-base font-semibold">
-            {t('sessionCreateFirstCycle', { defaultValue: 'Créer mon premier cycle' })}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.welcomeRoot} edges={['top', 'right', 'bottom', 'left']}>
+        <View style={styles.welcomeContent}>
+          <Image
+            source={require('../../../../assets/brand/aquacare-logo.png')}
+            style={styles.welcomeLogo}
+            resizeMode="contain"
+            accessibilityLabel={t('appName')}
+          />
+          <AppText
+            variant="sectionTitle"
+            color="secondary"
+            style={styles.welcomeMessage}
+          >
+            {t('welcomeScreenInspiration')}
+          </AppText>
+          <Button
+            label={t('welcomeScreenCta')}
+            onPress={() => navigation.replace('CreateFarm')}
+            size="large"
+            testID="welcome-start-farm"
+          />
+        </View>
+      </SafeAreaView>
     );
   }
 
-  // 2+ cycles — show picker
   return (
-    <View className="flex-1 bg-cream">
-      <View className="bg-mavecam-primary px-5 pt-16 pb-6">
-        <Text className="text-2xl font-bold text-white mb-2">{t('sessionCycleTitle')}</Text>
-        <Text className="text-sm text-white/90">{t('sessionCycleDescription')}</Text>
-      </View>
-
-      <View className="flex-1 px-4 py-4">
+    <View style={styles.root}>
+      {header}
+      <Screen style={styles.pickerScreen}>
         <CyclePicker
           cycles={activeCycles}
           selectedCycleId={selectedCycleId}
           onSelectCycle={setSelectedCycleId}
+          rankingCycles={allCycles}
         />
-      </View>
-
-      <View className="px-4 py-4 border-t border-gray-200 bg-white">
-        <TouchableOpacity
-          className={`rounded-lg py-3 items-center ${
-            selectedCycleId ? 'bg-mavecam-primary' : 'bg-gray-300'
-          }`}
-          onPress={handleConfirm}
-          disabled={!selectedCycleId}
-        >
-          <Text className="text-white text-base font-semibold">{t('sessionCycleConfirm')}</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.footer}>
+          <Button
+            label={t('sessionCycleConfirm')}
+            onPress={handleConfirm}
+            disabled={!selectedCycleId}
+            variant={selectedCycleId ? 'primary' : 'outline'}
+          />
+        </View>
+      </Screen>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surface.page },
+  stateScreen: { justifyContent: 'center' },
+  welcomeRoot: { flex: 1, backgroundColor: colors.surface.card },
+  welcomeContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing[6],
+  },
+  welcomeLogo: {
+    width: 220,
+    height: 96,
+    marginBottom: spacing[10],
+  },
+  welcomeMessage: {
+    maxWidth: 320,
+    marginBottom: spacing[10],
+    textAlign: 'center',
+  },
+  pickerScreen: { paddingBottom: 0 },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.subtle,
+    marginHorizontal: -spacing[4],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+  },
+});

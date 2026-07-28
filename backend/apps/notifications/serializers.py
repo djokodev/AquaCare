@@ -100,7 +100,7 @@ class NotificationActionErrorSerializer(serializers.Serializer):
 class NotificationListSerializer(NotificationErrorVisibilityMixin, serializers.ModelSerializer):
     """
     Serializer léger pour la liste de notifications.
-    Exclut les champs volumineux comme metadata.
+    Conserve metadata pour exposer le contexte cycle dans l'UI.
     """
 
     notification_type_display = serializers.CharField(
@@ -129,6 +129,7 @@ class NotificationListSerializer(NotificationErrorVisibilityMixin, serializers.M
             'priority',
             'title',
             'message',
+            'metadata',
             'channels',
             'scheduled_for',
             'is_read',

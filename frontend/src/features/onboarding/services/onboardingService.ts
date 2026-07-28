@@ -13,7 +13,7 @@ import logger from '@/utils/logger';
  */
 class OnboardingService {
   /** Clé de stockage dans AsyncStorage */
-  private static readonly STORAGE_KEY = '@mavecam_onboarding_completed';
+  private static readonly STORAGE_KEY = '@aquacare_onboarding_completed';
 
   /**
    * Vérifie si l'utilisateur a complété l'onboarding

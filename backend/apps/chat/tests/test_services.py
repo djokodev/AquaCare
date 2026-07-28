@@ -106,7 +106,7 @@ class TestConversationService:
                 requesting_user=user2
             )
 
-    def test_get_conversation_by_id_admin_access_any(self, user_factory, mavecam_admin):
+    def test_get_conversation_by_id_admin_access_any(self, user_factory, aquacare_admin):
         """Test admin can access any conversation."""
         user = user_factory()
         conversation = ConversationService.get_or_create_conversation(user)
@@ -114,7 +114,7 @@ class TestConversationService:
         # Admin should be able to access
         retrieved = ConversationService.get_conversation_by_id(
             conversation_id=conversation.id,
-            requesting_user=mavecam_admin
+            requesting_user=aquacare_admin
         )
 
         assert retrieved.id == conversation.id
@@ -211,7 +211,7 @@ class TestConversationService:
         self,
         authenticated_user,
         user_factory,
-        mavecam_admin,
+        aquacare_admin,
         django_assert_num_queries,
     ):
         """La liste serializee des conversations doit rester en une seule requete."""
@@ -220,9 +220,9 @@ class TestConversationService:
         other_conversation = ConversationService.get_or_create_conversation(other_user)
 
         MessageService.send_user_message(authenticated_user, "Premier message")
-        MessageService.send_admin_message(own_conversation, mavecam_admin, "Réponse support")
+        MessageService.send_admin_message(own_conversation, aquacare_admin, "Réponse support")
         MessageService.send_user_message(other_user, "Message autre utilisateur")
-        MessageService.send_admin_message(other_conversation, mavecam_admin, "Suivi support")
+        MessageService.send_admin_message(other_conversation, aquacare_admin, "Suivi support")
 
         with django_assert_num_queries(1):
             queryset = list(Conversation.objects.with_api_annotations().order_by('created_at'))
@@ -345,13 +345,13 @@ class TestMessageService:
     def test_message_feed_serialization_avoids_n_plus_one(
         self,
         authenticated_user,
-        mavecam_admin,
+        aquacare_admin,
         django_assert_num_queries,
     ):
         """Le feed messages doit charger conversation.user et sender_user en eager loading."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
         MessageService.send_user_message(authenticated_user, "Question support")
-        MessageService.send_admin_message(conversation, mavecam_admin, "Réponse support")
+        MessageService.send_admin_message(conversation, aquacare_admin, "Réponse support")
 
         with django_assert_num_queries(1):
             queryset = list(Message.objects.for_feed().filter(conversation=conversation))
@@ -399,18 +399,18 @@ class TestMessageService:
         assert message.media_file
         assert 'test_image' in message.media_file.name
 
-    def test_send_admin_message(self, authenticated_user, mavecam_admin):
+    def test_send_admin_message(self, authenticated_user, aquacare_admin):
         """Test sending admin response message."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 
         message = MessageService.send_admin_message(
             conversation=conversation,
-            admin_user=mavecam_admin,
+            admin_user=aquacare_admin,
             content="Bonjour, comment puis-je vous aider?"
         )
 
         assert message.sender_type == 'admin'
-        assert message.sender_user == mavecam_admin
+        assert message.sender_user == aquacare_admin
         assert message.content == "Bonjour, comment puis-je vous aider?"
         assert message.conversation == conversation
 
@@ -483,12 +483,12 @@ class TestMessageEventPolicyService:
         assert plan.should_notify_admins is True
         assert plan.acknowledgment_language is None
 
-    def test_admin_message_notifies_user_only(self, authenticated_user, mavecam_admin):
+    def test_admin_message_notifies_user_only(self, authenticated_user, aquacare_admin):
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
         admin_message = Message.objects.create(
             conversation=conversation,
             sender_type="admin",
-            sender_user=mavecam_admin,
+            sender_user=aquacare_admin,
             content="Reponse support",
         )
 
@@ -498,14 +498,14 @@ class TestMessageEventPolicyService:
         assert plan.should_notify_admins is False
         assert plan.should_notify_user is True
 
-    def test_send_admin_message_increments_unread_user(self, authenticated_user, mavecam_admin):
+    def test_send_admin_message_increments_unread_user(self, authenticated_user, aquacare_admin):
         """Test that admin message increments unread count for user."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
         assert conversation.unread_count_user == 0
 
         MessageService.send_admin_message(
             conversation=conversation,
-            admin_user=mavecam_admin,
+            admin_user=aquacare_admin,
             content="Test message"
         )
 
@@ -538,14 +538,14 @@ class TestMessageEventPolicyService:
         conversation.refresh_from_db()
         assert conversation.unread_count_user == initial_unread
 
-    def test_mark_messages_as_read(self, authenticated_user, mavecam_admin):
+    def test_mark_messages_as_read(self, authenticated_user, aquacare_admin):
         """Test marking messages as read."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 
         # Admin sends 3 messages
-        msg1 = MessageService.send_admin_message(conversation, mavecam_admin, "Message 1")
-        msg2 = MessageService.send_admin_message(conversation, mavecam_admin, "Message 2")
-        msg3 = MessageService.send_admin_message(conversation, mavecam_admin, "Message 3")
+        msg1 = MessageService.send_admin_message(conversation, aquacare_admin, "Message 1")
+        msg2 = MessageService.send_admin_message(conversation, aquacare_admin, "Message 2")
+        msg3 = MessageService.send_admin_message(conversation, aquacare_admin, "Message 3")
 
         # All should be unread
         assert not msg1.is_read

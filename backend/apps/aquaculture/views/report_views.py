@@ -5,13 +5,23 @@ from __future__ import annotations
 
 import logging
 from urllib.parse import quote
+from uuid import UUID
 
+from django.db.models import Q
 from django.http import FileResponse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -24,82 +34,28 @@ from ..serializers import (
 )
 from ..services import (
     GenerateReportCommand,
+    InaccessibleReportUnitScopeError,
     InvalidReportCycleScopeError,
+    InvalidReportScopeError,
+    InvalidReportUnitScopeError,
     MissingReportEmailError,
     ReportApplicationService,
     ReportDownloadDecision,
+    UnresolvableLegacyReportScopeError,
     WhatsAppShareCommand,
 )
-from ..throttles import AquacultureReportActionThrottle
+from ..throttles import AquacultureReportActionThrottle, AquacultureReportDownloadThrottle
 
 logger = logging.getLogger(__name__)
 
 
 @extend_schema_view(
     list=extend_schema(
-        summary="Lister les notifications",
-        description="""
-        Retourne les notifications de l'utilisateur triées par date.
-        Inclut rappels d'alimentation, alertes sanitaires et recommandations.
-        """,
-        parameters=[
-            OpenApiParameter(
-                name='is_read',
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                description='Filtrer par statut de lecture'
-            ),
-            OpenApiParameter(
-                name='notification_type',
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                description='Type de notification',
-                enum=['feeding_reminder', 'sanitary_alert', 'growth_alert', 'system_update']
-            ),
-        ],
-        examples=[
-            OpenApiExample(
-                'Notifications récentes',
-                value={
-                    'count': 8,
-                    'results': [
-                        {
-                            'id': 'notif-001',
-                            'notification_type': 'feeding_reminder',
-                            'title': 'Rappel alimentation',
-                            'message': 'Donnez 2.85 kg d\'aliment ce matin - Bassin A1',
-                            'is_read': False,
-                            'scheduled_for': '2025-08-20T07:00:00Z'
-                        }
-                    ]
-                }
-            )
-        ]
-    ),
-    create=extend_schema(
-        summary="Créer une notification",
-        description="Crée une notification personnalisée ou programmée.",
-        examples=[
-            OpenApiExample(
-                'Nouvelle notification',
-                value={
-                    'notification_type': 'feeding_reminder',
-                    'title': 'Rappel alimentation',
-                    'message': 'Il est temps de nourrir les poissons',
-                    'cycle': '456e7890-e89b-12d3-a456-426614174001',
-                    'scheduled_for': '2025-08-20T07:00:00Z'
-                }
-            )
-        ]
-    )
-)
-
-@extend_schema_view(
-    list=extend_schema(
         summary="Lister les rapports de production",
         description="""
         Retourne les rapports (journaliers, hebdomadaires, mensuels) de la ferme
-        de l'utilisateur authentifié.
+        de l'utilisateur authentifié. Pour une portée unitaire, l'allocation doit
+        appartenir à la ferme et au cycle fourni lorsque cycle_id est présent.
         """,
         parameters=[
             OpenApiParameter(
@@ -120,10 +76,48 @@ logger = logging.getLogger(__name__)
                 name='cycle_id',
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Filtrer les rapports sur un cycle de session spécifique (UUID)'
+                description=(
+                    'Filtrer les rapports sur un cycle de session spécifique (UUID). '
+                    'Pour scope_type=unit, ce cycle doit être celui de l’allocation.'
+                )
+            ),
+            OpenApiParameter(
+                name='scope_type',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                enum=['cycle', 'unit'],
+                description='Filtrer les rapports par portée (nom canonique)',
+            ),
+            OpenApiParameter(
+                name='scope',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                enum=['cycle', 'unit'],
+                description='Alias rétrocompatible de scope_type',
+            ),
+            OpenApiParameter(
+                name='cycle_unit_allocation_id',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description=(
+                    'Obligatoire pour scope_type=unit. Si cycle_id est fourni, '
+                    'l’allocation doit lui appartenir.'
+                )
             ),
         ],
-        responses={200: ProductionReportListSerializer(many=True)},
+        responses={
+            200: ProductionReportListSerializer(many=True),
+            400: OpenApiResponse(description='Paramètres de portée invalides.'),
+            404: OpenApiResponse(
+                description='Allocation inconnue, inaccessible ou liée à un autre cycle.',
+                examples=[
+                    OpenApiExample(
+                        'Allocation unitaire inaccessible',
+                        value={'detail': "Allocation d’unité introuvable ou inaccessible."},
+                    ),
+                ],
+            ),
+        },
     ),
     retrieve=extend_schema(
         summary="Détail d'un rapport",
@@ -159,6 +153,16 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     def _pending_response(message: str) -> Response:
         return Response({'detail': message}, status=status.HTTP_409_CONFLICT)
 
+    @staticmethod
+    def _normalize_uuid_query_param(value: str | None, field_name: str) -> str | None:
+        if value in (None, ''):
+            return None
+        try:
+            UUID(str(value))
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({field_name: _('Identifiant UUID invalide.')}) from exc
+        return str(value)
+
     def get_queryset(self):
         detail_actions = {
             'retrieve',
@@ -173,7 +177,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             if self.action in detail_actions
             else ProductionReport.objects.for_list()
         )
-        queryset = base_queryset.filter(farm_profile__user=self.request.user)
+        queryset = base_queryset.filter(farm_profile__user=self.request.user, is_deleted=False)
 
         report_type = self.request.query_params.get('report_type')
         if report_type:
@@ -183,9 +187,51 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        cycle_id = self.request.query_params.get('cycle_id')
-        if cycle_id:
-            queryset = queryset.filter(payload__report_meta__cycle_scope_id=cycle_id)
+        cycle_id = self._normalize_uuid_query_param(self.request.query_params.get('cycle_id'), 'cycle_id')
+        scope_type = self.request.query_params.get('scope_type')
+        legacy_scope = self.request.query_params.get('scope')
+        if scope_type and legacy_scope and scope_type != legacy_scope:
+            raise ValidationError({'scope_type': _('scope_type et scope doivent désigner la même portée.')})
+        scope = scope_type or legacy_scope
+        if scope and scope not in {'cycle', 'unit'}:
+            raise ValidationError({'scope_type': _('Portée de rapport inconnue.')})
+        cycle_unit_allocation_id = self._normalize_uuid_query_param(
+            self.request.query_params.get('cycle_unit_allocation_id'),
+            'cycle_unit_allocation_id',
+        )
+
+        if scope == 'unit':
+            if not cycle_unit_allocation_id:
+                raise ValidationError({'cycle_unit_allocation_id': _('Contexte d’unité incomplet.')})
+            try:
+                resolved_scope = ReportApplicationService.resolve_report_listing_unit_scope(
+                    self.request.user,
+                    cycle_id=cycle_id,
+                    cycle_unit_allocation_id=cycle_unit_allocation_id,
+                )
+            except InaccessibleReportUnitScopeError as exc:
+                raise NotFound(str(exc)) from exc
+            queryset = queryset.filter(
+                scope_type='unit',
+                scope_object_id=str(resolved_scope.allocation.id),
+            )
+        elif scope == 'cycle':
+            if not cycle_id:
+                raise ValidationError({'cycle_id': _('Contexte de cycle incomplet.')})
+            queryset = queryset.filter(
+                scope_type='cycle',
+                scope_object_id=cycle_id,
+            )
+        elif cycle_id:
+            queryset = queryset.filter(
+                Q(scope_type='cycle', scope_object_id=cycle_id)
+                | Q(payload__report_meta__cycle_scope_id=cycle_id)
+            )
+        if cycle_unit_allocation_id and scope != 'unit':
+            queryset = queryset.filter(
+                Q(scope_type='unit', scope_object_id=cycle_unit_allocation_id)
+                | Q(payload__report_meta__cycle_unit_allocation_id=cycle_unit_allocation_id)
+            )
 
         return queryset.order_by('-period_start', '-created_at')
 
@@ -202,10 +248,59 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         summary="Générer un rapport à la demande (asynchrone)",
         description=(
             "Crée un rapport avec status='pending' et lance la génération PDF en arrière-plan. "
-            "Retourne 202 Accepted. Poller GET /reports/{id}/ pour vérifier quand status='draft'."
+            "Retourne 202 Accepted. Poller GET /reports/{id}/ pour vérifier quand status='draft'. "
+            "Une portée unitaire exige cycle_unit_allocation_id; cycle_id est optionnel, "
+            "mais doit correspondre à l’allocation s’il est fourni."
         ),
         request=GenerateReportSerializer,
-        responses={202: ProductionReportDetailSerializer},
+        examples=[
+            OpenApiExample(
+                'Rapport de cycle',
+                value={
+                    'report_type': 'weekly',
+                    'scope_type': 'cycle',
+                    'cycle_id': '11111111-1111-4111-8111-111111111111',
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Rapport par unité',
+                value={
+                    'report_type': 'weekly',
+                    'scope_type': 'unit',
+                    'cycle_unit_allocation_id': '22222222-2222-4222-8222-222222222222',
+                },
+                request_only=True,
+            ),
+        ],
+        responses={
+            202: OpenApiResponse(
+                response=ProductionReportDetailSerializer,
+                description='Rapport pending créé ou réutilisé.',
+            ),
+            400: OpenApiResponse(
+                description='Combinaison de portée invalide, cycle inactif ou période invalide.',
+                examples=[
+                    OpenApiExample(
+                        'Allocation requise',
+                        value={
+                            'cycle_unit_allocation_id': [
+                                "L'allocation de cycle est requise pour un rapport d'unité."
+                            ]
+                        },
+                    ),
+                ],
+            ),
+            404: OpenApiResponse(
+                description='Allocation inconnue ou inaccessible.',
+                examples=[
+                    OpenApiExample(
+                        'Allocation inaccessible',
+                        value={'detail': "Allocation d’unité introuvable ou inaccessible."},
+                    ),
+                ],
+            ),
+        },
     )
     @action(detail=False, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def generate(self, request: Request) -> Response:
@@ -223,9 +318,17 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
                         if serializer.validated_data.get('cycle_id')
                         else None
                     ),
+                    scope_type=serializer.validated_data.get('scope_type', 'cycle'),
+                    cycle_unit_allocation_id=(
+                        str(serializer.validated_data['cycle_unit_allocation_id'])
+                        if serializer.validated_data.get('cycle_unit_allocation_id')
+                        else None
+                    ),
                 ),
             )
-        except InvalidReportCycleScopeError as exc:
+        except InaccessibleReportUnitScopeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        except (InvalidReportCycleScopeError, InvalidReportUnitScopeError, InvalidReportScopeError) as exc:
             return Response(
                 {'detail': str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -239,7 +342,10 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     )
     @action(detail=True, methods=['post'], throttle_classes=[AquacultureReportActionThrottle])
     def regenerate(self, request: Request, pk: str | None = None) -> Response:
-        report = ReportApplicationService.request_report_regeneration(self.get_object())
+        try:
+            report = ReportApplicationService.request_report_regeneration(self.get_object())
+        except (InvalidReportScopeError, UnresolvableLegacyReportScopeError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return self._serialize_report_detail(report, request, status_code=status.HTTP_202_ACCEPTED)
 
     @extend_schema(
@@ -251,6 +357,19 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
     def validate(self, request: Request, pk: str | None = None) -> Response:
         validated = ReportApplicationService.validate_report(self.get_object(), request.user)
         return self._serialize_report_detail(validated, request, status_code=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Supprimer un rapport (soft delete)",
+        description="Marque le rapport comme supprimé. Visible uniquement en admin.",
+        responses={204: None},
+    )
+    @action(detail=True, methods=['delete'], url_path='delete')
+    def delete_report(self, request: Request, pk: str | None = None) -> Response:
+        report = self.get_object()
+        report.is_deleted = True
+        report.deleted_at = timezone.now()
+        report.save(update_fields=['is_deleted', 'deleted_at'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         summary="Envoyer un rapport par email",
@@ -315,10 +434,13 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
         description="Retourne le fichier PDF du rapport.",
         responses={200: OpenApiTypes.BINARY},
     )
-    @action(detail=True, methods=['get'], throttle_classes=[AquacultureReportActionThrottle])
+    @action(detail=True, methods=['get'], throttle_classes=[AquacultureReportDownloadThrottle])
     def download(self, request: Request, pk: str | None = None):
         report = self.get_object()
-        decision: ReportDownloadDecision = ReportApplicationService.prepare_report_download(report)
+        try:
+            decision: ReportDownloadDecision = ReportApplicationService.prepare_report_download(report)
+        except (InvalidReportScopeError, UnresolvableLegacyReportScopeError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         if decision.status == 'pending':
             return self._pending_response(
                 _("Le rapport est en cours de génération. Réessayez dans quelques instants.")
@@ -329,6 +451,18 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         filename = decision.filename or f"report_{report.id}.pdf"
-        response = FileResponse(report.pdf_file.open('rb'), content_type='application/pdf')
+        try:
+            file_handle = report.pdf_file.open('rb')
+        except FileNotFoundError:
+            report.pdf_file = None
+            report.save(update_fields=['pdf_file', 'updated_at'])
+            try:
+                ReportApplicationService.request_report_regeneration(report)
+            except (InvalidReportScopeError, UnresolvableLegacyReportScopeError) as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            return self._pending_response(
+                _("Le fichier PDF est introuvable. Régénération lancée, réessayez dans quelques instants.")
+            )
+        response = FileResponse(file_handle, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{quote(filename)}"'
         return response

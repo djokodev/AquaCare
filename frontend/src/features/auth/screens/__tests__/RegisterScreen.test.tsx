@@ -30,6 +30,7 @@ describe('features/auth/screens/RegisterScreen', () => {
       register: mockRegister,
       isLoading: false,
       error: null,
+      fieldErrors: {},
       clearAuthError: mockClearAuthError,
     });
   });
@@ -116,5 +117,34 @@ describe('features/auth/screens/RegisterScreen', () => {
     fireEvent.press(getByText('signIn'));
 
     expect(mockNavigation.navigate).toHaveBeenCalledWith('Login');
+  });
+
+  it('permet d’afficher et de masquer les mots de passe', () => {
+    const { getAllByPlaceholderText, getAllByLabelText } = render(
+      <RegisterScreen navigation={mockNavigation} />
+    );
+    const passwordInputs = getAllByPlaceholderText('********');
+
+    expect(passwordInputs[0].props.secureTextEntry).toBe(true);
+    fireEvent.press(getAllByLabelText('showPassword')[0]);
+    expect(passwordInputs[0].props.secureTextEntry).toBe(false);
+    fireEvent.press(getAllByLabelText('hidePassword')[0]);
+    expect(passwordInputs[0].props.secureTextEntry).toBe(true);
+  });
+
+  it('affiche les erreurs backend sous le champ correspondant', () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      register: mockRegister,
+      isLoading: false,
+      error: null,
+      fieldErrors: {
+        phone_number: 'Un compte existe déjà avec ce numéro de téléphone.',
+      },
+      clearAuthError: mockClearAuthError,
+    });
+
+    const { getByText } = render(<RegisterScreen navigation={mockNavigation} />);
+
+    expect(getByText('Un compte existe déjà avec ce numéro de téléphone.')).toBeTruthy();
   });
 });

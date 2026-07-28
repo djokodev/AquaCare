@@ -1,11 +1,21 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import SanitaryLogScreen from '../SanitaryLogScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { offlineService } from '@/services/offlineService';
 import { useDispatch, useSelector } from 'react-redux';
 import { ProductionCycle } from '@/types/aquaculture';
+import { colors } from '@/theme';
+
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
@@ -20,6 +30,8 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 
 jest.mock('@/services/offlineService', () => ({
   offlineService: {
+    hasAnyPendingSync: jest.fn(),
+    syncAllOfflineData: jest.fn(),
     saveSanitaryLogOffline: jest.fn(),
   },
 }));
@@ -43,6 +55,14 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
   const navigation = {
     goBack: jest.fn(),
     navigate: jest.fn(),
+  } as any;
+  const route = {
+    params: {
+      cycleId: 'cycle-1',
+      cycleUnitAllocationId: 'allocation-1',
+      productionUnitId: 'unit-1',
+      productionUnitName: 'Bac 1',
+    },
   } as any;
 
   const activeCycle: ProductionCycle = {
@@ -68,6 +88,16 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
+    mockOffline.hasAnyPendingSync.mockResolvedValue(false);
+    mockOffline.syncAllOfflineData.mockResolvedValue({
+      success: 0,
+      failed: 0,
+      details: {
+        cycleLogs: { success: 0, failed: 0 },
+        newCycles: { success: 0, failed: 0 },
+        sanitaryLogs: { success: 0, failed: 0 },
+      },
+    });
   });
 
   const setSelectorState = (cycles: ProductionCycle[], currentCycle?: ProductionCycle) => {
@@ -83,27 +113,31 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     );
   };
 
-  it('affiche un etat vide sans cycle actif et navigue vers NewCycle', async () => {
+  it('affiche un etat vide sans cycle actif et navigue vers CreateFarm', async () => {
     setSelectorState([]);
 
     const { getByText } = render(<SanitaryLogScreen navigation={navigation} />);
 
     expect(getByText('noActiveCycles')).toBeTruthy();
     fireEvent.press(getByText('createCycle'));
-    expect(navigation.navigate).toHaveBeenCalledWith('NewCycle');
+    expect(navigation.navigate).toHaveBeenCalledWith('CreateFarm');
   });
 
   it('bloque la sauvegarde si le type d evenement est absent', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     setSelectorState([activeCycle]);
 
-    const { getByText, getByPlaceholderText } = render(<SanitaryLogScreen navigation={navigation} />);
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <SanitaryLogScreen navigation={navigation} />
+    );
 
     fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Respiration rapide');
     fireEvent.press(getByText('save'));
 
     expect(alertSpy).toHaveBeenCalledWith('error', 'selectEventType');
     expect(mockService.createSanitaryLog).not.toHaveBeenCalled();
+    expect(queryByText('sanitaryEventVaccination')).toBeNull();
+    expect(queryByText('sanitaryEventWaterQuality')).toBeNull();
     alertSpy.mockRestore();
   });
 
@@ -120,7 +154,7 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     const { getByText, getByPlaceholderText } = render(<SanitaryLogScreen navigation={navigation} />);
 
     fireEvent.press(getByText('sanitaryEventOther'));
-    fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Observation');
+    fireEvent.changeText(getByPlaceholderText('observationsPlaceholder'), 'Observation');
     fireEvent.press(getByText('save'));
 
     await waitFor(() => {
@@ -142,7 +176,7 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     const { getByText, getByPlaceholderText } = render(<SanitaryLogScreen navigation={navigation} />);
 
     fireEvent.press(getByText('sanitaryEventOther'));
-    fireEvent.changeText(getByPlaceholderText('symptomsPlaceholder'), 'Observation mineure');
+    fireEvent.changeText(getByPlaceholderText('observationsPlaceholder'), 'Observation mineure');
     fireEvent.changeText(getByPlaceholderText('exampleAffectedCount'), '12');
     fireEvent.press(getByText('save'));
 
@@ -162,6 +196,38 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
       'sanitarySuccessOther',
       expect.any(Array)
     );
+    alertSpy.mockRestore();
+  });
+
+  it('affiche le cycle selectionne sans contexte unitaire redondant', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    setSelectorState([activeCycle]);
+    mockService.createSanitaryLog.mockResolvedValueOnce({ id: 'san-unit' } as any);
+
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <SanitaryLogScreen navigation={navigation} route={route} />
+    );
+
+    expect(queryByText('productionUnitSanitaryLogContextTitle')).toBeNull();
+    expect(queryByText('Bac 1')).toBeNull();
+    expect(getByText('Cycle Sanitaire')).toBeTruthy();
+    expect(queryByText('Zone P1')).toBeNull();
+
+    fireEvent.press(getByText('sanitaryEventOther'));
+    fireEvent.changeText(getByPlaceholderText('observationsPlaceholder'), 'Observation');
+    fireEvent.press(getByText('save'));
+
+    await waitFor(() => {
+      expect(mockService.createSanitaryLog).toHaveBeenCalledWith(
+        'cycle-1',
+        expect.objectContaining({
+          cycle_unit_allocation: 'allocation-1',
+          event_type: 'other',
+          symptoms: 'Observation',
+        })
+      );
+    });
+
     alertSpy.mockRestore();
   });
 
@@ -195,6 +261,31 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     alertSpy.mockRestore();
   });
 
+  it('fait varier les champs selon le type d evenement', async () => {
+    setSelectorState([activeCycle]);
+
+    const { getByText, queryByText, getByPlaceholderText } = render(
+      <SanitaryLogScreen navigation={navigation} />
+    );
+
+    fireEvent.press(getByText('sanitaryEventDisease'));
+    expect(queryByText('treatmentApplied')).toBeNull();
+    expect(queryByText('treatmentFieldsInfo')).toBeNull();
+    expect(getByPlaceholderText('symptomsPlaceholder')).toBeTruthy();
+
+    fireEvent.press(getByText('sanitaryEventTreatment'));
+    const selectedTreatment = getByText('sanitaryEventTreatment');
+    expect(StyleSheet.flatten(selectedTreatment.props.style)).toMatchObject({
+      color: colors.text.primary,
+    });
+    expect(getByText('treatmentFieldsInfo')).toBeTruthy();
+    expect(getByText('treatmentApplied')).toBeTruthy();
+
+    fireEvent.press(getByText('sanitaryEventAbnormalMortality'));
+    expect(getByText('mortalityReason')).toBeTruthy();
+    expect(getByText('noTreatmentRequired')).toBeTruthy();
+  });
+
   it('affiche les details de validation en cas erreur API', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     setSelectorState([activeCycle]);
@@ -215,7 +306,7 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith(
         'error',
-        expect.stringContaining('symptoms')
+        expect.stringContaining('Champ requis')
       );
     });
 

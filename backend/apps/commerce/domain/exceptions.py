@@ -1,5 +1,5 @@
 """
-Exceptions métier pour le module commerce MAVECAM AquaCare.
+Exceptions métier pour le module commerce AquaCare.
 
 Architecture Clean : Les exceptions du domain représentent des violations
 de règles métier et sont indépendantes de l'infrastructure Django.
@@ -24,6 +24,16 @@ class ProductNotAvailableError(CommerceException):
 class InvalidOrderError(CommerceException):
     """Données de commande invalides (panier vide, quantité négative, etc.)."""
     pass
+
+
+class DeliveryAddressIncompleteError(InvalidOrderError):
+    """Adresse de livraison à domicile incomplète pour créer une commande."""
+
+    code = 'delivery_address_incomplete'
+
+    def __init__(self, missing_fields: list[str]):
+        self.missing_fields = tuple(missing_fields)
+        super().__init__('Informations de livraison à domicile incomplètes')
 
 
 class OrderNotFoundError(CommerceException):

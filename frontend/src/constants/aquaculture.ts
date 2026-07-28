@@ -1,16 +1,35 @@
 /**
  * Constantes aquaculture pour les calculs financiers
- * Valeurs validées par expert MAVECAM - Janvier 2026
+ * Valeurs validées par expert AquaCare - Janvier 2026
  *
  * @module constants/aquaculture
  */
 
+// Densités terrain — validées DT AquaCare
+export const STOCKING_DENSITY_TANK_PER_M3 = 300;    // alevins/m³ au départ (bacs/cages) — maximum
+export const STOCKING_DENSITY_POND_PER_M2 = 10;     // alevins/m² au départ (étangs) — maximum
+
+// Defaults métier cycle-first alignés avec le backend
+export const DEFAULT_EXPECTED_SURVIVAL_RATE_PCT = 95;
+export const TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS = 14;
+export const DEFAULT_OTHER_COSTS_RATE_PCT = 5;
+
+// Keep aligned with backend ECONOMIC_DEFAULTS_BY_SPECIES (offline-first copy).
+export const DEFAULT_CYCLE_DURATION_DAYS_BY_SPECIES = {
+  tilapia: 180,
+  clarias: 120,
+} as const;
+
+// Densités recommandées (semi-intensif) — utilisées pour les suggestions automatiques
+export const RECOMMENDED_STOCKING_DENSITY_POND_PER_M2 = 3;   // 3 poissons/m² (étangs)
+export const RECOMMENDED_STOCKING_DENSITY_TANK_PER_M3 = 100;  // 100 poissons/m³ (bacs/cages)
+
 export const AQUACULTURE_CONSTANTS = {
   /**
    * Prix de vente du poisson au kg (FCFA)
-   * Source: Prix moyen vente en gros au Cameroun
+   * Source: DT AquaCare — marché local Cameroun 2026
    */
-  FISH_SALE_PRICE_PER_KG: 1800,
+  FISH_SALE_PRICE_PER_KG: 2800,
 
   /**
    * Prix moyen de l'aliment au kg (FCFA)

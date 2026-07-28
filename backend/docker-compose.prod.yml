@@ -55,13 +55,16 @@ services:
     command: >
       bash -c "
       chown -R aquacare:aquacare /app/media /app/staticfiles /app/logs 2>/dev/null || true &&
-      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn mavecam_api.wsgi:application --bind 0.0.0.0:8000 --worker-class gthread --workers 6 --threads 8 --timeout 60 --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile -'
+      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn aquacare_api.wsgi:application --bind 0.0.0.0:8000 --worker-class gthread --workers 6 --threads 8 --timeout 60 --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile -'
       "
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=${DJANGO_DEBUG}
       - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}
+      - DJANGO_ENVIRONMENT=production
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -97,13 +100,16 @@ services:
     command: >
       bash -c "
       while ! nc -z db 5432; do sleep 0.5; done &&
-      celery -A mavecam_api worker --loglevel=info --concurrency=4
+      celery -A aquacare_api worker --loglevel=info --concurrency=4
       "
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=${DJANGO_DEBUG}
       - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}
+      - DJANGO_ENVIRONMENT=production
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -115,7 +121,7 @@ services:
       - EMAIL_HOST=${EMAIL_HOST:-smtp.sendgrid.net}
       - EMAIL_PORT=${EMAIL_PORT:-587}
       - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
-      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@mavecam.com}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-noreply@aquacare.tech}
     depends_on:
       db:
         condition: service_healthy
@@ -133,13 +139,16 @@ services:
     command: >
       bash -c "
       while ! nc -z db 5432; do sleep 0.5; done &&
-      celery -A mavecam_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+      celery -A aquacare_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
       "
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=${DJANGO_DEBUG}
       - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}
+      - DJANGO_ENVIRONMENT=production
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-}
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

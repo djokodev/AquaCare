@@ -6,12 +6,26 @@ from re import Pattern
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from .domain.account_invariants import (
+    build_user_account_invariant_errors,
+    is_blank_value,
+)
+
+__all__ = [
+    "PhoneNumberValidator",
+    "build_user_account_invariant_errors",
+    "is_blank_value",
+    "normalize_login_value",
+    "normalize_phone_number",
+    "validate_cameroon_phone",
+]
+
 
 class PhoneNumberValidator:
     """
     Validateur pour les numéros de téléphone camerounais et internationaux.
 
-    Métier : Les pisciculteurs MAVECAM utilisent principalement des numéros
+    Métier : Les pisciculteurs AquaCare utilisent principalement des numéros
     camerounais (+237) mais peuvent aussi avoir des numéros internationaux.
 
     Formats acceptés :
@@ -93,6 +107,14 @@ def normalize_phone_number(phone_number: str | None) -> str | None:
     
     # Autres cas : retourner tel quel
     return cleaned
+
+
+def normalize_login_value(value: str | None) -> str:
+    """Normalise une valeur de login textuel pour les recherches indexees."""
+    if not value:
+        return ""
+
+    return " ".join(str(value).strip().split()).casefold()
 
 
 def validate_cameroon_phone(value: str | None) -> None:

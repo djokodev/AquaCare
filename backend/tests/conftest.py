@@ -1,5 +1,5 @@
 """
-Configuration globale pour les tests MAVECAM.
+Configuration globale pour les tests AquaCare.
 
 Ce fichier contient des fixtures réutilisables et la configuration
 partagée entre tous les tests du projet.
@@ -34,7 +34,7 @@ def user_factory():
         unique_number = random.randint(100000, 999999)
         defaults = {
             'phone_number': f'+237690{unique_number}',
-            'email': f'test{unique_number}@mavecam.com',
+            'email': f'test{unique_number}@aquacare.tech',
             'first_name': 'Jean',
             'last_name': 'Farmer',
             'account_type': 'individual',
@@ -67,16 +67,16 @@ def auth_client(api_client, authenticated_user):
 
 
 @pytest.fixture
-def mavecam_admin(user_factory):
+def aquacare_admin(user_factory):
     """
-    Utilisateur administrateur MAVECAM pour les tests nécessitant
+    Utilisateur administrateur AquaCare pour les tests nécessitant
     des privilèges élevés (ex: gestion des certifications).
     """
     return user_factory(
         phone_number='+237699000001',
-        email='admin@mavecam.com',
+        email='admin@aquacare.tech',
         first_name='Admin',
-        last_name='MAVECAM',
+        last_name='AquaCare',
         is_staff=True,
         is_superuser=True
     )

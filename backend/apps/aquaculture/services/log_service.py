@@ -15,9 +15,10 @@ from __future__ import annotations
 import uuid as _uuid
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 from uuid import UUID
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -25,12 +26,18 @@ from django.utils.translation import gettext_lazy as _
 from ..constants import SAMPLING_TOLERANCE
 from ..domain.exceptions import (
     BusinessRuleViolation,
+    CycleLogCycleImmutableError,
+    CycleLogIdempotencyConflict,
     InsufficientFishCountError,
     InvalidDateRangeError,
     OfflineSyncConflictError,
 )
 from ..models import CycleLog, ProductionCycle
 from .base import BaseService
+from .feed_stock_ledger_service import (
+    FeedStockLedgerService,
+    FeedStockReservation,
+)
 
 if TYPE_CHECKING:
     from accounts.models import User
@@ -38,6 +45,7 @@ if TYPE_CHECKING:
 
 class CycleLogPayload(TypedDict, total=False):
     cycle: ProductionCycle | str | UUID
+    cycle_unit_allocation: Any
     client_uuid: str | UUID
     log_date: date | str
     mortality_count: int
@@ -46,6 +54,7 @@ class CycleLogPayload(TypedDict, total=False):
     sample_total_weight: Decimal
     average_weight: Decimal
     feed_quantity: Decimal
+    feed_reference: Any
     feed_type: str
     feed_size_mm: Decimal
     feeding_times: str
@@ -55,6 +64,30 @@ class CycleLogPayload(TypedDict, total=False):
     ammonia_level: Decimal
     observations: str
     created_offline: bool
+
+
+def _normalize_cycle_unit_allocation_ref(cycle_unit_allocation: Any) -> str | None:
+    if cycle_unit_allocation is None:
+        return None
+    return str(getattr(cycle_unit_allocation, 'id', cycle_unit_allocation))
+
+
+def _build_cycle_log_scope_kwargs(
+    *,
+    cycle: ProductionCycle,
+    log_date: date,
+    cycle_unit_allocation: Any,
+) -> dict[str, Any]:
+    scope_kwargs: dict[str, Any] = {
+        'cycle': cycle,
+        'log_date': log_date,
+    }
+    allocation_ref = _normalize_cycle_unit_allocation_ref(cycle_unit_allocation)
+    if allocation_ref is None:
+        scope_kwargs['cycle_unit_allocation__isnull'] = True
+    else:
+        scope_kwargs['cycle_unit_allocation'] = allocation_ref
+    return scope_kwargs
 
 
 class BulkLogError(TypedDict):
@@ -90,11 +123,41 @@ class CycleLogService(BaseService):
     }
 
     @staticmethod
+    def _normalize_replay_value(value: Any) -> Any:
+        if hasattr(value, 'id'):
+            return str(value.id)
+        if isinstance(value, (Decimal, date, UUID, _uuid.UUID)):
+            return str(value)
+        return value
+
+    @staticmethod
+    def _is_compatible_replay(
+        existing_log: CycleLog,
+        cycle: ProductionCycle,
+        log_data: CycleLogPayload,
+    ) -> bool:
+        if existing_log.cycle_id != cycle.id:
+            return False
+        ignored = {'cycle', 'id', 'created_at', 'created_offline', 'synced_at'}
+        relation_fields = {
+            'cycle_unit_allocation': 'cycle_unit_allocation_id',
+            'feed_reference': 'feed_reference_id',
+        }
+        for key, requested in log_data.items():
+            if key in ignored:
+                continue
+            actual = getattr(existing_log, relation_fields.get(key, key), None)
+            if CycleLogService._normalize_replay_value(actual) != CycleLogService._normalize_replay_value(requested):
+                return False
+        return True
+
+    @staticmethod
     @transaction.atomic
     def create_log(
         cycle: ProductionCycle,
         log_data: CycleLogPayload,
         created_offline: bool = False,
+        user: User | None = None,
     ) -> CycleLog:
         """
         Crée un nouveau log quotidien avec validation métier complète.
@@ -119,13 +182,31 @@ class CycleLogService(BaseService):
             InsufficientFishCountError: Si mortalité > effectif
             BusinessRuleViolation: Si autres règles violées
         """
+        cycle = ProductionCycle.objects.select_for_update().select_related('farm_profile').get(pk=cycle.pk)
         CycleLogService.log_operation(
             "create_log",
             {"cycle_id": str(cycle.id), "log_date": str(log_data.get('log_date'))}
         )
 
+        client_uuid = log_data.get('client_uuid')
+        if client_uuid:
+            existing_replay = CycleLog.objects.select_for_update().filter(client_uuid=client_uuid).first()
+            if existing_replay is not None:
+                if user is not None and existing_replay.cycle.farm_profile.user_id != user.id:
+                    raise OfflineSyncConflictError(
+                        _("Conflit de synchronisation : ce client_uuid appartient à un autre utilisateur.")
+                    )
+                if CycleLogService._is_compatible_replay(existing_replay, cycle, log_data):
+                    return existing_replay
+                raise CycleLogIdempotencyConflict()
+
+        feed_reference = log_data.get('feed_reference')
+        if feed_reference is not None:
+            log_data['feed_type'] = feed_reference.name
+            log_data['feed_size_mm'] = feed_reference.pellet_size_mm
+
         # 1. Validation règles métier
-        CycleLogService._validate_log_business_rules(cycle, log_data)
+        CycleLogService._validate_log_business_rules(cycle, log_data, user=user)
 
         # 2. Auto-calcul poids moyen si échantillon fourni
         if log_data.get('sample_count') and log_data.get('sample_total_weight'):
@@ -137,8 +218,11 @@ class CycleLogService(BaseService):
         # 3. Vérification doublon date (sauf si client_uuid fourni)
         if not log_data.get('client_uuid'):
             existing_log = CycleLog.objects.filter(
-                cycle=cycle,
-                log_date=log_data['log_date']
+                **_build_cycle_log_scope_kwargs(
+                    cycle=cycle,
+                    log_date=log_data['log_date'],
+                    cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
+                )
             ).first()
 
             if existing_log:
@@ -154,6 +238,11 @@ class CycleLogService(BaseService):
             created_offline=created_offline,
             **log_data
         )
+        from .cycle_feed_plan_progression_service import (
+            CycleFeedPlanProgressionService,
+        )
+
+        CycleFeedPlanProgressionService.record_progress_from_log(log)
 
         CycleLogService.log_operation(
             "log_created",
@@ -223,16 +312,23 @@ class CycleLogService(BaseService):
                 cycle_filter['farm_profile__user'] = user  # enforce ownership in production
             cycles_map = {
                 str(c.id): c
-                for c in ProductionCycle.objects.filter(**cycle_filter).select_related('farm_profile')
+                for c in ProductionCycle.objects.select_for_update()
+                .filter(**cycle_filter)
+                .select_related('farm_profile')
+                .order_by('id')
             }
 
         # Track UUIDs already processed in this batch to handle in-batch duplicates
         batch_uuid_map: dict[str, CycleLog] = {}
+        reserved_feed_by_size: dict[
+            tuple[UUID, Decimal],
+            list[FeedStockReservation],
+        ] = {}
 
         # Collect new logs to bulk_create (bypass signals)
         new_logs_to_create: list[CycleLog] = []
-        # Track (cycle_id, log_date) to prevent in-batch unique constraint violations
-        batch_date_keys: set = set()
+        # Track (cycle_id, log_date, allocation) to prevent in-batch unique violations
+        batch_date_keys: set[tuple[str, date, str | None]] = set()
         now = timezone.now()
 
         for idx, log_data in enumerate(logs_data):
@@ -256,6 +352,12 @@ class CycleLogService(BaseService):
                     })
                     continue
 
+                from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+                validate_cycle_unit_allocation_context(
+                    cycle=cycle,
+                    cycle_unit_allocation=log_data.get('cycle_unit_allocation'),
+                    user=user,
+                )
                 # Déduplication par client_uuid
                 client_uuid = log_data.get('client_uuid')
                 if client_uuid:
@@ -264,17 +366,14 @@ class CycleLogService(BaseService):
                     # 1. In-batch duplicate (same UUID appeared earlier in this batch)
                     if client_uuid_str in batch_uuid_map:
                         in_batch_log = batch_uuid_map[client_uuid_str]
-                        for key, value in log_data.items():
-                            if key not in ['id', 'created_at', 'cycle']:
-                                setattr(in_batch_log, key, value)
-                        in_batch_log.synced_at = now
-                        # If already persisted to DB, save changes now.
-                        # Note: can't use .pk since UUID PKs are set at construction time.
-                        if not in_batch_log._state.adding:
-                            in_batch_log.save()
-                        # Otherwise it's still in new_logs_to_create — attrs updated in-place
-                        result['updated'] += 1
-                        continue  # Don't re-append — already tracked
+                        if CycleLogService._is_compatible_replay(in_batch_log, cycle, log_data):
+                            result['updated'] += 1
+                        else:
+                            result['errors'].append({
+                                'index': idx,
+                                'error': str(CycleLogIdempotencyConflict().detail),
+                            })
+                        continue
 
                     # 2. Database duplicate (UUID exists from previous sync)
                     existing_log = CycleLog.objects.filter(client_uuid=client_uuid).first()
@@ -294,45 +393,68 @@ class CycleLogService(BaseService):
                             })
                             continue
 
-                        # Mise à jour log existant
-                        for key, value in log_data.items():
-                            if key not in ['id', 'created_at', 'cycle']:
-                                setattr(existing_log, key, value)
-
-                        existing_log.synced_at = now
-                        existing_log.save()
-
-                        result['updated'] += 1
-                        result['logs'].append(existing_log)
-                        result['cycles_affected'].add(existing_log.cycle_id)
-                        batch_uuid_map[client_uuid_str] = existing_log
+                        if CycleLogService._is_compatible_replay(existing_log, cycle, log_data):
+                            result['updated'] += 1
+                            result['logs'].append(existing_log)
+                            result['cycles_affected'].add(existing_log.cycle_id)
+                            batch_uuid_map[client_uuid_str] = existing_log
+                        else:
+                            result['errors'].append({
+                                'index': idx,
+                                'error': str(CycleLogIdempotencyConflict().detail),
+                            })
                         continue
 
                 # Validate + prepare new log for bulk_create (no signal)
                 clean_log_data = {k: v for k, v in log_data.items() if k not in ['cycle', 'id']}
                 created_offline = clean_log_data.pop('created_offline', True)
 
-                CycleLogService._validate_log_business_rules(cycle, clean_log_data)
-
                 # Check for existing log with same (cycle, log_date)
                 log_date_val = clean_log_data.get('log_date')
                 if log_date_val:
                     existing_date_log = CycleLog.objects.filter(
-                        cycle=cycle, log_date=log_date_val
+                        **_build_cycle_log_scope_kwargs(
+                            cycle=cycle,
+                            log_date=log_date_val,
+                            cycle_unit_allocation=clean_log_data.get('cycle_unit_allocation'),
+                        )
                     ).first()
                     if existing_date_log:
-                        # Update existing log instead of creating a duplicate
-                        for key, value in clean_log_data.items():
-                            if key not in ['id', 'created_at']:
-                                setattr(existing_date_log, key, value)
+                        CycleLogService.update_log(existing_date_log, clean_log_data, user=user)
                         existing_date_log.synced_at = now
-                        existing_date_log.save()
+                        existing_date_log.save(update_fields=['synced_at'])
                         result['updated'] += 1
                         result['logs'].append(existing_date_log)
                         result['cycles_affected'].add(existing_date_log.cycle_id)
                         if client_uuid:
                             batch_uuid_map[str(client_uuid)] = existing_date_log
                         continue
+
+                feed_reference = clean_log_data.get('feed_reference')
+                if feed_reference is not None:
+                    clean_log_data['feed_type'] = feed_reference.name
+                    clean_log_data['feed_size_mm'] = feed_reference.pellet_size_mm
+                reservation_key = None
+                reserved_feed_events: list[FeedStockReservation] = []
+                feed_size_mm = clean_log_data.get('feed_size_mm')
+                if feed_size_mm is None and feed_reference is not None:
+                    feed_size_mm = feed_reference.pellet_size_mm
+                    clean_log_data['feed_size_mm'] = feed_size_mm
+                if feed_size_mm is not None:
+                    reservation_key = (
+                        cycle.id,
+                        Decimal(str(feed_size_mm)),
+                    )
+                    reserved_feed_events = reserved_feed_by_size.get(
+                        reservation_key,
+                        [],
+                    )
+                CycleLogService._validate_log_business_rules(
+                    cycle,
+                    clean_log_data,
+                    user=user,
+                    reserved_feed_events=reserved_feed_events,
+                )
 
                 # Auto-calculate average weight if sample provided
                 if clean_log_data.get('sample_count') and clean_log_data.get('sample_total_weight'):
@@ -341,8 +463,12 @@ class CycleLogService(BaseService):
                             clean_log_data['sample_total_weight'] / clean_log_data['sample_count']
                         ))
 
-                # Prevent in-batch (cycle, log_date) duplicates
-                date_key = (str(cycle.id), str(log_date_val)) if log_date_val else None
+                # Prevent in-batch (cycle, log_date, allocation) duplicates
+                date_key = (
+                    str(cycle.id),
+                    log_date_val,
+                    _normalize_cycle_unit_allocation_ref(clean_log_data.get('cycle_unit_allocation')),
+                ) if log_date_val else None
                 if date_key and date_key in batch_date_keys:
                     result['errors'].append({
                         'index': idx,
@@ -357,14 +483,32 @@ class CycleLogService(BaseService):
                     **clean_log_data
                 )
                 new_logs_to_create.append(log)
+                if reservation_key is not None:
+                    reservation = FeedStockLedgerService.reservation(
+                        log_date=log_date_val,
+                        quantity_kg=Decimal(
+                            str(clean_log_data.get('feed_quantity') or 0)
+                        ),
+                        event_id=client_uuid or log.id,
+                    )
+                    reserved_feed_by_size.setdefault(reservation_key, []).append(
+                        reservation
+                    )
                 result['cycles_affected'].add(cycle.id)
                 if date_key:
                     batch_date_keys.add(date_key)
                 if client_uuid:
                     batch_uuid_map[str(client_uuid)] = log
 
-            except (BusinessRuleViolation, InvalidDateRangeError, InsufficientFishCountError,
-                    OfflineSyncConflictError, ValueError, TypeError) as e:
+            except (
+                BusinessRuleViolation,
+                InvalidDateRangeError,
+                InsufficientFishCountError,
+                OfflineSyncConflictError,
+                DjangoValidationError,
+                ValueError,
+                TypeError,
+            ) as e:
                 result['errors'].append({
                     'index': idx,
                     'error': str(e),
@@ -373,6 +517,12 @@ class CycleLogService(BaseService):
         # Bulk create all new logs at once (bypasses post_save signals)
         if new_logs_to_create:
             created_logs = CycleLog.objects.bulk_create(new_logs_to_create)
+            from .cycle_feed_plan_progression_service import (
+                CycleFeedPlanProgressionService,
+            )
+
+            for created_log in created_logs:
+                CycleFeedPlanProgressionService.record_progress_from_log(created_log)
             result['created'] = len(created_logs)
             result['logs'].extend(created_logs)
 
@@ -391,7 +541,11 @@ class CycleLogService(BaseService):
 
     @staticmethod
     @transaction.atomic
-    def update_log(log: CycleLog, update_data: CycleLogPayload) -> CycleLog:
+    def update_log(
+        log: CycleLog,
+        update_data: CycleLogPayload,
+        user: User | None = None,
+    ) -> CycleLog:
         """
         Met à jour un log existant.
 
@@ -405,11 +559,59 @@ class CycleLogService(BaseService):
         Returns:
             CycleLog mis à jour
         """
+        locked_cycle = ProductionCycle.objects.select_for_update().get(pk=log.cycle_id)
+        # Ne joint pas les FK nullables dans le SELECT FOR UPDATE : PostgreSQL
+        # refuse de verrouiller le côté nullable d'un OUTER JOIN.
+        log = CycleLog.objects.select_for_update().get(pk=log.pk)
         CycleLogService.log_operation(
             "update_log",
             {"log_id": str(log.id)}
         )
 
+        from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+
+        requested_cycle = update_data.get('cycle') if 'cycle' in update_data else locked_cycle
+        requested_cycle_id = getattr(requested_cycle, 'id', requested_cycle)
+        if str(requested_cycle_id) != str(locked_cycle.id):
+            raise CycleLogCycleImmutableError()
+        cycle = locked_cycle
+        cycle_unit_allocation = (
+            update_data['cycle_unit_allocation']
+            if 'cycle_unit_allocation' in update_data
+            else getattr(log, 'cycle_unit_allocation', None)
+        )
+        validate_cycle_unit_allocation_context(
+            cycle=cycle,
+            cycle_unit_allocation=cycle_unit_allocation,
+            user=user,
+        )
+
+        # Reconstitue la valeur finale avant toute écriture. Toute modification
+        # qui peut changer la compatibilité du stock repasse par le même ledger.
+        feed_reference = update_data.get('feed_reference', log.feed_reference)
+        feed_quantity = update_data.get('feed_quantity', log.feed_quantity)
+        final_values = {
+            field: update_data.get(field, getattr(log, field))
+            for field in (
+                'log_date', 'mortality_count', 'sample_count', 'sample_total_weight',
+                'average_weight', 'feed_quantity', 'cycle_unit_allocation',
+            )
+        }
+        final_values['feed_reference'] = feed_reference
+        if feed_reference is not None and Decimal(str(feed_quantity or 0)) > 0:
+            update_data['feed_type'] = feed_reference.name
+            update_data['feed_size_mm'] = feed_reference.pellet_size_mm
+        elif Decimal(str(feed_quantity or 0)) <= 0:
+            update_data['feed_reference'] = None
+            update_data['feed_type'] = ''
+            update_data['feed_size_mm'] = None
+
+        CycleLogService._validate_log_business_rules(
+            cycle,
+            final_values,
+            user=user,
+            existing_log=log,
+        )
         # Validation des nouvelles données si mortalité modifiée
         if 'mortality_count' in update_data:
             new_mortality = update_data['mortality_count']
@@ -427,6 +629,11 @@ class CycleLogService(BaseService):
                 setattr(log, key, value)
 
         log.save()
+        from .cycle_feed_plan_progression_service import (
+            CycleFeedPlanProgressionService,
+        )
+
+        CycleFeedPlanProgressionService.record_progress_from_log(log)
         return log
 
     @staticmethod
@@ -482,12 +689,19 @@ class CycleLogService(BaseService):
         cycle = ProductionCycle.objects.get(id=cycle_id, farm_profile__user=user)
 
         log_data['client_uuid'] = client_uuid
-        return CycleLogService.create_log(cycle, log_data, created_offline=True)
+        return CycleLogService.create_log(cycle, log_data, created_offline=True, user=user)
 
     # =================== MÉTHODES PRIVÉES (VALIDATION) ===================
 
     @staticmethod
-    def _validate_log_business_rules(cycle: ProductionCycle, log_data: CycleLogPayload) -> None:
+    def _validate_log_business_rules(
+        cycle: ProductionCycle,
+        log_data: CycleLogPayload,
+        user: User | None = None,
+        existing_log: CycleLog | None = None,
+        reserved_feed_kg: Decimal = Decimal('0'),
+        reserved_feed_events: list[FeedStockReservation] | None = None,
+    ) -> None:
         """
         Valide les règles métier pour la création d'un log.
 
@@ -501,6 +715,14 @@ class CycleLogService(BaseService):
         sample_count = log_data.get('sample_count')
         sample_total_weight = log_data.get('sample_total_weight')
         average_weight = log_data.get('average_weight')
+        cycle_unit_allocation = log_data.get('cycle_unit_allocation')
+        from aquaculture.domain.validators import validate_cycle_unit_allocation_context
+
+        validate_cycle_unit_allocation_context(
+            cycle=cycle,
+            cycle_unit_allocation=cycle_unit_allocation,
+            user=user,
+        )
 
         # Validation date dans période cycle
         if log_date:
@@ -520,10 +742,14 @@ class CycleLogService(BaseService):
                 )
 
         # Validation mortalité <= effectif disponible
-        if mortality_count > cycle.current_count:
+        available_count = cycle.current_count
+        if cycle_unit_allocation is not None:
+            available_count = cycle_unit_allocation.current_fish_count
+
+        if mortality_count > available_count:
             raise InsufficientFishCountError(
                 _("Mortalité (%(mortality)d) ne peut dépasser l'effectif actuel (%(current)d)")
-                % {'mortality': mortality_count, 'current': cycle.current_count}
+                % {'mortality': mortality_count, 'current': available_count}
             )
 
         # Validation cohérence échantillonnage
@@ -554,6 +780,21 @@ class CycleLogService(BaseService):
 
         # Validation paramètres environnementaux
         CycleLogService._validate_environmental_parameters(log_data)
+
+        if log_date:
+            from .cycle_store_service import CycleStoreService
+
+            CycleStoreService.validate_daily_feed_quantity(
+                cycle=cycle,
+                feed_quantity=log_data.get('feed_quantity'),
+                log_date=log_date,
+                cycle_unit_allocation=cycle_unit_allocation,
+                existing_log=existing_log,
+                feed_reference=log_data.get('feed_reference'),
+                feed_size_mm=log_data.get('feed_size_mm'),
+                reserved_feed_kg=reserved_feed_kg,
+                reserved_feed_events=reserved_feed_events,
+            )
 
     @staticmethod
     def _validate_environmental_parameters(log_data: CycleLogPayload) -> None:

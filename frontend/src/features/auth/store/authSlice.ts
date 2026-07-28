@@ -1,6 +1,20 @@
 ﻿import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { authService } from '@/features/auth/services/authService';
-import { User, FarmProfile, LoginRequest, RegisterRequest } from '@/types/auth';
+import { AuthRequestError, authService } from '@/features/auth/services/authService';
+import { profileService } from '@/features/profile/services/profileService';
+import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
+import { dashboardSyncService } from '@/services/dashboardSyncService';
+import {
+  AuthErrorPayload,
+  User,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+} from '@/features/auth/types/auth';
+import {
+  FarmProfile,
+  UpdateFarmProfilePayload,
+  UpdateUserProfilePayload,
+} from '@/features/profile/types/profile';
 
 interface AuthState {
   user: User | null;
@@ -8,6 +22,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  fieldErrors: Record<string, string>;
 }
 
 const initialState: AuthState = {
@@ -16,58 +31,162 @@ const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: false,
   error: null,
+  fieldErrors: {},
+};
+
+const normalizeAuthMessage = (message: string | null | undefined): string | null => {
+  if (!message) {
+    return null;
+  }
+
+  const sanitized = sanitizeUserFacingErrorMessage(message);
+  return sanitized === 'UNKNOWN_ERROR' ? 'UNKNOWN_ERROR' : sanitized;
+};
+
+const normalizeFieldErrors = (fieldErrors: Record<string, string>): Record<string, string> => {
+  const sanitizedFieldErrors: Record<string, string> = {};
+
+  for (const [field, message] of Object.entries(fieldErrors)) {
+    const sanitized = normalizeAuthMessage(message);
+    if (sanitized) {
+      sanitizedFieldErrors[field] = sanitized;
+    }
+  }
+
+  return sanitizedFieldErrors;
+};
+
+const getThunkErrorPayload = (error: unknown): AuthErrorPayload => {
+  if (error instanceof AuthRequestError) {
+    return {
+      message: normalizeAuthMessage(error.message),
+      fieldErrors: normalizeFieldErrors(error.fieldErrors),
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      message: normalizeAuthMessage(error.message),
+      fieldErrors: {},
+    };
+  }
+
+  const apiError = error as {
+    response?: { data?: Record<string, unknown> | string };
+    message?: string;
+  };
+  const data = apiError.response?.data;
+
+  if (typeof data === 'string' && data.trim()) {
+    return {
+      message: normalizeAuthMessage(data),
+      fieldErrors: {},
+    };
+  }
+  if (data && typeof data === 'object') {
+    if (typeof data.detail === 'string') {
+      return { message: normalizeAuthMessage(data.detail), fieldErrors: {} };
+    }
+    if (typeof data.message === 'string') {
+      return { message: normalizeAuthMessage(data.message), fieldErrors: {} };
+    }
+    if (typeof data.error === 'string') {
+      return { message: normalizeAuthMessage(data.error), fieldErrors: {} };
+    }
+
+    const firstFieldError = Object.values(data).find(Boolean);
+    if (Array.isArray(firstFieldError) && firstFieldError.length > 0) {
+      return {
+        message: normalizeAuthMessage(String(firstFieldError[0])),
+        fieldErrors: {},
+      };
+    }
+    if (firstFieldError) {
+      return {
+        message: normalizeAuthMessage(String(firstFieldError)),
+        fieldErrors: {},
+      };
+    }
+  }
+
+  return {
+    message: normalizeAuthMessage(apiError.message) ?? 'UNKNOWN_ERROR',
+    fieldErrors: {},
+  };
+};
+
+const clearAuthErrors = (state: AuthState) => {
+  state.error = null;
+  state.fieldErrors = {};
+};
+
+const applyAuthError = (state: AuthState, payload?: AuthErrorPayload) => {
+  const fieldErrors = normalizeFieldErrors(payload?.fieldErrors ?? {});
+  const normalizedMessage = normalizeAuthMessage(payload?.message);
+  const hasFieldErrors = Object.keys(fieldErrors).length > 0;
+  state.error =
+    hasFieldErrors && (!normalizedMessage || normalizedMessage === 'UNKNOWN_ERROR')
+      ? null
+      : normalizedMessage ?? (hasFieldErrors ? null : 'UNKNOWN_ERROR');
+  state.fieldErrors = fieldErrors;
 };
 
 // Actions asynchrones
-export const loginUser = createAsyncThunk(
+export const loginUser = createAsyncThunk<AuthResponse, LoginRequest, { rejectValue: AuthErrorPayload }>(
   'auth/login',
   async (credentials: LoginRequest, { rejectWithValue }) => {
     try {
       const response = await authService.login(credentials);
       return response;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorPayload(error));
     }
   }
 );
 
-export const registerUser = createAsyncThunk(
+export const registerUser = createAsyncThunk<AuthResponse, RegisterRequest, { rejectValue: AuthErrorPayload }>(
   'auth/register',
   async (userData: RegisterRequest, { rejectWithValue }) => {
     try {
       const response = await authService.register(userData);
       return response;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorPayload(error));
     }
   }
 );
 
-export const logoutUser = createAsyncThunk(
+export const logoutUser = createAsyncThunk<boolean, void, { rejectValue: AuthErrorPayload }>(
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
       await authService.logout();
       return true;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorPayload(error));
+    } finally {
+      await dashboardSyncService.clear();
     }
   }
 );
 
-export const deleteAccountUser = createAsyncThunk(
+export const deleteAccountUser = createAsyncThunk<boolean, void, { rejectValue: AuthErrorPayload }>(
   'auth/deleteAccount',
   async (_, { rejectWithValue }) => {
     try {
       await authService.deleteAccount();
       return true;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorPayload(error));
     }
   }
 );
 
-export const checkAuthStatus = createAsyncThunk(
+export const checkAuthStatus = createAsyncThunk<
+  { user: User | null; isAuthenticated: boolean },
+  void,
+  { rejectValue: AuthErrorPayload }
+>(
   'auth/checkStatus',
   async (_, { rejectWithValue }) => {
     try {
@@ -78,46 +197,69 @@ export const checkAuthStatus = createAsyncThunk(
       }
       return { user: null, isAuthenticated: false };
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorPayload(error));
     }
   }
 );
 
-export const loadUserProfile = createAsyncThunk(
+export const loadUserProfile = createAsyncThunk<
+  { user: User; farmProfile: FarmProfile | null },
+  void,
+  { rejectValue: AuthErrorPayload }
+>(
   'auth/loadProfile',
   async (_, { rejectWithValue }) => {
     try {
       const [user, farmProfile] = await Promise.all([
-        authService.getProfile(),
-        authService.getFarmProfile(),
+        profileService.getProfile(),
+        profileService.getFarmProfile(),
       ]);
       return { user, farmProfile };
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorPayload(error));
     }
   }
 );
 
-export const updateUserProfile = createAsyncThunk(
-  'auth/updateProfile',
-  async (profileData: Partial<User>, { rejectWithValue }) => {
+export const loadFarmProfile = createAsyncThunk<
+  FarmProfile | null,
+  void,
+  { rejectValue: AuthErrorPayload }
+>(
+  'auth/loadFarmProfile',
+  async (_, { rejectWithValue }) => {
     try {
-      const updatedUser = await authService.updateProfile(profileData);
+      return await profileService.getFarmProfile();
+    } catch (error: unknown) {
+      return rejectWithValue(getThunkErrorPayload(error));
+    }
+  }
+);
+
+export const updateUserProfile = createAsyncThunk<User, UpdateUserProfilePayload, { rejectValue: AuthErrorPayload }>(
+  'auth/updateProfile',
+  async (profileData: UpdateUserProfilePayload, { rejectWithValue }) => {
+    try {
+      const updatedUser = await profileService.updateProfile(profileData);
       return updatedUser;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorPayload(error));
     }
   }
 );
 
-export const updateFarmProfile = createAsyncThunk(
+export const updateFarmProfile = createAsyncThunk<
+  FarmProfile,
+  UpdateFarmProfilePayload,
+  { rejectValue: AuthErrorPayload }
+>(
   'auth/updateFarmProfile',
-  async (farmData: Partial<FarmProfile>, { rejectWithValue }) => {
+  async (farmData: UpdateFarmProfilePayload, { rejectWithValue }) => {
     try {
-      const updatedFarmProfile = await authService.updateFarmProfile(farmData);
+      const updatedFarmProfile = await profileService.updateFarmProfile(farmData);
       return updatedFarmProfile;
     } catch (error: unknown) {
-      return rejectWithValue(error instanceof Error ? error.message : 'UNKNOWN_ERROR');
+      return rejectWithValue(getThunkErrorPayload(error));
     }
   }
 );
@@ -128,7 +270,7 @@ export const authSlice = createSlice({
   initialState,
   reducers: {
     clearError: (state) => {
-      state.error = null;
+      clearAuthErrors(state);
     },
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
@@ -142,38 +284,38 @@ export const authSlice = createSlice({
     builder
       .addCase(loginUser.pending, (state) => {
         state.isLoading = true;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(loginUser.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isAuthenticated = true;
         state.user = action.payload.user;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
         state.isAuthenticated = false;
         state.user = null;
-        state.error = action.payload as string;
+        applyAuthError(state, action.payload as AuthErrorPayload | undefined);
       });
 
     // Register
     builder
       .addCase(registerUser.pending, (state) => {
         state.isLoading = true;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(registerUser.fulfilled, (state, action) => {
         state.isLoading = false;
         state.isAuthenticated = true;
         state.user = action.payload.user;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
         state.isAuthenticated = false;
         state.user = null;
-        state.error = action.payload as string;
+        applyAuthError(state, action.payload as AuthErrorPayload | undefined);
       });
 
     // Logout
@@ -186,7 +328,7 @@ export const authSlice = createSlice({
         state.isAuthenticated = false;
         state.user = null;
         state.farmProfile = null;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(logoutUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -194,26 +336,26 @@ export const authSlice = createSlice({
         state.isAuthenticated = false;
         state.user = null;
         state.farmProfile = null;
-        state.error = action.payload as string;
+        applyAuthError(state, action.payload as AuthErrorPayload | undefined);
       });
 
     // Delete account
     builder
       .addCase(deleteAccountUser.pending, (state) => {
         state.isLoading = true;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(deleteAccountUser.fulfilled, (state) => {
         state.isLoading = false;
         state.isAuthenticated = false;
         state.user = null;
         state.farmProfile = null;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(deleteAccountUser.rejected, (state, action) => {
         state.isLoading = false;
         // En cas d'echec de suppression, on conserve la session utilisateur.
-        state.error = action.payload as string;
+        applyAuthError(state, action.payload as AuthErrorPayload | undefined);
       });
 
     // Check auth status
@@ -230,14 +372,14 @@ export const authSlice = createSlice({
         state.isLoading = false;
         state.isAuthenticated = false;
         state.user = null;
-        state.error = action.payload as string;
+        applyAuthError(state, action.payload as AuthErrorPayload | undefined);
       });
 
     // Load profile
     builder
       .addCase(loadUserProfile.pending, (state) => {
         state.isLoading = true;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(loadUserProfile.fulfilled, (state, action) => {
         state.isLoading = false;
@@ -246,28 +388,46 @@ export const authSlice = createSlice({
       })
       .addCase(loadUserProfile.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        // Ne pas écraser l'erreur si l'utilisateur est déjà déconnecté :
+        // les requêtes en-vol (after logout) reviennent avec 401 et ne doivent
+        // pas afficher un message d'erreur sur le LoginScreen.
+        if (state.isAuthenticated) {
+          applyAuthError(state, action.payload as AuthErrorPayload | undefined);
+        }
+      });
+
+    // Load farm profile
+    builder
+      .addCase(loadFarmProfile.fulfilled, (state, action) => {
+        state.farmProfile = action.payload;
+        clearAuthErrors(state);
+      })
+      .addCase(loadFarmProfile.rejected, (state, action) => {
+        if (state.isAuthenticated) {
+          applyAuthError(state, action.payload as AuthErrorPayload | undefined);
+        }
       });
 
     // Update profile
     builder
       .addCase(updateUserProfile.fulfilled, (state, action) => {
         state.user = action.payload;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(updateUserProfile.rejected, (state, action) => {
-        state.error = action.payload as string;
+        applyAuthError(state, action.payload as AuthErrorPayload | undefined);
       });
 
     // Update farm profile
     builder
       .addCase(updateFarmProfile.fulfilled, (state, action) => {
         state.farmProfile = action.payload;
-        state.error = null;
+        clearAuthErrors(state);
       })
       .addCase(updateFarmProfile.rejected, (state, action) => {
-        state.error = action.payload as string;
+        applyAuthError(state, action.payload as AuthErrorPayload | undefined);
       });
+
   },
 });
 

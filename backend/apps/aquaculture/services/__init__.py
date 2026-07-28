@@ -16,17 +16,32 @@ Utilisation dans views.py :
     @action(detail=True, methods=['post'])
     def harvest(self, request, pk=None):
         cycle = self.get_object()
-        harvested = ProductionCycleService.harvest_cycle(
+        harvest_result = ProductionCycleService.harvest_cycle(
             cycle, **serializer.validated_data
         )
-        return Response(...)
+        return Response({'cycle': harvest_result.cycle, ...})
 """
 from .analytics_service import AnalyticsService
+from .annual_simulation_service import (
+    AQUACARE_FEE_PER_KG,
+    DEFAULT_OTHER_COSTS_RATE_PCT,
+    TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS,
+    AnnualSimulationResult,
+    AnnualSimulationService,
+)
 from .base import BaseService
-from .cycle_application_service import HarvestCycleCommand, ProductionCycleApplicationService
-from .cycle_service import ProductionCycleService
+from .cycle_application_service import HarvestCycleCommand, PartialHarvestCommand, ProductionCycleApplicationService
+from .cycle_dashboard_service import CycleDashboardService
+from .cycle_launch_application_service import (
+    CycleLaunchApplicationService,
+    CycleLaunchIdempotencyConflict,
+    CycleLaunchResult,
+)
+from .cycle_service import HarvestCycleResult, ProductionCycleService
+from .cycle_store_application_service import CycleStoreApplicationService, DeclareManualStockCommand
 from .dashboard_application_service import DashboardApplicationService, InvalidDashboardCycleScopeError
 from .dashboard_service import DashboardService
+from .farm_production_plan_service import FarmProductionPlanService
 from .feeding_application_service import (
     FeedingCycleNotFoundError,
     FeedingPlanApplicationService,
@@ -39,16 +54,27 @@ from .log_application_service import (
     UnauthorizedCycleAccessError,
 )
 from .log_service import CycleLogService
+from .production_unit_dashboard_service import ProductionUnitDashboardService
 from .report_application_service import (
     GenerateReportCommand,
+    InaccessibleReportUnitScopeError,
     InvalidReportCycleScopeError,
+    InvalidReportPeriodError,
+    InvalidReportScopeError,
+    InvalidReportUnitScopeError,
     MissingReportEmailError,
     ReportApplicationService,
     ReportDownloadDecision,
+    ReportScope,
+    UnresolvableLegacyReportScopeError,
     WhatsAppShareCommand,
 )
 from .report_service import ReportService
-from .sanitary_application_service import ResolveSanitaryIssueCommand, SanitaryApplicationService
+from .sanitary_application_service import (
+    CreateSanitaryLogCommand,
+    ResolveSanitaryIssueCommand,
+    SanitaryApplicationService,
+)
 from .sanitary_service import SanitaryService
 from .sync_application_service import SyncApplicationService, SyncExecutionResult
 from .sync_service import SyncService
@@ -56,31 +82,53 @@ from .sync_service import SyncService
 __all__ = [
     'BaseService',
     'ProductionCycleService',
+    'HarvestCycleResult',
     'ProductionCycleApplicationService',
     'HarvestCycleCommand',
+    'PartialHarvestCommand',
     'CycleLogService',
     'CycleLogApplicationService',
     'CycleLogMutationResult',
     'UnauthorizedCycleAccessError',
+    'CycleStoreApplicationService',
+    'DeclareManualStockCommand',
+    'CycleLaunchApplicationService',
+    'CycleLaunchIdempotencyConflict',
+    'CycleLaunchResult',
     'FeedingPlanService',
+    'FarmProductionPlanService',
     'FeedingPlanApplicationService',
     'FeedingCycleNotFoundError',
     'GenerateFeedingPlansCommand',
     'AnalyticsService',
+    'AnnualSimulationService',
+    'AnnualSimulationResult',
+    'AQUACARE_FEE_PER_KG',
+    'DEFAULT_OTHER_COSTS_RATE_PCT',
+    'TECHNICAL_PAUSE_BETWEEN_CYCLES_DAYS',
     'DashboardApplicationService',
     'InvalidDashboardCycleScopeError',
+    'CycleDashboardService',
     'GenerateReportCommand',
+    'ReportScope',
+    'InaccessibleReportUnitScopeError',
     'InvalidReportCycleScopeError',
+    'InvalidReportPeriodError',
+    'InvalidReportScopeError',
+    'InvalidReportUnitScopeError',
     'MissingReportEmailError',
     'ReportApplicationService',
     'ReportDownloadDecision',
+    'UnresolvableLegacyReportScopeError',
     'ReportService',
     'SanitaryService',
     'SanitaryApplicationService',
+    'CreateSanitaryLogCommand',
     'ResolveSanitaryIssueCommand',
     'SyncService',
     'SyncApplicationService',
     'SyncExecutionResult',
     'WhatsAppShareCommand',
     'DashboardService',
+    'ProductionUnitDashboardService',
 ]

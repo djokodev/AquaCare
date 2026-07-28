@@ -4,16 +4,16 @@ Tests unitaires pour les middleware personnalisés.
 Teste le rate limiting, la détection de langue, etc.
 """
 import json
-import time
 from unittest.mock import Mock, patch
 
 import pytest
 from accounts.middleware import APIResponseLanguageMiddleware, LoginRateLimitMiddleware, UserLanguageMiddleware
+from accounts.services.auth_application_service import AuthApplicationService
 from django.contrib.auth import get_user_model
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
 from django.http import JsonResponse
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 
 User = get_user_model()
 
@@ -50,6 +50,30 @@ class TestUserLanguageMiddleware:
 
             language = self.middleware.get_user_language(request)
             assert language == 'en'
+
+    def test_jwt_user_language_preference_used_for_api_request(self):
+        """Les requêtes API JWT doivent utiliser la préférence utilisateur."""
+        user = User.objects.create_user(
+            phone_number='+237690555001',
+            first_name='Lang',
+            last_name='User',
+            password='test123',
+            age_group='26_35',
+            language_preference='en',
+        )
+        token = AuthApplicationService.build_auth_tokens(user).access
+        request = self.factory.get(
+            '/api/accounts/profile/',
+            HTTP_AUTHORIZATION=f'Bearer {token}',
+            HTTP_ACCEPT_LANGUAGE='fr-FR,fr;q=0.9',
+        )
+        request = add_session_to_request(request)
+        request.user = Mock()
+        request.user.is_authenticated = False
+
+        language = self.middleware.get_user_language(request)
+
+        assert language == 'en'
     
     def test_accept_language_header_used_when_not_authenticated(self):
         """Test utilisation header Accept-Language."""
@@ -160,15 +184,7 @@ class TestLoginRateLimitMiddleware:
         """Test limite IP atteinte après plusieurs tentatives."""
         ip = '192.168.1.100'
         
-        # Simuler 5 tentatives dans la dernière minute
-        current_time = time.time()
-        cache.set(self.middleware._cache_key_ip(ip), [
-            current_time - 30,  # 30 secondes ago
-            current_time - 25,
-            current_time - 20,
-            current_time - 15,
-            current_time - 10
-        ], timeout=60)
+        cache.set(self.middleware._cache_key_ip(ip), 5, timeout=60)
         
         should_limit = self.middleware._check_limit(
             self.middleware._cache_key_ip(ip),
@@ -181,48 +197,56 @@ class TestLoginRateLimitMiddleware:
         """Test limite utilisateur atteinte."""
         login_name = 'Jean Farmer'
         
-        # Simuler 3 tentatives dans la dernière minute
-        current_time = time.time()
-        cache.set(self.middleware._cache_key_user(login_name), [
-            current_time - 30,
-            current_time - 20,
-            current_time - 10
-        ], timeout=60)
+        cache.set(self.middleware._cache_key_user(login_name), 3, timeout=60)
         
         should_limit = self.middleware.check_user_limit(login_name)
         assert should_limit is True
     
-    def test_old_attempts_cleaned_up(self):
-        """Test nettoyage des anciennes tentatives."""
+    def test_numeric_attempt_counter_not_limited_below_threshold(self):
+        """Test compteur de tentatives sous le seuil."""
         ip = '192.168.1.200'
         
-        # Ajouter des tentatives anciennes (> 1 minute)
-        current_time = time.time()
         key = self.middleware._cache_key_ip(ip)
-        cache.set(key, [
-            current_time - 120,  # 2 minutes ago (doit être supprimé)
-            current_time - 90,   # 1.5 minutes ago (doit être supprimé)
-            current_time - 30    # 30 seconds ago (doit rester)
-        ], timeout=60)
+        cache.set(key, 1, timeout=60)
         
         should_limit = self.middleware._check_limit(
             self.middleware._cache_key_ip(ip),
             self.middleware.ip_limit,
             self.middleware.window_seconds,
         )
-        remaining_attempts = cache.get(key, [])
+        remaining_attempts = self.middleware._get_recent_attempts(key)
         
-        # Vérifier qu'une seule tentative reste
         assert len(remaining_attempts) == 1
         assert should_limit is False  # Pas encore la limite
+
+    def test_record_attempt_uses_numeric_counter(self):
+        """Les tentatives sont stockées en compteur atomique plutôt qu'en liste."""
+        key = self.middleware._cache_key_ip('192.168.1.201')
+
+        self.middleware._record_attempt(key)
+        self.middleware._record_attempt(key)
+
+        assert cache.get(key) == 2
     
-    def test_get_client_ip_with_forwarded_header(self):
-        """Test récupération IP avec header X-Forwarded-For."""
+    @override_settings(ACCOUNT_TRUSTED_PROXY_IPS=('10.0.0.1',))
+    def test_get_client_ip_with_forwarded_header_from_trusted_proxy(self):
+        """Test récupération IP avec header X-Forwarded-For depuis un proxy fiable."""
         request = self.factory.post('/api/accounts/login/')
         request.META['HTTP_X_FORWARDED_FOR'] = '192.168.1.1, 10.0.0.1'
+        request.META['REMOTE_ADDR'] = '10.0.0.1'
         
         ip = self.middleware.get_client_ip(request)
         assert ip == '192.168.1.1'  # Première IP de la liste
+
+    @override_settings(ACCOUNT_TRUSTED_PROXY_IPS=('10.0.0.1',))
+    def test_get_client_ip_ignores_forwarded_header_from_untrusted_client(self):
+        """Un client direct ne doit pas pouvoir forger X-Forwarded-For."""
+        request = self.factory.post('/api/accounts/login/')
+        request.META['HTTP_X_FORWARDED_FOR'] = '192.168.1.1, 10.0.0.1'
+        request.META['REMOTE_ADDR'] = '203.0.113.10'
+
+        ip = self.middleware.get_client_ip(request)
+        assert ip == '203.0.113.10'
     
     def test_get_client_ip_without_forwarded_header(self):
         """Test récupération IP sans header forwarded."""
@@ -271,12 +295,7 @@ class TestLoginRateLimitMiddleware:
         """Test limite utilisateur egalement appliquee via phone_number."""
         phone_number = '+237690444444'
 
-        current_time = time.time()
-        cache.set(self.middleware._cache_key_user(phone_number), [
-            current_time - 30,
-            current_time - 20,
-            current_time - 10,
-        ], timeout=60)
+        cache.set(self.middleware._cache_key_user(phone_number), 3, timeout=60)
 
         request = self.factory.post(
             '/api/accounts/login/',

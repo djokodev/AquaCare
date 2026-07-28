@@ -5,11 +5,12 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { OnboardingSlideProps } from '../types/onboarding';
-import { MAVECAM_COLORS } from '@/constants/colors';
+import { AppText, Card } from '@/components/ui';
+import { colors, radii, spacing, typography } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -23,26 +24,26 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
   /**
    * Rend un texte avec "AquaCare" coloré en vert
    */
-  const renderTextWithAppName = (text: string, baseStyle: any) => {
+  const renderTextWithAppName = (text: string, baseStyle: TextStyle) => {
     const appName = 'AquaCare';
     const parts = text.split(appName);
 
     if (parts.length === 1) {
       // Pas de "AquaCare" dans le texte
-      return <Text style={baseStyle}>{text}</Text>;
+      return <AppText style={baseStyle}>{text}</AppText>;
     }
 
     return (
-      <Text style={baseStyle}>
+      <AppText style={baseStyle}>
         {parts.map((part, index) => (
           <React.Fragment key={index}>
             {part}
             {index < parts.length - 1 && (
-              <Text style={styles.appNameHighlight}>{appName}</Text>
+              <AppText style={styles.appNameHighlight}>{appName}</AppText>
             )}
           </React.Fragment>
         ))}
-      </Text>
+      </AppText>
     );
   };
 
@@ -74,12 +75,12 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
           <Ionicons
             name={slide.iconName as any}
             size={80}
-            color={MAVECAM_COLORS.ERROR}
+            color={colors.status.error}
           />
         </View>
       )}
 
-      <Text style={styles.title}>{t(slide.titleKey)}</Text>
+      <AppText style={styles.title}>{t(slide.titleKey)}</AppText>
     </View>
   );
 
@@ -98,7 +99,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
             <Ionicons
               name={slide.iconName as any}
               size={80}
-              color={MAVECAM_COLORS.GREEN_PRIMARY}
+              color={colors.brand.primary}
             />
           </View>
         )}
@@ -112,10 +113,10 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
                 <Ionicons
                   name="checkmark-circle"
                   size={22}
-                  color={MAVECAM_COLORS.GREEN_PRIMARY}
+                  color={colors.brand.primary}
                   style={styles.bulletIcon}
                 />
-                <Text style={styles.bulletText}>{t(item.textKey)}</Text>
+                <AppText style={styles.bulletText}>{t(item.textKey)}</AppText>
               </View>
             ))}
           </View>
@@ -130,7 +131,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
    */
   const renderHowSlide = () => (
     <View style={styles.contentContainer}>
-      <Text style={styles.title}>{t(slide.titleKey)}</Text>
+      <AppText style={styles.title}>{t(slide.titleKey)}</AppText>
 
       {slide.howSteps && (
         <View style={styles.stepsContainer}>
@@ -138,39 +139,40 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
             const hasDescription = t(step.descKey) !== '';
             return (
               <React.Fragment key={index}>
-                <View style={styles.stepItem}>
+                <Card variant="outlined" style={styles.stepItem}>
                   <View style={styles.stepNumber}>
-                    <Text style={styles.stepNumberText}>{index + 1}</Text>
+                    <AppText style={styles.stepNumberText}>{index + 1}</AppText>
                   </View>
                   <View style={styles.stepIconContainer}>
                     <Ionicons
                       name={step.iconName as any}
                       size={32}
-                      color={MAVECAM_COLORS.GREEN_PRIMARY}
+                      color={colors.brand.primary}
                     />
                   </View>
                   <View style={[
                     styles.stepTextContainer,
-                    !hasDescription && styles.stepTextContainerCentered
+                    !hasDescription && styles.stepTextContainerCentered,
                   ]}>
-                    <Text style={[
-                      styles.stepTitle,
-                      !hasDescription && styles.stepTitleCentered
-                    ]}>
+                    <AppText style={
+                      hasDescription
+                        ? [styles.stepTitle]
+                        : [styles.stepTitle, styles.stepTitleCentered]
+                    }>
                       {t(step.titleKey)}
-                    </Text>
+                    </AppText>
                     {hasDescription && (
-                      <Text style={styles.stepDesc}>{t(step.descKey)}</Text>
+                      <AppText style={styles.stepDesc}>{t(step.descKey)}</AppText>
                     )}
                   </View>
-                </View>
+                </Card>
 
                 {index < (slide.howSteps?.length || 0) - 1 && (
                   <View style={styles.arrowContainer}>
                     <Ionicons
                       name="arrow-down"
                       size={24}
-                      color={MAVECAM_COLORS.GRAY_LIGHT}
+                      color={colors.text.muted}
                     />
                   </View>
                 )}
@@ -201,7 +203,7 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
     return (
       <View style={styles.socialProofContainer}>
         {hasTitle && (
-          <Text style={styles.socialProofTitle}>{t(slide.titleKey)}</Text>
+          <AppText style={styles.socialProofTitle}>{t(slide.titleKey)}</AppText>
         )}
 
         {/* Mode minimaliste: afficher la stat principale en gros */}
@@ -210,28 +212,28 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
             <Ionicons
               name="people"
               size={80}
-              color={MAVECAM_COLORS.GREEN_PRIMARY}
+              color={colors.brand.primary}
             />
-            <Text style={styles.mainStatTextBlack}>
-              <Text style={styles.mainStatNumber}>+200</Text>
+            <AppText style={styles.mainStatTextBlack}>
+              <AppText style={styles.mainStatNumber}>+200</AppText>
               {' '}{t(nonEmptyStats[0].textKey).replace(/^\+200\s*/, '')}
-            </Text>
+            </AppText>
           </View>
         )}
 
         {/* Mode normal: Témoignage */}
         {!isMinimalist && hasTestimonial && (
-          <View style={styles.testimonialCard}>
+          <Card variant="outlined" style={styles.testimonialCard}>
             <View style={styles.testimonialHeader}>
               <Ionicons
                 name="person-circle"
                 size={36}
-                color={MAVECAM_COLORS.GREEN_PRIMARY}
+                color={colors.brand.primary}
               />
-              <Text style={styles.testimonialName}>{t(slide.testimonialNameKey!)}</Text>
+              <AppText style={styles.testimonialName}>{t(slide.testimonialNameKey!)}</AppText>
             </View>
-            <Text style={styles.testimonialText}>"{t(slide.testimonialTextKey!)}"</Text>
-          </View>
+            <AppText style={styles.testimonialText}>"{t(slide.testimonialTextKey!)}"</AppText>
+          </Card>
         )}
 
         {/* Mode normal: Statistiques */}
@@ -242,9 +244,9 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
                 <Ionicons
                   name={stat.iconName as any}
                   size={22}
-                  color={MAVECAM_COLORS.GREEN_PRIMARY}
+                  color={colors.brand.primary}
                 />
-                <Text style={styles.statText}>{t(stat.textKey)}</Text>
+                <AppText style={styles.statText}>{t(stat.textKey)}</AppText>
               </View>
             ))}
           </View>
@@ -263,14 +265,14 @@ export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
         <Ionicons
           name="rocket"
           size={80}
-          color={MAVECAM_COLORS.GREEN_PRIMARY}
+          color={colors.brand.primary}
         />
       </View>
 
-      <Text style={styles.title}>{t(slide.titleKey)}</Text>
+      <AppText style={styles.title}>{t(slide.titleKey)}</AppText>
 
       {slide.subtitleKey && (
-        <Text style={styles.subtitle}>{t(slide.subtitleKey)}</Text>
+        <AppText style={styles.subtitle}>{t(slide.subtitleKey)}</AppText>
       )}
     </View>
   );
@@ -288,99 +290,94 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    backgroundColor: MAVECAM_COLORS.WHITE,
+    paddingHorizontal: spacing[6],
+    backgroundColor: colors.surface.card,
   },
 
   contentContainer: {
     width: '100%',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: spacing[5],
   },
 
   iconContainer: {
-    marginBottom: 24,
+    marginBottom: spacing[6],
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...typography.screenTitle,
     textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 8,
-    lineHeight: 34,
+    marginBottom: spacing[6],
+    paddingHorizontal: spacing[2],
   },
 
   subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...typography.body,
+    color: colors.text.muted,
     textAlign: 'center',
-    paddingHorizontal: 16,
-    marginTop: 8,
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[2],
   },
 
   // Bullet list styles
   bulletList: {
     width: '100%',
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing[2],
   },
 
   bulletItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 8,
+    marginBottom: spacing[4],
+    paddingHorizontal: spacing[2],
   },
 
   bulletIcon: {
-    marginRight: 12,
+    marginRight: spacing[3],
     width: 24,
   },
 
   bulletText: {
     flex: 1,
-    fontSize: 16,
-    lineHeight: 22,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...typography.body,
+    color: colors.text.primary,
   },
 
   // How steps styles
   stepsContainer: {
     width: '100%',
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing[2],
   },
 
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
+    backgroundColor: colors.surface.page,
+    borderRadius: radii.lg,
+    padding: spacing[4],
+    marginBottom: spacing[2],
   },
 
   stepNumber: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    backgroundColor: colors.brand.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing[3],
   },
 
   stepNumberText: {
-    color: MAVECAM_COLORS.WHITE,
-    fontSize: 14,
-    fontWeight: 'bold',
+    ...typography.caption,
+    color: colors.text.inverse,
+    fontWeight: '700',
   },
 
   stepIconContainer: {
-    marginRight: 12,
+    marginRight: spacing[3],
   },
 
   stepTextContainer: {
@@ -388,67 +385,62 @@ const styles = StyleSheet.create({
   },
 
   stepTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...typography.label,
+    color: colors.text.primary,
     marginBottom: 2,
   },
 
   stepDesc: {
-    fontSize: 13,
-    color: MAVECAM_COLORS.GRAY_LIGHT,
+    ...typography.caption,
+    color: colors.text.muted,
   },
 
   arrowContainer: {
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: spacing[1],
   },
 
   // Social proof specific styles
   socialProofContainer: {
     width: '100%',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: spacing[2],
   },
 
   socialProofTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...typography.screenTitle,
+    color: colors.text.primary,
     textAlign: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 8,
-    lineHeight: 28,
+    marginBottom: spacing[4],
+    paddingHorizontal: spacing[2],
   },
 
   // Testimonial styles
   testimonialCard: {
     width: '100%',
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.surface.page,
+    borderRadius: radii.lg,
+    padding: spacing[4],
+    marginBottom: spacing[4],
     borderLeftWidth: 4,
-    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderLeftColor: colors.brand.primary,
   },
 
   testimonialHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing[2],
   },
 
   testimonialName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginLeft: 10,
+    ...typography.label,
+    color: colors.text.primary,
+    marginLeft: spacing[2],
   },
 
   testimonialText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...typography.helper,
+    color: colors.text.primary,
     fontStyle: 'italic',
   },
 
@@ -460,14 +452,14 @@ const styles = StyleSheet.create({
   statItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 8,
+    marginBottom: spacing[2],
+    paddingHorizontal: spacing[2],
   },
 
   statText: {
-    fontSize: 14,
-    color: MAVECAM_COLORS.GRAY_DARK,
-    marginLeft: 10,
+    ...typography.helper,
+    color: colors.text.primary,
+    marginLeft: spacing[2],
     fontWeight: '500',
   },
 
@@ -484,59 +476,55 @@ const styles = StyleSheet.create({
   mainStatContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 40,
-    marginBottom: 20,
+    marginTop: spacing[10],
+    marginBottom: spacing[5],
   },
 
   mainStatText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    ...typography.display,
+    color: colors.brand.primary,
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: spacing[5],
   },
 
   mainStatTextBlack: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...typography.screenTitle,
+    color: colors.text.primary,
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: spacing[5],
   },
 
   mainStatNumber: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
+    ...typography.display,
+    color: colors.brand.primary,
   },
 
   // AquaCare highlighted in green
   appNameHighlight: {
-    color: MAVECAM_COLORS.GREEN_PRIMARY,
-    fontWeight: 'bold',
+    ...typography.screenTitle,
+    color: colors.brand.primary,
   },
 
   // Guarantee section (Slide 1)
   guaranteeContainer: {
-    marginTop: 32,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: MAVECAM_COLORS.CREAM,
-    borderRadius: 12,
+    marginTop: spacing[8],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[4],
+    backgroundColor: colors.surface.page,
+    borderRadius: radii.lg,
     borderLeftWidth: 4,
-    borderLeftColor: MAVECAM_COLORS.GREEN_PRIMARY,
+    borderLeftColor: colors.brand.primary,
     width: '100%',
   },
 
   guaranteeIcon: {
-    marginBottom: 8,
+    marginBottom: spacing[2],
     alignSelf: 'center',
   },
 
   guaranteeText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: MAVECAM_COLORS.GRAY_DARK,
+    ...typography.helper,
+    color: colors.text.primary,
     textAlign: 'center',
   },
 });

@@ -65,7 +65,10 @@ class SecuredModelAdmin(RoleAwareAdminMixin, AuditLogMixin, admin.ModelAdmin):
         user_groups = set(request.user.groups.values_list('name', flat=True))
 
         for group_name, allowed_apps in RBACConstants.ROLE_APPS.items():
-            if group_name in user_groups and app_label in allowed_apps:
+            if (
+                user_groups.intersection(RBACConstants.group_names_for(group_name))
+                and app_label in allowed_apps
+            ):
                 return True
 
         return False

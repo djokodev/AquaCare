@@ -2,12 +2,12 @@
 Calculateurs de croissance et consommation pour cycles aquacoles.
 
 Architecture Clean : Logique mathématique pure sans dépendances Django.
-Formules basées sur les standards MAVECAM pour tilapia et catfish.
+Formules basées sur les standards AquaCare pour tilapia et catfish.
 """
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Final, TypedDict
+from typing import Final, NotRequired, TypedDict
 
 
 class WeightProgressionEntry(TypedDict):
@@ -15,18 +15,76 @@ class WeightProgressionEntry(TypedDict):
     weight_g: float
 
 
+class DailyFeedingEntry(TypedDict):
+    day: int
+    weight_g: float
+    feed_kg: Decimal
+
+
 class DetectedPhase(TypedDict):
     phase: str
-    pellet_size_mm: float
+    pellet_size_mm: float | None
     product_pattern: str
+    nutritional_guide_id: NotRequired[str | None]
+    nutritional_guide_source: NotRequired[str | None]
+    nutritional_guide_warning: NotRequired[str | None]
 
 
 class FeedingPhase(TypedDict):
     phase_name: str
-    pellet_size_mm: float
+    pellet_size_mm: float | None
     product_pattern: str
     days_range: list[int]
     weight_range_g: list[float]
+    nutritional_guide_id: NotRequired[str | None]
+    nutritional_guide_source: NotRequired[str | None]
+    nutritional_guide_warning: NotRequired[str | None]
+
+
+class NutritionalGuideRule(TypedDict):
+    id: str
+    min_weight: Decimal
+    max_weight: Decimal
+    growth_stage: str
+    feed_size_mm: Decimal
+    source: str
+
+
+class NutritionalGuideResolver:
+    """Résout en mémoire un intervalle nutritionnel avec des bornes uniques."""
+
+    @staticmethod
+    def resolve(
+        rules: list[NutritionalGuideRule],
+        weight_g: float | Decimal,
+    ) -> tuple[NutritionalGuideRule | None, str | None]:
+        weight = weight_g if isinstance(weight_g, Decimal) else Decimal(str(weight_g))
+        candidates = [
+            rule
+            for rule in rules
+            if rule['min_weight'] <= weight < rule['max_weight']
+        ]
+        if not candidates and rules:
+            maximum = max(rule['max_weight'] for rule in rules)
+            candidates = [
+                rule
+                for rule in rules
+                if rule['max_weight'] == maximum
+                and rule['min_weight'] <= weight <= rule['max_weight']
+            ]
+        candidates.sort(
+            key=lambda rule: (
+                rule['max_weight'] - rule['min_weight'],
+                rule['min_weight'],
+                rule['id'],
+            )
+        )
+        if not candidates:
+            return None, 'nutritional_guide_gap'
+        return (
+            candidates[0],
+            'nutritional_guide_overlap' if len(candidates) > 1 else None,
+        )
 
 
 type PhaseRule = tuple[float, float, str, float, str]
@@ -126,7 +184,7 @@ class FeedingCalculator:
     """
     Calculateur de consommation d'aliments.
 
-    Basé sur le pourcentage de biomasse selon les standards MAVECAM.
+    Basé sur le pourcentage de biomasse selon les standards AquaCare.
     """
 
     # Taux d'alimentation selon poids (% de la biomasse)
@@ -201,7 +259,7 @@ class FeedingCalculator:
         weight_progression: list[WeightProgressionEntry],
         start_day: int,
         end_day: int,
-        survival_rate: float = 0.85
+        survival_rate: float = 0.95
     ) -> Decimal:
         """
         Calcule la consommation totale sur une période.
@@ -221,42 +279,61 @@ class FeedingCalculator:
             >>> FeedingCalculator.calculate_period_consumption(1000, progression, 1, 30, 0.85)
             Decimal('145.50')  # 145.5 kg sur 30 jours
         """
-        total_kg = Decimal('0')
+        return sum(
+            (
+                entry['feed_kg']
+                for entry in FeedingCalculator.calculate_daily_feed_progression(
+                    fish_count,
+                    weight_progression,
+                    survival_rate,
+                )
+                if start_day <= entry['day'] <= end_day
+            ),
+            Decimal('0'),
+        )
 
-        for day_data in weight_progression:
-            day = day_data['day']
-            if start_day <= day <= end_day:
-                daily_feed = FeedingCalculator.calculate_daily_feed_kg(
+    @staticmethod
+    def calculate_daily_feed_progression(
+        fish_count: int,
+        weight_progression: list[WeightProgressionEntry],
+        survival_rate: float = 0.95,
+    ) -> list[DailyFeedingEntry]:
+        """Retourne la ration biologique calculée pour chaque jour du cycle."""
+        return [
+            {
+                'day': int(day_data['day']),
+                'weight_g': float(day_data['weight_g']),
+                'feed_kg': FeedingCalculator.calculate_daily_feed_kg(
                     fish_count,
                     day_data['weight_g'],
-                    survival_rate
-                )
-                total_kg += daily_feed
-
-        return total_kg
+                    survival_rate,
+                ),
+            }
+            for day_data in weight_progression
+        ]
 
 
 class PhaseDetector:
     """
     Détecteur de phases d'élevage et granulométrie adaptée.
 
-    Basé sur le poids moyen et les règles MAVECAM.
+    Basé sur le poids moyen et les règles AquaCare.
     """
 
     # Règles de granulométrie par espèce et poids
     PHASE_RULES: Final[dict[str, list[PhaseRule]]] = {
+        # Fallback aligné sur les tables DIBAQ chargées dans NutritionalGuide.
+        # Les recommandations de cycle utilisent cette table uniquement quand
+        # le guide persistant n'est pas encore disponible.
         'tilapia': [
-            (0, 20, 'pre_grossissement', 2.0, 'TILAPIA 2MM'),
-            (20, 100, 'pre_grossissement', 3.0, 'TILAPIA 3MM'),
-            (100, 9999, 'grossissement', 4.5, 'TILAPIA 4.5MM')
+            (0, 100, 'pre_grossissement', 2.0, 'TILAPIA 2MM'),
+            (100, 500, 'grossissement', 3.5, 'TILAPIA 3.5MM'),
+            (500, 9999, 'grossissement', 5.0, 'TILAPIA 5MM')
         ],
         'catfish': [
-            (0, 5, 'pre_grossissement', 1.5, 'CATFISH 1.5MM'),
-            (5, 20, 'pre_grossissement', 2.0, 'CATFISH 2MM'),
-            (20, 100, 'pre_grossissement', 3.0, 'CATFISH 3MM'),
-            (100, 250, 'grossissement', 4.5, 'CATFISH 4.5MM'),
-            (250, 500, 'grossissement', 6.0, 'CATFISH 6MM'),
-            (500, 9999, 'grossissement', 8.0, 'CATFISH 8MM')
+            (0, 100, 'pre_grossissement', 2.0, 'CATFISH 2MM'),
+            (100, 500, 'grossissement', 4.0, 'CATFISH 4MM'),
+            (500, 9999, 'grossissement', 6.0, 'CATFISH 6MM')
         ]
     }
 
@@ -280,11 +357,24 @@ class PhaseDetector:
             >>> PhaseDetector.detect_phase('tilapia', 50)
             {
                 'phase': 'pre_grossissement',
-                'pellet_size_mm': 3.0,
-                'product_pattern': 'TILAPIA 3MM'
+                'pellet_size_mm': 2.0,
+                'product_pattern': 'TILAPIA 2MM'
             }
         """
-        rules = PhaseDetector.PHASE_RULES.get(species.lower(), PhaseDetector.PHASE_RULES['tilapia'])
+        normalized_species = (species or '').strip().lower()
+        if normalized_species == 'clarias':
+            normalized_species = 'catfish'
+        rules = PhaseDetector.PHASE_RULES.get(normalized_species)
+
+        # Une espèce inconnue ne doit pas réutiliser silencieusement les règles
+        # tilapia : on renvoie une phase marquée pour que l'appelant puisse
+        # décider d'un comportement sécurisé.
+        if not rules:
+            return {
+                'phase': 'unknown',
+                'pellet_size_mm': 0.0,
+                'product_pattern': f'{normalized_species.upper() or "UNKNOWN"} UNKNOWN'
+            }
 
         for min_weight, max_weight, phase, pellet_size, product_pattern in rules:
             if min_weight <= avg_weight_g < max_weight:
@@ -294,17 +384,49 @@ class PhaseDetector:
                     'product_pattern': product_pattern
                 }
 
-        # Fallback (grossissement)
+        # Fallback pré-récolte : on conserve la dernière granulométrie définie
+        # pour l'espèce (6 mm pour catfish, 5 mm pour tilapia) au lieu d'un 5 mm
+        # générique qui masquerait l'espèce réelle.
+        _last_min, _last_max, last_phase, last_pellet, last_pattern = rules[-1]
         return {
-            'phase': 'grossissement',
-            'pellet_size_mm': 4.5,
-            'product_pattern': f'{species.upper()} 4.5MM'
+            'phase': last_phase,
+            'pellet_size_mm': last_pellet,
+            'product_pattern': last_pattern,
+        }
+
+    @staticmethod
+    def detect_phase_from_guides(
+        species: str,
+        avg_weight_g: float,
+        rules: list[NutritionalGuideRule],
+    ) -> DetectedPhase:
+        """Détermine la granulométrie depuis le référentiel persistant injecté."""
+        selected, warning = NutritionalGuideResolver.resolve(rules, avg_weight_g)
+        if selected is None:
+            return {
+                'phase': 'unresolved',
+                'pellet_size_mm': None,
+                'product_pattern': '',
+                'nutritional_guide_id': None,
+                'nutritional_guide_source': None,
+                'nutritional_guide_warning': warning,
+            }
+        normalized_species = 'catfish' if species == 'clarias' else species
+        pellet = float(selected['feed_size_mm'])
+        return {
+            'phase': selected['growth_stage'],
+            'pellet_size_mm': pellet,
+            'product_pattern': f'{normalized_species.upper()} {pellet:g}MM',
+            'nutritional_guide_id': selected['id'],
+            'nutritional_guide_source': selected['source'],
+            'nutritional_guide_warning': warning,
         }
 
     @staticmethod
     def group_by_phases(
         species: str,
         weight_progression: list[WeightProgressionEntry],
+        nutritional_guide_rules: list[NutritionalGuideRule] | None = None,
     ) -> list[FeedingPhase]:
         """
         Regroupe les jours par phases d'alimentation (même granulométrie).
@@ -326,7 +448,15 @@ class PhaseDetector:
         current_phase_info: DetectedPhase | None = None
 
         for day_data in weight_progression:
-            phase_info = PhaseDetector.detect_phase(species, day_data['weight_g'])
+            phase_info = (
+                PhaseDetector.detect_phase_from_guides(
+                    species,
+                    day_data['weight_g'],
+                    nutritional_guide_rules,
+                )
+                if nutritional_guide_rules is not None
+                else PhaseDetector.detect_phase(species, day_data['weight_g'])
+            )
 
             # Changement de phase ?
             if (current_phase_info is None or
@@ -338,7 +468,10 @@ class PhaseDetector:
                     'pellet_size_mm': phase_info['pellet_size_mm'],
                     'product_pattern': phase_info['product_pattern'],
                     'days_range': [day_data['day'], day_data['day']],
-                    'weight_range_g': [day_data['weight_g'], day_data['weight_g']]
+                    'weight_range_g': [day_data['weight_g'], day_data['weight_g']],
+                    'nutritional_guide_id': phase_info.get('nutritional_guide_id'),
+                    'nutritional_guide_source': phase_info.get('nutritional_guide_source'),
+                    'nutritional_guide_warning': phase_info.get('nutritional_guide_warning'),
                 })
                 current_phase_info = phase_info
             else:
@@ -356,18 +489,18 @@ class ROICalculator:
 
     # Prix de vente moyen par kg (FCFA)
     MARKET_PRICE_PER_KG = {
-        'tilapia': 2500,
-        'catfish': 2800
+        'tilapia': 2800,
+        'catfish': 2000
     }
 
-    # FCR cible MAVECAM
+    # FCR cible AquaCare
     FCR_TARGET = {
         'tilapia': 1.8,
         'catfish': 1.9
     }
 
-    # Taux de survie standard
-    SURVIVAL_RATE_DEFAULT = 0.85
+    # Taux de survie avec accompagnement AquaCare — validé DT
+    SURVIVAL_RATE_DEFAULT = 0.95
 
     @staticmethod
     def calculate_fcr(total_feed_kg: float, total_biomass_gain_kg: float) -> float:

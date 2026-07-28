@@ -12,8 +12,8 @@
       "meals_per_day": 4,
       "feed_size_mm": "1.0",
       "recommended_products": [
-        "MAVECAM Starter Premium 1.0mm",  
-        "MAVECAM Alevin High Energy"
+        "AquaCare Starter Premium 1.0mm",  
+        "AquaCare Alevin High Energy"
       ],
       "expected_fcr": "0.90",
       "feeding_notes": "Alimentation fréquente requise. Distribuer de petites quantités toutes les 4 heures. Surveiller la qualité de l'eau."
@@ -32,8 +32,8 @@
       "meals_per_day": 3,
       "feed_size_mm": "1.8",
       "recommended_products": [
-        "MAVECAM Starter 1.8mm",
-        "MAVECAM Juvenile Growth"
+        "AquaCare Starter 1.8mm",
+        "AquaCare Juvenile Growth"
       ],
       "expected_fcr": "0.95",
       "feeding_notes": "Transition vers 3 repas par jour. Maintenir la croissance optimale avec surveillance régulière du poids."
@@ -52,8 +52,8 @@
       "meals_per_day": 3,
       "feed_size_mm": "2.5",
       "recommended_products": [
-        "MAVECAM Superior 2-3mm",
-        "MAVECAM Growth Plus"
+        "AquaCare Superior 2-3mm",
+        "AquaCare Growth Plus"
       ],
       "expected_fcr": "1.00",
       "feeding_notes": "Phase de croissance active. Ajuster les quantités selon l'appétit et les conditions environnementales."
@@ -72,8 +72,8 @@
       "meals_per_day": 2,
       "feed_size_mm": "4.5",
       "recommended_products": [
-        "MAVECAM Superior 4.5mm",
-        "MAVECAM Finition Pro"
+        "AquaCare Superior 4.5mm",
+        "AquaCare Finition Pro"
       ],
       "expected_fcr": "1.10",
       "feeding_notes": "Phase de finition. Réduire le taux protéique et préparer pour la récolte. Surveiller la qualité de la chair."
@@ -92,8 +92,8 @@
       "meals_per_day": 4,
       "feed_size_mm": "1.0",
       "recommended_products": [
-        "MAVECAM Tilapia Starter 1.0mm",
-        "MAVECAM Alevin Tilapia Plus"
+        "AquaCare Tilapia Starter 1.0mm",
+        "AquaCare Alevin Tilapia Plus"
       ],
       "expected_fcr": "0.85",
       "feeding_notes": "Tilapia alevin très sensible. Maintenir température stable 28-30°C. Alimentation fréquente indispensable."
@@ -112,8 +112,8 @@
       "meals_per_day": 3,
       "feed_size_mm": "1.8",
       "recommended_products": [
-        "MAVECAM Tilapia Juvenile 1.8mm",
-        "MAVECAM Growth Tilapia"
+        "AquaCare Tilapia Juvenile 1.8mm",
+        "AquaCare Growth Tilapia"
       ],
       "expected_fcr": "0.90",
       "feeding_notes": "Phase critique pour le tilapia. Maintenir oxygène dissous >5mg/L. Éviter la suralimentation."
@@ -132,8 +132,8 @@
       "meals_per_day": 3,
       "feed_size_mm": "2.5",
       "recommended_products": [
-        "MAVECAM Tilapia Growth 2-3mm",
-        "MAVECAM Standard Plus"
+        "AquaCare Tilapia Growth 2-3mm",
+        "AquaCare Standard Plus"
       ],
       "expected_fcr": "1.00",
       "feeding_notes": "Croissance régulière attendue. Adapter selon température de l'eau. Surveiller reproduction précoce."
@@ -152,8 +152,8 @@
       "meals_per_day": 2,
       "feed_size_mm": "4.5",
       "recommended_products": [
-        "MAVECAM Tilapia Finition 4.5mm",
-        "MAVECAM Market Size"
+        "AquaCare Tilapia Finition 4.5mm",
+        "AquaCare Market Size"
       ],
       "expected_fcr": "1.15",
       "feeding_notes": "Préparation marché. Optimiser le ratio chair/poids. Réduire l'alimentation 24h avant récolte."

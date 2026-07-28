@@ -1,5 +1,5 @@
 """
-Modèles de données pour le module commerce MAVECAM AquaCare.
+Modèles de données pour le module commerce AquaCare.
 
 Architecture offline-first avec support synchronisation mobile via UUID.
 Gestion catalogue produits alimentaires et commandes aquaculteurs.
@@ -41,16 +41,14 @@ class OrderQuerySet(models.QuerySet["Order"]):
     """QuerySet utilitaire pour les commandes avec details precharges."""
 
     def with_details(self) -> models.QuerySet["Order"]:
-        return self.select_related('user', 'farm_profile').prefetch_related('items__product')
+        return self.select_related('user', 'farm_profile', 'production_cycle').prefetch_related('items__product')
 
 
 class Product(models.Model):
     """
-    Produit du catalogue MAVECAM (aliments pour poissons).
+    Produit du catalogue AquaCare (aliments pour poissons).
 
-    Catalogue fixe de 22 produits :
-    - Aller Aqua : INFA, FUTURA, CLARIAS FLOAT, TIL-PRO
-    - DIBAQ : Catfish et Tilapia (différentes tailles)
+    Catalogue DIBAQ : Catfish et Tilapia (différentes tailles de granulés).
 
     Pas de gestion de stock pour MVP (toujours disponible).
     """
@@ -101,7 +99,7 @@ class Product(models.Model):
         help_text=_('Phase de croissance du poisson (optionnel si non-vérifié)')
     )
 
-    # Caractéristiques techniques (données catalogue MAVECAM)
+    # Caractéristiques techniques (données catalogue AquaCare)
     pellet_size_mm = models.DecimalField(
         _('Taille granulé (mm)'),
         max_digits=4,
@@ -127,7 +125,7 @@ class Product(models.Model):
     # Conditionnement et prix
     package_weight_kg = models.PositiveIntegerField(
         _('Poids conditionnement (kg)'),
-        help_text=_('Poids d\'un sac (15, 20 ou 25 kg selon produit)')
+        help_text=_('Poids d\'un sac en kilogrammes')
     )
     price_per_package = models.DecimalField(
         _('Prix par sac (FCFA)'),
@@ -176,11 +174,9 @@ class Product(models.Model):
         if self.lipid_percentage and (self.lipid_percentage < 1 or self.lipid_percentage > 20):
             errors['lipid_percentage'] = _("Le taux de lipides doit être entre 1% et 20%")
 
-        # Valider poids package (1, 20 ou 25 kg standard MAVECAM)
+        # The catalogue evolves: any strictly positive bag weight is valid.
         if self.package_weight_kg is not None and self.package_weight_kg <= 0:
             errors['package_weight_kg'] = _("Le poids du conditionnement doit être supérieur à 0")
-        elif self.package_weight_kg and self.package_weight_kg not in [1, 20, 25]:
-            errors['package_weight_kg'] = _("Le poids du conditionnement doit être 1, 20 ou 25 kg")
 
         # Valider prix cohérent
         if self.price_per_package and self.price_per_package <= 0:
@@ -197,7 +193,7 @@ class Product(models.Model):
 
 class Order(models.Model):
     """
-    Commande de produits MAVECAM par un aquaculteur.
+    Commande de produits AquaCare par un aquaculteur.
 
     Workflow simplifié :
     - Statut initial 'confirmed' dès la création
@@ -254,6 +250,16 @@ class Order(models.Model):
         help_text=_('Ferme associée à la commande')
     )
 
+    production_cycle = models.ForeignKey(
+        'aquaculture.ProductionCycle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders',
+        verbose_name=_('Cycle de production'),
+        help_text=_('Cycle de production pour lequel cette commande est passée')
+    )
+
     # Identification commande
     order_number = models.CharField(
         _('Numéro de commande'),
@@ -269,6 +275,42 @@ class Order(models.Model):
         choices=ORDER_STATUS_CHOICES,
         default='confirmed',
         help_text=_('Statut de la commande')
+    )
+    delivered_at = models.DateTimeField(
+        _('Livrée le'),
+        null=True,
+        blank=True,
+        help_text=_('Date à laquelle la livraison à domicile a été déclarée'),
+    )
+    delivered_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders_marked_delivered',
+        verbose_name=_('Livrée par'),
+        help_text=_('Opérateur ayant déclaré la livraison à domicile'),
+    )
+    ready_for_pickup_at = models.DateTimeField(
+        _('Prête au retrait le'),
+        null=True,
+        blank=True,
+        help_text=_('Date à laquelle la commande a été déclarée prête au retrait'),
+    )
+    ready_for_pickup_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders_marked_ready_for_pickup',
+        verbose_name=_('Prête au retrait par'),
+        help_text=_('Opérateur ayant déclaré la commande prête au retrait'),
+    )
+    received_at = models.DateTimeField(
+        _('Réception confirmée le'),
+        null=True,
+        blank=True,
+        help_text=_('Date à laquelle le client a confirmé la réception ou le retrait'),
     )
 
     # Livraison (snapshot adresse au moment de la commande)
@@ -310,6 +352,17 @@ class Order(models.Model):
     delivery_full_address = models.TextField(
         _('Adresse complète'),
         help_text=_('Adresse complète de livraison (région, département, ville, quartier)')
+    )
+    farm_name_snapshot = models.CharField(_('Nom de ferme figé'), max_length=200, blank=True, default='')
+    document_schema_version = models.CharField(_('Version documentaire'), max_length=20, default='1.0')
+    issuer_snapshot = models.JSONField(_('Émetteur figé'), default=dict)
+    fulfilment_partner_snapshot = models.JSONField(_('Partenaire figé'), default=dict)
+    production_cycle_name_snapshot = models.CharField(_('Nom du cycle figé'), max_length=200, blank=True, default='')
+    pickup_location_display_fr_snapshot = models.CharField(
+        _('Libellé français du point de retrait figé'), max_length=100, blank=True, default=''
+    )
+    pickup_location_display_en_snapshot = models.CharField(
+        _('Libellé anglais du point de retrait figé'), max_length=100, blank=True, default=''
     )
 
     # Montants (calculés automatiquement, immutables après création)
@@ -423,8 +476,8 @@ class OrderItem(models.Model):
 
     class Meta:
         app_label = 'commerce'
-        verbose_name = _("Article commande")
-        verbose_name_plural = _("Articles commande")
+        verbose_name = _("Article commandé")
+        verbose_name_plural = _("Articles commandés")
         ordering = ['order', 'id']
         indexes = [
             # Index pour performance admin inline OrderItem
@@ -475,6 +528,15 @@ class OrderItem(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         help_text=_('Total de la ligne = prix unitaire × quantité')
+    )
+    product_brand_snapshot = models.CharField(_('Marque figée'), max_length=50, blank=True, default='')
+    product_species_snapshot = models.CharField(_('Espèce figée'), max_length=20, blank=True, default='')
+    product_phase_snapshot = models.CharField(_('Phase figée'), max_length=30, blank=True, default='')
+    product_pellet_size_mm_snapshot = models.DecimalField(
+        _('Granulométrie figée (mm)'), max_digits=4, decimal_places=2, null=True, blank=True
+    )
+    product_package_weight_kg_snapshot = models.PositiveIntegerField(
+        _('Poids conditionnement figé (kg)'), null=True, blank=True
     )
 
     def __str__(self):

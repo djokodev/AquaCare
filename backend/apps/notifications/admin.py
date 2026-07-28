@@ -4,7 +4,7 @@ Implemente le RBAC multi-niveau avec audit logging.
 
 Roles:
 - OWNER (is_superuser): Controle total
-- SUPPORT (mavecam_support): Acces complet (envoi, lecture, modification)
+- SUPPORT (aquacare_support): Acces complet (envoi, lecture, modification)
 - MANAGERS: Lecture seule
 - COMMERCE: Lecture seule (contexte commandes)
 """

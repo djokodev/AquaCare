@@ -23,8 +23,8 @@ python manage.py collectstatic --noinput --clear
 echo "Loading nutritional guides..."
 python manage.py load_nutritional_data || echo "Warning: nutritional data already loaded or error occurred"
 
-# Charger les produits MAVECAM (27 produits : 18 Aller Aqua + 9 DIBAQ)
-echo "Loading MAVECAM product catalog..."
+# Charger les produits AquaCare (27 produits : 18 Aller Aqua + 9 DIBAQ)
+echo "Loading AquaCare product catalog..."
 python manage.py load_products || echo "Warning: product catalog already loaded or error occurred"
 
 echo "=========================="

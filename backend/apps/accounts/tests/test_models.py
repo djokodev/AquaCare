@@ -2,9 +2,12 @@
 Tests unitaires pour les modèles de l'application accounts - Version étendue.
 
 Ces tests vérifient le comportement des modèles de base de données
-de façon isolée, incluant toutes les validations métier MAVECAM.
+de façon isolée, incluant toutes les validations métier AquaCare.
 """
+import uuid
+
 import pytest
+from accounts.managers import AmbiguousLoginNameError
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -18,7 +21,7 @@ class TestUserModel:
     Tests pour le modèle User personnalisé étendu.
     
     Vérifie que la création d'utilisateurs fonctionne correctement
-    avec toutes les spécifications MAVECAM.
+    avec toutes les spécifications AquaCare.
     """
     
     def test_create_individual_user_success(self):
@@ -53,12 +56,50 @@ class TestUserModel:
         assert user.is_active is True
         assert user.is_staff is False
         assert user.check_password('motdepasse123')
+
+    def test_user_uuid_field(self):
+        """User.id doit être un UUID pour la synchronisation offline-first."""
+        user = User.objects.create_user(
+            phone_number='+237690123458',
+            first_name='Uuid',
+            last_name='Farmer',
+            password='motdepasse123',
+            account_type='individual',
+            age_group='26_35',
+        )
+
+        assert isinstance(user.id, uuid.UUID)
+        assert len(str(user.id)) == 36
+
+    def test_create_user_rolls_back_when_farm_profile_creation_fails(self, monkeypatch):
+        """La création User + FarmProfile doit être atomique."""
+
+        def fail_farm_profile_creation(user):
+            raise RuntimeError("farm profile failed")
+
+        monkeypatch.setattr(
+            "accounts.services.registration_service.AccountRegistrationService._create_default_farm_profile",
+            staticmethod(fail_farm_profile_creation),
+        )
+
+        with pytest.raises(RuntimeError, match="farm profile failed"):
+            User.objects.create_user(
+                phone_number='+237690123457',
+                email='rollback@exemple.com',
+                first_name='Rollback',
+                last_name='Farmer',
+                password='motdepasse123',
+                account_type='individual',
+                age_group='26_35',
+            )
+
+        assert not User.objects.filter(phone_number='+237690123457').exists()
     
     def test_create_company_user_success(self):
         """
         Test la création d'une entreprise avec données valides.
         
-        Simule : Une SARL s'inscrit sur la plateforme MAVECAM.
+        Simule : Une SARL s'inscrit sur la plateforme AquaCare.
         """
         user = User.objects.create_user(
             phone_number='+237691234567',
@@ -100,15 +141,15 @@ class TestUserModel:
     
     def test_create_superuser_success(self):
         """
-        Test la création d'un administrateur MAVECAM.
+        Test la création d'un administrateur AquaCare.
         
-        Métier : Les admins MAVECAM gèrent les certifications d'éleveurs.
+        Métier : Les admins AquaCare gèrent les certifications d'éleveurs.
         """
         admin = User.objects.create_superuser(
             phone_number='+237699000000',
-            email='admin@mavecam.com',
+            email='admin@aquacare.test',
             first_name='Admin',
-            last_name='MAVECAM',
+            last_name='AquaCare',
             password='admin123'
         )
         
@@ -131,6 +172,45 @@ class TestUserModel:
         with django_assert_num_queries(1):
             user = User.objects.get_by_login_name('Jeanne Piscicultrice')
             assert user.farm_profile.farm_name == 'Ferme de Jeanne Piscicultrice'
+
+    def test_get_by_login_name_uses_normalized_lookup(self):
+        """Le login par nom reste insensible à la casse sans fonction SQL par ligne."""
+        user = User.objects.create_user(
+            phone_number='+237699000014',
+            first_name='Jeanne',
+            last_name='Piscicultrice',
+            password='motdepasse123',
+            account_type='individual',
+            age_group='26_35',
+        )
+
+        result = User.objects.get_by_login_name('  JEANNE   piscicultrice ')
+
+        assert result == user
+        assert user.first_name_normalized == 'jeanne'
+        assert user.last_name_normalized == 'piscicultrice'
+
+    def test_get_by_login_name_duplicate_names_returns_ambiguous_error(self):
+        """Un nom de connexion ambigu doit échouer proprement."""
+        User.objects.create_user(
+            phone_number='+237699000012',
+            first_name='Jean',
+            last_name='Farmer',
+            password='motdepasse123',
+            account_type='individual',
+            age_group='26_35',
+        )
+        User.objects.create_user(
+            phone_number='+237699000013',
+            first_name='Jean',
+            last_name='Farmer',
+            password='motdepasse123',
+            account_type='individual',
+            age_group='26_35',
+        )
+
+        with pytest.raises(AmbiguousLoginNameError):
+            User.objects.get_by_login_name('Jean Farmer')
 
     def test_get_by_natural_key_loads_farm_profile_in_single_query(self, django_assert_num_queries):
         """Le lookup par numero de telephone doit aussi charger la ferme."""
@@ -238,8 +318,26 @@ class TestUserModel:
         )
         with pytest.raises(ValidationError) as exc_info:
             user.full_clean()
-        
+
         assert 'age_group' in str(exc_info.value)
+
+    def test_individual_blank_names_with_spaces_fail(self):
+        """
+        Test que les noms composés uniquement d'espaces sont invalides.
+        """
+        user = User(
+            phone_number='+237694567891',
+            first_name='   ',
+            last_name='   ',
+            account_type='individual',
+            age_group='36_45',
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            user.full_clean()
+
+        assert 'first_name' in str(exc_info.value)
+        assert 'last_name' in str(exc_info.value)
     
     def test_company_validation_success(self):
         """
@@ -277,8 +375,26 @@ class TestUserModel:
         )
         with pytest.raises(ValidationError) as exc_info:
             user.full_clean()
-        
+
         assert 'business_name' in str(exc_info.value)
+
+    def test_company_blank_business_fields_with_spaces_fail(self):
+        """
+        Test que les champs entreprise remplis d'espaces sont invalides.
+        """
+        user = User(
+            phone_number='+237696789013',
+            account_type='company',
+            business_name='   ',
+            legal_status='sarl',
+            promoter_name='   ',
+        )
+
+        with pytest.raises(ValidationError) as exc_info:
+            user.full_clean()
+
+        assert 'business_name' in str(exc_info.value)
+        assert 'promoter_name' in str(exc_info.value)
     
     def test_geographic_hierarchy_validation_success(self):
         """

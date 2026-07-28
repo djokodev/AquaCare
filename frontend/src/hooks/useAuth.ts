@@ -9,11 +9,19 @@ import {
   deleteAccountUser,
   checkAuthStatus,
   loadUserProfile,
+  loadFarmProfile,
   updateUserProfile,
   updateFarmProfile,
   clearError,
 } from '@/features/auth/store/authSlice';
-import { LoginRequest, RegisterRequest, User, FarmProfile } from '@/types/auth';
+import {
+  LoginRequest,
+  RegisterRequest,
+} from '@/features/auth/types/auth';
+import {
+  UpdateFarmProfilePayload,
+  UpdateUserProfilePayload,
+} from '@/features/profile/types/profile';
 
 // Module-level tracking: survives component remounts, prevents duplicate profile loads
 // across all instances of useAuth() (e.g., multiple screens mounted simultaneously).
@@ -32,13 +40,10 @@ export const useAuth = () => {
       dispatch(logoutUser());
     };
 
-    // S'enregistrer pour la déconnexion automatique
     setLogoutCallback(handleAutoLogout);
-
-    // Cleanup au démontage du composant
-    return () => {
-      setLogoutCallback(() => {});
-    };
+    // Pas de cleanup : le prochain composant monté écrase le callback.
+    // Supprimer le cleanup évite la fenêtre vide pendant la transition Login → Main
+    // qui causait une déconnexion automatique intempestive juste après le login.
   }, [dispatch]);
 
   // Auto-load farm profile once per user session
@@ -100,16 +105,20 @@ export const useAuth = () => {
     return dispatch(loadUserProfile());
   }, [dispatch]);
 
+  const loadFarmProfileOnly = useCallback(() => {
+    return dispatch(loadFarmProfile());
+  }, [dispatch]);
+
   const updateProfile = useCallback(
-    (profileData: Partial<User>) => {
-      return dispatch(updateUserProfile(profileData));
+    (profileData: UpdateUserProfilePayload) => {
+      return dispatch(updateUserProfile(profileData)).unwrap();
     },
     [dispatch]
   );
 
   const updateFarm = useCallback(
-    (farmData: Partial<FarmProfile>) => {
-      return dispatch(updateFarmProfile(farmData));
+    (farmData: UpdateFarmProfilePayload) => {
+      return dispatch(updateFarmProfile(farmData)).unwrap();
     },
     [dispatch]
   );
@@ -134,6 +143,7 @@ export const useAuth = () => {
     isAuthenticated: authState.isAuthenticated,
     isLoading: authState.isLoading,
     error: authState.error,
+    fieldErrors: authState.fieldErrors,
 
     // Actions
     login,
@@ -145,6 +155,7 @@ export const useAuth = () => {
     updateProfile,
     updateFarm,
     clearAuthError,
+    loadFarmProfile: loadFarmProfileOnly,
 
     // Computed properties
     isIndividual: authState.user?.is_individual || false,
@@ -153,5 +164,3 @@ export const useAuth = () => {
     isFarmCertified: authState.farmProfile?.is_certified || false,
   };
 };
-
-

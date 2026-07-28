@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 
 import CycleSessionEntryScreen from '../CycleSessionEntryScreen';
 import {
@@ -12,12 +12,28 @@ import { ProductionCycle } from '@/types/aquaculture';
 
 jest.mock('react-redux', () => ({
   useDispatch: jest.fn(),
+  useSelector: jest.fn(),
 }));
+
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  return {
+    SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View>,
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
 
 describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
   const mockDispatch = jest.fn();
   const navigation = {
     replace: jest.fn(),
+    goBack: jest.fn(),
+    navigate: jest.fn(),
+  } as any;
+  const route = {
+    params: undefined,
   } as any;
 
   const cycleA: ProductionCycle = {
@@ -50,6 +66,15 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
+    // Le screen ne lit que `state.auth.isAuthenticated` ; l'utilisateur est cense
+    // etre connecte dans ces scenarios.
+    (useSelector as unknown as jest.Mock).mockImplementation(
+      (selector: (state: unknown) => unknown) =>
+        selector({
+          auth: { isAuthenticated: true },
+          aquaculture: { cycles: [] },
+        })
+    );
   });
 
   const mockDashboardDispatchResult = (dashboardAction: ReturnType<typeof fetchDashboardData.fulfilled>) => {
@@ -61,7 +86,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
     });
   };
 
-  it('affiche le CTA "Créer mon premier cycle" si 0 cycles actifs', async () => {
+  it('affiche un accueil minimal si aucun cycle actif', async () => {
     mockDashboardDispatchResult(
       fetchDashboardData.fulfilled(
         {
@@ -80,11 +105,52 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    const { getByText } = render(<CycleSessionEntryScreen navigation={navigation} />);
+    const { getByLabelText, getByTestId, getByText, queryByText } = render(
+      <CycleSessionEntryScreen navigation={navigation} route={route} />,
+    );
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(clearCurrentCycle());
-      expect(getByText('sessionCreateFirstCycle')).toBeTruthy();
+      expect(getByText('welcomeScreenCta')).toBeTruthy();
+      expect(getByText('welcomeScreenInspiration')).toBeTruthy();
+      expect(getByLabelText('appName')).toBeTruthy();
+      expect(queryByText('sessionCycleTitle')).toBeNull();
+    });
+
+    fireEvent.press(getByTestId('welcome-start-farm'));
+    expect(navigation.replace).toHaveBeenCalledWith('CreateFarm');
+  });
+
+  it('affiche le chargement puis une erreur relançable', async () => {
+    const failedAction = fetchDashboardData.rejected(
+      new Error('network error'),
+      'req-id',
+      undefined,
+      'sessionCycleLoadError',
+    );
+    mockDispatch.mockImplementation((action: unknown) => {
+      if (typeof action === 'function') {
+        return Promise.resolve(failedAction);
+      }
+      return action;
+    });
+
+    const { getByText } = render(
+      <CycleSessionEntryScreen navigation={navigation} route={route} />,
+    );
+
+    expect(getByText('sessionCycleLoading')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(getByText('sessionCycleLoadError')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('retry'));
+
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.any(Function),
+      );
     });
   });
 
@@ -107,7 +173,7 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    render(<CycleSessionEntryScreen navigation={navigation} />);
+    render(<CycleSessionEntryScreen navigation={navigation} route={route} />);
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(cycleA));
@@ -134,23 +200,67 @@ describe('features/aquaculture/screens/CycleSessionEntryScreen', () => {
       )
     );
 
-    const { getByText } = render(<CycleSessionEntryScreen navigation={navigation} />);
+    const { getByText, getByTestId } = render(<CycleSessionEntryScreen navigation={navigation} route={route} />);
 
     // Capture references inside waitFor to avoid race condition on state flush
     let cycleBEl: ReturnType<typeof getByText>;
     let confirmEl: ReturnType<typeof getByText>;
     await waitFor(() => {
-      expect(getByText('Cycle A')).toBeTruthy();
-      cycleBEl = getByText('Cycle B');
+      expect(getByText('Cycle A #1')).toBeTruthy();
+      cycleBEl = getByText('Cycle B #2');
       confirmEl = getByText('sessionCycleConfirm');
     });
 
     fireEvent.press(cycleBEl!);
+    expect(getByTestId('cycle-picker-cycle-b').props.accessibilityState.selected).toBe(true);
     fireEvent.press(confirmEl!);
 
     await waitFor(() => {
       expect(mockDispatch).toHaveBeenCalledWith(setCurrentCycle(cycleB));
       expect(navigation.replace).toHaveBeenCalledWith('MainTabs');
     });
+  });
+
+  it('affiche un retour explicite vers le dashboard quand demandé par la navigation', async () => {
+    const navigationWithBack = {
+      replace: jest.fn(),
+      goBack: jest.fn(),
+      navigate: jest.fn(),
+    } as any;
+    const routeWithBack = {
+      params: {
+        showBackToDashboard: true,
+      },
+    } as any;
+
+    mockDashboardDispatchResult(
+      fetchDashboardData.fulfilled(
+        {
+          active_cycles_count: 2,
+          total_biomass: 216,
+          total_fish_count: 1800,
+          average_fcr: 1.8,
+          average_survival_rate: 90,
+          active_cycles: [cycleA, cycleB],
+          recent_logs: [],
+          current_feeding_plans: [],
+          pending_notifications: [],
+        },
+        'req-id',
+        undefined
+      )
+    );
+
+    const { getByLabelText } = render(
+      <CycleSessionEntryScreen navigation={navigationWithBack} route={routeWithBack} />
+    );
+
+    await waitFor(() => {
+      expect(getByLabelText('backToDashboard')).toBeTruthy();
+    });
+
+    fireEvent.press(getByLabelText('backToDashboard'));
+
+    expect(navigationWithBack.navigate).toHaveBeenCalledWith('MainTabs');
   });
 });

@@ -1,5 +1,5 @@
 """
-Tests unitaires pour les sérialiseurs aquacoles MAVECAM.
+Tests unitaires pour les sérialiseurs aquacoles AquaCare.
 
 Teste la validation des données, sérialisation/désérialisation et logique métier
 des sérialiseurs pour l'API aquaculture.
@@ -8,7 +8,16 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
-from aquaculture.models import CycleLog, NutritionalGuide
+from aquaculture.models import (
+    CycleLog,
+    CycleUnitAllocation,
+    FarmFeedReference,
+    FeedingPlan,
+    NutritionalGuide,
+    ProductionCycle,
+    ProductionUnit,
+    SanitaryLog,
+)
 from aquaculture.serializers import (
     CycleLogSerializer,
     CycleLogSyncSerializer,
@@ -67,8 +76,8 @@ class TestProductionCycleSerializer:
         }
         
         serializer = ProductionCycleSerializer(data=data)
-        assert not serializer.is_valid()
-        assert 'end_date' in serializer.errors
+        assert serializer.is_valid()
+        assert 'end_date' not in serializer.validated_data
 
     def test_excessive_fish_count_validation(self, farm_profile):
         """Test validation nombre de poissons excessif."""
@@ -99,10 +108,31 @@ class TestProductionCycleSerializer:
             'initial_count': 10000,  # 1000 poissons/m² = trop dense
             'initial_average_weight': Decimal('15.00')
         }
-        
+
         serializer = ProductionCycleSerializer(data=data)
         assert not serializer.is_valid()
         assert 'initial_count' in serializer.errors
+
+    def test_mixed_infrastructure_types_skip_density_validation(self, farm_profile):
+        """Test validation cycle avec unités mixtes pilotées par allocations."""
+        data = {
+            'farm_profile': farm_profile.id,
+            'cycle_name': 'Test Cycle Multi Unites',
+            'species': 'tilapia',
+            'pond_identifier': 'Bassin Multi',
+            'pond_surface_m2': Decimal('120.00'),
+            'pond_volume_m3': Decimal('3.00'),
+            'infrastructure_type': ['tank', 'pond'],
+            'start_date': date.today(),
+            'initial_count': 3600,
+            'initial_average_weight': Decimal('10.00'),
+        }
+
+        serializer = ProductionCycleSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+
+        cycle = serializer.save(farm_profile=farm_profile)
+        assert cycle.initial_count == 3600
 
     def test_computed_fields(self, production_cycle):
         """Test champs calculés du sérialiseur."""
@@ -127,18 +157,19 @@ class TestProductionCycleSerializer:
             'pond_identifier': 'Bassin E',
             'pond_surface_m2': Decimal('80.00'),
             'start_date': date.today(),
-            'initial_count': 1200,
+            # Keep test fixture aligned with current pond-density cap (10 fish/m²)
+            'initial_count': 800,
             'initial_average_weight': Decimal('12.00')
         }
 
         serializer = ProductionCycleSerializer(data=data)
         assert serializer.is_valid(), serializer.errors
 
-        assert serializer.validated_data['target_harvest_weight_g'] == Decimal('300')
-        assert serializer.validated_data['planned_cycle_duration_days'] == 120
-        assert serializer.validated_data['expected_survival_rate_pct'] == Decimal('85')
-        assert serializer.validated_data['planned_selling_price_per_kg_fcfa'] == Decimal('1800')
-        assert serializer.validated_data['planned_harvest_date'] == date.today() + timedelta(days=120)
+        assert serializer.validated_data['target_harvest_weight_g'] == Decimal('350')
+        assert serializer.validated_data['planned_cycle_duration_days'] == 180
+        assert serializer.validated_data['expected_survival_rate_pct'] == Decimal('95')
+        assert serializer.validated_data['planned_selling_price_per_kg_fcfa'] == Decimal('2800')
+        assert serializer.validated_data['planned_harvest_date'] == date.today() + timedelta(days=179)
 
     def test_target_weight_must_exceed_initial_weight(self, farm_profile):
         data = {
@@ -181,6 +212,13 @@ class TestCycleLogSerializer:
 
     def test_valid_log_creation(self, production_cycle):
         """Test création log valide."""
+        feed = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            source='external',
+            name='Aliment test 2,5 mm',
+            species=production_cycle.species,
+            pellet_size_mm=Decimal('2.50'),
+        )
         data = {
             'cycle': production_cycle.id,
             'log_date': date.today(),
@@ -188,6 +226,7 @@ class TestCycleLogSerializer:
             'feed_quantity': Decimal('2.50'),
             'water_temperature': Decimal('28.0'),
             'feed_size_mm': Decimal('2.5'),
+            'feed_reference': feed.id,
             'ph_level': Decimal('7.2'),
             'observations': 'Poissons actifs, bonne appétence'
         }
@@ -212,6 +251,89 @@ class TestCycleLogSerializer:
         serializer = CycleLogSerializer(data=data)
         assert not serializer.is_valid()
         assert 'log_date' in serializer.errors
+
+    def test_valid_log_with_cycle_unit_allocation(self, production_cycle, farm_profile):
+        """Test création log valide rattaché à une allocation d'unité."""
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac 1',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+        feed = FarmFeedReference.objects.create(
+            farm_profile=production_cycle.farm_profile,
+            source='external',
+            name='Aliment allocation',
+            species=production_cycle.species,
+            pellet_size_mm=Decimal('2.50'),
+        )
+
+        data = {
+            'cycle': production_cycle.id,
+            'cycle_unit_allocation': allocation.id,
+            'log_date': date.today(),
+            'mortality_count': 5,
+            'feed_quantity': Decimal('2.50'),
+            'feed_reference': feed.id,
+            'water_temperature': Decimal('28.0'),
+            'observations': 'Poissons actifs, bonne appétence',
+        }
+
+        serializer = CycleLogSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+
+        log = serializer.save()
+        assert log.cycle_unit_allocation_id == allocation.id
+
+    def test_cycle_unit_allocation_must_match_cycle(self, production_cycle, farm_profile):
+        """Test refus quand l'allocation ne correspond pas au cycle du log."""
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle autre',
+            species='tilapia',
+            pond_identifier='Bassin autre',
+            pond_surface_m2=Decimal('120.00'),
+            start_date=production_cycle.start_date,
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=1000,
+            current_average_weight=Decimal('10.00'),
+            current_biomass=Decimal('10.00'),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac 2',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=other_cycle,
+            production_unit=unit,
+            initial_fish_count=400,
+            current_fish_count=400,
+            initial_biomass_kg=Decimal('4.00'),
+            current_biomass_kg=Decimal('4.00'),
+        )
+
+        data = {
+            'cycle': production_cycle.id,
+            'cycle_unit_allocation': allocation.id,
+            'log_date': date.today(),
+            'mortality_count': 2,
+        }
+
+        serializer = CycleLogSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'cycle_unit_allocation' in serializer.errors
 
     def test_sampling_data_validation(self, production_cycle):
         """Test validation données échantillonnage."""
@@ -327,7 +449,7 @@ class TestCycleLogSyncSerializer:
                 'mortality_count': 2,
                 'created_offline': True
             },
-            # Doublon du premier (même client_uuid)
+            # Replay incompatible du premier (même client_uuid, autre payload)
             {
                 'cycle': production_cycle.id,
                 'client_uuid': client_uuid_1,
@@ -345,9 +467,9 @@ class TestCycleLogSyncSerializer:
         # Devrait avoir créé 2 logs (1 dédupliqué)
         assert len(logs) == 2
         
-        # Vérifier que le premier log a été mis à jour
+        # Un replay incompatible ne réécrit jamais l'objet déjà accepté.
         updated_log = CycleLog.objects.get(client_uuid=client_uuid_1)
-        assert updated_log.mortality_count == 5  # Valeur mise à jour
+        assert updated_log.mortality_count == 3
 
 
 @pytest.mark.django_db
@@ -366,7 +488,7 @@ class TestFeedingPlanSerializer:
             'feeding_rate': Decimal('7.00'),
             'meals_per_day': 3,
             'feed_per_meal': Decimal('0.55'),
-            'recommended_feed_type': 'MAVECAM Starter 1.8mm',
+            'recommended_feed_type': 'AquaCare Starter 1.8mm',
             'feed_size_mm': Decimal('1.8'),
             'protein_percentage': 42,
             'start_date': date.today(),
@@ -392,7 +514,7 @@ class TestFeedingPlanSerializer:
             'feeding_rate': Decimal('8.00'),
             'meals_per_day': 4,
             'feed_per_meal': Decimal('0.30'),
-            'recommended_feed_type': 'MAVECAM Starter 1.0mm',
+            'recommended_feed_type': 'AquaCare Starter 1.0mm',
             'feed_size_mm': Decimal('1.0'),
             'protein_percentage': 45,
             'start_date': date.today(),
@@ -417,7 +539,7 @@ class TestFeedingPlanSerializer:
             feeding_rate=Decimal('5.00'),
             meals_per_day=3,
             feed_per_meal=Decimal('0.60'),
-            recommended_feed_type='MAVECAM Superior 2-3mm',
+            recommended_feed_type='AquaCare Superior 2-3mm',
             feed_size_mm=Decimal('2.5'),
             protein_percentage=38,
             start_date=date.today(),
@@ -432,6 +554,50 @@ class TestFeedingPlanSerializer:
         assert float(data['total_week_feed']) == 12.6  # 1.8 * 7 jours
         assert data['feed_per_meal_display'] == '0.6kg'
 
+    def test_unit_scope_fields(self, production_cycle, farm_profile):
+        """Test des champs de contexte unité du sérialiseur."""
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac 1',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=900,
+            current_fish_count=900,
+            initial_biomass_kg=Decimal('9.00'),
+            current_biomass_kg=Decimal('9.00'),
+        )
+        plan = FeedingPlan.objects.create(
+            cycle=production_cycle,
+            cycle_unit_allocation=allocation,
+            week_number=1,
+            estimated_fish_count=900,
+            average_weight=Decimal('15.00'),
+            biomass=Decimal('13.50'),
+            daily_feed_amount=Decimal('0.90'),
+            feeding_rate=Decimal('4.00'),
+            meals_per_day=2,
+            feed_per_meal=Decimal('0.45'),
+            recommended_feed_type='AquaCare Superior 2-3mm',
+            feed_size_mm=Decimal('2.0'),
+            protein_percentage=38,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=6),
+        )
+
+        serializer = FeedingPlanSerializer(plan)
+        data = serializer.data
+
+        assert str(data['cycle_unit_allocation']) == str(allocation.id)
+        assert data['production_unit'] == str(unit.id)
+        assert data['production_unit_name'] == 'Bac 1'
+        assert data['production_unit_type'] == 'tank'
+        assert data['production_unit_display_dimension'] == '3.00 m³'
+        assert data['scope_label'] == "Plan d'alimentation de Bac 1"
+
 
 @pytest.mark.django_db
 class TestSanitaryLogSerializer:
@@ -439,7 +605,11 @@ class TestSanitaryLogSerializer:
 
     def test_valid_sanitary_log_creation(self, production_cycle):
         """Test création log sanitaire valide."""
+        import uuid
+
+        client_uuid = uuid.uuid4()
         data = {
+            'client_uuid': client_uuid,
             'cycle': production_cycle.id,
             'event_date': date.today(),
             'event_type': 'disease',
@@ -454,8 +624,84 @@ class TestSanitaryLogSerializer:
         
         log = serializer.save()
         assert log.event_type == 'disease'
+        assert log.client_uuid == client_uuid
         assert log.affected_count == 50
         assert not log.resolved  # Par défaut
+
+    def test_valid_sanitary_log_with_cycle_unit_allocation(self, production_cycle, farm_profile):
+        """Test création log sanitaire valide rattaché à une allocation."""
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sanitaire',
+            unit_type='tank',
+            volume_m3=Decimal('3.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=500,
+            current_fish_count=500,
+            initial_biomass_kg=Decimal('5.00'),
+            current_biomass_kg=Decimal('5.00'),
+        )
+
+        data = {
+            'cycle': production_cycle.id,
+            'cycle_unit_allocation': allocation.id,
+            'event_date': date.today(),
+            'event_type': 'disease',
+            'symptoms': "Nage erratique et perte d'appétit",
+            'affected_count': 20,
+        }
+
+        serializer = SanitaryLogSerializer(data=data)
+        assert serializer.is_valid(), serializer.errors
+
+        log = serializer.save()
+        assert log.cycle_unit_allocation_id == allocation.id
+
+    def test_sanitary_cycle_unit_allocation_must_match_cycle(self, production_cycle, farm_profile):
+        """Test refus quand l'allocation sanitaire ne correspond pas au cycle."""
+        other_cycle = ProductionCycle.objects.create(
+            farm_profile=farm_profile,
+            cycle_name='Cycle sanitaire autre',
+            species='tilapia',
+            pond_identifier='Bassin sanitaire autre',
+            pond_surface_m2=Decimal('120.00'),
+            start_date=production_cycle.start_date,
+            initial_count=1000,
+            initial_average_weight=Decimal('10.00'),
+            initial_biomass=Decimal('10.00'),
+            current_count=1000,
+            current_average_weight=Decimal('10.00'),
+            current_biomass=Decimal('10.00'),
+        )
+        unit = ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='Bac sanitaire 2',
+            unit_type='tank',
+            volume_m3=Decimal('4.00'),
+        )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=other_cycle,
+            production_unit=unit,
+            initial_fish_count=400,
+            current_fish_count=400,
+            initial_biomass_kg=Decimal('4.00'),
+            current_biomass_kg=Decimal('4.00'),
+        )
+
+        data = {
+            'cycle': production_cycle.id,
+            'cycle_unit_allocation': allocation.id,
+            'event_date': date.today(),
+            'event_type': 'disease',
+            'symptoms': "Nage erratique et perte d'appétit",
+        }
+
+        serializer = SanitaryLogSerializer(data=data)
+        assert not serializer.is_valid()
+        assert 'cycle_unit_allocation' in serializer.errors
 
     def test_auto_resolution_date(self, production_cycle):
         """Test date résolution automatique."""
@@ -489,8 +735,6 @@ class TestSanitaryLogSerializer:
 
     def test_computed_fields(self, production_cycle):
         """Test champs calculés du sérialiseur."""
-        from aquaculture.models import SanitaryLog
-        
         log = SanitaryLog.objects.create(
             cycle=production_cycle,
             event_date=date.today() - timedelta(days=5),
@@ -525,7 +769,7 @@ class TestNutritionalGuideSerializer:
             protein_requirement=42,
             meals_per_day=3,
             feed_size_mm=Decimal('1.8'),
-            recommended_products=['MAVECAM Starter 1.8mm'],
+            recommended_products=['AquaCare Starter 1.8mm'],
             expected_fcr=Decimal('0.95'),
             feeding_notes='Phase transition critique'
         )

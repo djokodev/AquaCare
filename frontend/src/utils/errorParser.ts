@@ -23,9 +23,173 @@ export interface ApiErrorDetails {
 export interface ParsedApiError {
   status: number;
   message: string;
+  code?: string;
   details: ApiErrorDetails[];
-  rawError: any;
+  rawError: unknown;
 }
+
+const META_FIELDS = new Set(['code', 'status_code']);
+const USER_FACING_ERROR_KEYS = new Set([
+  'AUTH_INVALID_CREDENTIALS',
+  'AUTH_FORBIDDEN',
+  'AUTH_NOT_FOUND',
+  'AUTH_RATE_LIMITED',
+  'AUTH_SERVER_ERROR',
+  'AUTH_NETWORK_ERROR',
+  'AUTH_UNKNOWN_ERROR',
+  'UNKNOWN_ERROR',
+  'accountsErrorGeneric',
+]);
+
+const TECHNICAL_ONLY_PATTERNS = [
+  /^HTTP_\d{3}$/i,
+  /^HTTP_\d{3}\s+invalid$/i,
+  /^AUTH_[A-Z0-9_]+$/i,
+  /^invalid$/i,
+  /^status[_-]?code\s*[:=]\s*\d{3}$/i,
+  /^code\s*[:=]\s*invalid$/i,
+];
+
+const TECHNICAL_SUFFIX_PATTERNS = [
+  /\s+HTTP_\d{3}\s+invalid$/i,
+  /\s+HTTP_\d{3}$/i,
+  /\s+AUTH_[A-Z0-9_]+$/i,
+  /\s+\d{3}\s+invalid$/i,
+];
+
+/**
+ * Retire les fragments techniques visibles pour l'utilisateur, sans
+ * toucher aux phrases métiers lisibles ni aux clés i18n connues.
+ */
+export const sanitizeUserFacingErrorMessage = (message: string): string => {
+  const normalized = message.trim();
+
+  if (!normalized) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  if (USER_FACING_ERROR_KEYS.has(normalized)) {
+    return normalized;
+  }
+
+  if (normalized.startsWith('{') || normalized.startsWith('[')) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  if (TECHNICAL_ONLY_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  let sanitized = normalized;
+  let previous = '';
+
+  while (sanitized !== previous) {
+    previous = sanitized;
+    for (const pattern of TECHNICAL_SUFFIX_PATTERNS) {
+      sanitized = sanitized.replace(pattern, '').trim();
+    }
+  }
+
+  if (!sanitized) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  if (USER_FACING_ERROR_KEYS.has(sanitized)) {
+    return sanitized;
+  }
+
+  if (TECHNICAL_ONLY_PATTERNS.some((pattern) => pattern.test(sanitized))) {
+    return 'UNKNOWN_ERROR';
+  }
+
+  return sanitized;
+};
+
+const toDisplayMessages = (value: unknown): string[] => {
+  if (typeof value === 'string' && value.trim()) {
+    const sanitized = sanitizeUserFacingErrorMessage(value);
+    return sanitized === 'UNKNOWN_ERROR' ? [] : [sanitized];
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return [String(value)];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap(toDisplayMessages);
+  }
+  if (value && typeof value === 'object') {
+    const data = value as Record<string, unknown>;
+    const directMessage = data.detail ?? data.message ?? data.error;
+    if (directMessage) {
+      return toDisplayMessages(directMessage);
+    }
+  }
+  return [];
+};
+
+const getFirstApiMessage = (data: unknown): string | undefined => {
+  if (typeof data === 'string' && data.trim()) {
+    const sanitized = sanitizeUserFacingErrorMessage(data);
+    return sanitized === 'UNKNOWN_ERROR' ? undefined : sanitized;
+  }
+  if (!data || typeof data !== 'object') {
+    return undefined;
+  }
+
+  const responseData = data as Record<string, unknown>;
+  for (const key of ['detail', 'message', 'error', 'non_field_errors']) {
+    const messages = toDisplayMessages(responseData[key]);
+    if (messages.length > 0) {
+      return messages[0];
+    }
+  }
+
+  for (const [field, value] of Object.entries(responseData)) {
+    if (META_FIELDS.has(field)) {
+      continue;
+    }
+    const messages = toDisplayMessages(value);
+    if (messages.length > 0) {
+      return `${getFieldLabel(field)} : ${messages[0]}`;
+    }
+  }
+
+  return undefined;
+};
+
+const collectValidationDetails = (
+  fieldPath: string,
+  value: unknown
+): ApiErrorDetails[] => {
+  if (Array.isArray(value)) {
+    const directMessages = value.flatMap((item) =>
+      item && typeof item === 'object' ? [] : toDisplayMessages(item)
+    );
+    const nestedDetails = value.flatMap((item, index) =>
+      item && typeof item === 'object'
+        ? collectValidationDetails(`${fieldPath}.${index + 1}`, item)
+        : []
+    );
+    return [
+      ...(directMessages.length > 0 ? [{ field: fieldPath, messages: directMessages }] : []),
+      ...nestedDetails,
+    ];
+  }
+
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).filter(
+      ([field]) => !META_FIELDS.has(field)
+    );
+    const nestedDetails = entries.flatMap(([field, nestedValue]) =>
+      collectValidationDetails(`${fieldPath}.${field}`, nestedValue)
+    );
+    if (nestedDetails.length > 0) {
+      return nestedDetails;
+    }
+  }
+
+  const messages = toDisplayMessages(value);
+  return messages.length > 0 ? [{ field: fieldPath, messages }] : [];
+};
 
 /**
  * Parse les erreurs API Django REST Framework.
@@ -52,43 +216,42 @@ export interface ParsedApiError {
  * }
  * ```
  */
-export const parseApiError = (error: any): ParsedApiError => {
+export const parseApiError = (error: unknown): ParsedApiError => {
   // Cas 1 : Erreur réseau (pas de réponse du serveur)
-  if (!error.response) {
+  const candidate = error as ApiErrorLike;
+  if (!candidate.response) {
     return {
       status: 0,
       message: 'Erreur de connexion au serveur. Vérifiez votre connexion internet.',
+      code: candidate.code,
       details: [],
       rawError: error,
     };
   }
 
-  const { status, data } = error.response;
+  const { status = 0, data } = candidate.response;
+  const responseCode =
+    data && typeof data === 'object' && typeof (data as Record<string, unknown>).code === 'string'
+      ? String((data as Record<string, unknown>).code)
+      : undefined;
 
   // Cas 2 : Erreur 400 avec détails de validation
   if (status === 400 && data && typeof data === 'object') {
     const details: ApiErrorDetails[] = [];
 
-    // Parser chaque champ d'erreur
-    Object.keys(data).forEach((field) => {
-      const fieldErrors = data[field];
-
-      if (Array.isArray(fieldErrors)) {
-        details.push({
-          field,
-          messages: fieldErrors,
-        });
-      } else if (typeof fieldErrors === 'string') {
-        details.push({
-          field,
-          messages: [fieldErrors],
-        });
+    Object.entries(data).forEach(([field, fieldErrors]) => {
+      if (META_FIELDS.has(field) || field === 'detail' || field === 'message' || field === 'error') {
+        return;
       }
+      details.push(...collectValidationDetails(field, fieldErrors));
     });
 
     return {
       status,
-      message: 'Erreur de validation des données',
+      message: details.length > 0
+        ? 'Erreur de validation des données'
+        : getFirstApiMessage(data) ?? 'Erreur de validation des données',
+      code: responseCode ?? candidate.code,
       details,
       rawError: data,
     };
@@ -99,6 +262,7 @@ export const parseApiError = (error: any): ParsedApiError => {
     return {
       status,
       message: 'Session expirée, veuillez vous reconnecter',
+      code: responseCode ?? candidate.code,
       details: [],
       rawError: data,
     };
@@ -109,6 +273,7 @@ export const parseApiError = (error: any): ParsedApiError => {
     return {
       status,
       message: "Vous n'avez pas les permissions nécessaires pour cette action",
+      code: responseCode ?? candidate.code,
       details: [],
       rawError: data,
     };
@@ -119,6 +284,18 @@ export const parseApiError = (error: any): ParsedApiError => {
     return {
       status,
       message: 'Ressource non trouvée',
+      code: responseCode ?? candidate.code,
+      details: [],
+      rawError: data,
+    };
+  }
+
+  // Cas 5 bis : Conflit métier ou synchronisation
+  if (status === 409) {
+    return {
+      status,
+      message: getFirstApiMessage(data) ?? 'Conflit de synchronisation, veuillez réessayer',
+      code: responseCode ?? candidate.code,
       details: [],
       rawError: data,
     };
@@ -129,6 +306,7 @@ export const parseApiError = (error: any): ParsedApiError => {
     return {
       status,
       message: 'Erreur serveur, veuillez réessayer plus tard',
+      code: responseCode ?? candidate.code,
       details: [],
       rawError: data,
     };
@@ -137,7 +315,12 @@ export const parseApiError = (error: any): ParsedApiError => {
   // Cas par défaut
   return {
     status,
-    message: data?.detail || data?.message || 'Une erreur est survenue',
+    message:
+      getFirstApiMessage(data) ??
+      (candidate.message && sanitizeUserFacingErrorMessage(candidate.message) !== 'UNKNOWN_ERROR'
+        ? sanitizeUserFacingErrorMessage(candidate.message)
+        : 'Une erreur est survenue'),
+    code: responseCode ?? candidate.code,
     details: [],
     rawError: data,
   };
@@ -237,7 +420,8 @@ const getFieldLabel = (field: string): string => {
     detail: 'Détail',
   };
 
-  return fieldLabels[field] || field.replace(/_/g, ' ');
+  const leafField = field.split('.').at(-1) ?? field;
+  return fieldLabels[leafField] || leafField.replace(/_/g, ' ');
 };
 
 /**
@@ -269,10 +453,10 @@ const getFieldLabel = (field: string): string => {
  * }
  * ```
  */
-export const logApiError = (error: any, context: string): void => {
+export const logApiError = (error: unknown, context: string): void => {
   if (__DEV__) {
     const parsedError = parseApiError(error);
-    logger.log(`🔴 API Error - ${context}`);
+    logger.log(`API Error: ${context}`);
     logger.log('Status:', parsedError.status);
     logger.log('Message:', parsedError.message);
     if (parsedError.details.length > 0) {
@@ -292,6 +476,7 @@ export interface ApiErrorLike {
   code?: string;
   message?: string;
   response?: {
+    status?: number;
     data?: Record<string, unknown> | string;
   };
 }
@@ -306,9 +491,10 @@ export const isNetworkError = (error: unknown): boolean => {
   const message = candidate.message?.toLowerCase() ?? '';
   return (
     candidate.code === 'NETWORK_ERROR' ||
+    candidate.code === 'ECONNABORTED' ||
     message.includes('network') ||
     message.includes('connection') ||
-    !candidate.response
+    message.includes('timeout')
   );
 };
 
@@ -320,25 +506,32 @@ export const isNetworkError = (error: unknown): boolean => {
  * @param fallback - Message par défaut si aucun message trouvé
  */
 export const getApiErrorMessage = (error: unknown, fallback = 'Une erreur est survenue'): string => {
+  if (typeof error === 'string' && error.trim()) {
+    const sanitized = sanitizeUserFacingErrorMessage(error);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
+  }
   if (!error || typeof error !== 'object') return fallback;
   const candidate = error as ApiErrorLike;
-  const responseData = candidate.response?.data;
-
-  if (typeof responseData === 'string') return responseData;
-
-  if (responseData && typeof responseData === 'object') {
-    const data = responseData as Record<string, unknown>;
-    if (typeof data.message === 'string') return data.message;
-    if (typeof data.detail === 'string') return data.detail;
-
-    const firstKey = Object.keys(data)[0];
-    const firstValue = firstKey ? data[firstKey] : undefined;
-    if (Array.isArray(firstValue) && firstValue.length > 0) {
-      return `${firstKey}: ${String(firstValue[0])}`;
-    }
+  if (!candidate.response && candidate.message && !isNetworkError(error)) {
+    const sanitized = sanitizeUserFacingErrorMessage(candidate.message);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
   }
 
-  if (candidate.message) return candidate.message;
+  const parsedError = parseApiError(error);
+
+  if (parsedError.details.length > 0) {
+    return formatErrorForDisplay(parsedError);
+  }
+
+  if (parsedError.message) {
+    const sanitized = sanitizeUserFacingErrorMessage(parsedError.message);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
+  }
+
+  if (candidate.message) {
+    const sanitized = sanitizeUserFacingErrorMessage(candidate.message);
+    return sanitized === 'UNKNOWN_ERROR' ? fallback : sanitized;
+  }
   return fallback;
 };
 

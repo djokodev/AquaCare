@@ -1,5 +1,5 @@
 """
-Service de base pour le module commerce MAVECAM AquaCare.
+Service de base pour le module commerce AquaCare.
 
 Hérite du BaseService existant dans aquaculture pour réutiliser
 les fonctionnalités communes (logging, validation, etc.).

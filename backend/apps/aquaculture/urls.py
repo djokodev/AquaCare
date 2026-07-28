@@ -1,17 +1,25 @@
 """
-Configuration des URLs pour le module aquaculture de MAVECAM AquaCare.
+Configuration des URLs pour le module aquaculture de AquaCare.
 Définit les endpoints d'API REST pour la gestion de la pisciculture.
 """
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    CalibrationOperationViewSet,
+    CalibrationTankViewSet,
+    CycleLaunchView,
     CycleLogViewSet,
+    CycleUnitAllocationViewSet,
     DashboardView,
+    FarmFeedReferenceViewSet,
     FeedingPlanViewSet,
     NutritionalGuideViewSet,
     ProductionCycleViewSet,
+    ProductionPlanSetupView,
+    ProductionPlanSimulationView,
     ProductionReportViewSet,
+    ProductionUnitViewSet,
     SanitaryLogViewSet,
     SyncView,
 )
@@ -23,9 +31,14 @@ router = DefaultRouter()
 router.register(r'cycles', ProductionCycleViewSet, basename='production-cycle')
 router.register(r'cycle-logs', CycleLogViewSet, basename='cycle-log')
 router.register(r'feeding-plans', FeedingPlanViewSet, basename='feeding-plan')
+router.register(r'feed-references', FarmFeedReferenceViewSet, basename='feed-reference')
 router.register(r'sanitary-logs', SanitaryLogViewSet, basename='sanitary-log')
 router.register(r'nutritional-guides', NutritionalGuideViewSet, basename='nutritional-guide')
+router.register(r'production-units', ProductionUnitViewSet, basename='production-unit')
+router.register(r'cycle-unit-allocations', CycleUnitAllocationViewSet, basename='cycle-unit-allocation')
 router.register(r'reports', ProductionReportViewSet, basename='production-report')
+router.register(r'calibration-tanks', CalibrationTankViewSet, basename='calibration-tank')
+router.register(r'calibration-operations', CalibrationOperationViewSet, basename='calibration-operation')
 # router.register(r'notifications', NotificationViewSet, basename='notification')  # Moved to /api/notifications/
 
 urlpatterns = [
@@ -34,6 +47,23 @@ urlpatterns = [
     
     # Synchronization endpoint for offline-first mobile app
     path('sync/', SyncView.as_view(), name='sync'),
+
+    # Production plan setup and annual simulation
+    path(
+        'production-plan/setup/',
+        ProductionPlanSetupView.as_view(),
+        name='production_plan_setup',
+    ),
+    path(
+        'production-plan/simulate/',
+        ProductionPlanSimulationView.as_view(),
+        name='production_plan_simulation',
+    ),
+    path(
+        'cycles/launch/',
+        CycleLaunchView.as_view(),
+        name='production_cycle_launch',
+    ),
     
     # Include all ViewSet routes
     path('', include(router.urls)),
@@ -52,9 +82,12 @@ POST   /api/aquaculture/cycles/            - Create new cycle
 GET    /api/aquaculture/cycles/{id}/       - Get cycle details
 PUT    /api/aquaculture/cycles/{id}/       - Update cycle
 DELETE /api/aquaculture/cycles/{id}/       - Delete cycle
+GET    /api/aquaculture/cycles/{id}/dashboard/ - Global dashboard aggregated from production units
 POST   /api/aquaculture/cycles/{id}/harvest/ - Complete cycle (harvest)
 GET    /api/aquaculture/cycles/{id}/statistics/ - Detailed cycle statistics
 GET    /api/aquaculture/cycles/{id}/comparison/ - Compare with previous cycles
+GET    /api/aquaculture/cycles/{id}/store/ - Cycle feed store summary
+POST   /api/aquaculture/cycles/{id}/store/manual-stock/ - Declare manual feed stock
 
 DAILY LOGS:
 GET    /api/aquaculture/cycle-logs/        - List logs (filterable by cycle_id)
@@ -85,6 +118,20 @@ NUTRITIONAL GUIDES (Read-only reference data):
 GET    /api/aquaculture/nutritional-guides/ - List all guides
 GET    /api/aquaculture/nutritional-guides/{id}/ - Get guide details
 GET    /api/aquaculture/nutritional-guides/for_species/?species=clarias - Guides for species
+
+PRODUCTION UNITS:
+GET    /api/aquaculture/production-units/ - List farm units
+POST   /api/aquaculture/production-units/ - Create a production unit
+GET    /api/aquaculture/production-units/{id}/ - Get production unit details
+PUT    /api/aquaculture/production-units/{id}/ - Update production unit
+DELETE /api/aquaculture/production-units/{id}/ - Delete production unit
+
+CYCLE UNIT ALLOCATIONS:
+GET    /api/aquaculture/cycle-unit-allocations/ - List allocations
+POST   /api/aquaculture/cycle-unit-allocations/ - Create allocation
+GET    /api/aquaculture/cycle-unit-allocations/{id}/ - Get allocation details
+PUT    /api/aquaculture/cycle-unit-allocations/{id}/ - Update allocation
+DELETE /api/aquaculture/cycle-unit-allocations/{id}/ - Delete allocation
 
 NOTIFICATIONS:
 GET    /api/aquaculture/notifications/     - List user notifications

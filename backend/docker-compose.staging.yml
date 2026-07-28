@@ -3,13 +3,15 @@
 # Stack simplifiée (pas de PgBouncer, Redis unique)
 # Nginx interne sur 127.0.0.1:8081:80 → proxié par le nginx hôte
 # Démarrage : docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
+
+name: aquacare_staging
 # =============================================================================
 
 services:
   db:
     image: postgres:15-alpine
     container_name: aquacare_db_staging
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -27,7 +29,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: aquacare_redis_staging
-    restart: always
+    restart: unless-stopped
     # Redis unique : DB 0 = broker Celery, DB 1 = cache Django
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
     healthcheck:
@@ -41,16 +43,16 @@ services:
   api:
     image: ghcr.io/djokodev/aquacare-api:staging
     container_name: aquacare_api_staging
-    restart: always
+    restart: unless-stopped
     user: root
     command: >
       bash -c "
       chown -R aquacare:aquacare /app/media /app/staticfiles /app/logs 2>/dev/null || true &&
-      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn mavecam_api.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -'
+      su -s /bin/bash aquacare -c '/usr/local/bin/gunicorn aquacare_api.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -'
       "
     environment:
       # DJANGO_SETTINGS_MODULE ici surcharge la valeur hardcodée dans le Dockerfile
-      - DJANGO_SETTINGS_MODULE=mavecam_api.settings.staging
+      - DJANGO_SETTINGS_MODULE=aquacare_api.settings.staging
       - DJANGO_ENVIRONMENT=staging
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=False
@@ -66,6 +68,8 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
       - DJANGO_SUPERUSER_PHONE=${DJANGO_SUPERUSER_PHONE:-}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-}
       - DJANGO_SUPERUSER_FIRST_NAME=${DJANGO_SUPERUSER_FIRST_NAME:-Admin}
@@ -84,15 +88,15 @@ services:
   celery_worker:
     image: ghcr.io/djokodev/aquacare-api:staging
     container_name: aquacare_celery_worker_staging
-    restart: always
+    restart: unless-stopped
     entrypoint: []
     command: >
       bash -c "
       while ! nc -z db 5432; do sleep 0.5; done &&
-      celery -A mavecam_api worker --loglevel=info --concurrency=2
+      celery -A aquacare_api worker --loglevel=info --concurrency=2
       "
     environment:
-      - DJANGO_SETTINGS_MODULE=mavecam_api.settings.staging
+      - DJANGO_SETTINGS_MODULE=aquacare_api.settings.staging
       - DJANGO_ENVIRONMENT=staging
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=False
@@ -106,26 +110,31 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - SENTRY_DSN=${SENTRY_DSN:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - media_staging_data:/app/media
     networks:
       - aquacare_staging_network
 
   celery_beat:
     image: ghcr.io/djokodev/aquacare-api:staging
     container_name: aquacare_celery_beat_staging
-    restart: always
+    restart: unless-stopped
     entrypoint: []
     command: >
       bash -c "
       while ! nc -z db 5432; do sleep 0.5; done &&
-      celery -A mavecam_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+      celery -A aquacare_api beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
       "
     environment:
-      - DJANGO_SETTINGS_MODULE=mavecam_api.settings.staging
+      - DJANGO_SETTINGS_MODULE=aquacare_api.settings.staging
       - DJANGO_ENVIRONMENT=staging
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_DEBUG=False
@@ -138,6 +147,9 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
@@ -149,7 +161,7 @@ services:
   nginx:
     image: ghcr.io/djokodev/aquacare-nginx:staging
     container_name: aquacare_nginx_staging
-    restart: always
+    restart: unless-stopped
     ports:
       # Exposé uniquement en local — le nginx hôte proxie api-staging.aquacare.tech → 127.0.0.1:8081
       - "127.0.0.1:8081:80"

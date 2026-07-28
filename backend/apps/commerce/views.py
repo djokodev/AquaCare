@@ -1,5 +1,5 @@
 """
-ViewSets Django REST Framework pour API commerce MAVECAM AquaCare.
+ViewSets Django REST Framework pour API commerce AquaCare.
 
 Architecture minimaliste : ViewSets délèguent toute logique métier aux Services.
 Responsabilités : authentification, permissions, sérialisation, routing HTTP.
@@ -11,15 +11,23 @@ from typing import Any, cast
 
 from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    OpenApiTypes,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.fields import UUIDField
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from .domain.exceptions import (
+    DeliveryAddressIncompleteError,
     InvalidOrderError,
     ProductNotAvailableError,
     ProductNotFoundError,
@@ -45,6 +53,7 @@ from .services import (
     DeliveryFeePreviewCommand,
     FeedingSuggestionsQuery,
     OrderApplicationService,
+    ProductionCycleAccessError,
     RecommendedProductQuery,
 )
 from .throttles import (
@@ -105,7 +114,7 @@ logger = logging.getLogger(__name__)
 )
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    API catalogue produits MAVECAM (lecture seule).
+    API catalogue produits AquaCare (lecture seule).
 
     Endpoints :
     - GET /api/commerce/products/ : Liste produits
@@ -195,12 +204,8 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                 cycle_id,
             )
             return self._serialize_products(products)
-        except Exception as exc:
-            from aquaculture.models import ProductionCycle
-
-            if isinstance(exc, ProductionCycle.DoesNotExist):
-                return self._error_response('Cycle introuvable', status.HTTP_404_NOT_FOUND)
-            raise
+        except ProductionCycleAccessError:
+            return self._error_response('Cycle introuvable', status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['get'])
     def recommended(self, request: Request) -> Response:
@@ -244,7 +249,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         Génère suggestions intelligentes d'achat d'aliments.
 
         Analyse la consommation des cycles actifs et suggère les quantités optimales
-        de produits MAVECAM à commander.
+        de produits AquaCare à commander.
 
         Query params :
         - farm_profile_id: UUID du profil ferme (optionnel, filtre si fourni)
@@ -417,6 +422,14 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         summary="Lister mes commandes",
+        parameters=[
+            OpenApiParameter(
+                name='production_cycle',
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description='Limite les commandes au cycle de production indiqué.',
+            ),
+        ],
         responses={200: OrderSerializer(many=True)},
     ),
     retrieve=extend_schema(
@@ -428,15 +441,30 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
         request=OrderCreateSerializer,
         responses={
             201: OrderSerializer,
-            400: OpenApiResponse(description="Erreurs de validation"),
+            400: CommerceErrorResponseSerializer,
         },
     ),
     statistics=extend_schema(
         summary="Recuperer mes statistiques de commande",
+        parameters=[
+            OpenApiParameter(
+                name='production_cycle',
+                type=OpenApiTypes.UUID,
+                location=OpenApiParameter.QUERY,
+                description='Calcule les statistiques pour ce cycle uniquement.',
+            ),
+        ],
         responses={200: OrderStatisticsSerializer},
     ),
     confirm_receipt=extend_schema(
         summary="Confirmer la reception d'une commande",
+        description=(
+            "Confirme la réception par le propriétaire. Pour une livraison à domicile, "
+            "la transition est delivered -> received ; pour un retrait, ready_for_pickup "
+            "-> received. La requête est idempotente : une commande déjà reçue renvoie "
+            "la représentation courante. La confirmation déclenche la synchronisation "
+            "du stock du cycle lorsqu'un cycle est associé."
+        ),
         responses={
             200: OrderSerializer,
             400: OpenApiResponse(description="Transition de statut invalide"),
@@ -477,6 +505,12 @@ class OrderViewSet(
 
     @staticmethod
     def _raise_service_validation_error(exc: Exception) -> None:
+        if isinstance(exc, DeliveryAddressIncompleteError):
+            raise ValidationError({
+                'code': exc.code,
+                'message': str(exc),
+                'missing_fields': list(exc.missing_fields),
+            }) from exc
         raise ValidationError({'message': str(exc)}) from exc
 
     @staticmethod
@@ -509,7 +543,17 @@ class OrderViewSet(
 
     def get_queryset(self) -> QuerySet[Order]:
         """Retourne uniquement les commandes de l'utilisateur."""
-        return OrderApplicationService.get_user_orders(self.request.user)
+        return OrderApplicationService.get_user_orders(
+            self.request.user,
+            production_cycle_id=self._production_cycle_id(),
+        )
+
+    def _production_cycle_id(self) -> str | None:
+        """Valide le filtre UUID partagé par la liste et les statistiques."""
+        raw_cycle_id = self.request.query_params.get('production_cycle')
+        if not raw_cycle_id:
+            return None
+        return str(UUIDField().run_validation(raw_cycle_id))
 
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """
@@ -539,6 +583,7 @@ class OrderViewSet(
             ],
             "delivery_method": "home",
             "pickup_location": "",  // requis si pickup
+            "production_cycle_id": "uuid",  // optionnel (liaison cycle session)
             "client_uuid": "uuid",  // optionnel (sync offline)
             "created_offline": false
         }
@@ -553,6 +598,11 @@ class OrderViewSet(
                     items_data=OrderCreateSerializer._build_items_payload(validated_data['items']),
                     delivery_method=validated_data['delivery_method'],
                     pickup_location=validated_data.get('pickup_location'),
+                    production_cycle_id=(
+                        str(validated_data['production_cycle_id'])
+                        if validated_data.get('production_cycle_id') is not None
+                        else None
+                    ),
                     client_uuid=(
                         str(validated_data['client_uuid'])
                         if validated_data.get('client_uuid') is not None
@@ -581,17 +631,22 @@ class OrderViewSet(
             "last_order_number": "ORD-20250110-0001"
         }
         """
-        stats = OrderApplicationService.get_order_statistics(request.user)
+        stats = OrderApplicationService.get_order_statistics(
+            request.user,
+            production_cycle_id=self._production_cycle_id(),
+        )
         serializer = OrderStatisticsSerializer(stats)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def confirm_receipt(self, request: Request, pk: str | None = None) -> Response:
         """
-        Confirme la réception d'une commande livrée.
+        Confirme la réception d'une commande livrée ou prête au retrait.
 
         Règle métier:
-        - Transition autorisée uniquement: delivered -> received
+        - domicile: delivered -> received
+        - retrait: ready_for_pickup -> received
+        - replay idempotent si la commande est déjà reçue
         """
         order = self.get_object()
         try:

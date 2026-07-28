@@ -7,7 +7,7 @@
  *   â†’ Backend Docker local (172.20.10.2:8000)
  *
  * PRODUCTION (eas build) :
- *   â†’ API en ligne (77.237.241.223)
+ *   â†’ API en ligne
  *
  * Pas besoin de toucher au fichier .env !
  */
@@ -29,6 +29,8 @@ export const API_ENDPOINTS = {
     LOGOUT: '/accounts/logout/',
     PROFILE: '/accounts/profile/',
     FARM_PROFILE: '/accounts/farm/',
+    FARM_SETUP: '/accounts/farm/setup/',
+    FARM_SIMULATE: '/accounts/farm/simulate/',
     TOKEN_REFRESH: '/accounts/token/refresh/',
     TOKEN_VERIFY: '/accounts/token/verify/',
     DELETE_ACCOUNT: '/accounts/delete/',
@@ -42,6 +44,9 @@ export const API_ENDPOINTS = {
     SANITARY_LOGS: '/aquaculture/sanitary-logs/',
     DASHBOARD: '/aquaculture/dashboard/',
     SYNC: '/aquaculture/sync/',
+    PRODUCTION_PLAN_SETUP: '/aquaculture/production-plan/setup/',
+    PRODUCTION_PLAN_SIMULATE: '/aquaculture/production-plan/simulate/',
+    CYCLE_LAUNCH: '/aquaculture/cycles/launch/',
   },
 };
 
@@ -53,5 +58,3 @@ export const STORAGE_KEYS = {
   LANGUAGE: 'aquacare_language',
   PUSH_DEVICE_ID: 'aquacare_push_device_id',
 };
-
-
