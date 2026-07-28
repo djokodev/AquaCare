@@ -790,7 +790,6 @@ class CycleFeedRecommendationService:
             stock_tracking_started_at=CycleStoreService._get_stock_tracking_started_at(entries),
         )
         stock_by_size: dict[Decimal, Decimal] = {}
-        external_sizes: set[Decimal] = set()
         warnings: list[str] = []
         for item in stock_items:
             available = cls._decimal(item['quantity_available_kg'])
@@ -800,8 +799,6 @@ class CycleFeedRecommendationService:
             if item['feed_reference_id'] and item['species'] == cycle.species and item['feed_size_mm']:
                 size = cls._decimal(item['feed_size_mm'])
                 stock_by_size[size] = stock_by_size.get(size, ZERO_DECIMAL) + available
-                if item['source'] == 'external' and available > ZERO_DECIMAL:
-                    external_sizes.add(size)
 
         pending_by_size: dict[Decimal, Decimal] = {}
         pending_items = OrderItem.objects.filter(
@@ -908,9 +905,6 @@ class CycleFeedRecommendationService:
                 warnings.append('exact_product_unavailable')
             if shortfall > ZERO_DECIMAL and phase.get('nutritional_guide_warning') == 'nutritional_guide_gap':
                 warnings.append('nutritional_guide_gap')
-            if allocated_stock > ZERO_DECIMAL and size in external_sizes:
-                warnings.append('external_feed_nutrition_unknown')
-
             phase_payloads.append({
                 **phase,
                 'phase_status': phase_status,

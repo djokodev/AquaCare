@@ -1793,7 +1793,6 @@ export const fr = {
   feedWarning_nutritional_guide_gap: 'Une partie du besoin ne correspond à aucun intervalle du guide nutritionnel.',
   feedWarning_nutritional_guide_overlap: 'Des intervalles du guide nutritionnel se chevauchent ; la règle la plus précise a été retenue.',
   feedWarning_feed_phase_need_reconciliation_error: 'Le détail des phases n’a pas pu être rapproché exactement du besoin calculé.',
-  feedWarning_external_feed_nutrition_unknown: 'Un aliment externe couvre du stock, mais ses données nutritionnelles sont incomplètes.',
   feedRecommendationBreakdown: 'Recommandation initiale par phase : {{phases}} sac(s)',
   feedPhaseWeightRange: '{{min}}–{{max}} g',
   feedPhaseNoExactProduct: 'Produit {{size}} mm indisponible dans le catalogue AquaCare.',

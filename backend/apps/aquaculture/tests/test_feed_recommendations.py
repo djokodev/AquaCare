@@ -477,6 +477,7 @@ def test_recommendation_allocates_external_stock_and_pending_order(
     assert phase['shortfall_kg'] == '10.00'
     assert phase['total_bags'] == 1
     assert phase['surplus_kg'] == '5.00'
+    assert 'external_feed_nutrition_unknown' not in result['warnings']
 
 
 @pytest.mark.django_db

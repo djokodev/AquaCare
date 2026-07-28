@@ -1792,7 +1792,6 @@
   feedWarning_nutritional_guide_gap: 'Part of the need does not match any nutritional guide interval.',
   feedWarning_nutritional_guide_overlap: 'Nutritional guide intervals overlap; the most specific rule was selected.',
   feedWarning_feed_phase_need_reconciliation_error: 'The phase details could not be reconciled exactly with the calculated need.',
-  feedWarning_external_feed_nutrition_unknown: 'External feed covers stock, but its nutritional data is incomplete.',
   feedRecommendationBreakdown: 'Initial recommendation by phase: {{phases}} bag(s)',
   feedPhaseWeightRange: '{{min}}–{{max}} g',
   feedPhaseNoExactProduct: '{{size}} mm product unavailable in the AquaCare catalogue.',
