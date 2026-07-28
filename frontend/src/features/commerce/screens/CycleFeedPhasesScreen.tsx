@@ -205,6 +205,13 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
     void loadPhases();
   }, [loadPhases]);
 
+  useEffect(() => {
+    if (cartItemsCount !== 0) return;
+    setSubmittedScopes((current) =>
+      Object.keys(current).length > 0 ? {} : current
+    );
+  }, [cartItemsCount]);
+
   const handleQuantityChange = useCallback((key: string, delta: number) => {
     setQuantities((current) => ({
       ...current,

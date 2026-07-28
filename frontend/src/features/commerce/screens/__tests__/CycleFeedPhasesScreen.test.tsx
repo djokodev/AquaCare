@@ -77,6 +77,29 @@ describe('CycleFeedPhasesScreen', () => {
     expect(Alert.alert).toHaveBeenCalledWith('success', 'feedPhaseAddedToCart', expect.any(Array));
   });
 
+  it('reactive la commande d une phase lorsque le panier est vide', async () => {
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue(recommendation([phase]));
+    const screen = render(<CycleFeedPhasesScreen {...props} />);
+
+    await screen.findByText('Starter');
+    const orderButton = screen.getByLabelText('feedPhaseOrderBtn');
+    expect(orderButton.props.accessibilityState.disabled).toBe(false);
+
+    fireEvent.press(orderButton);
+    expect(screen.getByLabelText('feedPhaseOrderBtn').props.accessibilityState.disabled).toBe(true);
+
+    mockCartQuantity = 2;
+    screen.rerender(<CycleFeedPhasesScreen {...props} />);
+    expect(screen.getByLabelText('cart 2')).toBeTruthy();
+
+    mockCartQuantity = 0;
+    screen.rerender(<CycleFeedPhasesScreen {...props} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('feedPhaseOrderBtn').props.accessibilityState.disabled).toBe(false);
+    });
+  });
+
   it('commande toutes les phases et conserve le cycle dans la navigation', async () => {
     jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue(recommendation([phase]));
     const { findByText, getByText } = render(<CycleFeedPhasesScreen {...props} />);
