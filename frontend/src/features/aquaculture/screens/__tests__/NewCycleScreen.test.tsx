@@ -1,6 +1,6 @@
 import React from "react";
 import { Alert } from "react-native";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import NewCycleScreen from "../NewCycleScreen";
 import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
 import { offlineService } from "@/services/offlineService";
@@ -10,6 +10,11 @@ import { isNetworkError, parseApiError } from "@/utils/errorParser";
 import { getBusinessIsoDate } from "@/utils/businessDate";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cycleLaunchReferenceCache } from "@/features/aquaculture/services/cycleLaunchReferenceCache";
+import type {
+  CycleLaunchOpeningStockInput,
+  CycleLaunchRequest,
+  FarmFeedReference,
+} from "@/types/aquaculture";
 
 jest.mock("react-redux", () => ({
   useDispatch: jest.fn(),
@@ -140,6 +145,61 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     fireEvent.changeText(getByTestId("newCycleSellingPrice"), "2800");
     fireEvent.changeText(getByTestId("newCycleAllocation-unit-1"), "1500");
   };
+
+  const buildPendingLaunchWithStocks = (
+    initialFeedStocks: CycleLaunchOpeningStockInput[],
+  ): CycleLaunchRequest => ({
+    launch_uuid: "55555555-5555-4555-8555-555555555555",
+    launch_kind: "additional_cycle",
+    cycle: {
+      onboarding_mode: "ongoing",
+      species: "tilapia",
+      start_date: "2026-06-01",
+      initial_count: 2000,
+      initial_average_weight: null,
+      target_harvest_weight_g: 350,
+      planned_cycle_duration_days: 150,
+      expected_survival_rate_pct: 95,
+      planned_selling_price_per_kg_fcfa: 2800,
+      fingerlings_cost_fcfa: 0,
+      other_operational_costs_fcfa: 0,
+      created_offline: true,
+    },
+    tracking_baseline: {
+      tracking_start_date: "2026-07-20",
+      fish_count: 1850,
+      average_weight_g: "75",
+      biomass_kg: null,
+    },
+    production_units: [{
+      local_id: "existing-unit-1",
+      source: "existing",
+      production_unit_id: "unit-1",
+    }],
+    allocations: [{
+      production_unit_local_id: "existing-unit-1",
+      fish_count: 1850,
+    }],
+    initial_feed_stocks: initialFeedStocks,
+  });
+
+  const buildFeedReference = (
+    overrides: Partial<FarmFeedReference> = {},
+  ): FarmFeedReference => ({
+    id: "feed-current",
+    client_uuid: null,
+    farm_profile: "farm-1",
+    source: "external",
+    catalog_product_id: null,
+    name: "Aliment courant",
+    species: "tilapia",
+    pellet_size_mm: "2.00",
+    brand: "",
+    protein_percentage: null,
+    lipid_percentage: null,
+    package_weight_kg: null,
+    ...overrides,
+  });
 
   it("lance un cycle supplémentaire avec une unité existante en un seul appel", async () => {
     const alertSpy = jest
@@ -657,6 +717,178 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(screen.queryByText("Ancien aliment")).toBeNull();
   });
 
+  it("invalide une sélection du cache retirée par le refresh serveur", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    const oldReference = buildFeedReference({
+      id: "feed-old",
+      name: "Ancien aliment",
+    });
+    const newReference = buildFeedReference({
+      id: "feed-new",
+      name: "Nouvel aliment",
+    });
+    let resolveServerReferences:
+      ((references: FarmFeedReference[]) => void) | undefined;
+    const serverReferencesPromise = new Promise<FarmFeedReference[]>(
+      (resolve) => {
+        resolveServerReferences = resolve;
+      },
+    );
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    await cycleLaunchReferenceCache.cacheFeedReferences(
+      "farm-1",
+      [oldReference],
+    );
+    mockService.getFarmFeedReferences.mockReturnValue(serverReferencesPromise);
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    fireEvent.press(screen.getByText("ongoingCycleMode"));
+    fireEvent.press(screen.getByText("tilapia"));
+    fireEvent.press(screen.getByText("existingFeedReference"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Ancien aliment")).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByLabelText("Ancien aliment"));
+    fireEvent.changeText(screen.getByTestId("newCycleStockQuantity"), "25");
+
+    await act(async () => {
+      resolveServerReferences?.([newReference]);
+      await serverReferencesPromise;
+    });
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Ancien aliment")).toBeNull();
+      expect(screen.getByLabelText("Nouvel aliment")).toBeTruthy();
+    });
+    fireEvent.press(screen.getByTestId("newCycleAddOpeningStock"));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "error",
+      "cycleLaunchFeedReferenceNotFound",
+    );
+    expect(screen.queryByText("25 kg · unknownCost")).toBeNull();
+    alertSpy.mockRestore();
+  });
+
+  it("conserve une sélection encore valide après le refresh serveur", async () => {
+    const currentReference = buildFeedReference();
+    let resolveServerReferences:
+      ((references: FarmFeedReference[]) => void) | undefined;
+    const serverReferencesPromise = new Promise<FarmFeedReference[]>(
+      (resolve) => {
+        resolveServerReferences = resolve;
+      },
+    );
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    await cycleLaunchReferenceCache.cacheFeedReferences(
+      "farm-1",
+      [currentReference],
+    );
+    mockService.getFarmFeedReferences.mockReturnValue(serverReferencesPromise);
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    fireEvent.press(screen.getByText("ongoingCycleMode"));
+    fireEvent.press(screen.getByText("tilapia"));
+    fireEvent.press(screen.getByText("existingFeedReference"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Aliment courant")).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByLabelText("Aliment courant"));
+
+    await act(async () => {
+      resolveServerReferences?.([currentReference]);
+      await serverReferencesPromise;
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("newCycleFeedReference-feed-current").props
+          .accessibilityState.selected,
+      ).toBe(true),
+    );
+  });
+
+  it("invalide la référence sélectionnée après un changement d espèce", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    const tilapiaReference = buildFeedReference();
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockService.getFarmFeedReferences.mockResolvedValue([tilapiaReference]);
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    fireEvent.press(screen.getByText("ongoingCycleMode"));
+    fireEvent.press(screen.getByText("tilapia"));
+    fireEvent.press(screen.getByText("existingFeedReference"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Aliment courant")).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByLabelText("Aliment courant"));
+    fireEvent.press(screen.getByText("clarias"));
+    fireEvent.changeText(screen.getByTestId("newCycleStockQuantity"), "25");
+    fireEvent.press(screen.getByTestId("newCycleAddOpeningStock"));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "error",
+      "cycleLaunchFeedReferenceNotFound",
+    );
+    alertSpy.mockRestore();
+  });
+
+  it("invalide la référence sélectionnée après un changement de ferme", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    const farmOneReference = buildFeedReference({
+      id: "feed-farm-1",
+      name: "Aliment ferme 1",
+    });
+    const farmTwoReference = buildFeedReference({
+      id: "feed-farm-2",
+      farm_profile: "farm-2",
+      name: "Aliment ferme 2",
+    });
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme 1" },
+    });
+    mockService.getFarmFeedReferences.mockImplementation(async (farmId) =>
+      farmId === "farm-1" ? [farmOneReference] : [farmTwoReference],
+    );
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    fireEvent.press(screen.getByText("ongoingCycleMode"));
+    fireEvent.press(screen.getByText("tilapia"));
+    fireEvent.press(screen.getByText("existingFeedReference"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Aliment ferme 1")).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByLabelText("Aliment ferme 1"));
+
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-2", farm_name: "Ferme 2" },
+    });
+    screen.rerender(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Aliment ferme 1")).toBeNull();
+      expect(screen.getByLabelText("Aliment ferme 2")).toBeTruthy();
+    });
+    fireEvent.changeText(screen.getByTestId("newCycleStockQuantity"), "25");
+    fireEvent.press(screen.getByTestId("newCycleAddOpeningStock"));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "error",
+      "cycleLaunchFeedReferenceNotFound",
+    );
+    alertSpy.mockRestore();
+  });
+
   it("préserve le snapshot alimentaire utilisé pendant un round-trip pending", async () => {
     const oldReference = {
       id: "feed-old",
@@ -793,6 +1025,149 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
       mockOffline.updatePendingCycleLaunch.mock.calls[1][2]?.localContext
         ?.feedReferences,
     ).toEqual([newReference]);
+  });
+
+  it("préserve et réaffiche un snapshot pending identifié par client UUID", async () => {
+    const oldReference = buildFeedReference({
+      id: "snapshot-old",
+      client_uuid: "client-old",
+      name: "Ancien aliment client",
+      pellet_size_mm: "2.00",
+    });
+    const stock = {
+      local_id: "stock-client-old",
+      feed_reference_client_uuid: "client-old",
+      quantity_kg: "25.00",
+      cost_status: "unknown",
+      total_cost_fcfa: null,
+      note: "Reliquat client",
+    } satisfies CycleLaunchOpeningStockInput;
+    const offlineLaunch = buildPendingLaunchWithStocks([stock]);
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockService.getProductionUnits.mockResolvedValue([units[0]]);
+    mockService.getFarmFeedReferences.mockResolvedValue([]);
+
+    const firstMount = render(
+      <NewCycleScreen
+        navigation={navigation}
+        route={{
+          params: {
+            editingOfflineLaunchId: offlineLaunch.launch_uuid,
+            offlineLaunch,
+            offlineLaunchContext: {
+              productionUnits: [units[0]],
+              feedReferences: [oldReference],
+            },
+          },
+        } as unknown as React.ComponentProps<typeof NewCycleScreen>["route"]}
+      />,
+    );
+    await waitFor(() =>
+      expect(
+        firstMount.getAllByText("cycleLaunchReferenceUnavailable").length,
+      ).toBeGreaterThan(0),
+    );
+    expect(firstMount.getByText("Ancien aliment client")).toBeTruthy();
+    expect(firstMount.getByText("2.00 mm")).toBeTruthy();
+
+    fireEvent.press(firstMount.getByText("startTracking"));
+    await waitFor(() =>
+      expect(mockOffline.updatePendingCycleLaunch).toHaveBeenCalledTimes(1),
+    );
+    const updatedPayload =
+      mockOffline.updatePendingCycleLaunch.mock.calls[0][1];
+    const updatedContext =
+      mockOffline.updatePendingCycleLaunch.mock.calls[0][2]?.localContext;
+    expect(updatedPayload.initial_feed_stocks).toEqual([stock]);
+    expect(updatedPayload.initial_feed_stocks?.[0].feed_reference_id).toBeUndefined();
+    expect(updatedContext?.feedReferences).toEqual([oldReference]);
+    firstMount.unmount();
+
+    const secondMount = render(
+      <NewCycleScreen
+        navigation={navigation}
+        route={{
+          params: {
+            editingOfflineLaunchId: offlineLaunch.launch_uuid,
+            offlineLaunch: updatedPayload,
+            offlineLaunchContext: updatedContext,
+          },
+        } as unknown as React.ComponentProps<typeof NewCycleScreen>["route"]}
+      />,
+    );
+    await waitFor(() =>
+      expect(secondMount.getByText("Ancien aliment client")).toBeTruthy(),
+    );
+    expect(secondMount.getByText("2.00 mm")).toBeTruthy();
+    expect(
+      secondMount.getAllByText("cycleLaunchReferenceUnavailable").length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("priorise les métadonnées serveur pour un client UUID sans changer le payload", async () => {
+    const clientUuid = "client-synchronized";
+    const snapshot = buildFeedReference({
+      id: "local-old",
+      client_uuid: clientUuid,
+      name: "Ancien nom",
+    });
+    const serverReference = buildFeedReference({
+      id: "server-new",
+      client_uuid: clientUuid,
+      name: "Nom serveur",
+      pellet_size_mm: "3.00",
+    });
+    const stock = {
+      local_id: "stock-client-synchronized",
+      feed_reference_client_uuid: clientUuid,
+      quantity_kg: "25.00",
+      cost_status: "unknown",
+      total_cost_fcfa: null,
+      note: "",
+    } satisfies CycleLaunchOpeningStockInput;
+    const offlineLaunch = buildPendingLaunchWithStocks([stock]);
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockService.getProductionUnits.mockResolvedValue([units[0]]);
+    mockService.getFarmFeedReferences.mockResolvedValue([serverReference]);
+
+    const screen = render(
+      <NewCycleScreen
+        navigation={navigation}
+        route={{
+          params: {
+            editingOfflineLaunchId: offlineLaunch.launch_uuid,
+            offlineLaunch,
+            offlineLaunchContext: {
+              productionUnits: [units[0]],
+              feedReferences: [snapshot],
+            },
+          },
+        } as unknown as React.ComponentProps<typeof NewCycleScreen>["route"]}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Nom serveur")).toBeTruthy(),
+    );
+    expect(screen.queryByText("Ancien nom")).toBeNull();
+    expect(screen.getByText("3.00 mm")).toBeTruthy();
+    expect(screen.queryByText("cycleLaunchReferenceUnavailable")).toBeNull();
+
+    fireEvent.press(screen.getByText("startTracking"));
+    await waitFor(() =>
+      expect(mockOffline.updatePendingCycleLaunch).toHaveBeenCalledTimes(1),
+    );
+    const savedPayload =
+      mockOffline.updatePendingCycleLaunch.mock.calls[0][1];
+    expect(savedPayload.initial_feed_stocks).toEqual([stock]);
+    expect(savedPayload.initial_feed_stocks?.[0].feed_reference_id).toBeUndefined();
+    expect(
+      mockOffline.updatePendingCycleLaunch.mock.calls[0][2]?.localContext
+        ?.feedReferences,
+    ).toEqual([serverReference]);
   });
 
   it("conserve et signale le snapshot d une unité pending devenue indisponible", async () => {

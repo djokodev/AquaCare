@@ -2,6 +2,8 @@ import {
   buildAdditionalCycleLaunchRequest,
   validateAdditionalCycleLaunch,
 } from "../additionalCycleLaunchService";
+import type { NewCycleData } from "@/features/aquaculture/utils/newCycleForm";
+import type { ProductionUnit } from "@/types/aquaculture";
 
 const unit = {
   id: "unit-1",
@@ -145,5 +147,36 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
       selectedUnits: [unit as any],
       allocationsByUnitId: { "unit-1": "1850" },
     })).toBe("ongoingCycleBiomassInconsistent");
+  });
+
+  it.each([
+    {
+      feed_reference_id: "feed-1",
+      feed_reference_client_uuid: "11111111-1111-4111-8111-111111111111",
+    },
+    {
+      feed_reference_client_uuid: "11111111-1111-4111-8111-111111111111",
+      external_feed: {
+        client_uuid: "22222222-2222-4222-8222-222222222222",
+        name: "Aliment externe",
+        pellet_size_mm: "2.00",
+      },
+    },
+  ])("rejects opening stock with multiple feed identities", (identities) => {
+    expect(validateAdditionalCycleLaunch({
+      formData: {
+        ...ongoingForm,
+        initial_feed_stocks: [{
+          local_id: "stock-conflict",
+          ...identities,
+          quantity_kg: "25.00",
+          cost_status: "unknown",
+          total_cost_fcfa: null,
+          note: "",
+        }],
+      } as unknown as NewCycleData,
+      selectedUnits: [unit as unknown as ProductionUnit],
+      allocationsByUnitId: { "unit-1": "1850" },
+    })).toBe("openingStockInvalid");
   });
 });

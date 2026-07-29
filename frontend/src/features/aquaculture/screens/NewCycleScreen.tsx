@@ -61,7 +61,11 @@ import {
 import { createClientUuid } from "@/utils/clientUuid";
 import { hydrateNewCycleFormFromLaunch } from "@/features/aquaculture/utils/launchHydration";
 import { cycleLaunchReferenceCache } from "@/features/aquaculture/services/cycleLaunchReferenceCache";
-import { buildPendingLaunchLocalContext } from "@/features/aquaculture/services/cycleLaunchLocalContext";
+import {
+  buildPendingLaunchLocalContext,
+  isFeedReferenceSelectable,
+  resolveOpeningStockFeedReference,
+} from "@/features/aquaculture/services/cycleLaunchLocalContext";
 import { TRANSACTIONAL_LAUNCH_ERROR_KEYS } from "@/features/aquaculture/utils/aquacultureErrorPresenter";
 import type {
   CycleLaunchCalibrationUnitInput,
@@ -152,10 +156,6 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const [unavailablePendingUnitIds, setUnavailablePendingUnitIds] = useState<
     string[]
   >([]);
-  const [
-    unavailablePendingFeedReferenceIds,
-    setUnavailablePendingFeedReferenceIds,
-  ] = useState<string[]>([]);
   const [launchRequestId] = useState(
     () => offlineLaunch?.launch_uuid ?? createClientUuid(),
   );
@@ -164,9 +164,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   );
   const [calibrationName, setCalibrationName] = useState("");
   const [calibrationVolume, setCalibrationVolume] = useState("");
-  const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>(
-    () => offlineLaunchContext?.feedReferences ?? [],
-  );
+  const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>([]);
   const [stockReferenceMode, setStockReferenceMode] = useState<"existing" | "external">("external");
   const [stockReferenceId, setStockReferenceId] = useState("");
   const [stockName, setStockName] = useState("");
@@ -207,6 +205,19 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
 
   const applyEconomicDefaults = (species: "clarias" | "tilapia") => {
     const defaults = ECONOMIC_DEFAULTS[species];
+    setStockReferenceId((currentId) =>
+      feedReferences.some(
+        (reference) =>
+          reference.id === currentId
+          && isFeedReferenceSelectable({
+            reference,
+            species,
+            farmProfileId: farmProfile?.id,
+          }),
+      )
+        ? currentId
+        : "",
+    );
     setFormData((prev) => ({
       ...prev,
       species,
@@ -239,6 +250,26 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.species, formData.pond_identifier]);
+
+  useEffect(() => {
+    setStockReferenceId("");
+  }, [farmProfile?.id]);
+
+  useEffect(() => {
+    setStockReferenceId((currentId) =>
+      feedReferences.some(
+        (reference) =>
+          reference.id === currentId
+          && isFeedReferenceSelectable({
+            reference,
+            species: formData.species,
+            farmProfileId: farmProfile?.id,
+          }),
+      )
+        ? currentId
+        : "",
+    );
+  }, [farmProfile?.id, feedReferences, formData.species]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -274,23 +305,6 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         setAvailableUnits(pendingUnitSnapshots);
         setFeedReferences([]);
       }
-      const cachedFeedIds = new Set(
-        (cached?.feedReferences ?? []).map((reference) => reference.id),
-      );
-      const usedPendingFeedIds = new Set(
-        (offlineLaunch?.initial_feed_stocks ?? [])
-          .map((stock) => stock.feed_reference_id)
-          .filter((id): id is string => Boolean(id)),
-      );
-      setUnavailablePendingFeedReferenceIds(
-        pendingFeedSnapshots
-          .filter(
-            (reference) =>
-              usedPendingFeedIds.has(reference.id)
-              && !cachedFeedIds.has(reference.id),
-          )
-          .map((reference) => reference.id),
-      );
       setLoadingUnits(false);
       if (!(await offlineService.isOnline())) {
         const hasOfflineUnits =
@@ -338,16 +352,13 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
           const serverReferences =
             await aquacultureService.getFarmFeedReferences(farmProfileId);
           setFeedReferences(serverReferences);
-          const pendingReferenceIds = editingOfflineLaunchId
-            ? (offlineLaunch?.initial_feed_stocks ?? [])
-                .map((stock) => stock.feed_reference_id)
-                .filter((id): id is string => Boolean(id))
-                .filter(
-                  (id) =>
-                    !serverReferences.some((reference) => reference.id === id),
-                )
-            : [];
-          setUnavailablePendingFeedReferenceIds(pendingReferenceIds);
+          setStockReferenceId((currentId) =>
+            serverReferences.some(
+              (reference) => reference.id === currentId,
+            )
+              ? currentId
+              : "",
+          );
           await cycleLaunchReferenceCache.cacheFeedReferences(
             farmProfileId,
             serverReferences,
@@ -369,7 +380,19 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
     selectedUnitIds.includes(unit.id),
   );
   const pendingFeedReferenceSnapshots =
-    offlineLaunchContext?.feedReferences ?? [];
+    (offlineLaunchContext?.feedReferences ?? []).filter(
+      (reference) =>
+        !farmProfile?.id || reference.farm_profile === farmProfile.id,
+    );
+  const hasUnavailablePendingFeedReference =
+    formData.initial_feed_stocks.some(
+      (stock) =>
+        resolveOpeningStockFeedReference({
+          stock,
+          currentFeedReferences: feedReferences,
+          pendingSnapshots: pendingFeedReferenceSnapshots,
+        }).unavailable,
+    );
   const validationErrorKey = validateAdditionalCycleLaunch({
     formData,
     selectedUnits,
@@ -527,6 +550,22 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   };
 
   const addOpeningStock = () => {
+    const selectedFeedReference =
+      stockReferenceMode === "existing"
+        ? feedReferences.find(
+            (reference) =>
+              reference.id === stockReferenceId
+              && isFeedReferenceSelectable({
+                reference,
+                species: formData.species,
+                farmProfileId: farmProfile?.id,
+              }),
+          ) ?? null
+        : null;
+    if (stockReferenceMode === "existing" && !selectedFeedReference) {
+      Alert.alert(t("error"), t("cycleLaunchFeedReferenceNotFound"));
+      return;
+    }
     const localId = createClientUuid();
     const common = {
       local_id: localId,
@@ -540,8 +579,11 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
       "feed_reference_id" | "external_feed"
     >;
     const stock: CycleLaunchOpeningStockInput =
-      stockReferenceMode === "existing"
-        ? { ...common, feed_reference_id: stockReferenceId }
+      selectedFeedReference
+        ? {
+            ...common,
+            feed_reference_id: selectedFeedReference.id,
+          }
         : {
             ...common,
             external_feed: {
@@ -554,7 +596,10 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
     if (
       !(Number(stock.quantity_kg) > 0) ||
       (stockCostStatus === "known" && !(Number(stock.total_cost_fcfa) >= 0)) ||
-      (stockReferenceMode === "existing" ? !stockReferenceId : !stockName.trim() || !(Number(stockPelletSize) > 0))
+      (
+        stockReferenceMode === "external"
+        && (!stockName.trim() || !(Number(stockPelletSize) > 0))
+      )
     ) {
       Alert.alert(t("error"), t("openingStockInvalid"));
       return;
@@ -746,7 +791,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             <View style={{ gap: spacing[3] }}>
               <AppText variant="sectionTitle">{t("openingFeedStock")}</AppText>
               <AppText color="muted">{t("openingFeedStockDescription")}</AppText>
-              {unavailablePendingFeedReferenceIds.length > 0 ? (
+              {hasUnavailablePendingFeedReference ? (
                 <InlineAlert
                   tone="warning"
                   message={t("cycleLaunchPendingFeedReferenceUnavailable")}
@@ -765,12 +810,16 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                   {feedReferences
                     .filter(
                       (reference) =>
-                        !unavailablePendingFeedReferenceIds.includes(reference.id),
+                        isFeedReferenceSelectable({
+                          reference,
+                          species: formData.species,
+                          farmProfileId: farmProfile?.id,
+                        }),
                     )
-                    .filter((reference) => reference.species === formData.species)
                     .map((reference) => (
                       <SelectableCard
                         key={reference.id}
+                        testID={`newCycleFeedReference-${reference.id}`}
                         selected={stockReferenceId === reference.id}
                         onPress={() => setStockReferenceId(reference.id)}
                         accessibilityLabel={reference.name}
@@ -786,7 +835,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                   <TextField label={t("pelletSize")} value={stockPelletSize} onChangeText={setStockPelletSize} keyboardType="decimal-pad" suffix={numberSuffix("mm")} />
                 </>
               )}
-              <TextField label={t("quantityKg")} value={stockQuantity} onChangeText={setStockQuantity} keyboardType="decimal-pad" suffix={numberSuffix("kg")} />
+              <TextField testID="newCycleStockQuantity" label={t("quantityKg")} value={stockQuantity} onChangeText={setStockQuantity} keyboardType="decimal-pad" suffix={numberSuffix("kg")} />
               <SegmentedControl
                 value={stockCostStatus}
                 options={[
@@ -799,34 +848,27 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                 <TextField label={t("totalCostFcfa")} value={stockCost} onChangeText={setStockCost} keyboardType="decimal-pad" suffix={numberSuffix("FCFA")} />
               ) : null}
               <TextField label={t("notes")} value={stockNote} onChangeText={setStockNote} />
-              <Button label={t("addOpeningStock")} variant="outline" onPress={addOpeningStock} />
+              <Button testID="newCycleAddOpeningStock" label={t("addOpeningStock")} variant="outline" onPress={addOpeningStock} />
               {formData.initial_feed_stocks.map((stock) => {
-                const existingReference =
-                  feedReferences.find(
-                    (reference) => reference.id === stock.feed_reference_id,
-                  )
-                  ?? pendingFeedReferenceSnapshots.find(
-                    (reference) => reference.id === stock.feed_reference_id,
-                  );
-                const referenceUnavailable = Boolean(
-                  stock.feed_reference_id
-                  && unavailablePendingFeedReferenceIds.includes(
-                    stock.feed_reference_id,
-                  ),
-                );
+                const resolvedFeedReference =
+                  resolveOpeningStockFeedReference({
+                    stock,
+                    currentFeedReferences: feedReferences,
+                    pendingSnapshots: pendingFeedReferenceSnapshots,
+                  });
                 return (
                 <Card key={stock.local_id} variant="outlined">
                   <AppText variant="bodyStrong">
                     {stock.external_feed?.name
-                      ?? existingReference?.name
+                      ?? resolvedFeedReference.reference?.name
                       ?? t("feed")}
                   </AppText>
-                  {existingReference?.pellet_size_mm ? (
+                  {resolvedFeedReference.reference?.pellet_size_mm ? (
                     <AppText color="muted">
-                      {existingReference.pellet_size_mm} mm
+                      {resolvedFeedReference.reference.pellet_size_mm} mm
                     </AppText>
                   ) : null}
-                  {referenceUnavailable ? (
+                  {resolvedFeedReference.unavailable ? (
                     <AppText variant="helper" color="error">
                       {t("cycleLaunchReferenceUnavailable")}
                     </AppText>
