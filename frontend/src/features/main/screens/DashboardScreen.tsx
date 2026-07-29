@@ -60,6 +60,7 @@ import {
 import { colors, spacing } from "@/theme";
 import { useDashboardSyncStatus } from "@/hooks/useDashboardSyncStatus";
 import { dashboardSyncService } from "@/services/dashboardSyncService";
+import { getRejectedCycleLaunchDisplay } from "@/features/aquaculture/utils/aquacultureErrorPresenter";
 
 interface DashboardActionCardProps {
   label: string;
@@ -627,21 +628,39 @@ export default function DashboardScreen({ navigation }: any) {
                 tone="info"
                 message={t("pendingCycleOperationsBlocked")}
               />
-              {pendingCycleLaunches.map((launch) => (
-                <Card key={launch.id} variant="outlined">
-                  <AppText variant="bodyStrong">
-                    {launch.payload.cycle.cycle_name ?? t("newCycleTitle")}
-                  </AppText>
-                  <AppText color="muted">
-                    {t(
-                      launch.sync_status === "rejected"
-                        ? "cycleLaunchRejected"
-                        : launch.attempted
-                          ? "cycleLaunchLockedAfterAttempt"
-                          : "cycleLaunchEditableBeforeAttempt",
+              {pendingCycleLaunches.map((launch) => {
+                const rejectedDisplay =
+                  launch.sync_status === "rejected"
+                    ? getRejectedCycleLaunchDisplay({
+                        code: launch.last_error_code,
+                        message: launch.last_error_message,
+                        httpStatus: launch.last_http_status,
+                        t,
+                      })
+                    : null;
+                return (
+                  <Card key={launch.id} variant="outlined">
+                    <AppText variant="bodyStrong">
+                      {launch.payload.cycle.cycle_name ?? t("newCycleTitle")}
+                    </AppText>
+                    {rejectedDisplay ? (
+                      <>
+                        <AppText color="muted">{rejectedDisplay.status}</AppText>
+                        <AppText>
+                          {t("cycleLaunchRejectedCause")}: {rejectedDisplay.cause}
+                        </AppText>
+                        <AppText color="muted">{rejectedDisplay.action}</AppText>
+                      </>
+                    ) : (
+                      <AppText color="muted">
+                        {t(
+                          launch.attempted
+                            ? "cycleLaunchLockedAfterAttempt"
+                            : "cycleLaunchEditableBeforeAttempt",
+                        )}
+                      </AppText>
                     )}
-                  </AppText>
-                  <View style={{ flexDirection: "row", gap: spacing[2], marginTop: spacing[2] }}>
+                    <View style={{ flexDirection: "row", gap: spacing[2], marginTop: spacing[2] }}>
                     {!launch.attempted ? (
                       <Button
                         label={t("edit")}
@@ -696,9 +715,10 @@ export default function DashboardScreen({ navigation }: any) {
                         }}
                       />
                     ) : null}
-                  </View>
-                </Card>
-              ))}
+                    </View>
+                  </Card>
+                );
+              })}
             </DashboardSection>
           </View>
         ) : null}

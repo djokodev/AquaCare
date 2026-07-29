@@ -43,4 +43,12 @@ describe('businessDate cycle schedule', () => {
     expect(getOngoingCycleSchedule('2026-06-01', '2026-10-28', 150)).toBeNull();
     expect(getOngoingCycleSchedule('2026-06-01', '2026-10-29', 150)).toBeNull();
   });
+
+  it('counts two inclusive days on the day before harvest', () => {
+    expect(getOngoingCycleSchedule('2026-06-01', '2026-10-27', 150)).toEqual({
+      totalDurationDays: 150,
+      plannedHarvestDate: '2026-10-28',
+      remainingDurationDays: 2,
+    });
+  });
 });

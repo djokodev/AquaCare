@@ -259,6 +259,79 @@ describe("features/main/screens/DashboardScreen", () => {
     expect(getByText("retry")).toBeTruthy();
   });
 
+  it("affiche la cause traduite d un rejet sans aucune action dangereuse", async () => {
+    mockOffline.getOfflineCycleLaunches.mockResolvedValue([{
+      id: "launch-rejected",
+      payload: {
+        cycle: { cycle_name: "Cycle rejeté" },
+        launch_kind: "additional_cycle",
+      },
+      attempted: true,
+      sync_status: "rejected",
+      last_error_code: "cycle_launch_unit_already_allocated",
+      last_http_status: 409,
+    } as any]);
+
+    const { getByText, queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+    await waitFor(() => expect(getByText("Cycle rejeté")).toBeTruthy());
+    expect(getByText("cycleLaunchRejectedStatus")).toBeTruthy();
+    expect(
+      getByText(
+        "cycleLaunchRejectedCause: cycleLaunchUnitAlreadyAllocated",
+      ),
+    ).toBeTruthy();
+    expect(queryByText("retry")).toBeNull();
+    expect(queryByText("edit")).toBeNull();
+    expect(queryByText("delete")).toBeNull();
+  });
+
+  it("affiche le fallback contrôlé d un code de rejet inconnu", async () => {
+    mockOffline.getOfflineCycleLaunches.mockResolvedValue([{
+      id: "launch-rejected-unknown",
+      payload: {
+        cycle: { cycle_name: "Cycle à corriger" },
+        launch_kind: "additional_cycle",
+      },
+      attempted: true,
+      sync_status: "rejected",
+      last_error_code: "unknown",
+      last_error_message: "La configuration doit être corrigée.",
+      last_http_status: 400,
+    } as any]);
+
+    const { getByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+    await waitFor(() => expect(getByText("Cycle à corriger")).toBeTruthy());
+    expect(
+      getByText(
+        "cycleLaunchRejectedCause: La configuration doit être corrigée.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("garde édition et suppression pour un lancement pending non tenté", async () => {
+    mockOffline.getOfflineCycleLaunches.mockResolvedValue([{
+      id: "launch-pending",
+      payload: {
+        cycle: { cycle_name: "Cycle modifiable" },
+        launch_kind: "additional_cycle",
+      },
+      attempted: false,
+      sync_status: "pending",
+    } as any]);
+
+    const { getByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+    await waitFor(() => expect(getByText("Cycle modifiable")).toBeTruthy());
+    expect(getByText("edit")).toBeTruthy();
+    expect(getByText("delete")).toBeTruthy();
+    expect(getByText("retry")).toBeTruthy();
+  });
+
   it("garde le sélecteur disponible quand le dashboard est scoped mais deux cycles sont actifs", async () => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
       selector({

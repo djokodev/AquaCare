@@ -61,6 +61,7 @@ import {
 import { createClientUuid } from "@/utils/clientUuid";
 import { hydrateNewCycleFormFromLaunch } from "@/features/aquaculture/utils/launchHydration";
 import { cycleLaunchReferenceCache } from "@/features/aquaculture/services/cycleLaunchReferenceCache";
+import { TRANSACTIONAL_LAUNCH_ERROR_KEYS } from "@/features/aquaculture/utils/aquacultureErrorPresenter";
 import type {
   CycleLaunchCalibrationUnitInput,
   CycleLaunchOpeningStockInput,
@@ -72,21 +73,6 @@ const SPECIES_OPTIONS = [
   { value: "clarias", labelKey: "clarias", durationDays: 120 },
   { value: "tilapia", labelKey: "tilapia", durationDays: 180 },
 ] as const;
-
-const TRANSACTIONAL_LAUNCH_ERROR_KEYS: Record<string, string> = {
-  cycle_launch_unit_already_allocated: "cycleLaunchUnitAlreadyAllocated",
-  cycle_launch_unit_capacity_exceeded: "cycleLaunchUnitCapacityExceeded",
-  cycle_launch_unit_capacity_unavailable: "cycleLaunchUnitCapacityUnavailable",
-  ongoing_cycle_tracking_baseline_required: "ongoingCycleTrackingDateInvalid",
-  ongoing_cycle_tracking_date_before_start: "ongoingCycleTrackingDateInvalid",
-  ongoing_cycle_tracking_date_in_future: "ongoingCycleTrackingDateInvalid",
-  ongoing_cycle_current_count_required: "ongoingCycleCurrentCountInvalid",
-  ongoing_cycle_current_count_exceeds_initial: "ongoingCycleCurrentCountInvalid",
-  ongoing_cycle_current_weight_required: "ongoingCycleCurrentWeightRequired",
-  ongoing_cycle_biomass_inconsistent: "ongoingCycleBiomassInconsistent",
-  ongoing_cycle_planned_harvest_elapsed: "plannedHarvestElapsed",
-  event_before_tracking_start: "eventBeforeTrackingStartForbidden",
-};
 
 type NewCycleScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -162,6 +148,13 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const [loadingUnits, setLoadingUnits] = useState(true);
   const [unitsLoadError, setUnitsLoadError] = useState(false);
   const [offlineReferencesEmpty, setOfflineReferencesEmpty] = useState(false);
+  const [unavailablePendingUnitIds, setUnavailablePendingUnitIds] = useState<
+    string[]
+  >([]);
+  const [
+    unavailablePendingFeedReferenceIds,
+    setUnavailablePendingFeedReferenceIds,
+  ] = useState<string[]>([]);
   const [launchRequestId] = useState(
     () => offlineLaunch?.launch_uuid ?? createClientUuid(),
   );
@@ -256,23 +249,37 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
       const cached = farmProfileId
         ? await cycleLaunchReferenceCache.load(farmProfileId)
         : null;
+      const pendingUnitSnapshots = (
+        offlineLaunchContext?.productionUnits ?? []
+      ).filter(
+        (unit) => !farmProfileId || unit.farm_profile === farmProfileId,
+      );
+      const pendingFeedSnapshots = (
+        offlineLaunchContext?.feedReferences ?? []
+      ).filter(
+        (reference) =>
+          !farmProfileId || reference.farm_profile === farmProfileId,
+      );
       if (cached) {
-        setAvailableUnits((current) => [
+        setAvailableUnits([
           ...cached.productionUnits,
-          ...current.filter(
+          ...pendingUnitSnapshots.filter(
             (unit) =>
               !cached.productionUnits.some((cachedUnit) => cachedUnit.id === unit.id),
           ),
         ]);
-        setFeedReferences((current) => [
+        setFeedReferences([
           ...cached.feedReferences,
-          ...current.filter(
+          ...pendingFeedSnapshots.filter(
             (reference) =>
               !cached.feedReferences.some(
                 (cachedReference) => cachedReference.id === reference.id,
               ),
           ),
         ]);
+      } else {
+        setAvailableUnits(pendingUnitSnapshots);
+        setFeedReferences(pendingFeedSnapshots);
       }
       setLoadingUnits(false);
       if (!(await offlineService.isOnline())) {
@@ -291,12 +298,18 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
           status: "active",
           purpose: "production",
         });
-        setAvailableUnits((localUnits) => [
-          ...serverUnits,
-          ...localUnits.filter(
-            (localUnit) => !serverUnits.some((unit) => unit.id === localUnit.id),
-          ),
-        ]);
+        const pendingSnapshots = editingOfflineLaunchId
+          ? (offlineLaunchContext?.productionUnits ?? []).filter(
+              (snapshot) =>
+                (!farmProfileId || snapshot.farm_profile === farmProfileId)
+                && selectedUnitIds.includes(snapshot.id)
+                && !serverUnits.some((unit) => unit.id === snapshot.id),
+            )
+          : [];
+        setAvailableUnits([...serverUnits, ...pendingSnapshots]);
+        setUnavailablePendingUnitIds(
+          pendingSnapshots.map((snapshot) => snapshot.id),
+        );
         if (farmProfileId) {
           await cycleLaunchReferenceCache.cacheProductionUnits(
             farmProfileId,
@@ -314,15 +327,17 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         try {
           const serverReferences =
             await aquacultureService.getFarmFeedReferences(farmProfileId);
-          setFeedReferences((localReferences) => [
-            ...serverReferences,
-            ...localReferences.filter(
-              (localReference) =>
-                !serverReferences.some(
-                  (reference) => reference.id === localReference.id,
-              ),
-            ),
-          ]);
+          setFeedReferences(serverReferences);
+          const pendingReferenceIds = editingOfflineLaunchId
+            ? (offlineLaunch?.initial_feed_stocks ?? [])
+                .map((stock) => stock.feed_reference_id)
+                .filter((id): id is string => Boolean(id))
+                .filter(
+                  (id) =>
+                    !serverReferences.some((reference) => reference.id === id),
+                )
+            : [];
+          setUnavailablePendingFeedReferenceIds(pendingReferenceIds);
           await cycleLaunchReferenceCache.cacheFeedReferences(
             farmProfileId,
             serverReferences,
@@ -343,6 +358,8 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const selectedUnits = availableUnits.filter((unit) =>
     selectedUnitIds.includes(unit.id),
   );
+  const pendingFeedReferenceSnapshots =
+    offlineLaunchContext?.feedReferences ?? [];
   const validationErrorKey = validateAdditionalCycleLaunch({
     formData,
     selectedUnits,
@@ -615,6 +632,12 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             {loadingUnits ? <LoadingState compact message={t("productionUnitsLoading")} /> : null}
             {unitsLoadError ? <ErrorState compact message={t("productionUnitsLoadError")} /> : null}
             {offlineReferencesEmpty ? <EmptyState compact message={t("cycleLaunchOfflineReferencesEmpty")} /> : null}
+            {unavailablePendingUnitIds.length > 0 ? (
+              <InlineAlert
+                tone="warning"
+                message={t("cycleLaunchPendingUnitUnavailable")}
+              />
+            ) : null}
             {!loadingUnits && !unitsLoadError && !offlineReferencesEmpty && availableUnits.length === 0 ? <EmptyState compact message={t("newCycleNoExistingUnits")} /> : null}
             {!loadingUnits && !unitsLoadError ? availableUnits.map((unit) => {
               const selected = selectedUnitIds.includes(unit.id);
@@ -628,10 +651,22 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
               const density = dimensionValue && numericAllocation > 0 ? (numericAllocation / dimensionValue).toFixed(2) : null;
               return (
                 <View key={unit.id} style={{ gap: spacing[2] }}>
-                  <SelectableCard testID={`newCycleUnit-${unit.id}`} selected={selected} onPress={() => toggleUnit(unit)} accessibilityLabel={unit.name} primaryBorder>
+                  <SelectableCard
+                    testID={`newCycleUnit-${unit.id}`}
+                    selected={selected}
+                    disabled={unavailablePendingUnitIds.includes(unit.id)}
+                    onPress={() => toggleUnit(unit)}
+                    accessibilityLabel={unit.name}
+                    primaryBorder
+                  >
                     <AppText variant="cardTitle">{unit.name}</AppText>
                     <AppText color="muted">{t(unitTypeKey)}{dimension ? ` · ${dimension}` : ""}</AppText>
                     <AppText variant="helper" color="muted">{t("createFarmUnitCapacityLabel", { count: capacity ?? 0 })}</AppText>
+                    {unavailablePendingUnitIds.includes(unit.id) ? (
+                      <AppText variant="helper" color="error">
+                        {t("cycleLaunchReferenceUnavailable")}
+                      </AppText>
+                    ) : null}
                   </SelectableCard>
                   {selected ? <Card variant="outlined">
                     <TextField testID={`newCycleAllocation-${unit.id}`} label={t("createFarmProductionUnitAssignedFishLabel")} value={allocation} onChangeText={(value) => setAllocationsByUnitId((current) => ({ ...current, [unit.id]: value }))} placeholder={t("createFarmProductionUnitAssignedFishPlaceholder")} keyboardType="numeric" />
@@ -703,6 +738,12 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             <View style={{ gap: spacing[3] }}>
               <AppText variant="sectionTitle">{t("openingFeedStock")}</AppText>
               <AppText color="muted">{t("openingFeedStockDescription")}</AppText>
+              {unavailablePendingFeedReferenceIds.length > 0 ? (
+                <InlineAlert
+                  tone="warning"
+                  message={t("cycleLaunchPendingFeedReferenceUnavailable")}
+                />
+              ) : null}
               <SegmentedControl
                 value={stockReferenceMode}
                 options={[
@@ -752,6 +793,9 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                   <AppText variant="bodyStrong">
                     {stock.external_feed?.name
                       ?? feedReferences.find((reference) => reference.id === stock.feed_reference_id)?.name
+                      ?? pendingFeedReferenceSnapshots.find(
+                        (reference) => reference.id === stock.feed_reference_id,
+                      )?.name
                       ?? t("feed")}
                   </AppText>
                   <AppText>{stock.quantity_kg} kg · {t(stock.cost_status === "known" ? "knownCost" : "unknownCost")}</AppText>

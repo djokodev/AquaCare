@@ -23,6 +23,10 @@ import { parseApiError } from '@/utils/errorParser';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 import { AppHeader, AppText, Badge, Button, Card, Divider, EmptyState, ErrorState, LoadingState, Screen } from '@/components/ui';
 import { colors, spacing } from '@/theme';
+import {
+  resolveFcrScopeLabel,
+  resolveFcrUnavailableLabel,
+} from '@/features/aquaculture/utils/reportFcrPresenter';
 
 type ReportDetailScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReportDetail'>;
 type ReportDetailScreenRouteProp = RouteProp<RootStackParamList, 'ReportDetail'>;
@@ -99,10 +103,19 @@ interface ReportCycleData {
     fcr_scope?: 'full_cycle' | 'since_tracking_start' | null;
     fcr_label?: string | null;
     fcr_data_complete?: boolean;
+    fcr_unavailable_reason?: string | null;
     daily_growth_rate?: number | null;
     specific_growth_rate?: number | null;
     average_daily_feed?: number | null;
     performance_score?: number | null;
+  };
+  cumulative_metrics?: {
+    total_feed?: number | null;
+    fcr?: number | null;
+    fcr_scope?: 'full_cycle' | 'since_tracking_start' | null;
+    fcr_label?: string | null;
+    fcr_data_complete?: boolean;
+    fcr_unavailable_reason?: string | null;
   };
   logs?: Array<{
     id?: string;
@@ -125,6 +138,20 @@ interface ReportCycleData {
     resolved?: boolean;
   }>;
 }
+
+interface ReportFcrMetrics {
+  total_feed?: number | null;
+  fcr?: number | null;
+  fcr_scope?: 'full_cycle' | 'since_tracking_start' | null;
+  fcr_label?: string | null;
+  fcr_data_complete?: boolean;
+  fcr_unavailable_reason?: string | null;
+}
+
+const getSectionFcrMetrics = (
+  section: ReportCycleData,
+): ReportFcrMetrics =>
+  section.cumulative_metrics ?? section.current_metrics ?? {};
 
 export default function ReportDetailScreen({ navigation, route }: ReportDetailScreenProps) {
   const { t } = useTranslation();
@@ -309,6 +336,22 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
     () => ((payload.cycles as ReportCycleData[]) || []) as ReportCycleData[],
     [payload]
   );
+  const cycleDashboard = useMemo(
+    () => ((payload.cycle_dashboard as ReportFcrMetrics) || {}),
+    [payload],
+  );
+  const summaryFcrMetrics =
+    scopeType === 'cycle'
+      ? {
+          ...cycleDashboard,
+          total_feed:
+            cycleDashboard.total_feed
+            ?? summary.total_feed_consumed_kg
+            ?? summary.total_feed,
+        }
+      : cycles[0]
+        ? getSectionFcrMetrics(cycles[0])
+        : {};
   const latestSanitaryLogs = cycles[0]?.sanitary_logs?.slice(0, 3) ?? [];
 
   const renderListHeader = useCallback(
@@ -339,27 +382,58 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
           <AppText variant="cardTitle">{scopeType === 'unit' ? t('reportSummaryUnit') : t('reportSummaryCycle')}</AppText>
           <View style={styles.metricGrid}>{metrics.map(([label, value]) => <ReportMetric key={label} label={label} value={value} />)}</View>
         </Card>
+        <Card variant="outlined" style={styles.sectionCard}>
+          <AppText variant="cardTitle">{t('reportFcrTitle')}</AppText>
+          {summaryFcrMetrics.fcr != null ? (
+            <>
+              <AppText color="muted">
+                {resolveFcrScopeLabel(
+                  summaryFcrMetrics.fcr_scope,
+                  summaryFcrMetrics.fcr_label,
+                  t,
+                )}
+              </AppText>
+              <AppText variant="bodyStrong">{summaryFcrMetrics.fcr.toFixed(2)}</AppText>
+            </>
+          ) : (
+            <AppText>
+              {resolveFcrUnavailableLabel(
+                summaryFcrMetrics.fcr_unavailable_reason,
+                t,
+                {
+                  dataComplete: summaryFcrMetrics.fcr_data_complete,
+                  totalFeed: summaryFcrMetrics.total_feed,
+                },
+              )}
+            </AppText>
+          )}
+        </Card>
         {scopeType === 'cycle' ? <Card variant="outlined" style={styles.sectionCard}>
           <AppText variant="cardTitle">{t('reportComparisonByUnit')}</AppText>
-          {cycles.length ? cycles.map((section, index) => <Card key={section.unit?.id || section.cycle?.id || index} variant="outlined" style={styles.comparisonCard}>
+          {cycles.length ? cycles.map((section, index) => {
+            const fcrMetrics = getSectionFcrMetrics(section);
+            return <Card key={section.unit?.id || section.cycle?.id || index} variant="outlined" style={styles.comparisonCard}>
             <AppText variant="label">{section.unit?.production_unit_name || section.cycle?.cycle_name || t('cycle')}</AppText>
             <AppText variant="helper" color="muted">{section.unit?.production_unit_type_display || section.cycle?.species_display || ''}{section.unit?.production_unit_dimension ? ` · ${section.unit.production_unit_dimension}` : ''}</AppText>
             <AppText variant="helper">{t('reportEstimatedFishCount')}: {section.current_metrics?.current_count || 0} · {t('reportFeedConsumed')}: {(section.period_metrics?.total_feed || 0).toFixed(2)} kg · {t('reportCumulativeMortality')}: {section.period_metrics?.total_mortality || 0}</AppText>
             <AppText variant="helper">
-              {section.current_metrics?.fcr == null
-                && section.current_metrics?.fcr_data_complete === false
-                ? t('fcrUnavailableIncompleteData')
-                : section.current_metrics?.fcr_label
-                  || (section.current_metrics?.fcr_scope === 'since_tracking_start'
-                    ? t('fcrSinceAquaCare')
-                    : section.current_metrics?.fcr_scope === 'full_cycle'
-                      ? t('fcrFullStat')
-                      : t('fcrStat'))}
-              : {section.current_metrics?.fcr != null
-                ? section.current_metrics.fcr.toFixed(2)
-                : t('notProvided')}
+              {fcrMetrics.fcr != null
+                ? `${resolveFcrScopeLabel(
+                    fcrMetrics.fcr_scope,
+                    fcrMetrics.fcr_label,
+                    t,
+                  )}: ${fcrMetrics.fcr.toFixed(2)}`
+                : resolveFcrUnavailableLabel(
+                    fcrMetrics.fcr_unavailable_reason,
+                    t,
+                    {
+                      dataComplete: fcrMetrics.fcr_data_complete,
+                      totalFeed: fcrMetrics.total_feed,
+                    },
+                  )}
             </AppText>
-          </Card>) : <EmptyState message={t('noReportDataAvailable')} compact />}
+          </Card>;
+          }) : <EmptyState message={t('noReportDataAvailable')} compact />}
         </Card> : null}
         {scopeType === 'unit' ? <Card variant="outlined" style={styles.sectionCard}>
           <AppText variant="cardTitle">{t('reportLatestSanitaryEvents')}</AppText>
@@ -423,6 +497,7 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
       scopeLabel,
       scopeType,
       summary,
+      summaryFcrMetrics,
       t,
     ]
   );

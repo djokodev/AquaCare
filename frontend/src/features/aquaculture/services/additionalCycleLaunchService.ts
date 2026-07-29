@@ -1,7 +1,10 @@
 import { getProductionUnitCapacity } from "@/features/aquaculture/utils/productionUnits";
 import type { NewCycleData } from "@/features/aquaculture/utils/newCycleForm";
 import type { CycleLaunchCalibrationUnitInput, CycleLaunchRequest, ProductionUnit } from "@/types/aquaculture";
-import { getBusinessIsoDate } from "@/utils/businessDate";
+import {
+  getBusinessIsoDate,
+  getOngoingCycleSchedule,
+} from "@/utils/businessDate";
 
 export class AdditionalCycleLaunchError extends Error {
   translationKey: string;
@@ -54,10 +57,22 @@ export const validateAdditionalCycleLaunch = ({
   const trackingCount = toPositiveInteger(formData.tracking_start_count);
   const trackingWeight = toFiniteNumber(formData.tracking_start_average_weight);
   const targetWeight = toFiniteNumber(formData.target_harvest_weight_g);
+  const duration = toPositiveInteger(formData.planned_cycle_duration_days);
+  const survival = toFiniteNumber(formData.expected_survival_rate_pct);
   if (
     targetWeight === undefined ||
     targetWeight <= 0 ||
     (!ongoing && (initialWeight === undefined || targetWeight <= initialWeight))
+  ) {
+    return "fillRequiredFields";
+  }
+  if (
+    !duration ||
+    duration < 30 ||
+    duration > 365 ||
+    survival === undefined ||
+    survival < 0 ||
+    survival > 100
   ) {
     return "fillRequiredFields";
   }
@@ -69,6 +84,15 @@ export const validateAdditionalCycleLaunch = ({
       formData.tracking_start_date > today
     ) {
       return "ongoingCycleTrackingDateInvalid";
+    }
+    if (
+      getOngoingCycleSchedule(
+        formData.start_date,
+        formData.tracking_start_date,
+        duration,
+      ) === null
+    ) {
+      return "ongoingCyclePlannedHarvestElapsed";
     }
     if (
       !trackingCount ||
@@ -91,18 +115,6 @@ export const validateAdditionalCycleLaunch = ({
     ) {
       return "ongoingCycleBiomassInconsistent";
     }
-  }
-  const duration = toPositiveInteger(formData.planned_cycle_duration_days);
-  const survival = toFiniteNumber(formData.expected_survival_rate_pct);
-  if (
-    !duration ||
-    duration < 30 ||
-    duration > 365 ||
-    survival === undefined ||
-    survival < 0 ||
-    survival > 100
-  ) {
-    return "fillRequiredFields";
   }
   const sellingPrice = toFiniteNumber(
     formData.planned_selling_price_per_kg_fcfa,

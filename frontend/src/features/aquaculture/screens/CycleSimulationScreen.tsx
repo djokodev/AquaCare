@@ -59,6 +59,7 @@ import { isNetworkError, parseApiError } from '@/utils/errorParser';
 import { offlineService } from '@/services/offlineService';
 import { formatAquacultureErrorWithAction } from '@/features/aquaculture/utils/aquacultureErrorPresenter';
 import { spacing } from '@/theme';
+import { getOngoingCycleSchedule } from '@/utils/businessDate';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CycleSimulation'>;
 type RouteType = RouteProp<RootStackParamList, 'CycleSimulation'>;
@@ -110,6 +111,22 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const [launching, setLaunching] = useState(false);
   const [currentResult, setCurrentResult] = useState<CycleSimulationResult | null>(
     cycleSimulationResult
+  );
+  const ongoingSchedule = useMemo(
+    () =>
+      ongoing
+        ? getOngoingCycleSchedule(
+            formData.startDate,
+            formData.trackingStartDate ?? '',
+            Number(formData.cycleDuration),
+          )
+        : null,
+    [
+      formData.cycleDuration,
+      formData.startDate,
+      formData.trackingStartDate,
+      ongoing,
+    ],
   );
   const hasExistingCycle = Boolean(currentCycle || (dashboardData?.active_cycles?.length ?? 0) > 0);
   const requiresAdditionalCycleFlow = farmSetupCompleted || hasExistingCycle;
@@ -192,6 +209,10 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
 
   async function handleLaunchFirstCycle() {
     if (!ongoing && !currentResult) return;
+    if (ongoing && !ongoingSchedule) {
+      Alert.alert(t('error'), t('ongoingCyclePlannedHarvestElapsed'));
+      return;
+    }
 
     setLaunching(true);
     const launchKind = requiresAdditionalCycleFlow
@@ -311,6 +332,12 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
             tone="info"
             message={t('ongoingCycleBaselineConfirmation')}
           />
+          {!ongoingSchedule ? (
+            <InlineAlert
+              tone="error"
+              message={t('ongoingCyclePlannedHarvestElapsed')}
+            />
+          ) : null}
           <Card variant="elevated" style={styles.card}>
             <AppText variant="bodyStrong">{t('trackingStartSituation')}</AppText>
             <MetricRow label={t('historicalStartDate')} value={formData.startDate} />
@@ -473,16 +500,35 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           label={t('simulationTargetWeight')}
           value={`${formData.harvestWeight || harvestWeightDefault} g`}
         />
-        <MetricRow
-          label={t('simulationPlannedDuration')}
-          value={t('simulationDays', {
-            days: ongoing
-              ? Number(formData.cycleDuration)
-              : currentResult?.cycle_duration_days ?? 0,
-          })}
-        />
-        {!ongoing ? (
+        {ongoing && ongoingSchedule ? (
           <>
+            <AppText testID="simulationOngoingTotalDuration" variant="helper">
+              {t('ongoingTotalDuration', {
+                count: ongoingSchedule.totalDurationDays,
+              })}
+            </AppText>
+            <AppText testID="simulationOngoingPlannedHarvestDate" variant="helper">
+              {t('ongoingPlannedHarvestDate', {
+                date: formatLocalDate(
+                  ongoingSchedule.plannedHarvestDate,
+                  densityLocale,
+                ),
+              })}
+            </AppText>
+            <AppText testID="simulationOngoingRemainingDuration" variant="helper">
+              {t('ongoingRemainingDuration', {
+                count: ongoingSchedule.remainingDurationDays,
+              })}
+            </AppText>
+          </>
+        ) : !ongoing ? (
+          <>
+            <MetricRow
+              label={t('simulationPlannedDuration')}
+              value={t('simulationDays', {
+                days: currentResult?.cycle_duration_days ?? 0,
+              })}
+            />
             <MetricRow
               label={t('simulationEstimatedHarvestDate')}
               value={currentResult?.cycles_breakdown[0]?.end_date_estimate
@@ -578,6 +624,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         label={launchButtonLabel}
         onPress={handleLaunchFirstCycle}
         loading={launching}
+        disabled={ongoing && !ongoingSchedule}
       />
     </Screen>
   );

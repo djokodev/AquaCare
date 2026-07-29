@@ -15,6 +15,7 @@ import type {
   CycleLaunchResponse,
   ProductionUnitDraft,
 } from "@/types/aquaculture";
+import { getOngoingCycleSchedule } from "@/utils/businessDate";
 
 export class FirstCycleLaunchError extends Error {
   translationKey: string;
@@ -241,6 +242,16 @@ export const buildFirstCycleLaunchRequestFromForm = ({
   const trackingStartDate = formData.trackingStartDate?.trim();
   if (ongoing && !trackingStartDate) {
     throw new FirstCycleLaunchError("ongoingCycleTrackingDateRequired");
+  }
+  if (
+    ongoing
+    && getOngoingCycleSchedule(
+      startDate,
+      trackingStartDate as string,
+      configuredDuration,
+    ) === null
+  ) {
+    throw new FirstCycleLaunchError("ongoingCyclePlannedHarvestElapsed");
   }
   const trackingWeight = toFiniteNumber(formData.trackingStartAverageWeight);
   if (ongoing && (!trackingWeight || trackingWeight <= 0)) {

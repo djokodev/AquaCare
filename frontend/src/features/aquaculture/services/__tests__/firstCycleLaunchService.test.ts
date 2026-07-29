@@ -458,4 +458,26 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
       ).toThrow(expect.objectContaining({ translationKey }));
     },
   );
+
+  it.each(["2026-10-28", "2026-10-29"])(
+    "refuse une baseline %s égale ou postérieure à la récolte",
+    (trackingStartDate) => {
+      expect(() =>
+        buildFirstCycleLaunchRequestFromForm({
+          formData: {
+            ...formData,
+            onboardingMode: "ongoing",
+            startDate: "2026-06-01",
+            cycleDuration: "150",
+            historicalInitialCount: "2200",
+            trackingStartDate,
+            trackingStartAverageWeight: "75",
+          },
+        }),
+      ).toThrow(expect.objectContaining({
+        translationKey: "ongoingCyclePlannedHarvestElapsed",
+      }));
+      expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+    },
+  );
 });

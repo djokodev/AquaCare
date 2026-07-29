@@ -80,6 +80,14 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
           units_missing_today_log_count: 1,
           active_sanitary_events_count: 1,
         },
+        cycle_dashboard: {
+          fcr: null,
+          fcr_scope: 'since_tracking_start',
+          fcr_label: null,
+          fcr_data_complete: false,
+          fcr_unavailable_reason: 'incomplete_feed_data',
+          total_feed: 14.5,
+        },
         units: [
           {
             id: 'allocation-1',
@@ -135,6 +143,14 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
               fcr_label: null,
               fcr_data_complete: false,
             },
+            cumulative_metrics: {
+              total_feed: 6,
+              fcr: null,
+              fcr_scope: 'since_tracking_start',
+              fcr_label: null,
+              fcr_data_complete: false,
+              fcr_unavailable_reason: 'incomplete_feed_data',
+            },
             period_metrics: {
               log_count: 2,
               sanitary_event_count: 1,
@@ -171,6 +187,14 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
               total_feed_consumed: 8.5,
               survival_rate: 94,
             },
+            cumulative_metrics: {
+              total_feed: 8.5,
+              fcr: 1.42,
+              fcr_scope: 'since_tracking_start',
+              fcr_label: null,
+              fcr_data_complete: true,
+              fcr_unavailable_reason: null,
+            },
             period_metrics: {
               log_count: 2,
               sanitary_event_count: 0,
@@ -185,7 +209,7 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
       },
     });
 
-    const { getByText, queryByText } = render(
+    const { getAllByText, getByText, queryByText } = render(
       <ReportDetailScreen
         navigation={navigation}
         route={{ key: 'ReportDetail', name: 'ReportDetail', params: { reportId: 'report-1' } } as any}
@@ -199,7 +223,10 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
       expect(getByText('Bac 2')).toBeTruthy();
       expect(getByText('reportInitialFishCount')).toBeTruthy();
       expect(getByText('reportEstimatedFishCount')).toBeTruthy();
-      expect(getByText(/fcrUnavailableIncompleteData/)).toBeTruthy();
+      expect(
+        getAllByText('fcrUnavailableIncompleteFeedData'),
+      ).toHaveLength(2);
+      expect(getByText('fcrSinceAquaCare: 1.42')).toBeTruthy();
       expect(queryByText(/fcrFullStat/)).toBeNull();
     });
   });
@@ -231,6 +258,13 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
           total_feed_consumed_kg: 3.2,
           estimated_current_biomass_kg: 48.5,
         },
+        cycle_dashboard: {
+          fcr: null,
+          fcr_scope: 'since_tracking_start',
+          fcr_data_complete: false,
+          fcr_unavailable_reason: 'no_feed_observation',
+          total_feed: 0,
+        },
         cycles: [
           {
             cycle: {
@@ -261,6 +295,14 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
               fcr_scope: 'since_tracking_start',
               fcr_label: null,
               fcr_data_complete: false,
+            },
+            cumulative_metrics: {
+              total_feed: 0,
+              fcr: null,
+              fcr_scope: 'since_tracking_start',
+              fcr_label: null,
+              fcr_data_complete: false,
+              fcr_unavailable_reason: 'no_feed_observation',
             },
             period_metrics: {
               log_count: 1,
@@ -308,6 +350,54 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
       expect(queryByText('reportLatestUnitLogs')).toBeNull();
       expect(getByText('Bac 1')).toBeTruthy();
       expect(getByText("Rapport de l'unité")).toBeTruthy();
+      expect(getByText('fcrUnavailableNoFeedObservation')).toBeTruthy();
     });
+  });
+
+  it('explique un FCR nul après une observation alimentaire explicite à zéro', async () => {
+    mockGetReport.mockResolvedValue({
+      id: 'report-zero-feed',
+      report_type: 'daily',
+      status: 'draft',
+      period_start: '2026-07-01',
+      period_end: '2026-07-01',
+      farm_profile: 'farm-1',
+      email_status: 'not_sent',
+      whatsapp_status: 'not_shared',
+      created_at: '2026-07-01T08:00:00Z',
+      updated_at: '2026-07-01T08:00:00Z',
+      payload: {
+        report_meta: {
+          scope_type: 'cycle',
+          scope_name: 'Cycle zéro',
+        },
+        summary: {
+          cycle_name: 'Cycle zéro',
+          total_feed_consumed_kg: 0,
+        },
+        cycle_dashboard: {
+          fcr: null,
+          fcr_scope: 'full_cycle',
+          fcr_data_complete: true,
+          fcr_unavailable_reason: null,
+        },
+        cycles: [],
+      },
+    });
+
+    const { getByText } = render(
+      <ReportDetailScreen
+        navigation={navigation}
+        route={{
+          key: 'ReportDetail',
+          name: 'ReportDetail',
+          params: { reportId: 'report-zero-feed' },
+        } as any}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(getByText('fcrUnavailableZeroFeedObserved')).toBeTruthy(),
+    );
   });
 });

@@ -24,7 +24,10 @@ import type {
   CycleOnboardingMode,
 } from '@/types/aquaculture';
 import { INPUT_LIMITS } from '@/domain/aquaculture/constants';
-import { getBusinessIsoDate } from '@/utils/businessDate';
+import {
+  getBusinessIsoDate,
+  getOngoingCycleSchedule,
+} from '@/utils/businessDate';
 
 export type FarmSetupSpecies = 'tilapia' | 'clarias' | 'autre';
 export type FarmSetupInfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | 'bac_en_sol';
@@ -360,6 +363,7 @@ export const validateFarmSetupForm = (
   const fingerlingsCount = parseStrictInteger(form.fingerlingsCount);
   const hasProductionUnits = form.productionUnits.length > 0;
   const ongoing = form.onboardingMode === 'ongoing';
+  const cycleDuration = getValidCycleDuration(form.cycleDuration);
 
   if (!form.species) errors.species = 'required';
   if (ongoing) {
@@ -375,6 +379,15 @@ export const validateFarmSetupForm = (
       form.trackingStartDate > todayISO()
     ) {
       errors.trackingStartDate = 'ongoingCycleTrackingDateInvalid';
+    } else if (
+      cycleDuration !== undefined
+      && getOngoingCycleSchedule(
+        form.startDate,
+        form.trackingStartDate,
+        cycleDuration,
+      ) === null
+    ) {
+      errors.trackingStartDate = 'ongoingCyclePlannedHarvestElapsed';
     }
     if (trackingWeight === null || trackingWeight <= 0) {
       errors.trackingStartAverageWeight = 'ongoingCycleCurrentWeightRequired';
@@ -437,7 +450,7 @@ export const validateFarmSetupForm = (
 
   if (!form.cycleDuration.trim()) {
     errors.cycleDuration = 'required';
-  } else if (getValidCycleDuration(form.cycleDuration) === undefined) {
+  } else if (cycleDuration === undefined) {
     errors.cycleDuration = 'createFarmCycleDurationRangeError';
   }
 

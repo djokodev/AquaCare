@@ -52,6 +52,41 @@ const ongoingForm = {
 } as const;
 
 describe("additionalCycleLaunchService ongoing onboarding", () => {
+  it.each(["2026-10-28", "2026-10-29"])(
+    "rejects a baseline %s at or after planned harvest",
+    (trackingStartDate) => {
+      jest.useFakeTimers().setSystemTime(new Date("2026-10-30T12:00:00Z"));
+      expect(validateAdditionalCycleLaunch({
+        formData: {
+          ...ongoingForm,
+          tracking_start_date: trackingStartDate,
+        } as any,
+        selectedUnits: [unit as any],
+        allocationsByUnitId: { "unit-1": "1850" },
+      })).toBe("ongoingCyclePlannedHarvestElapsed");
+      jest.useRealTimers();
+    },
+  );
+
+  it("accepts the day before harvest and builds two inclusive remaining days", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-10-30T12:00:00Z"));
+    const input = {
+      formData: {
+        ...ongoingForm,
+        tracking_start_date: "2026-10-27",
+      } as any,
+      selectedUnits: [unit as any],
+      allocationsByUnitId: { "unit-1": "1850" },
+      launchUuid: "11111111-1111-4111-8111-111111111111",
+    };
+    expect(validateAdditionalCycleLaunch(input)).toBeNull();
+    expect(
+      buildAdditionalCycleLaunchRequest(input).tracking_baseline
+        ?.tracking_start_date,
+    ).toBe("2026-10-27");
+    jest.useRealTimers();
+  });
+
   it("builds an ongoing aggregate without inventing historical weight or cost", () => {
     const payload = buildAdditionalCycleLaunchRequest({
       formData: ongoingForm as any,

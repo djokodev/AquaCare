@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { isNetworkError, parseApiError } from "@/utils/errorParser";
 import { getBusinessIsoDate } from "@/utils/businessDate";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cycleLaunchReferenceCache } from "@/features/aquaculture/services/cycleLaunchReferenceCache";
 
 jest.mock("react-redux", () => ({
   useDispatch: jest.fn(),
@@ -547,6 +548,27 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(offline.queryByTestId("newCycleUnit-unit-1")).toBeNull();
   });
 
+  it("purge les unités en mémoire lors d un changement de ferme", async () => {
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme 1" },
+    });
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("newCycleUnit-unit-1")).toBeTruthy(),
+    );
+
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-2", farm_name: "Ferme 2" },
+    });
+    mockOffline.isOnline.mockResolvedValue(false);
+    screen.rerender(<NewCycleScreen navigation={navigation} />);
+
+    await waitFor(() =>
+      expect(screen.getByText("cycleLaunchOfflineReferencesEmpty")).toBeTruthy(),
+    );
+    expect(screen.queryByTestId("newCycleUnit-unit-1")).toBeNull();
+  });
+
   it("conserve le cache affiché quand le rafraîchissement serveur échoue", async () => {
     mockUseAuth.mockReturnValue({
       farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
@@ -573,6 +595,137 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(fallback.queryByText("productionUnitsLoadError")).toBeNull();
   });
 
+  it("remplace les unités obsolètes du cache après un refresh réussi", async () => {
+    const obsolete = {
+      ...units[1],
+      id: "unit-obsolete",
+      name: "Bassin obsolète",
+    };
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    await cycleLaunchReferenceCache.cacheProductionUnits(
+      "farm-1",
+      [units[0], obsolete] as any,
+    );
+    mockService.getProductionUnits.mockResolvedValue([units[0]]);
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("newCycleUnit-unit-1")).toBeTruthy(),
+    );
+    expect(screen.queryByTestId("newCycleUnit-unit-obsolete")).toBeNull();
+    await waitFor(async () =>
+      expect(
+        (await cycleLaunchReferenceCache.load("farm-1"))?.productionUnits,
+      ).toEqual([units[0]]),
+    );
+  });
+
+  it("remplace les références alimentaires obsolètes après succès serveur", async () => {
+    const oldReference = {
+      id: "feed-old",
+      farm_profile: "farm-1",
+      name: "Ancien aliment",
+      species: "tilapia",
+      pellet_size_mm: "2.00",
+    };
+    const newReference = {
+      ...oldReference,
+      id: "feed-new",
+      name: "Nouvel aliment",
+    };
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    await cycleLaunchReferenceCache.cacheFeedReferences(
+      "farm-1",
+      [oldReference] as any,
+    );
+    mockService.getFarmFeedReferences.mockResolvedValue(
+      [newReference] as any,
+    );
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(mockService.getFarmFeedReferences).toHaveBeenCalledWith("farm-1"),
+    );
+    fireEvent.press(screen.getByText("ongoingCycleMode"));
+    fireEvent.press(screen.getByText("tilapia"));
+    fireEvent.press(screen.getByText("existingFeedReference"));
+    expect(screen.getByText("Nouvel aliment")).toBeTruthy();
+    expect(screen.queryByText("Ancien aliment")).toBeNull();
+  });
+
+  it("conserve et signale le snapshot d une unité pending devenue indisponible", async () => {
+    const obsolete = {
+      ...units[1],
+      id: "unit-obsolete",
+      name: "Bassin obsolète",
+    };
+    const offlineLaunch = {
+      launch_uuid: "33333333-3333-4333-8333-333333333333",
+      launch_kind: "additional_cycle",
+      cycle: {
+        onboarding_mode: "ongoing",
+        species: "tilapia",
+        start_date: "2026-01-01",
+        initial_count: 1000,
+        planned_cycle_duration_days: 180,
+        expected_survival_rate_pct: 95,
+        created_offline: true,
+      },
+      tracking_baseline: {
+        tracking_start_date: "2026-02-01",
+        fish_count: 900,
+        average_weight_g: "50",
+        biomass_kg: null,
+      },
+      production_units: [{
+        local_id: "existing-unit-obsolete",
+        source: "existing",
+        production_unit_id: "unit-obsolete",
+      }],
+      allocations: [{
+        production_unit_local_id: "existing-unit-obsolete",
+        fish_count: 900,
+      }],
+      initial_feed_stocks: [],
+    };
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockService.getProductionUnits.mockResolvedValue([units[0]]);
+
+    const screen = render(
+      <NewCycleScreen
+        navigation={navigation}
+        route={{
+          params: {
+            editingOfflineLaunchId: offlineLaunch.launch_uuid,
+            offlineLaunch,
+            offlineLaunchContext: {
+              productionUnits: [obsolete],
+              feedReferences: [],
+            },
+          },
+        } as any}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("cycleLaunchPendingUnitUnavailable")).toBeTruthy(),
+    );
+    expect(screen.getByTestId("newCycleUnit-unit-obsolete")).toBeTruthy();
+    expect(
+      screen.getByTestId("newCycleAllocation-unit-obsolete").props.value,
+    ).toBe("900");
+    expect(
+      screen.getByTestId("newCycleUnit-unit-obsolete").props
+        .accessibilityState.disabled,
+    ).toBe(true);
+  });
+
   it("affiche le calendrier ongoing avec la durée restante inclusive", async () => {
     const { getByTestId, getByText } = render(
       <NewCycleScreen navigation={navigation} />,
@@ -588,5 +741,29 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(getByTestId("ongoingTotalDuration")).toBeTruthy();
     expect(getByTestId("ongoingPlannedHarvestDate")).toBeTruthy();
     expect(getByTestId("ongoingRemainingDuration")).toBeTruthy();
+  });
+
+  it("bloque localement une baseline à la récolte sans requête HTTP", async () => {
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
+    );
+    await waitFor(() => expect(mockService.getProductionUnits).toHaveBeenCalled());
+    fireEvent.press(getByText("ongoingCycleMode"));
+    fireEvent.press(getByText("tilapia"));
+    fireEvent.press(getByTestId("newCycleUnit-unit-1"));
+    fireEvent.changeText(getByTestId("newCycleInitialCount"), "2000");
+    fireEvent.changeText(getByTestId("newCycleStartDate"), "2026-01-01");
+    fireEvent.changeText(getByTestId("newCycleTrackingDate"), "2026-05-30");
+    fireEvent.changeText(getByTestId("newCycleTrackingCount"), "1800");
+    fireEvent.changeText(getByTestId("newCycleTrackingWeight"), "75");
+    fireEvent.changeText(getByTestId("newCycleTargetWeight"), "350");
+    fireEvent.changeText(getByTestId("newCycleDuration"), "150");
+    fireEvent.changeText(getByTestId("newCycleSurvival"), "95");
+    fireEvent.changeText(getByTestId("newCycleAllocation-unit-1"), "1800");
+
+    expect(getByText("ongoingCyclePlannedHarvestElapsed")).toBeTruthy();
+    fireEvent.press(getByTestId("newCycleSubmit"));
+    expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
   });
 });

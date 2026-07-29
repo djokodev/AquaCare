@@ -34,6 +34,63 @@ const baseForm: FarmSetupFormState = {
 };
 
 describe('farmSetupForm', () => {
+  it.each(['2026-10-28', '2026-10-29'])(
+    'refuse une baseline %s égale ou postérieure à la récolte prévue',
+    (trackingStartDate) => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-10-30T12:00:00Z'));
+      const errors = validateFarmSetupForm({
+        ...baseForm,
+        onboardingMode: 'ongoing',
+        startDate: '2026-06-01',
+        cycleDuration: '150',
+        historicalInitialCount: '2000',
+        fingerlingsCount: '1800',
+        trackingStartDate,
+        trackingStartAverageWeight: '75',
+        productionUnits: [{
+          local_id: 'unit-1',
+          name: 'Bac 1',
+          unit_type: 'tank',
+          volume_m3: '20',
+        }],
+        productionUnitAllocations: [{
+          production_unit_local_id: 'unit-1',
+          fish_count: '1800',
+        }],
+      });
+      expect(errors.trackingStartDate).toBe(
+        'ongoingCyclePlannedHarvestElapsed',
+      );
+      jest.useRealTimers();
+    },
+  );
+
+  it('accepte la baseline la veille de la récolte prévue', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-30T12:00:00Z'));
+    const errors = validateFarmSetupForm({
+      ...baseForm,
+      onboardingMode: 'ongoing',
+      startDate: '2026-06-01',
+      cycleDuration: '150',
+      historicalInitialCount: '2000',
+      fingerlingsCount: '1800',
+      trackingStartDate: '2026-10-27',
+      trackingStartAverageWeight: '75',
+      productionUnits: [{
+        local_id: 'unit-1',
+        name: 'Bac 1',
+        unit_type: 'tank',
+        volume_m3: '20',
+      }],
+      productionUnitAllocations: [{
+        production_unit_local_id: 'unit-1',
+        fish_count: '1800',
+      }],
+    });
+    expect(errors.trackingStartDate).toBeUndefined();
+    jest.useRealTimers();
+  });
+
   it('valide un formulaire cycle-first complet', () => {
     const errors = validateFarmSetupForm({
       ...baseForm,

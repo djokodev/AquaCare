@@ -30,9 +30,21 @@ jest.mock('react-i18next', () => {
     ...actual,
     useTranslation: () => ({
       i18n: { language: 'en' },
-      t: (key: string, options?: { days?: number; count?: number }) => {
+      t: (
+        key: string,
+        options?: { days?: number; count?: number; date?: string },
+      ) => {
         if (key === 'simulationDays') return `${options?.days} days`;
         if (key === 'myFeedSacks') return `${options?.count} sacks`;
+        if (key === 'ongoingTotalDuration') {
+          return `total:${options?.count}`;
+        }
+        if (key === 'ongoingPlannedHarvestDate') {
+          return `harvest:${options?.date}`;
+        }
+        if (key === 'ongoingRemainingDuration') {
+          return `remaining:${options?.count}`;
+        }
         return key;
       },
     }),
@@ -228,6 +240,53 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     );
     expect(mockBuildRequest).not.toHaveBeenCalled();
     expect(mockLaunchFirstCycle).not.toHaveBeenCalled();
+  });
+
+  it('affiche le calendrier complet et la durée restante du setup ongoing', () => {
+    const route = buildRoute({
+      onboardingMode: 'ongoing',
+      startDate: '2026-06-01',
+      cycleDuration: '150',
+      historicalInitialCount: '2200',
+      trackingStartDate: '2026-10-27',
+      trackingStartAverageWeight: '75',
+      fingerlingsCount: '2100',
+    });
+    const { getByTestId } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />,
+    );
+
+    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(getByTestId('simulationOngoingTotalDuration')).toBeTruthy();
+    expect(getByTestId('simulationOngoingPlannedHarvestDate')).toBeTruthy();
+    expect(getByTestId('simulationOngoingRemainingDuration')).toBeTruthy();
+    expect(getByTestId('simulationOngoingTotalDuration').props.children).toBe(
+      'total:150',
+    );
+    expect(getByTestId('simulationOngoingRemainingDuration').props.children).toBe(
+      'remaining:2',
+    );
+  });
+
+  it('désactive le lancement ongoing lorsque la récolte est déjà atteinte', () => {
+    const route = buildRoute({
+      onboardingMode: 'ongoing',
+      startDate: '2026-06-01',
+      cycleDuration: '150',
+      historicalInitialCount: '2200',
+      trackingStartDate: '2026-10-28',
+      trackingStartAverageWeight: '75',
+      fingerlingsCount: '2100',
+    });
+    const { getByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />,
+    );
+
+    expect(getByText('ongoingCyclePlannedHarvestElapsed')).toBeTruthy();
+    fireEvent.press(getByText('simulationLaunchBtn'));
+    expect(mockBuildRequestFromForm).not.toHaveBeenCalled();
+    expect(mockLaunchFirstCycleFromForm).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
   });
 
   it('enregistre directement le lancement quand le téléphone est hors ligne', async () => {
