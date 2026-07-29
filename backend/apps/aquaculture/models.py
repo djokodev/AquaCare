@@ -506,7 +506,11 @@ class ProductionUnit(models.Model):
 
     def save(self, *args, **kwargs):
         self.unit_type = normalize_production_unit_type(self.unit_type) or self.unit_type
-        self.full_clean()
+        # Keep field and domain validation here, but leave uniqueness and
+        # database constraints to PostgreSQL. Preflight uniqueness queries are
+        # inherently racy and can otherwise raise ValidationError or
+        # IntegrityError for the same concurrent write depending on timing.
+        self.full_clean(validate_unique=False, validate_constraints=False)
         return super().save(*args, **kwargs)
 
 
