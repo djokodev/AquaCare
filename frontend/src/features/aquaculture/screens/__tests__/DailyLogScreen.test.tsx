@@ -146,6 +146,7 @@ describe('features/aquaculture/screens/DailyLogScreen', () => {
     mockOffline.getOfflineFeedReferences.mockResolvedValue([]);
     mockOffline.getPendingSyncLogs.mockResolvedValue([]);
     mockOffline.syncAllOfflineData.mockResolvedValue({
+      attempted: 0,
       success: 0,
       failed: 0,
       details: {

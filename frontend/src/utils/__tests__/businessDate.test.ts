@@ -45,10 +45,82 @@ describe('businessDate cycle schedule', () => {
   });
 
   it('counts two inclusive days on the day before harvest', () => {
-    expect(getOngoingCycleSchedule('2026-06-01', '2026-10-27', 150)).toEqual({
+    expect(
+      getOngoingCycleSchedule(
+        '2026-06-01',
+        '2026-10-27',
+        150,
+        '2026-10-27',
+      ),
+    ).toEqual({
       totalDurationDays: 150,
       plannedHarvestDate: '2026-10-28',
       remainingDurationDays: 2,
     });
+  });
+
+  it('rejects a harvest date that has already passed', () => {
+    expect(
+      getOngoingCycleSchedule(
+        '2026-01-01',
+        '2026-05-29',
+        150,
+        '2026-07-29',
+      ),
+    ).toBeNull();
+    expect(
+      getOngoingCycleSchedule(
+        '2026-07-27',
+        '2026-07-27',
+        2,
+        '2026-07-29',
+      ),
+    ).toBeNull();
+  });
+
+  it('accepts harvest today and a future harvest', () => {
+    expect(
+      getOngoingCycleSchedule(
+        '2026-07-28',
+        '2026-07-28',
+        2,
+        '2026-07-29',
+      ),
+    ).toEqual({
+      totalDurationDays: 2,
+      plannedHarvestDate: '2026-07-29',
+      remainingDurationDays: 2,
+    });
+    expect(
+      getOngoingCycleSchedule(
+        '2026-07-28',
+        '2026-07-29',
+        3,
+        '2026-07-29',
+      ),
+    ).toEqual({
+      totalDurationDays: 3,
+      plannedHarvestDate: '2026-07-30',
+      remainingDurationDays: 2,
+    });
+  });
+
+  it('rejects invalid ISO dates instead of normalizing them', () => {
+    expect(
+      getOngoingCycleSchedule(
+        '2026-02-31',
+        '2026-03-01',
+        150,
+        '2026-07-29',
+      ),
+    ).toBeNull();
+    expect(
+      getOngoingCycleSchedule(
+        '2026-01-01',
+        '2026-02-31',
+        150,
+        '2026-07-29',
+      ),
+    ).toBeNull();
   });
 });

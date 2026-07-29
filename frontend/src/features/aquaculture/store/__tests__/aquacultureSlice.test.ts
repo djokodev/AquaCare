@@ -96,6 +96,7 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockOfflineService.syncAllOfflineData.mockResolvedValue({
+      attempted: 0,
       success: 0,
       failed: 0,
       details: {
@@ -524,6 +525,7 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
   it('synchronizeData utilise offlineService et met a jour le store', async () => {
     const store = createStore();
     mockOfflineService.syncAllOfflineData.mockResolvedValueOnce({
+      attempted: 0,
       success: 3,
       failed: 0,
       details: {

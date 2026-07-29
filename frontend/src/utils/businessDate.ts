@@ -69,9 +69,22 @@ export function getOngoingCycleSchedule(
   startIso: string,
   trackingStartIso: string,
   durationDays: number,
+  todayIso: string = getBusinessIsoDate(),
 ): OngoingCycleSchedule | null {
+  const validStart = inclusiveDaysBetween(startIso, startIso) === 1;
+  const validTracking =
+    inclusiveDaysBetween(trackingStartIso, trackingStartIso) === 1;
+  const validToday = inclusiveDaysBetween(todayIso, todayIso) === 1;
+  if (!validStart || !validTracking || !validToday) return null;
+
   const plannedHarvestDate = plannedHarvestIsoDate(startIso, durationDays);
-  if (!plannedHarvestDate || trackingStartIso >= plannedHarvestDate) {
+  if (
+    !plannedHarvestDate
+    || trackingStartIso < startIso
+    || trackingStartIso > todayIso
+    || trackingStartIso >= plannedHarvestDate
+    || plannedHarvestDate < todayIso
+  ) {
     return null;
   }
   const remainingDurationDays = inclusiveDaysBetween(

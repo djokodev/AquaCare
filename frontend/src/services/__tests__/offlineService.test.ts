@@ -83,6 +83,7 @@ describe('services/offlineService', () => {
     const [saved] = await offlineService.getOfflineCycleLaunches();
 
     expect(result).toEqual({
+      attempted: 1,
       success: 1,
       failed: 0,
       skippedOffline: 0,
@@ -145,6 +146,7 @@ describe('services/offlineService', () => {
     const [saved] = await offlineService.getOfflineCycleLaunches();
 
     expect(result).toEqual({
+      attempted: 0,
       success: 0,
       failed: 0,
       skippedOffline: 1,
@@ -167,6 +169,7 @@ describe('services/offlineService', () => {
     const [saved] = await offlineService.getOfflineCycleLaunches();
 
     expect(result).toEqual({
+      attempted: 1,
       success: 0,
       failed: 1,
       skippedOffline: 0,
@@ -189,10 +192,16 @@ describe('services/offlineService', () => {
     const [saved] = await offlineService.getOfflineCycleLaunches();
 
     expect(result).toMatchObject({
+      attempted: 0,
       success: 0,
       failed: 0,
       details: {
-        cycleLaunches: { success: 0, failed: 0, skippedOffline: 1 },
+        cycleLaunches: {
+          attempted: 0,
+          success: 0,
+          failed: 0,
+          skippedOffline: 1,
+        },
       },
     });
     expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();

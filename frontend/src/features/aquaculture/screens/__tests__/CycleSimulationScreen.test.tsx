@@ -243,6 +243,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   });
 
   it('affiche le calendrier complet et la durée restante du setup ongoing', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-27T12:00:00Z'));
     const route = buildRoute({
       onboardingMode: 'ongoing',
       startDate: '2026-06-01',
@@ -266,6 +267,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     expect(getByTestId('simulationOngoingRemainingDuration').props.children).toBe(
       'remaining:2',
     );
+    jest.useRealTimers();
   });
 
   it('désactive le lancement ongoing lorsque la récolte est déjà atteinte', () => {
@@ -275,6 +277,27 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       cycleDuration: '150',
       historicalInitialCount: '2200',
       trackingStartDate: '2026-10-28',
+      trackingStartAverageWeight: '75',
+      fingerlingsCount: '2100',
+    });
+    const { getByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />,
+    );
+
+    expect(getByText('ongoingCyclePlannedHarvestElapsed')).toBeTruthy();
+    fireEvent.press(getByText('simulationLaunchBtn'));
+    expect(mockBuildRequestFromForm).not.toHaveBeenCalled();
+    expect(mockLaunchFirstCycleFromForm).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
+  });
+
+  it('désactive le lancement ongoing lorsque la récolte est déjà passée', () => {
+    const route = buildRoute({
+      onboardingMode: 'ongoing',
+      startDate: '2026-01-01',
+      cycleDuration: '150',
+      historicalInitialCount: '2200',
+      trackingStartDate: '2026-05-29',
       trackingStartAverageWeight: '75',
       fingerlingsCount: '2100',
     });

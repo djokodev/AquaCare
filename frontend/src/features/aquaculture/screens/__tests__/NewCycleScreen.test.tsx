@@ -657,6 +657,144 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(screen.queryByText("Ancien aliment")).toBeNull();
   });
 
+  it("préserve le snapshot alimentaire utilisé pendant un round-trip pending", async () => {
+    const oldReference = {
+      id: "feed-old",
+      client_uuid: null,
+      farm_profile: "farm-1",
+      source: "external",
+      catalog_product_id: null,
+      name: "Ancien aliment",
+      species: "tilapia",
+      pellet_size_mm: "2.00",
+      brand: "Ancienne marque",
+      protein_percentage: "32.00",
+      lipid_percentage: null,
+      package_weight_kg: "25.00",
+    };
+    const newReference = {
+      ...oldReference,
+      id: "feed-new",
+      name: "Nouvel aliment",
+      pellet_size_mm: "3.00",
+    };
+    const launchUuid = "44444444-4444-4444-8444-444444444444";
+    const offlineLaunch = {
+      launch_uuid: launchUuid,
+      launch_kind: "additional_cycle",
+      cycle: {
+        onboarding_mode: "ongoing",
+        species: "tilapia",
+        start_date: "2026-06-01",
+        initial_count: 2000,
+        initial_average_weight: null,
+        target_harvest_weight_g: 350,
+        planned_cycle_duration_days: 150,
+        expected_survival_rate_pct: 95,
+        planned_selling_price_per_kg_fcfa: 2800,
+        fingerlings_cost_fcfa: 0,
+        other_operational_costs_fcfa: 0,
+        created_offline: true,
+      },
+      tracking_baseline: {
+        tracking_start_date: "2026-07-20",
+        fish_count: 1850,
+        average_weight_g: "75",
+        biomass_kg: null,
+      },
+      production_units: [{
+        local_id: "existing-unit-1",
+        source: "existing",
+        production_unit_id: "unit-1",
+      }],
+      allocations: [{
+        production_unit_local_id: "existing-unit-1",
+        fish_count: 1850,
+      }],
+      initial_feed_stocks: [{
+        local_id: "stock-old",
+        feed_reference_id: "feed-old",
+        quantity_kg: "25.00",
+        cost_status: "unknown",
+        total_cost_fcfa: null,
+        note: "Reliquat historique",
+      }],
+    } as any;
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockService.getProductionUnits.mockResolvedValue([units[0]]);
+    mockService.getFarmFeedReferences.mockResolvedValue([newReference] as any);
+    const route = {
+      params: {
+        editingOfflineLaunchId: launchUuid,
+        offlineLaunch,
+        offlineLaunchContext: {
+          productionUnits: [units[0]],
+          feedReferences: [oldReference],
+        },
+      },
+    } as any;
+
+    const firstMount = render(
+      <NewCycleScreen navigation={navigation} route={route} />,
+    );
+    await waitFor(() =>
+      expect(
+        firstMount.getAllByText("cycleLaunchReferenceUnavailable").length,
+      ).toBeGreaterThan(0),
+    );
+    expect(firstMount.getByText("Ancien aliment")).toBeTruthy();
+    expect(firstMount.getByText("2.00 mm")).toBeTruthy();
+    fireEvent.press(firstMount.getByText("existingFeedReference"));
+    expect(firstMount.getByLabelText("Nouvel aliment")).toBeTruthy();
+    expect(firstMount.queryByLabelText("Ancien aliment")).toBeNull();
+
+    fireEvent.press(firstMount.getByText("startTracking"));
+    await waitFor(() =>
+      expect(mockOffline.updatePendingCycleLaunch).toHaveBeenCalledTimes(1),
+    );
+    const updatedPayload =
+      mockOffline.updatePendingCycleLaunch.mock.calls[0][1];
+    const updatedContext =
+      mockOffline.updatePendingCycleLaunch.mock.calls[0][2]?.localContext;
+    expect(updatedContext?.feedReferences).toEqual([
+      newReference,
+      oldReference,
+    ]);
+    firstMount.unmount();
+
+    const secondMount = render(
+      <NewCycleScreen
+        navigation={navigation}
+        route={{
+          params: {
+            editingOfflineLaunchId: launchUuid,
+            offlineLaunch: updatedPayload,
+            offlineLaunchContext: updatedContext,
+          },
+        } as any}
+      />,
+    );
+    await waitFor(() =>
+      expect(
+        secondMount.getAllByText("cycleLaunchReferenceUnavailable").length,
+      ).toBeGreaterThan(0),
+    );
+    expect(secondMount.getByText("Ancien aliment")).toBeTruthy();
+    expect(secondMount.getByText("2.00 mm")).toBeTruthy();
+
+    fireEvent.press(secondMount.getByText("remove"));
+    fireEvent.press(secondMount.getByText("startTracking"));
+    await waitFor(() =>
+      expect(mockOffline.updatePendingCycleLaunch).toHaveBeenCalledTimes(2),
+    );
+    expect(
+      mockOffline.updatePendingCycleLaunch.mock.calls[1][2]?.localContext
+        ?.feedReferences,
+    ).toEqual([newReference]);
+  });
+
   it("conserve et signale le snapshot d une unité pending devenue indisponible", async () => {
     const obsolete = {
       ...units[1],
@@ -754,6 +892,30 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     fireEvent.changeText(getByTestId("newCycleInitialCount"), "2000");
     fireEvent.changeText(getByTestId("newCycleStartDate"), "2026-01-01");
     fireEvent.changeText(getByTestId("newCycleTrackingDate"), "2026-05-30");
+    fireEvent.changeText(getByTestId("newCycleTrackingCount"), "1800");
+    fireEvent.changeText(getByTestId("newCycleTrackingWeight"), "75");
+    fireEvent.changeText(getByTestId("newCycleTargetWeight"), "350");
+    fireEvent.changeText(getByTestId("newCycleDuration"), "150");
+    fireEvent.changeText(getByTestId("newCycleSurvival"), "95");
+    fireEvent.changeText(getByTestId("newCycleAllocation-unit-1"), "1800");
+
+    expect(getByText("ongoingCyclePlannedHarvestElapsed")).toBeTruthy();
+    fireEvent.press(getByTestId("newCycleSubmit"));
+    expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
+  });
+
+  it("bloque localement une récolte déjà passée sans requête HTTP", async () => {
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
+    );
+    await waitFor(() => expect(mockService.getProductionUnits).toHaveBeenCalled());
+    fireEvent.press(getByText("ongoingCycleMode"));
+    fireEvent.press(getByText("tilapia"));
+    fireEvent.press(getByTestId("newCycleUnit-unit-1"));
+    fireEvent.changeText(getByTestId("newCycleInitialCount"), "2000");
+    fireEvent.changeText(getByTestId("newCycleStartDate"), "2026-01-01");
+    fireEvent.changeText(getByTestId("newCycleTrackingDate"), "2026-05-29");
     fireEvent.changeText(getByTestId("newCycleTrackingCount"), "1800");
     fireEvent.changeText(getByTestId("newCycleTrackingWeight"), "75");
     fireEvent.changeText(getByTestId("newCycleTargetWeight"), "350");

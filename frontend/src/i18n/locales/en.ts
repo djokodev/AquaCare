@@ -337,7 +337,7 @@
   calculatedBiomass: 'Calculated biomass',
   preTrackingEventsNotReconstructed: 'AquaCare will not reconstruct events before the tracking start date. Observed metrics begin on that date.',
   ongoingCycleTrackingDateInvalid: 'The tracking date must be between the real cycle start date and today.',
-  ongoingCyclePlannedHarvestElapsed: 'The calculated harvest date must be after AquaCare tracking starts.',
+  ongoingCyclePlannedHarvestElapsed: 'The planned harvest date must be after the tracking start date and must not already have passed.',
   ongoingCycleCurrentCountInvalid: 'The current fish count must be positive and cannot exceed the historical initial count.',
   ongoingCycleCurrentWeightRequired: 'The observed average weight at tracking start is required.',
   ongoingCycleBiomassInconsistent: 'The measured biomass differs from the calculated biomass by more than 10%.',

@@ -180,14 +180,20 @@ describe("features/main/screens/DashboardScreen", () => {
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({
+      attempted: 0,
       success: 0,
       failed: 0,
       details: {} as any,
     });
     mockOffline.getOfflineCycleLaunches.mockResolvedValue([]);
     mockOffline.syncOfflineCycleLaunches.mockResolvedValue({
+      attempted: 0,
       success: 0,
       failed: 0,
+      skippedOffline: 0,
+      uncertain: 0,
+      rejected: 0,
+      skippedRejected: 0,
     });
     mockOffline.deletePendingCycleLaunch.mockResolvedValue();
     mockGetCycleDashboard.mockResolvedValue({
@@ -331,6 +337,194 @@ describe("features/main/screens/DashboardScreen", () => {
     expect(getByText("delete")).toBeTruthy();
     expect(getByText("retry")).toBeTruthy();
   });
+
+  it.each([
+    ["uncertain", "cycleLaunchLockedAfterAttempt", true],
+    ["rejected", "cycleLaunchRejectedStatus", false],
+  ] as const)(
+    "attend la sync silencieuse et affiche immédiatement le statut %s",
+    async (syncStatus, expectedStatus, retryVisible) => {
+      let launches = [{
+        id: `launch-${syncStatus}`,
+        payload: {
+          cycle: { cycle_name: `Cycle ${syncStatus}` },
+          launch_kind: "additional_cycle",
+        },
+        attempted: false,
+        sync_status: "pending",
+      }] as any[];
+      mockOffline.hasAnyPendingSync.mockResolvedValue(true);
+      mockOffline.getOfflineCycleLaunches.mockImplementation(async () =>
+        launches.map((launch) => ({ ...launch })),
+      );
+      mockOffline.syncAllOfflineData.mockImplementation(async () => {
+        await Promise.resolve();
+        launches = [{
+          ...launches[0],
+          attempted: true,
+          sync_status: syncStatus,
+          ...(syncStatus === "rejected"
+            ? {
+                last_error_code: "cycle_launch_unit_already_allocated",
+                last_http_status: 409,
+              }
+            : {}),
+        }];
+        return {
+          attempted: 1,
+          success: 0,
+          failed: 1,
+          uncertain: syncStatus === "uncertain" ? 1 : 0,
+          rejected: syncStatus === "rejected" ? 1 : 0,
+          details: {} as any,
+        };
+      });
+
+      const { getByText, queryByText } = render(
+        <DashboardScreen navigation={navigation} />,
+      );
+
+      await waitFor(() => expect(getByText(expectedStatus)).toBeTruthy());
+      expect(queryByText("edit")).toBeNull();
+      expect(queryByText("delete")).toBeNull();
+      if (retryVisible) {
+        expect(getByText("retry")).toBeTruthy();
+      } else {
+        expect(queryByText("retry")).toBeNull();
+        expect(
+          getByText(
+            "cycleLaunchRejectedCause: cycleLaunchUnitAlreadyAllocated",
+          ),
+        ).toBeTruthy();
+      }
+    },
+  );
+
+  it("ne mute pas artificiellement un pending lorsque la sync est sautée offline", async () => {
+    const pendingLaunch = {
+      id: "launch-offline",
+      payload: {
+        cycle: { cycle_name: "Cycle toujours modifiable" },
+        launch_kind: "additional_cycle",
+      },
+      attempted: false,
+      sync_status: "pending",
+    } as any;
+    mockOffline.hasAnyPendingSync.mockResolvedValue(true);
+    mockOffline.getOfflineCycleLaunches.mockResolvedValue([pendingLaunch]);
+    mockOffline.syncAllOfflineData.mockResolvedValue({
+      attempted: 0,
+      success: 0,
+      failed: 0,
+      skippedOffline: 1,
+      details: {} as any,
+    });
+
+    const { getByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    await waitFor(() =>
+      expect(getByText("Cycle toujours modifiable")).toBeTruthy(),
+    );
+    expect(getByText("edit")).toBeTruthy();
+    expect(getByText("delete")).toBeTruthy();
+    expect(mockOffline.getOfflineCycleLaunches).toHaveBeenCalledTimes(2);
+  });
+
+  it("rafraîchit les données serveur et retire une carte synchronisée", async () => {
+    let launches = [{
+      id: "launch-synced",
+      payload: {
+        cycle: { cycle_name: "Cycle synchronisé" },
+        launch_kind: "additional_cycle",
+      },
+      attempted: false,
+      sync_status: "pending",
+    }] as any[];
+    mockOffline.hasAnyPendingSync.mockResolvedValue(true);
+    mockOffline.getOfflineCycleLaunches.mockImplementation(async () =>
+      launches.map((launch) => ({ ...launch })),
+    );
+    mockOffline.syncAllOfflineData.mockImplementation(async () => {
+      launches = [{
+        ...launches[0],
+        attempted: true,
+        sync_status: "synced",
+        response: { productionCycle: cycleB },
+      }];
+      return {
+        attempted: 1,
+        success: 1,
+        failed: 0,
+        details: {} as any,
+      };
+    });
+
+    const { queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    await waitFor(() => {
+      expect(mockLoadProfile).toHaveBeenCalled();
+      expect(mockFetchDashboardData).toHaveBeenCalledWith(undefined);
+      expect(mockFetchProductionCycles).toHaveBeenCalled();
+    });
+    expect(queryByText("Cycle synchronisé")).toBeNull();
+  });
+
+  it.each(["uncertain", "rejected"] as const)(
+    "recharge la carte après un Retry qui finit en %s sans succès",
+    async (syncStatus) => {
+      let launches = [{
+        id: `manual-${syncStatus}`,
+        payload: {
+          cycle: { cycle_name: `Retry ${syncStatus}` },
+          launch_kind: "additional_cycle",
+        },
+        attempted: false,
+        sync_status: "pending",
+      }] as any[];
+      mockOffline.getOfflineCycleLaunches.mockImplementation(async () =>
+        launches.map((launch) => ({ ...launch })),
+      );
+      mockOffline.syncOfflineCycleLaunches.mockImplementation(async () => {
+        launches = [{
+          ...launches[0],
+          attempted: true,
+          sync_status: syncStatus,
+          ...(syncStatus === "rejected"
+            ? { last_error_code: "validation_error", last_http_status: 400 }
+            : {}),
+        }];
+        return {
+          attempted: 1,
+          success: 0,
+          failed: 1,
+          skippedOffline: 0,
+          uncertain: syncStatus === "uncertain" ? 1 : 0,
+          rejected: syncStatus === "rejected" ? 1 : 0,
+          skippedRejected: 0,
+        };
+      });
+
+      const screen = render(<DashboardScreen navigation={navigation} />);
+      await waitFor(() =>
+        expect(screen.getByText(`Retry ${syncStatus}`)).toBeTruthy(),
+      );
+      fireEvent.press(screen.getByText("retry"));
+
+      await waitFor(() => {
+        expect(screen.queryByText("edit")).toBeNull();
+        expect(screen.queryByText("delete")).toBeNull();
+      });
+      if (syncStatus === "rejected") {
+        expect(screen.queryByText("retry")).toBeNull();
+      } else {
+        expect(screen.getByText("cycleLaunchLockedAfterAttempt")).toBeTruthy();
+      }
+    },
+  );
 
   it("garde le sélecteur disponible quand le dashboard est scoped mais deux cycles sont actifs", async () => {
     mockUseSelector.mockImplementation((selector: (state: any) => unknown) =>
@@ -481,6 +675,9 @@ describe("features/main/screens/DashboardScreen", () => {
       <DashboardScreen navigation={navigation} />,
     );
 
+    await waitFor(() =>
+      expect(mockFetchProductionCycles).toHaveBeenCalled(),
+    );
     mockLoadProfile.mockClear();
     mockFetchDashboardData.mockClear();
     mockFetchProductionCycles.mockClear();

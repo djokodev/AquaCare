@@ -127,6 +127,14 @@ interface SyncCounter {
   skippedRejected?: number;
 }
 
+interface CycleLaunchSyncCounter extends SyncCounter {
+  attempted: number;
+  skippedOffline: number;
+  uncertain: number;
+  rejected: number;
+  skippedRejected: number;
+}
+
 const resolveReferenceIdentity = (
   referenceId: string | null | undefined,
   referenceClientUuid: string | null | undefined,
@@ -195,7 +203,7 @@ const hasPendingStockDependency = (
 };
 
 interface OfflineSyncDetails {
-  cycleLaunches?: SyncCounter;
+  cycleLaunches?: CycleLaunchSyncCounter;
   feedReferences?: SyncCounter;
   stockDeclarations?: SyncCounter;
   cycleLogs: SyncCounter;
@@ -207,6 +215,7 @@ interface OfflineSyncDetails {
 }
 
 interface OfflineSyncResult extends SyncCounter {
+  attempted: number;
   details: OfflineSyncDetails;
 }
 
@@ -1055,7 +1064,7 @@ class OfflineService {
 
   async syncOfflineCycleLaunches(
     options: { onlineVerified?: boolean } = {},
-  ): Promise<SyncCounter> {
+  ): Promise<CycleLaunchSyncCounter> {
     const storedLaunches = await this.getOfflineCycleLaunches();
     const rejected = storedLaunches.filter(
       (launch) => launch.sync_status === 'rejected',
@@ -1066,6 +1075,7 @@ class OfflineService {
     );
     if (launches.length === 0) {
       return {
+        attempted: 0,
         success: 0,
         failed: 0,
         skippedOffline: 0,
@@ -1076,6 +1086,7 @@ class OfflineService {
     }
     if (!options.onlineVerified && !(await this.isOnline())) {
       return {
+        attempted: 0,
         success: 0,
         failed: 0,
         skippedOffline: launches.length,
@@ -1086,6 +1097,7 @@ class OfflineService {
     }
     let success = 0;
     let failed = 0;
+    let attempted = 0;
     let uncertain = 0;
     let rejectedCount = 0;
     for (const launch of launches) {
@@ -1098,6 +1110,7 @@ class OfflineService {
             : item),
       );
       try {
+        attempted += 1;
         const response = await aquacultureService.launchProductionCycle(
           launch.payload,
         );
@@ -1138,6 +1151,7 @@ class OfflineService {
       }
     }
     return {
+      attempted,
       success,
       failed,
       skippedOffline: 0,
@@ -1220,12 +1234,17 @@ class OfflineService {
       pendingCalibrationOperations.length === 0 && pendingFinalHarvests.length === 0
     ) {
       return {
+        attempted: 0,
         success: 0,
         failed: 0,
         details: {
           cycleLaunches: {
+            attempted: 0,
             success: 0,
             failed: 0,
+            skippedOffline: 0,
+            uncertain: 0,
+            rejected: 0,
             skippedRejected: rejectedCycleLaunches.length,
           },
           cycleLogs: { success: 0, failed: 0 },
@@ -1242,13 +1261,17 @@ class OfflineService {
 
     if (!(await this.isOnline())) {
       return {
+        attempted: 0,
         success: 0,
         failed: 0,
         details: {
           cycleLaunches: {
+            attempted: 0,
             success: 0,
             failed: 0,
             skippedOffline: pendingCycleLaunches.length,
+            uncertain: 0,
+            rejected: 0,
             skippedRejected: rejectedCycleLaunches.length,
           },
           cycleLogs: { success: 0, failed: 0 },
@@ -1279,10 +1302,19 @@ class OfflineService {
     }
 
     const results: OfflineSyncResult = {
+      attempted: 0,
       success: 0,
       failed: 0,
       details: {
-        cycleLaunches: { success: 0, failed: 0 },
+        cycleLaunches: {
+          attempted: 0,
+          success: 0,
+          failed: 0,
+          skippedOffline: 0,
+          uncertain: 0,
+          rejected: 0,
+          skippedRejected: 0,
+        },
         cycleLogs: { success: 0, failed: 0 },
         feedReferences: { success: 0, failed: 0 },
         stockDeclarations: { success: 0, failed: 0 },
@@ -1297,6 +1329,7 @@ class OfflineService {
     results.details.cycleLaunches = await this.syncOfflineCycleLaunches({
       onlineVerified: true,
     });
+    results.attempted = results.details.cycleLaunches.attempted;
     results.details.newCycles = await this.syncOfflineNewCycles();
     results.details.feedReferences = await this.syncOfflineFeedReferences();
     results.details.stockDeclarations = await this.syncOfflineStockDeclarations();
@@ -1434,6 +1467,7 @@ class OfflineService {
           (item) => acceptedFinalHarvestUuids.has(item.harvestData.client_uuid),
         ).length;
         return {
+          attempted: 0,
           success: cycleSuccess + cycleLogSuccess + sanitaryLogSuccess + tankSuccess +
             calibrationSuccess + finalHarvestSuccess,
           failed: cycleFailures + cycleLogFailures + sanitaryLogFailures + tankFailures +
@@ -1488,6 +1522,7 @@ class OfflineService {
         calibrationTanksSuccess + calibrationOperationsSuccess + finalHarvestsSuccess;
 
       return {
+        attempted: 0,
         success,
         failed: 0,
         details: {

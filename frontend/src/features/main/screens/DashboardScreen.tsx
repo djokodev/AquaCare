@@ -157,10 +157,18 @@ export default function DashboardScreen({ navigation }: any) {
 
   useEffect(() => {
     const initializeDashboard = async () => {
-      tryGlobalOfflineSync();
-      dispatch(fetchDashboardData(undefined));
-      dispatch(fetchProductionCycles());
-      await loadPendingCycleLaunches();
+      const syncOutcome = await tryGlobalOfflineSync();
+      await Promise.all([
+        ...(syncOutcome.serverDataRefreshed
+          ? []
+          : [
+              dispatch(fetchDashboardData(undefined)),
+              dispatch(fetchProductionCycles()),
+            ]),
+        ...(syncOutcome.localDataRefreshed
+          ? []
+          : [loadPendingCycleLaunches()]),
+      ]);
     };
 
     initializeDashboard();
@@ -182,7 +190,10 @@ export default function DashboardScreen({ navigation }: any) {
     }, [currentCycle?.id, dispatch]),
   );
 
-  const tryGlobalOfflineSync = async () => {
+  const tryGlobalOfflineSync = async (): Promise<{
+    localDataRefreshed: boolean;
+    serverDataRefreshed: boolean;
+  }> => {
     try {
       const hasPending = await offlineService.hasAnyPendingSync();
       if (hasPending) {
@@ -191,11 +202,26 @@ export default function DashboardScreen({ navigation }: any) {
 
         if (result.success > 0) {
           await refreshAfterCycleLaunchSync(launchesBeforeSync);
+          return {
+            localDataRefreshed: true,
+            serverDataRefreshed: true,
+          };
+        }
+        if (result.attempted > 0) {
+          await loadPendingCycleLaunches();
+          return {
+            localDataRefreshed: true,
+            serverDataRefreshed: false,
+          };
         }
       }
     } catch (err) {
       // Sync error handled silently
     }
+    return {
+      localDataRefreshed: false,
+      serverDataRefreshed: false,
+    };
   };
 
   const refreshAfterCycleLaunchSync = async (

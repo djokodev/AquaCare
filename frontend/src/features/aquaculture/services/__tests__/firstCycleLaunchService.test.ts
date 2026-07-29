@@ -480,4 +480,25 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
       expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
     },
   );
+
+  it("refuse de construire un lancement dont la récolte est déjà passée", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-29T12:00:00Z"));
+    expect(() =>
+      buildFirstCycleLaunchRequestFromForm({
+        formData: {
+          ...formData,
+          onboardingMode: "ongoing",
+          startDate: "2026-01-01",
+          cycleDuration: "150",
+          historicalInitialCount: "2200",
+          trackingStartDate: "2026-05-29",
+          trackingStartAverageWeight: "75",
+        },
+      }),
+    ).toThrow(expect.objectContaining({
+      translationKey: "ongoingCyclePlannedHarvestElapsed",
+    }));
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+    jest.useRealTimers();
+  });
 });

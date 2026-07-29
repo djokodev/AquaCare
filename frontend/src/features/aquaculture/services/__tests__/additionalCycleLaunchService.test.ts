@@ -69,7 +69,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
   );
 
   it("accepts the day before harvest and builds two inclusive remaining days", () => {
-    jest.useFakeTimers().setSystemTime(new Date("2026-10-30T12:00:00Z"));
+    jest.useFakeTimers().setSystemTime(new Date("2026-10-27T12:00:00Z"));
     const input = {
       formData: {
         ...ongoingForm,
@@ -84,6 +84,30 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
       buildAdditionalCycleLaunchRequest(input).tracking_baseline
         ?.tracking_start_date,
     ).toBe("2026-10-27");
+    jest.useRealTimers();
+  });
+
+  it("rejects an elapsed harvest in both validator and builder", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-29T12:00:00Z"));
+    const input = {
+      formData: {
+        ...ongoingForm,
+        start_date: "2026-01-01",
+        tracking_start_date: "2026-05-29",
+      } as any,
+      selectedUnits: [unit as any],
+      allocationsByUnitId: { "unit-1": "1850" },
+      launchUuid: "11111111-1111-4111-8111-111111111111",
+    };
+
+    expect(validateAdditionalCycleLaunch(input)).toBe(
+      "ongoingCyclePlannedHarvestElapsed",
+    );
+    expect(() => buildAdditionalCycleLaunchRequest(input)).toThrow(
+      expect.objectContaining({
+        translationKey: "ongoingCyclePlannedHarvestElapsed",
+      }),
+    );
     jest.useRealTimers();
   });
 

@@ -336,7 +336,7 @@ export const fr = {
   calculatedBiomass: 'Biomasse calculée',
   preTrackingEventsNotReconstructed: 'AquaCare ne reconstruira pas les événements antérieurs à la date de démarrage du suivi. Les métriques observées commenceront à cette date.',
   ongoingCycleTrackingDateInvalid: 'La date de suivi doit être comprise entre le début réel du cycle et aujourd’hui.',
-  ongoingCyclePlannedHarvestElapsed: 'La date de récolte calculée doit être postérieure au début du suivi AquaCare.',
+  ongoingCyclePlannedHarvestElapsed: 'La date de récolte planifiée doit être postérieure au début du suivi et ne doit pas être déjà dépassée.',
   ongoingCycleCurrentCountInvalid: 'L’effectif présent doit être positif et ne peut pas dépasser l’effectif initial historique.',
   ongoingCycleCurrentWeightRequired: 'Le poids moyen observé au démarrage du suivi est obligatoire.',
   ongoingCycleBiomassInconsistent: 'La biomasse mesurée diffère de la biomasse calculée de plus de 10 %.',
