@@ -72,6 +72,11 @@ import type {
 } from '@/features/aquaculture/types/productionUnits';
 import type { CycleLaunchOpeningStockInput } from '@/types/aquaculture';
 import { hydrateFarmSetupFormFromLaunch } from '@/features/aquaculture/utils/launchHydration';
+import { offlineService } from '@/services/offlineService';
+import {
+  buildFirstCycleLaunchRequestFromForm,
+  FirstCycleLaunchError,
+} from '@/features/aquaculture/services/firstCycleLaunchService';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CreateFarm'>;
 type CreateFarmRouteProp = RouteProp<RootStackParamList, 'CreateFarm'>;
@@ -224,8 +229,13 @@ export default function CreateFarmScreen({ navigation, route }: Props) {
   const [bulkUnitErrors, setBulkUnitErrors] = useState<BulkUnitDraftErrors>({});
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [singleFormOffsetY, setSingleFormOffsetY] = useState(0);
-  const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto');
-  const [fingerlingsCountMode, setFingerlingsCountMode] = useState<'auto' | 'manual'>('auto');
+  const isEditingOfflineLaunch = Boolean(route?.params?.editingOfflineLaunchId);
+  const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>(
+    isEditingOfflineLaunch ? 'manual' : 'auto',
+  );
+  const [fingerlingsCountMode, setFingerlingsCountMode] = useState<'auto' | 'manual'>(
+    isEditingOfflineLaunch ? 'manual' : 'auto',
+  );
   const [isCycleDurationCustomized, setIsCycleDurationCustomized] = useState(false);
   const formErrors = useMemo(() => validateFarmSetupForm(form), [form]);
   const cycleDurationErrorKey = formErrors.cycleDuration;
@@ -784,8 +794,47 @@ export default function CreateFarmScreen({ navigation, route }: Props) {
       return;
     }
 
-    const params = buildCycleSimulationInput(form);
+    const launchKind = 'initial_setup' as const;
+    if (isEditingOfflineLaunch || !(await offlineService.isOnline())) {
+      try {
+        const request = buildFirstCycleLaunchRequestFromForm({
+          formData: form,
+          launchKind,
+        });
+        const offlinePayload = {
+          ...request,
+          cycle: { ...request.cycle, created_offline: true },
+        };
+        if (route?.params?.editingOfflineLaunchId) {
+          await offlineService.updatePendingCycleLaunch(
+            route.params.editingOfflineLaunchId,
+            offlinePayload,
+          );
+        } else {
+          await offlineService.saveCycleLaunchOffline(offlinePayload, {
+            attempted: false,
+          });
+        }
+        Alert.alert(t('saved'), t('cycleLaunchPendingSync'));
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs', params: { screen: 'Dashboard' } }],
+        });
+      } catch (error) {
+        const message = error instanceof FirstCycleLaunchError
+          ? t(error.translationKey)
+          : t('simulationErrorRetry');
+        Alert.alert(t('error'), message);
+      }
+      return;
+    }
 
+    if (form.onboardingMode === 'ongoing') {
+      navigation.navigate('CycleSimulation', { formData: form });
+      return;
+    }
+
+    const params = buildCycleSimulationInput(form);
     const result = await dispatch(runCycleSimulation(params));
     if (runCycleSimulation.fulfilled.match(result)) {
       navigation.navigate('CycleSimulation', {
@@ -1146,6 +1195,7 @@ export default function CreateFarmScreen({ navigation, route }: Props) {
           <AppText variant="sectionTitle">{t('declaredHistory')}</AppText>
           <FieldLabel label={t('initialCount')} required />
           <TextField
+            testID="createFarmHistoricalInitialCount"
             value={form.historicalInitialCount ?? ''}
             onChangeText={v => setField('historicalInitialCount', sanitizePositiveIntegerInput(v))}
             keyboardType="numeric"
@@ -1153,6 +1203,7 @@ export default function CreateFarmScreen({ navigation, route }: Props) {
           />
           <FieldLabel label={t('historicalInitialWeightOptional')} />
           <TextField
+            testID="createFarmHistoricalInitialWeight"
             value={form.historicalInitialWeight ?? ''}
             onChangeText={v => setField('historicalInitialWeight', v)}
             keyboardType="decimal-pad"
@@ -1160,12 +1211,14 @@ export default function CreateFarmScreen({ navigation, route }: Props) {
           <AppText variant="sectionTitle">{t('trackingStartSituation')}</AppText>
           <FieldLabel label={t('trackingStartDate')} required />
           <TextField
+            testID="createFarmTrackingStartDate"
             value={form.trackingStartDate ?? ''}
             onChangeText={v => setField('trackingStartDate', v)}
             error={formErrors.trackingStartDate ? t(formErrors.trackingStartDate) : undefined}
           />
           <FieldLabel label={t('observedAverageWeight')} required />
           <TextField
+            testID="createFarmTrackingStartWeight"
             value={form.trackingStartAverageWeight ?? ''}
             onChangeText={v => setField('trackingStartAverageWeight', v)}
             keyboardType="decimal-pad"

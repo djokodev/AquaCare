@@ -646,11 +646,13 @@ export default function DashboardScreen({ navigation }: any) {
                           if (launch.payload.launch_kind === "initial_setup") {
                             navigation.navigate("CreateFarm", {
                               offlineLaunch: launch.payload,
+                              offlineLaunchContext: launch.localContext,
                               editingOfflineLaunchId: launch.id,
                             });
                           } else {
                             navigation.navigate("NewCycle", {
                               offlineLaunch: launch.payload,
+                              offlineLaunchContext: launch.localContext,
                               editingOfflineLaunchId: launch.id,
                             });
                           }

@@ -11,10 +11,12 @@ import {
   CycleStoreManualStockPayload,
   DailyLogForm,
   FarmFeedReferenceCreatePayload,
+  FarmFeedReference,
   FinalHarvestOperation,
   HarvestData,
   SanitaryLogForm,
   SyncPayload,
+  ProductionUnit,
 } from '@/types/aquaculture';
 import logger from '@/utils/logger';
 import { getBusinessIsoDate } from '@/utils/businessDate';
@@ -66,6 +68,10 @@ export interface OfflineCycleLaunch {
   sync_status: "pending" | "syncing" | "failed" | "synced";
   attempted: boolean;
   response?: CycleLaunchResponse;
+  localContext?: {
+    productionUnits?: ProductionUnit[];
+    feedReferences?: FarmFeedReference[];
+  };
 }
 
 interface OfflineSanitaryLog {
@@ -103,6 +109,7 @@ export interface OfflineFinalHarvest {
 interface SyncCounter {
   success: number;
   failed: number;
+  skippedOffline?: number;
 }
 
 const resolveReferenceIdentity = (
@@ -856,7 +863,10 @@ class OfflineService {
 
   async saveCycleLaunchOffline(
     payload: CycleLaunchRequest,
-    options: { attempted?: boolean } = {},
+    options: {
+      attempted?: boolean;
+      localContext?: OfflineCycleLaunch['localContext'];
+    } = {},
   ): Promise<string> {
     const launches = await this.getOfflineCycleLaunches();
     const fingerprint = cycleLaunchFingerprint(payload);
@@ -876,6 +886,7 @@ class OfflineService {
                 ...launch,
                 attempted,
                 sync_status: attempted ? 'failed' : launch.sync_status,
+                localContext: options.localContext ?? launch.localContext,
               }
             : launch),
       );
@@ -891,6 +902,7 @@ class OfflineService {
         timestamp: Date.now(),
         sync_status: options.attempted ? 'failed' : 'pending',
         attempted: options.attempted === true,
+        localContext: options.localContext,
       },
     ]);
     return id;
@@ -906,6 +918,7 @@ class OfflineService {
   async updatePendingCycleLaunch(
     id: string,
     payload: CycleLaunchRequest,
+    options: { localContext?: OfflineCycleLaunch['localContext'] } = {},
   ): Promise<void> {
     const launches = await this.getOfflineCycleLaunches();
     const existing = launches.find((launch) => launch.id === id);
@@ -923,6 +936,7 @@ class OfflineService {
               payload,
               fingerprint: cycleLaunchFingerprint(payload),
               timestamp: Date.now(),
+              localContext: options.localContext ?? launch.localContext,
             }
           : launch),
     );
@@ -936,10 +950,22 @@ class OfflineService {
     );
   }
 
-  async syncOfflineCycleLaunches(): Promise<SyncCounter> {
+  async syncOfflineCycleLaunches(
+    options: { onlineVerified?: boolean } = {},
+  ): Promise<SyncCounter> {
     const launches = (await this.getOfflineCycleLaunches()).filter(
       (launch) => launch.sync_status !== 'synced',
     );
+    if (launches.length === 0) {
+      return { success: 0, failed: 0, skippedOffline: 0 };
+    }
+    if (!options.onlineVerified && !(await this.isOnline())) {
+      return {
+        success: 0,
+        failed: 0,
+        skippedOffline: launches.length,
+      };
+    }
     let success = 0;
     let failed = 0;
     for (const launch of launches) {
@@ -975,7 +1001,7 @@ class OfflineService {
         failed += 1;
       }
     }
-    return { success, failed };
+    return { success, failed, skippedOffline: 0 };
   }
 
   async saveSanitaryLogOffline(cycleId: string, sanitaryData: SanitaryLogForm): Promise<string> {
@@ -1062,6 +1088,28 @@ class OfflineService {
       };
     }
 
+    if (!(await this.isOnline())) {
+      return {
+        success: 0,
+        failed: 0,
+        details: {
+          cycleLaunches: {
+            success: 0,
+            failed: 0,
+            skippedOffline: pendingCycleLaunches.length,
+          },
+          cycleLogs: { success: 0, failed: 0 },
+          feedReferences: { success: 0, failed: 0 },
+          stockDeclarations: { success: 0, failed: 0 },
+          newCycles: { success: 0, failed: 0 },
+          sanitaryLogs: { success: 0, failed: 0 },
+          calibrationTanks: { success: 0, failed: 0 },
+          calibrationOperations: { success: 0, failed: 0 },
+          finalHarvests: { success: 0, failed: 0 },
+        },
+      };
+    }
+
     if (
       pendingCycleLaunches.length === 0 &&
       pendingFeedReferences.length === 0 &&
@@ -1093,7 +1141,9 @@ class OfflineService {
       },
     };
 
-    results.details.cycleLaunches = await this.syncOfflineCycleLaunches();
+    results.details.cycleLaunches = await this.syncOfflineCycleLaunches({
+      onlineVerified: true,
+    });
     results.details.newCycles = await this.syncOfflineNewCycles();
     results.details.feedReferences = await this.syncOfflineFeedReferences();
     results.details.stockDeclarations = await this.syncOfflineStockDeclarations();

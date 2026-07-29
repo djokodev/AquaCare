@@ -808,6 +808,54 @@ class ReportService(BaseService):
         }
 
     @staticmethod
+    def _resolve_scoped_fcr(
+        *,
+        cycle: ProductionCycle,
+        language_code: str,
+        feed_consumed_kg: float | None,
+        initial_biomass_kg: float | None,
+        current_biomass_kg: float | None,
+        harvested_biomass_kg: float | None,
+        feed_logs: list,
+        harvest_data_complete: bool,
+    ) -> dict:
+        """Resolve an observed FCR without requiring pre-AquaCare history."""
+        scope = cycle.history_scope
+        label = ReportService._pick_text(
+            language_code,
+            (
+                "FCR depuis le démarrage du suivi AquaCare"
+                if cycle.has_partial_history
+                else "FCR du cycle complet"
+            ),
+            (
+                "FCR since AquaCare tracking started"
+                if cycle.has_partial_history
+                else "Full-cycle FCR"
+            ),
+        )
+        feed_data_complete = all(
+            log.feed_quantity is not None for log in feed_logs
+        )
+        data_complete = feed_data_complete and harvest_data_complete
+        value = ReportFcrService.calculate(
+            feed_consumed_kg=feed_consumed_kg,
+            initial_biomass_kg=initial_biomass_kg,
+            current_biomass_kg=current_biomass_kg,
+            harvested_biomass_kg=harvested_biomass_kg,
+            harvest_data_complete=data_complete,
+        )
+        return {
+            "value": value,
+            "scope": scope,
+            "label": label,
+            "data_complete": data_complete,
+            "unavailable_reason": (
+                None if data_complete else "incomplete_tracked_data"
+            ),
+        }
+
+    @staticmethod
     def _build_unit_dashboard_section(
         *,
         cycle: ProductionCycle,
@@ -848,11 +896,18 @@ class ReportService(BaseService):
         )
         feed_consumed_kg = ReportService._to_float(total_feed) or 0.0
         feed_cost_consumed_fcfa = round(feed_consumed_kg * feed_price, 2)
-        unit_fcr = ReportFcrService.calculate(
+        tracked_feed_logs = cumulative_daily_logs if cumulative_daily_logs is not None else daily_logs
+        fcr_resolution = ReportService._resolve_scoped_fcr(
+            cycle=cycle,
+            language_code=language_code,
             feed_consumed_kg=feed_consumed_kg,
             initial_biomass_kg=ReportService._to_float(stock_snapshot['initial_biomass_kg']),
             current_biomass_kg=ReportService._to_float(estimated_biomass),
-            harvested_biomass_kg=ReportService._to_float(stock_snapshot["harvested_biomass_kg"]),
+            harvested_biomass_kg=(
+                (ReportService._to_float(stock_snapshot["harvested_biomass_kg"]) or 0)
+                + (ReportService._to_float(stock_snapshot["outgoing_biomass_kg"]) or 0)
+            ),
+            feed_logs=tracked_feed_logs,
             harvest_data_complete=stock_snapshot["harvest_data_complete"],
         )
         unit_name = allocation.production_unit.name
@@ -957,7 +1012,11 @@ class ReportService(BaseService):
                     if ReportService._to_float(stock_snapshot.get("biological_survival_rate_pct")) is not None
                     else None
                 ),
-                "fcr": unit_fcr,
+                "fcr": fcr_resolution["value"],
+                "fcr_scope": fcr_resolution["scope"],
+                "fcr_label": fcr_resolution["label"],
+                "fcr_data_complete": fcr_resolution["data_complete"],
+                "fcr_unavailable_reason": fcr_resolution["unavailable_reason"],
                 "daily_growth_rate": None,
                 "specific_growth_rate": None,
                 "average_daily_feed": None,
@@ -972,7 +1031,21 @@ class ReportService(BaseService):
                     stock_snapshot["biological_survival_rate_pct"]
                 ),
                 "stock_remaining_rate_pct": ReportService._to_float(stock_snapshot["stock_remaining_rate_pct"]),
-                "fcr": unit_fcr,
+                "fcr": fcr_resolution["value"],
+                "fcr_scope": fcr_resolution["scope"],
+                "fcr_label": fcr_resolution["label"],
+                "fcr_data_complete": fcr_resolution["data_complete"],
+                "fcr_unavailable_reason": fcr_resolution["unavailable_reason"],
+                "fcr_initial_biomass_kg": ReportService._to_float(
+                    stock_snapshot["initial_biomass_kg"]
+                ),
+                "fcr_current_biomass_kg": ReportService._to_float(
+                    estimated_biomass
+                ),
+                "fcr_outflow_biomass_kg": (
+                    (ReportService._to_float(stock_snapshot["harvested_biomass_kg"]) or 0)
+                    + (ReportService._to_float(stock_snapshot["outgoing_biomass_kg"]) or 0)
+                ),
             },
             "active_sanitary_events_count": sum(
                 1
@@ -1364,7 +1437,14 @@ class ReportService(BaseService):
                 ),
                 Prefetch(
                     "daily_logs",
-                    queryset=CycleLog.objects.filter(log_date__lte=period_end).order_by("-log_date", "-log_time"),
+                    queryset=CycleLog.objects.filter(
+                        log_date__lte=period_end,
+                        **(
+                            {"log_date__gte": cycle.analysis_start_date}
+                            if cycle.has_partial_history
+                            else {}
+                        ),
+                    ).order_by("-log_date", "-log_time"),
                     to_attr="cumulative_daily_logs",
                 ),
                 Prefetch(
@@ -1376,7 +1456,14 @@ class ReportService(BaseService):
                 ),
                 Prefetch(
                     "unit_partial_harvests",
-                    queryset=PartialHarvest.objects.filter(harvest_date__lte=period_end).order_by(
+                    queryset=PartialHarvest.objects.filter(
+                        harvest_date__lte=period_end,
+                        **(
+                            {"harvest_date__gte": cycle.analysis_start_date}
+                            if cycle.has_partial_history
+                            else {}
+                        ),
+                    ).order_by(
                         "-harvest_date", "-created_at"
                     ),
                     to_attr="cumulative_partial_harvests",
@@ -2003,7 +2090,14 @@ class ReportService(BaseService):
             ).order_by("-log_date", "-log_time")
         )
         cumulative_daily_logs = list(
-            allocation.daily_logs.filter(log_date__lte=period_end).order_by("-log_date", "-log_time")
+            allocation.daily_logs.filter(
+                log_date__lte=period_end,
+                **(
+                    {"log_date__gte": cycle.analysis_start_date}
+                    if cycle.has_partial_history
+                    else {}
+                ),
+            ).order_by("-log_date", "-log_time")
         )
         period_sanitary_logs = list(
             allocation.sanitary_logs.filter(
@@ -2032,7 +2126,16 @@ class ReportService(BaseService):
             period_end=period_end,
             cumulative_daily_logs=cumulative_daily_logs,
             cumulative_sanitary_logs=cumulative_sanitary_logs,
-            cumulative_partial_harvests=list(getattr(allocation, "cumulative_partial_harvests", [])),
+            cumulative_partial_harvests=list(
+                allocation.unit_partial_harvests.filter(
+                    harvest_date__lte=period_end,
+                    **(
+                        {"harvest_date__gte": cycle.analysis_start_date}
+                        if cycle.has_partial_history
+                        else {}
+                    ),
+                )
+            ),
         )
         has_period_end_log = any(log.log_date == period_end for log in period_daily_logs)
         scope_label = ReportService._pick_text(
@@ -2603,37 +2706,71 @@ class ReportService(BaseService):
             "total_production_cost_to_date_fcfa": round(direct + other_to_date, 2),
         }
         total_initial_biomass = sum(
-            float((section.get("unit") or {}).get("initial_biomass_kg") or 0) for section in sections
-        )
-        total_current_biomass = sum(
-            float((section.get("current_metrics") or {}).get("current_biomass") or 0) for section in sections
-        )
-        total_harvested_biomass = sum(
-            float((section.get("cumulative_metrics") or {}).get("harvested_biomass_kg") or 0)
+            float(
+                (section.get("cumulative_metrics") or {}).get(
+                    "fcr_initial_biomass_kg"
+                )
+                or 0
+            )
             for section in sections
         )
+        total_current_biomass = sum(
+            float(
+                (section.get("cumulative_metrics") or {}).get(
+                    "fcr_current_biomass_kg"
+                )
+                or 0
+            )
+            for section in sections
+        )
+        total_harvested_biomass = sum(
+            float(
+                (section.get("cumulative_metrics") or {}).get(
+                    "fcr_outflow_biomass_kg"
+                )
+                or 0
+            )
+            for section in sections
+        )
+        fcr_scopes = {
+            (section.get("cumulative_metrics") or {}).get("fcr_scope")
+            for section in sections
+        }
+        fcr_labels = {
+            (section.get("cumulative_metrics") or {}).get("fcr_label")
+            for section in sections
+        }
+        fcr_data_complete = bool(sections) and all(
+            bool(
+                (section.get("cumulative_metrics") or {}).get(
+                    "fcr_data_complete"
+                )
+            )
+            for section in sections
+        )
+        common_fcr_scope = next(iter(fcr_scopes)) if len(fcr_scopes) == 1 else None
+        common_fcr_label = next(iter(fcr_labels)) if len(fcr_labels) == 1 else None
         dashboard_fcr = ReportFcrService.calculate(
-            feed_consumed_kg=(
-                float(global_economic.get("feed_consumed_kg") or 0)
-                or sum(float((section.get("cumulative_metrics") or {}).get("total_feed") or 0) for section in sections)
+            feed_consumed_kg=sum(
+                float(
+                    (section.get("cumulative_metrics") or {}).get("total_feed")
+                    or 0
+                )
+                for section in sections
             ),
             initial_biomass_kg=total_initial_biomass,
             current_biomass_kg=total_current_biomass,
             harvested_biomass_kg=total_harvested_biomass,
-            harvest_data_complete=all(
-                (section.get("cumulative_metrics") or {}).get("fcr") is not None for section in sections
+            harvest_data_complete=(
+                fcr_data_complete and common_fcr_scope is not None
             ),
         )
         payload["cycle_dashboard"]["fcr"] = dashboard_fcr
-        payload["cycle_dashboard"]["fcr_scope"] = (
-            sections[0].get("current_metrics", {}).get("fcr_scope")
-            if sections and dashboard_fcr is not None
-            else None
-        )
-        payload["cycle_dashboard"]["fcr_label"] = (
-            sections[0].get("current_metrics", {}).get("fcr_label")
-            if sections and dashboard_fcr is not None
-            else None
+        payload["cycle_dashboard"]["fcr_scope"] = common_fcr_scope
+        payload["cycle_dashboard"]["fcr_label"] = common_fcr_label
+        payload["cycle_dashboard"]["fcr_data_complete"] = fcr_data_complete
+        payload["cycle_dashboard"]["fcr_unavailable_reason"] = (
+            None if fcr_data_complete else "incomplete_tracked_data"
         )
         if not all("cumulative_metrics" in section for section in sections):
             legacy_metrics = (sections[0].get("current_metrics") or {}) if sections else {}

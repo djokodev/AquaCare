@@ -1,6 +1,7 @@
 import { aquacultureService } from "../aquacultureService";
 import {
   buildFirstCycleLaunchRequest,
+  buildFirstCycleLaunchRequestFromForm,
   launchFirstCycle,
 } from "../firstCycleLaunchService";
 
@@ -406,4 +407,55 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
     expect(requestAfterSimChange.cycle.start_date).toBe("2026-07-01");
     expect(requestAfterSimChange.cycle.initial_count).toBe(500);
   });
+
+  it("construit un lancement ongoing sans résultat ni breakdown de simulation", () => {
+    const request = buildFirstCycleLaunchRequestFromForm({
+      formData: {
+        ...formData,
+        onboardingMode: "ongoing",
+        startDate: "2026-06-01",
+        historicalInitialCount: "2200",
+        historicalInitialWeight: "",
+        trackingStartDate: "2026-07-20",
+        trackingStartAverageWeight: "75",
+        fingerlingsCount: "2100",
+      },
+    });
+
+    expect(request).toMatchObject({
+      launch_uuid: formData.launchRequestId,
+      cycle: {
+        onboarding_mode: "ongoing",
+        start_date: "2026-06-01",
+        initial_count: 2200,
+        initial_average_weight: null,
+      },
+      tracking_baseline: {
+        tracking_start_date: "2026-07-20",
+        fish_count: 2100,
+        average_weight_g: "75",
+      },
+    });
+  });
+
+  it.each([
+    ["startDate", "", "ongoingCycleHistoricalStartRequired"],
+    ["trackingStartDate", "", "ongoingCycleTrackingDateRequired"],
+  ])(
+    "refuse un lancement ongoing quand %s est vide",
+    (field, value, translationKey) => {
+      expect(() =>
+        buildFirstCycleLaunchRequestFromForm({
+          formData: {
+            ...formData,
+            onboardingMode: "ongoing",
+            historicalInitialCount: "2200",
+            trackingStartDate: "2026-07-20",
+            trackingStartAverageWeight: "75",
+            [field]: value,
+          },
+        }),
+      ).toThrow(expect.objectContaining({ translationKey }));
+    },
+  );
 });

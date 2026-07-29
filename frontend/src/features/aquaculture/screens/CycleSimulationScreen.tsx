@@ -51,7 +51,9 @@ import { groupProductionUnitAllocationSummaries } from '@/features/aquaculture/u
 import {
   FirstCycleLaunchError,
   buildFirstCycleLaunchRequest,
+  buildFirstCycleLaunchRequestFromForm,
   launchFirstCycle,
+  launchFirstCycleFromForm,
 } from '@/features/aquaculture/services/firstCycleLaunchService';
 import { isNetworkError, parseApiError } from '@/utils/errorParser';
 import { offlineService } from '@/services/offlineService';
@@ -150,7 +152,9 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const hasProductionUnitAllocations = (formData.productionUnitAllocations ?? []).length > 0;
 
   useEffect(() => {
-    recalculate();
+    if (!ongoing) {
+      recalculate();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -187,19 +191,28 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     : totalCapacity ?? '—';
 
   async function handleLaunchFirstCycle() {
-    if (!currentResult) return;
+    if (!ongoing && !currentResult) return;
 
     setLaunching(true);
-    const launchParams = {
-      formData,
-      simulationResult: currentResult,
-      defaultPondIdentifier: t('simulationDefaultPondIdentifier'),
-      launchKind: requiresAdditionalCycleFlow ? 'additional_cycle' as const : 'initial_setup' as const,
-    };
+    const launchKind = requiresAdditionalCycleFlow
+      ? 'additional_cycle' as const
+      : 'initial_setup' as const;
+    const launchParams = currentResult
+      ? {
+          formData,
+          simulationResult: currentResult,
+          defaultPondIdentifier: t('simulationDefaultPondIdentifier'),
+          launchKind,
+        }
+      : null;
+    const buildRequest = () =>
+      ongoing
+        ? buildFirstCycleLaunchRequestFromForm({ formData, launchKind })
+        : buildFirstCycleLaunchRequest(launchParams!);
 
     try {
       if (editingOfflineLaunchId) {
-        const request = buildFirstCycleLaunchRequest(launchParams);
+        const request = buildRequest();
         await offlineService.updatePendingCycleLaunch(
           editingOfflineLaunchId,
           {
@@ -212,7 +225,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         return;
       }
       if ((await offlineService.isOnline()) === false) {
-        const request = buildFirstCycleLaunchRequest(launchParams);
+        const request = buildRequest();
         await offlineService.saveCycleLaunchOffline({
           ...request,
           cycle: { ...request.cycle, created_offline: true },
@@ -221,7 +234,9 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         navigation.navigate('MainTabs', { screen: 'Dashboard' });
         return;
       }
-      const launchResult = await launchFirstCycle(launchParams);
+      const launchResult = ongoing
+        ? await launchFirstCycleFromForm({ formData, launchKind })
+        : await launchFirstCycle(launchParams!);
       dispatch(addCreatedProductionCycle(launchResult.productionCycle));
       dispatch(setFarmProfile(launchResult.farmProfile));
       await dispatch(fetchDashboardData({ forceAllCycles: true })).unwrap();
@@ -243,7 +258,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       }
       if (isNetworkError(err)) {
         await offlineService.saveCycleLaunchOffline(
-          buildFirstCycleLaunchRequest(launchParams),
+          buildRequest(),
           { attempted: true },
         );
         Alert.alert(t('saved'), t('cycleLaunchPendingAfterAttempt'));
@@ -258,7 +273,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     }
   }
 
-  if (simLoading && !currentResult) {
+  if (!ongoing && simLoading && !currentResult) {
     return (
       <Screen style={styles.centered}>
         <LoadingState message={t('simulationLoading')} />
@@ -266,7 +281,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     );
   }
 
-  if (!currentResult) {
+  if (!ongoing && !currentResult) {
     return (
       <Screen style={styles.centered}>
         <ErrorState
@@ -278,12 +293,12 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     );
   }
 
-  const technicalPauseDays = currentResult.technical_pause_days;
-  const cyclesPerYear = currentResult.cycles_per_year_derived;
-  const annualProjectionProduction = currentResult.annual_projection_production_kg;
-  const annualProjectionRevenue = currentResult.annual_projection_revenue_fcfa;
-  const annualProjectionNetProfit = currentResult.annual_projection_net_profit_fcfa;
-  const annualProjectionAquacareFee = currentResult.annual_projection_aquacare_fee_fcfa;
+  const technicalPauseDays = currentResult?.technical_pause_days ?? 0;
+  const cyclesPerYear = currentResult?.cycles_per_year_derived ?? 0;
+  const annualProjectionProduction = currentResult?.annual_projection_production_kg ?? 0;
+  const annualProjectionRevenue = currentResult?.annual_projection_revenue_fcfa ?? 0;
+  const annualProjectionNetProfit = currentResult?.annual_projection_net_profit_fcfa ?? 0;
+  const annualProjectionAquacareFee = currentResult?.annual_projection_aquacare_fee_fcfa ?? 0;
 
   return (
     <Screen scroll style={styles.content}>
@@ -291,10 +306,53 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         <AppText variant="cardTitle" style={styles.title}>{t('simulationSubtitle')}</AppText>
       </View>
       {ongoing ? (
-        <InlineAlert
-          tone="info"
-          message={t('ongoingCycleBaselineConfirmation')}
-        />
+        <>
+          <InlineAlert
+            tone="info"
+            message={t('ongoingCycleBaselineConfirmation')}
+          />
+          <Card variant="elevated" style={styles.card}>
+            <AppText variant="bodyStrong">{t('trackingStartSituation')}</AppText>
+            <MetricRow label={t('historicalStartDate')} value={formData.startDate} />
+            <MetricRow
+              label={t('historicalInitialCount')}
+              value={formData.historicalInitialCount || t('notProvided')}
+            />
+            <MetricRow
+              label={t('historicalInitialWeightOptional')}
+              value={formData.historicalInitialWeight
+                ? `${formData.historicalInitialWeight} g`
+                : t('notProvided')}
+            />
+            <MetricRow
+              label={t('trackingStartDate')}
+              value={formData.trackingStartDate || t('notProvided')}
+            />
+            <MetricRow
+              label={t('fishPresentAtTrackingStart')}
+              value={formData.fingerlingsCount}
+            />
+            <MetricRow
+              label={t('observedAverageWeight')}
+              value={formData.trackingStartAverageWeight
+                ? `${formData.trackingStartAverageWeight} g`
+                : t('notProvided')}
+            />
+            <MetricRow
+              label={t('baselineBiomass')}
+              value={`${formData.trackingStartBiomass || (
+                (
+                  Number(formData.fingerlingsCount)
+                  * Number(formData.trackingStartAverageWeight)
+                ) / 1000
+              ).toFixed(2)} kg`}
+            />
+            <MetricRow
+              label={t('openingStockLines')}
+              value={String(formData.initialFeedStocks?.length ?? 0)}
+            />
+          </Card>
+        </>
       ) : null}
 
       {!ongoing ? <Card variant="elevated" style={styles.card}>
@@ -417,19 +475,23 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         />
         <MetricRow
           label={t('simulationPlannedDuration')}
-          value={t('simulationDays', { days: currentResult.cycle_duration_days })}
+          value={t('simulationDays', {
+            days: ongoing
+              ? Number(formData.cycleDuration)
+              : currentResult?.cycle_duration_days ?? 0,
+          })}
         />
         {!ongoing ? (
           <>
             <MetricRow
               label={t('simulationEstimatedHarvestDate')}
-              value={currentResult.cycles_breakdown[0]?.end_date_estimate
+              value={currentResult?.cycles_breakdown[0]?.end_date_estimate
                 ? formatLocalDate(currentResult.cycles_breakdown[0].end_date_estimate, densityLocale)
                 : '—'}
             />
             <MetricRow
               label={t('simulationFeedBags')}
-              value={t('myFeedSacks', { count: currentResult.feed_bags_per_cycle })}
+              value={t('myFeedSacks', { count: currentResult?.feed_bags_per_cycle ?? 0 })}
             />
           </>
         ) : null}

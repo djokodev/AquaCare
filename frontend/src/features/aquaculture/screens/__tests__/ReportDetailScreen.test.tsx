@@ -130,6 +130,10 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
               current_biomass: 45,
               total_feed_consumed: 6,
               survival_rate: 97,
+              fcr: null,
+              fcr_scope: 'since_tracking_start',
+              fcr_label: null,
+              fcr_data_complete: false,
             },
             period_metrics: {
               log_count: 2,
@@ -181,7 +185,7 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
       },
     });
 
-    const { getByText } = render(
+    const { getByText, queryByText } = render(
       <ReportDetailScreen
         navigation={navigation}
         route={{ key: 'ReportDetail', name: 'ReportDetail', params: { reportId: 'report-1' } } as any}
@@ -195,6 +199,8 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
       expect(getByText('Bac 2')).toBeTruthy();
       expect(getByText('reportInitialFishCount')).toBeTruthy();
       expect(getByText('reportEstimatedFishCount')).toBeTruthy();
+      expect(getByText(/fcrUnavailableIncompleteData/)).toBeTruthy();
+      expect(queryByText(/fcrFullStat/)).toBeNull();
     });
   });
 
@@ -251,6 +257,10 @@ describe('features/aquaculture/screens/ReportDetailScreen', () => {
               current_biomass: 48.5,
               total_feed_consumed: 3.2,
               survival_rate: 99,
+              fcr: null,
+              fcr_scope: 'since_tracking_start',
+              fcr_label: null,
+              fcr_data_complete: false,
             },
             period_metrics: {
               log_count: 1,

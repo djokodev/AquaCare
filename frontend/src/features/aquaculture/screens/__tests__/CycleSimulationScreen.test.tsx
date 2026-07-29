@@ -7,7 +7,9 @@ import CycleSimulationScreen from '../CycleSimulationScreen';
 import {
   FirstCycleLaunchError,
   buildFirstCycleLaunchRequest,
+  buildFirstCycleLaunchRequestFromForm,
   launchFirstCycle,
+  launchFirstCycleFromForm,
 } from '@/features/aquaculture/services/firstCycleLaunchService';
 import { offlineService } from '@/services/offlineService';
 import {
@@ -39,7 +41,9 @@ jest.mock('react-i18next', () => {
 
 jest.mock('@/features/aquaculture/services/firstCycleLaunchService', () => ({
   launchFirstCycle: jest.fn(),
+  launchFirstCycleFromForm: jest.fn(),
   buildFirstCycleLaunchRequest: jest.fn(),
+  buildFirstCycleLaunchRequestFromForm: jest.fn(),
   FirstCycleLaunchError: class FirstCycleLaunchError extends Error {
     translationKey: string;
 
@@ -61,7 +65,11 @@ jest.mock('@/services/offlineService', () => ({
 describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   const mockDispatch = jest.fn();
   const mockLaunchFirstCycle = launchFirstCycle as unknown as jest.Mock;
+  const mockLaunchFirstCycleFromForm =
+    launchFirstCycleFromForm as unknown as jest.Mock;
   const mockBuildRequest = buildFirstCycleLaunchRequest as unknown as jest.Mock;
+  const mockBuildRequestFromForm =
+    buildFirstCycleLaunchRequestFromForm as unknown as jest.Mock;
   const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const createdProductionCycle = { id: 'cycle-1' } as unknown as ProductionCycle;
   const navigation = {
@@ -151,6 +159,11 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       launch_kind: 'initial_setup',
       cycle: { created_offline: false },
     });
+    mockBuildRequestFromForm.mockReturnValue({
+      launch_uuid: 'launch-ongoing-1',
+      launch_kind: 'initial_setup',
+      cycle: { onboarding_mode: 'ongoing', created_offline: false },
+    });
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     (useSelector as unknown as jest.Mock).mockImplementation(
       (selector: (state: any) => unknown) =>
@@ -181,6 +194,40 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       productionCycle: createdProductionCycle,
       productionUnitIdByLocalId: {},
     });
+    mockLaunchFirstCycleFromForm.mockResolvedValue({
+      farmProfile: { id: 'farm-profile-1' },
+      productionCycle: createdProductionCycle,
+      productionUnitIdByLocalId: {},
+    });
+  });
+
+  it('confirme et lance un ongoing sans appeler la simulation legacy', async () => {
+    const route = buildRoute({
+      onboardingMode: 'ongoing',
+      startDate: '2026-06-01',
+      historicalInitialCount: '2200',
+      historicalInitialWeight: '',
+      trackingStartDate: '2026-07-20',
+      trackingStartAverageWeight: '75',
+      fingerlingsCount: '2100',
+    });
+    const { getByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />,
+    );
+
+    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(getByText('historicalStartDate')).toBeTruthy();
+    expect(getByText('trackingStartSituation')).toBeTruthy();
+    expect(getByText('baselineBiomass')).toBeTruthy();
+    fireEvent.press(getByText('simulationLaunchBtn'));
+
+    await waitFor(() =>
+      expect(mockLaunchFirstCycleFromForm).toHaveBeenCalledWith(
+        expect.objectContaining({ formData: route.params.formData }),
+      ),
+    );
+    expect(mockBuildRequest).not.toHaveBeenCalled();
+    expect(mockLaunchFirstCycle).not.toHaveBeenCalled();
   });
 
   it('enregistre directement le lancement quand le téléphone est hors ligne', async () => {

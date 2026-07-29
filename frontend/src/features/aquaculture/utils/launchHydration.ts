@@ -52,7 +52,11 @@ export function hydrateFarmSetupFormFromLaunch(
       cycle.planned_selling_price_per_kg_fcfa ?? "",
     ),
     otherCosts: String(cycle.other_operational_costs_fcfa ?? ""),
-    fingerlingsCount: String(cycle.initial_count ?? ""),
+    fingerlingsCount: String(
+      ongoing
+        ? payload.tracking_baseline?.fish_count ?? ""
+        : cycle.initial_count ?? "",
+    ),
     harvestWeight: String(cycle.target_harvest_weight_g ?? ""),
     survivalRate: String(cycle.expected_survival_rate_pct ?? ""),
     productionUnits: units

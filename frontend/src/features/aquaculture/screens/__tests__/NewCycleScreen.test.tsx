@@ -29,6 +29,7 @@ jest.mock("@/hooks/useAuth", () => ({
 jest.mock("@/features/aquaculture/services/aquacultureService", () => ({
   aquacultureService: {
     getProductionUnits: jest.fn(),
+    getFarmFeedReferences: jest.fn(),
     launchProductionCycle: jest.fn(),
   },
 }));
@@ -39,6 +40,7 @@ jest.mock("@/services/offlineService", () => ({
     syncAllOfflineData: jest.fn(),
     isOnline: jest.fn(),
     saveCycleLaunchOffline: jest.fn(),
+    updatePendingCycleLaunch: jest.fn(),
     saveNewCycleOffline: jest.fn(),
   },
 }));
@@ -114,6 +116,7 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     } as any);
     mockOffline.isOnline.mockResolvedValue(true);
     mockOffline.saveCycleLaunchOffline.mockResolvedValue(undefined as any);
+    mockOffline.updatePendingCycleLaunch.mockResolvedValue(undefined as any);
     mockService.getProductionUnits.mockResolvedValue(units);
     mockIsNetworkError.mockReturnValue(false);
     mockService.launchProductionCycle.mockResolvedValue({
@@ -281,10 +284,110 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     );
     expect(mockOffline.saveCycleLaunchOffline).toHaveBeenCalledWith(
       mockService.launchProductionCycle.mock.calls[0][0],
-      { attempted: true },
+      {
+        attempted: true,
+        localContext: {
+          productionUnits: [units[0]],
+          feedReferences: [],
+        },
+      },
     );
     expect(mockOffline.saveNewCycleOffline).not.toHaveBeenCalled();
     expect(getByTestId("newCycleInitialCount").props.value).toBe("1500");
+    alertSpy.mockRestore();
+  });
+
+  it("édite un lancement ongoing avec ses snapshots sans aucun accès réseau", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    mockOffline.isOnline.mockResolvedValue(false);
+    const launchUuid = "22222222-2222-4222-8222-222222222222";
+    const offlineLaunch = {
+      launch_uuid: launchUuid,
+      launch_kind: "additional_cycle",
+      cycle: {
+        onboarding_mode: "ongoing",
+        species: "tilapia",
+        start_date: "2026-06-01",
+        initial_count: 2000,
+        initial_average_weight: null,
+        target_harvest_weight_g: 350,
+        planned_cycle_duration_days: 150,
+        expected_survival_rate_pct: 95,
+        planned_selling_price_per_kg_fcfa: 2800,
+        fingerlings_cost_fcfa: 0,
+        other_operational_costs_fcfa: 0,
+        created_offline: true,
+      },
+      tracking_baseline: {
+        tracking_start_date: "2026-07-20",
+        fish_count: 1850,
+        average_weight_g: "75",
+        biomass_kg: null,
+      },
+      production_units: [{
+        local_id: "existing-unit-1",
+        source: "existing",
+        production_unit_id: "unit-1",
+      }],
+      allocations: [{
+        production_unit_local_id: "existing-unit-1",
+        fish_count: 1850,
+      }],
+      initial_feed_stocks: [],
+    } as any;
+    const route = {
+      params: {
+        editingOfflineLaunchId: launchUuid,
+        offlineLaunch,
+        offlineLaunchContext: {
+          productionUnits: [units[0]],
+          feedReferences: [],
+        },
+      },
+    } as any;
+
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} route={route} />,
+    );
+
+    await waitFor(() =>
+      expect(getByTestId("newCycleAllocation-unit-1").props.value).toBe("1850"),
+    );
+    expect(mockService.getProductionUnits).not.toHaveBeenCalled();
+    expect(getByTestId("newCycleInitialCount").props.value).toBe("2000");
+    expect(getByTestId("newCycleTrackingCount").props.value).toBe("1850");
+
+    fireEvent.changeText(getByTestId("newCycleTrackingCount"), "1800");
+    fireEvent.changeText(getByTestId("newCycleAllocation-unit-1"), "1800");
+    fireEvent.press(getByText("startTracking"));
+
+    await waitFor(() =>
+      expect(mockOffline.updatePendingCycleLaunch).toHaveBeenCalledTimes(1),
+    );
+    expect(mockOffline.updatePendingCycleLaunch).toHaveBeenCalledWith(
+      launchUuid,
+      expect.objectContaining({
+        launch_uuid: launchUuid,
+        cycle: expect.objectContaining({
+          initial_count: 2000,
+          created_offline: true,
+        }),
+        tracking_baseline: expect.objectContaining({ fish_count: 1800 }),
+        allocations: [{
+          production_unit_local_id: "existing-unit-1",
+          fish_count: 1800,
+        }],
+      }),
+      {
+        localContext: {
+          productionUnits: [units[0]],
+          feedReferences: [],
+        },
+      },
+    );
+    expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 

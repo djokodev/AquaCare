@@ -99,6 +99,7 @@ export type RootStackParamList = {
   NewCycle:
     | {
         offlineLaunch?: import("@/types/aquaculture").CycleLaunchRequest;
+        offlineLaunchContext?: import("@/services/offlineService").OfflineCycleLaunch["localContext"];
         editingOfflineLaunchId?: string;
       }
     | undefined;
@@ -178,6 +179,7 @@ export type RootStackParamList = {
   CreateFarm:
     | {
         offlineLaunch?: import("@/types/aquaculture").CycleLaunchRequest;
+        offlineLaunchContext?: import("@/services/offlineService").OfflineCycleLaunch["localContext"];
         editingOfflineLaunchId?: string;
       }
     | undefined;

@@ -42,6 +42,11 @@ export interface LaunchFirstCycleParams {
   launchKind?: "initial_setup" | "additional_cycle";
 }
 
+export interface BuildFirstCycleFromFormParams {
+  formData: FarmSetupFormState;
+  launchKind?: "initial_setup" | "additional_cycle";
+}
+
 const toFiniteNumber = (value?: string | number | null): number | undefined => {
   if (value === null || value === undefined || value === "") {
     return undefined;
@@ -145,24 +150,101 @@ export const buildFirstCycleLaunchRequest = (
   params: LaunchFirstCycleParams,
 ): CycleLaunchRequest => {
   const { formData, simulationResult, launchKind = "initial_setup" } = params;
+  const ongoing = formData.onboardingMode === "ongoing";
+  const formPayload = buildFirstCycleLaunchRequestFromForm({
+    formData,
+    launchKind,
+  });
+  if (ongoing) {
+    return formPayload;
+  }
+
   const firstCycle = simulationResult.cycles_breakdown[0];
   if (!firstCycle) {
     throw new FirstCycleLaunchError("simulationErrorRetry");
   }
 
   const configuredDuration = getValidCycleDuration(formData.cycleDuration);
-  const ongoing = formData.onboardingMode === "ongoing";
   if (
     configuredDuration === undefined ||
-    (
-      !ongoing &&
-      (
-        configuredDuration !== firstCycle.duration_days ||
-        configuredDuration !== simulationResult.cycle_duration_days
-      )
-    )
+    configuredDuration !== firstCycle.duration_days ||
+    configuredDuration !== simulationResult.cycle_duration_days
   ) {
     throw new FirstCycleLaunchError("simulationCycleDurationMismatchError");
+  }
+
+  const simulatedInitialCount = toPositiveInteger(firstCycle.initial_fish_count);
+  const baselineCount = toPositiveInteger(formData.fingerlingsCount);
+  if (!baselineCount || !simulatedInitialCount || simulatedInitialCount !== baselineCount) {
+    throw new FirstCycleLaunchError(
+      "simulationProductionUnitAllocationInvalidError",
+    );
+  }
+
+  return {
+    ...formPayload,
+    ...(formPayload.production_plan
+      ? {
+          production_plan: {
+            ...formPayload.production_plan,
+            annual_production_target_kg:
+              simulationResult.annual_production_target_kg,
+            num_cycles_per_year: simulationResult.num_cycles,
+          },
+        }
+      : {}),
+    cycle: {
+      ...formPayload.cycle,
+      start_date: firstCycle.start_date_estimate,
+      fingerlings_cost_fcfa:
+        simulationResult.cycle_fingerlings_cost_fcfa
+        ?? formPayload.cycle.fingerlings_cost_fcfa,
+      other_operational_costs_fcfa:
+        simulationResult.cycle_other_costs_fcfa
+        ?? formPayload.cycle.other_operational_costs_fcfa,
+      planned_feed_bags:
+        firstCycle.feed_bags_total
+        || simulationResult.feed_bags_per_cycle
+        || undefined,
+    },
+  };
+};
+
+export const buildFirstCycleLaunchRequestFromForm = ({
+  formData,
+  launchKind = "initial_setup",
+}: BuildFirstCycleFromFormParams): CycleLaunchRequest => {
+  const ongoing = formData.onboardingMode === "ongoing";
+  const configuredDuration = getValidCycleDuration(formData.cycleDuration);
+  if (configuredDuration === undefined) {
+    throw new FirstCycleLaunchError("simulationCycleDurationMismatchError");
+  }
+
+  const startDate = formData.startDate?.trim();
+  if (!startDate) {
+    throw new FirstCycleLaunchError(
+      ongoing ? "ongoingCycleHistoricalStartRequired" : "fillRequiredFields",
+    );
+  }
+  const baselineCount = toPositiveInteger(formData.fingerlingsCount);
+  if (!baselineCount) {
+    throw new FirstCycleLaunchError(
+      ongoing ? "ongoingCycleTrackingCountRequired" : "fillRequiredFields",
+    );
+  }
+  const historicalCount = ongoing
+    ? toPositiveInteger(formData.historicalInitialCount)
+    : baselineCount;
+  if (!historicalCount) {
+    throw new FirstCycleLaunchError("ongoingCycleHistoricalCountRequired");
+  }
+  const trackingStartDate = formData.trackingStartDate?.trim();
+  if (ongoing && !trackingStartDate) {
+    throw new FirstCycleLaunchError("ongoingCycleTrackingDateRequired");
+  }
+  const trackingWeight = toFiniteNumber(formData.trackingStartAverageWeight);
+  if (ongoing && (!trackingWeight || trackingWeight <= 0)) {
+    throw new FirstCycleLaunchError("ongoingCycleTrackingWeightRequired");
   }
 
   const productionUnits = formData.productionUnits ?? [];
@@ -180,51 +262,36 @@ export const buildFirstCycleLaunchRequest = (
   if (!launchUuid) {
     throw new FirstCycleLaunchError("simulationErrorRetry");
   }
-
   const plan = buildFarmSetupPayload(formData);
   const sellingPrice = toFiniteNumber(formData.sellingPrice);
   const fingerlingsPrice = toFiniteNumber(formData.fingerlingsPrice) ?? 0;
-  const simulatedInitialCount = toPositiveInteger(firstCycle.initial_fish_count);
-  const baselineCount = toPositiveInteger(formData.fingerlingsCount);
-  if (
-    !baselineCount ||
-    (
-      !ongoing &&
-      (
-        !simulatedInitialCount ||
-        simulatedInitialCount !== baselineCount
-      )
-    )
-  ) {
-    throw new FirstCycleLaunchError(
-      "simulationProductionUnitAllocationInvalidError",
-    );
-  }
+  const perCycleOtherCosts = (toFiniteNumber(formData.otherCosts) ?? 0)
+    / Math.max(plan.num_cycles_per_year, 1);
 
-  const payload: CycleLaunchRequest = {
+  return {
     launch_uuid: launchUuid,
     launch_kind: launchKind,
     ...(launchKind === "initial_setup"
       ? {
           production_plan: {
-            annual_production_target_kg: simulationResult.annual_production_target_kg,
-            num_cycles_per_year: simulationResult.num_cycles,
+            annual_production_target_kg: plan.annual_production_target_kg,
+            num_cycles_per_year: plan.num_cycles_per_year,
             fingerlings_cost_per_unit_fcfa:
               plan.fingerlings_cost_per_unit_fcfa ?? fingerlingsPrice,
-            planned_selling_price_per_kg_fcfa:
-              plan.planned_selling_price_per_kg_fcfa ?? sellingPrice,
+            ...(plan.planned_selling_price_per_kg_fcfa === undefined
+              ? {}
+              : {
+                  planned_selling_price_per_kg_fcfa:
+                    plan.planned_selling_price_per_kg_fcfa,
+                }),
           },
         }
       : {}),
     cycle: {
       onboarding_mode: ongoing ? "ongoing" : "new",
       species: formData.species === "clarias" ? "clarias" : "tilapia",
-      start_date: ongoing
-        ? (formData.startDate || firstCycle.start_date_estimate)
-        : firstCycle.start_date_estimate,
-      initial_count: ongoing
-        ? toPositiveInteger(formData.historicalInitialCount) ?? baselineCount
-        : baselineCount,
+      start_date: startDate,
+      initial_count: historicalCount,
       ...(ongoing
         ? {
             initial_average_weight:
@@ -239,35 +306,16 @@ export const buildFirstCycleLaunchRequest = (
       ...(sellingPrice === undefined
         ? {}
         : { planned_selling_price_per_kg_fcfa: sellingPrice }),
-      fingerlings_cost_fcfa:
-        ongoing
-          ? fingerlingsPrice * (
-              toPositiveInteger(formData.historicalInitialCount) ?? baselineCount
-            )
-          : simulationResult.cycle_fingerlings_cost_fcfa ??
-            fingerlingsPrice * baselineCount,
-      other_operational_costs_fcfa:
-        ongoing
-          ? toFiniteNumber(formData.otherCosts) ?? 0
-          : simulationResult.cycle_other_costs_fcfa ?? 0,
-      ...(!ongoing
-        ? {
-            planned_feed_bags:
-              firstCycle.feed_bags_total ||
-              simulationResult.feed_bags_per_cycle ||
-              undefined,
-          }
-        : {}),
+      fingerlings_cost_fcfa: fingerlingsPrice * historicalCount,
+      other_operational_costs_fcfa: perCycleOtherCosts,
       created_offline: false,
     },
     ...(ongoing
       ? {
           tracking_baseline: {
-            tracking_start_date:
-              formData.trackingStartDate || formData.startDate || firstCycle.start_date_estimate,
+            tracking_start_date: trackingStartDate as string,
             fish_count: baselineCount,
-            average_weight_g:
-              formData.trackingStartAverageWeight ?? "",
+            average_weight_g: formData.trackingStartAverageWeight as string,
             biomass_kg: formData.trackingStartBiomass || null,
           },
         }
@@ -293,7 +341,6 @@ export const buildFirstCycleLaunchRequest = (
       : {}),
   };
 
-  return payload;
 };
 
 export const launchFirstCycle = async (
@@ -303,3 +350,10 @@ export const launchFirstCycle = async (
     buildFirstCycleLaunchRequest(params),
   );
 };
+
+export const launchFirstCycleFromForm = async (
+  params: BuildFirstCycleFromFormParams,
+): Promise<FirstCycleLaunchResult> =>
+  aquacultureService.launchProductionCycle(
+    buildFirstCycleLaunchRequestFromForm(params),
+  );

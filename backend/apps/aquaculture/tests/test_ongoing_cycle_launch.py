@@ -786,3 +786,88 @@ def test_ongoing_launch_rejects_species_mismatch_feed_reference(
     assert response.data['code'] == 'feed_reference_species_mismatch'
     assert ProductionCycle.objects.count() == 0
     assert CycleFeedStockEntry.objects.count() == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_launch_hides_cross_farm_external_feed_client_uuid(
+    auth_client,
+    farm_profile,
+    user_factory,
+):
+    other_user = user_factory()
+    client_uuid = uuid4()
+    FarmFeedReference.objects.create(
+        farm_profile=other_user.farm_profile,
+        source='external',
+        client_uuid=client_uuid,
+        name='Other Farm Feed',
+        normalized_name='other farm feed',
+        species='clarias',
+        pellet_size_mm=Decimal('2.00'),
+    )
+    payload = ongoing_launch_payload()
+    payload['initial_feed_stocks'] = [{
+        'local_id': 'stock-1',
+        'external_feed': {
+            'client_uuid': str(client_uuid),
+            'name': 'Other Farm Feed',
+            'species': 'clarias',
+            'pellet_size_mm': '2.00',
+        },
+        'quantity_kg': '25.00',
+        'cost_status': 'unknown',
+        'total_cost_fcfa': None,
+    }]
+
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data['code'] == 'feed_reference_not_found'
+    assert ProductionCycle.objects.count() == 0
+    assert ProductionUnit.objects.count() == 0
+    assert CycleFeedStockEntry.objects.count() == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_launch_keeps_external_feed_idempotency_conflict(
+    auth_client,
+    farm_profile,
+):
+    client_uuid = uuid4()
+    FarmFeedReference.objects.create(
+        farm_profile=farm_profile,
+        source='external',
+        client_uuid=client_uuid,
+        name='Known Feed',
+        normalized_name='known feed',
+        species='clarias',
+        pellet_size_mm=Decimal('2.00'),
+    )
+    payload = ongoing_launch_payload()
+    payload['initial_feed_stocks'] = [{
+        'local_id': 'stock-1',
+        'external_feed': {
+            'client_uuid': str(client_uuid),
+            'name': 'Changed Feed',
+            'species': 'clarias',
+            'pellet_size_mm': '3.00',
+        },
+        'quantity_kg': '25.00',
+        'cost_status': 'unknown',
+        'total_cost_fcfa': None,
+    }]
+
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data['code'] == 'feed_reference_idempotency_conflict'
+    assert ProductionCycle.objects.count() == 0
+    assert CycleFeedStockEntry.objects.count() == 0

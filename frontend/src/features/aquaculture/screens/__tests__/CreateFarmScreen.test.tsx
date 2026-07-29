@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import CreateFarmScreen from '../CreateFarmScreen';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
+import { offlineService } from '@/services/offlineService';
 
 let mockLanguage = 'fr';
 
@@ -25,6 +26,14 @@ jest.mock('react-redux', () => ({
   useSelector: jest.fn(),
 }));
 
+jest.mock('@/services/offlineService', () => ({
+  offlineService: {
+    isOnline: jest.fn(),
+    saveCycleLaunchOffline: jest.fn(),
+    updatePendingCycleLaunch: jest.fn(),
+  },
+}));
+
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -42,6 +51,7 @@ jest.mock('@/hooks/useAuth', () => ({
 
 describe('features/aquaculture/screens/CreateFarmScreen', () => {
   const mockDispatch = jest.fn();
+  const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const navigation = {
     navigate: jest.fn(),
     goBack: jest.fn(),
@@ -65,6 +75,9 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     mockLanguage = 'fr';
     jest.clearAllMocks();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
+    mockOffline.isOnline.mockResolvedValue(true);
+    mockOffline.saveCycleLaunchOffline.mockResolvedValue('launch-1');
+    mockOffline.updatePendingCycleLaunch.mockResolvedValue();
     (useSelector as unknown as jest.Mock).mockImplementation(
       (selector: (state: any) => unknown) =>
         selector({
@@ -78,6 +91,137 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
           },
         })
     );
+  });
+
+  it.each([
+    ['new', false],
+    ['ongoing', true],
+  ])(
+    'sauvegarde un setup initial %s sans simulation quand le réseau est absent',
+    async (_mode, ongoing) => {
+      mockOffline.isOnline.mockResolvedValue(false);
+      const { getAllByText, getByPlaceholderText, getByTestId, getByText } =
+        render(<CreateFarmScreen navigation={navigation} />);
+
+      fireEvent.press(getByText('createFarmSpeciesTilapia'));
+      if (ongoing) {
+        fireEvent.press(getByText('ongoingCycleMode'));
+      }
+      fireEvent.press(getAllByText('productionUnitTypeTank')[0]);
+      fireEvent.changeText(
+        getByPlaceholderText('createFarmUnitNamePlaceholder'),
+        'Bac offline',
+      );
+      fireEvent.changeText(
+        getByPlaceholderText('createFarmUnitVolumePlaceholder'),
+        '3',
+      );
+      fireEvent.press(getByText('+ createFarmAddUnitBtn'));
+      fireEvent.changeText(
+        getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax'),
+        '900',
+      );
+      if (ongoing) {
+        fireEvent.changeText(
+          getByTestId('createFarmHistoricalInitialCount'),
+          '1000',
+        );
+        fireEvent.changeText(
+          getByTestId('createFarmTrackingStartWeight'),
+          '50',
+        );
+      }
+
+      fireEvent.press(getByText('createFarmSimulateBtn'));
+
+      await waitFor(() => {
+        expect(mockOffline.saveCycleLaunchOffline).toHaveBeenCalledWith(
+          expect.objectContaining({
+            launch_kind: 'initial_setup',
+            cycle: expect.objectContaining({
+              onboarding_mode: ongoing ? 'ongoing' : 'new',
+              created_offline: true,
+            }),
+          }),
+          { attempted: false },
+        );
+      });
+      expect(mockDispatch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('préserve la baseline et les allocations pendant une édition offline', async () => {
+    const pendingPayload = {
+      launch_uuid: '11111111-1111-4111-8111-111111111111',
+      launch_kind: 'initial_setup',
+      production_plan: {
+        annual_production_target_kg: 1200,
+        num_cycles_per_year: 2,
+        fingerlings_cost_per_unit_fcfa: 50,
+      },
+      cycle: {
+        onboarding_mode: 'ongoing',
+        species: 'tilapia',
+        start_date: '2026-06-01',
+        initial_count: 2000,
+        initial_average_weight: null,
+        planned_cycle_duration_days: 180,
+        expected_survival_rate_pct: 95,
+        fingerlings_cost_fcfa: 100000,
+        other_operational_costs_fcfa: 0,
+        created_offline: true,
+      },
+      tracking_baseline: {
+        tracking_start_date: '2026-07-20',
+        fish_count: 1850,
+        average_weight_g: '50.00',
+        biomass_kg: null,
+      },
+      production_units: [{
+        local_id: 'unit-local-1',
+        source: 'new',
+        name: 'Bac hydraté',
+        unit_type: 'tank',
+        volume_m3: 10,
+      }],
+      allocations: [{
+        production_unit_local_id: 'unit-local-1',
+        fish_count: 1850,
+      }],
+      initial_feed_stocks: [],
+    } as any;
+    const route = {
+      params: {
+        offlineLaunch: pendingPayload,
+        editingOfflineLaunchId: pendingPayload.launch_uuid,
+      },
+    } as any;
+    const { getByPlaceholderText, getByText } = render(
+      <CreateFarmScreen navigation={navigation} route={route} />,
+    );
+
+    await waitFor(() => {
+      expect(
+        getByPlaceholderText('createFarmFingerlingsCountPlaceholderMax').props
+          .value,
+      ).toBe('1850');
+    });
+    fireEvent.press(getByText('createFarmSimulateBtn'));
+
+    await waitFor(() => {
+      expect(mockOffline.updatePendingCycleLaunch).toHaveBeenCalledWith(
+        pendingPayload.launch_uuid,
+        expect.objectContaining({
+          launch_uuid: pendingPayload.launch_uuid,
+          tracking_baseline: expect.objectContaining({ fish_count: 1850 }),
+          allocations: [{
+            production_unit_local_id: 'unit-local-1',
+            fish_count: 1850,
+          }],
+        }),
+      );
+    });
+    expect(mockDispatch).not.toHaveBeenCalled();
   });
 
   it('affiche le nom de la ferme en haut du flux', () => {

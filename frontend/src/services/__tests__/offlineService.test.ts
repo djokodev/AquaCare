@@ -36,6 +36,7 @@ describe('services/offlineService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await AsyncStorage.clear();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true } as any);
   });
 
   afterEach(() => {
@@ -78,7 +79,7 @@ describe('services/offlineService', () => {
     const result = await offlineService.syncOfflineCycleLaunches();
     const [saved] = await offlineService.getOfflineCycleLaunches();
 
-    expect(result).toEqual({ success: 1, failed: 0 });
+    expect(result).toEqual({ success: 1, failed: 0, skippedOffline: 0 });
     expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
       cycleLaunchPayload,
     );
@@ -124,6 +125,84 @@ describe('services/offlineService', () => {
       cycleLaunchPayload.launch_uuid,
     );
     expect(await offlineService.getOfflineCycleLaunches()).toEqual([]);
+  });
+
+  it('keeps an unattempted launch editable when synchronization is offline', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+
+    const result = await offlineService.syncOfflineCycleLaunches();
+    const [saved] = await offlineService.getOfflineCycleLaunches();
+
+    expect(result).toEqual({ success: 0, failed: 0, skippedOffline: 1 });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+    expect(saved.attempted).toBe(false);
+    expect(saved.sync_status).toBe('pending');
+  });
+
+  it('locks the exact payload after an online request fails', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    mockAquaculture.launchProductionCycle.mockRejectedValueOnce(
+      new Error('network lost after send'),
+    );
+
+    const result = await offlineService.syncOfflineCycleLaunches();
+    const [saved] = await offlineService.getOfflineCycleLaunches();
+
+    expect(result).toEqual({ success: 0, failed: 1, skippedOffline: 0 });
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      cycleLaunchPayload,
+    );
+    expect(saved.attempted).toBe(true);
+    expect(saved.sync_status).toBe('failed');
+  });
+
+  it('keeps dashboard-wide silent sync read-only while connectivity is known offline', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+
+    const result = await offlineService.syncAllOfflineData();
+    const [saved] = await offlineService.getOfflineCycleLaunches();
+
+    expect(result).toMatchObject({
+      success: 0,
+      failed: 0,
+      details: {
+        cycleLaunches: { success: 0, failed: 0, skippedOffline: 1 },
+      },
+    });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+    expect(saved).toMatchObject({
+      attempted: false,
+      sync_status: 'pending',
+    });
+  });
+
+  it('stores local context outside the server payload fingerprint', async () => {
+    const localContext = {
+      productionUnits: [{ id: 'unit-1', name: 'Bassin local' }],
+    } as any;
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, {
+      localContext,
+    });
+    const before = (await offlineService.getOfflineCycleLaunches())[0];
+
+    await offlineService.updatePendingCycleLaunch(
+      before.id,
+      cycleLaunchPayload,
+      {
+        localContext: {
+          productionUnits: [{ id: 'unit-1', name: 'Bassin renommé' }],
+        } as any,
+      },
+    );
+    const after = (await offlineService.getOfflineCycleLaunches())[0];
+
+    expect(after.fingerprint).toBe(before.fingerprint);
+    expect(after.payload).toEqual(cycleLaunchPayload);
+    expect(after.localContext?.productionUnits?.[0].name).toBe(
+      'Bassin renommé',
+    );
   });
 
   it('sauvegarde et relit un cycle log offline avec date par defaut', async () => {

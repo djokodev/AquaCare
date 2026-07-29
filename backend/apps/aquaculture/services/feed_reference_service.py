@@ -131,7 +131,7 @@ class FeedReferenceService:
             existing = FarmFeedReference.objects.select_for_update().filter(client_uuid=client_uuid).first()
             if existing:
                 if existing.farm_profile_id != farm_profile.id:
-                    raise PermissionError(_('Ce client_uuid appartient à une autre ferme.'))
+                    raise FeedReferenceNotFound()
                 if not cls._same_payload(existing, canonical_payload):
                     raise FeedReferenceIdempotencyConflict()
                 return existing

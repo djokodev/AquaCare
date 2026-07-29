@@ -9,9 +9,13 @@ from ..models import CalibrationOperation, ProductionUnit
 from ..serializers import CalibrationOperationSerializer, CalibrationTankSerializer
 from ..services.integrity_error_service import translate_production_unit_integrity_error
 from ..services.production_unit_service import ProductionUnitLifecycleService
+from .production_unit_error_contract import ProductionUnitErrorContractMixin
 
 
-class CalibrationTankViewSet(viewsets.ModelViewSet):
+class CalibrationTankViewSet(
+    ProductionUnitErrorContractMixin,
+    viewsets.ModelViewSet,
+):
     serializer_class = CalibrationTankSerializer
     permission_classes = [permissions.IsAuthenticated]
 

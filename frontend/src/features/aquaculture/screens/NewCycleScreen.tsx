@@ -100,6 +100,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const dispatch = useDispatch<AppDispatch>();
 
   const offlineLaunch = route?.params?.offlineLaunch;
+  const offlineLaunchContext = route?.params?.offlineLaunchContext;
   const editingOfflineLaunchId = route?.params?.editingOfflineLaunchId;
   const [formData, setFormData] = useState<NewCycleData>(() =>
     offlineLaunch
@@ -129,7 +130,9 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         } satisfies NewCycleData)
   );
   const [saving, setSaving] = useState(false);
-  const [availableUnits, setAvailableUnits] = useState<ProductionUnit[]>([]);
+  const [availableUnits, setAvailableUnits] = useState<ProductionUnit[]>(
+    () => offlineLaunchContext?.productionUnits ?? [],
+  );
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>(() =>
     (offlineLaunch?.production_units ?? [])
       .map((unit) => unit.production_unit_id)
@@ -161,7 +164,9 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   );
   const [calibrationName, setCalibrationName] = useState("");
   const [calibrationVolume, setCalibrationVolume] = useState("");
-  const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>([]);
+  const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>(
+    () => offlineLaunchContext?.feedReferences ?? [],
+  );
   const [stockReferenceMode, setStockReferenceMode] = useState<"existing" | "external">("external");
   const [stockReferenceId, setStockReferenceId] = useState("");
   const [stockName, setStockName] = useState("");
@@ -237,17 +242,41 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
 
   useEffect(() => {
     const bootstrap = async () => {
-      await runSilentOfflineSync();
+      if (!editingOfflineLaunchId) {
+        await runSilentOfflineSync();
+      }
       dispatch(fetchDashboardData({ lightweight: true }));
+      if (!(await offlineService.isOnline())) {
+        setLoadingUnits(false);
+        setUnitsLoadError(
+          (offlineLaunchContext?.productionUnits?.length ?? 0) === 0,
+        );
+        return;
+      }
       try {
         setLoadingUnits(true);
-        setAvailableUnits(
-          await aquacultureService.getProductionUnits({ status: "active", purpose: "production" }),
-        );
+        const serverUnits = await aquacultureService.getProductionUnits({
+          status: "active",
+          purpose: "production",
+        });
+        setAvailableUnits((localUnits) => [
+          ...serverUnits,
+          ...localUnits.filter(
+            (localUnit) => !serverUnits.some((unit) => unit.id === localUnit.id),
+          ),
+        ]);
         if (farmProfile?.id) {
-          setFeedReferences(
-            await aquacultureService.getFarmFeedReferences(farmProfile.id),
-          );
+          const serverReferences =
+            await aquacultureService.getFarmFeedReferences(farmProfile.id);
+          setFeedReferences((localReferences) => [
+            ...serverReferences,
+            ...localReferences.filter(
+              (localReference) =>
+                !serverReferences.some(
+                  (reference) => reference.id === localReference.id,
+                ),
+            ),
+          ]);
         }
         setUnitsLoadError(false);
       } catch {
@@ -257,7 +286,12 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
       }
     };
     void bootstrap();
-  }, [dispatch, farmProfile?.id]);
+  }, [
+    dispatch,
+    editingOfflineLaunchId,
+    farmProfile?.id,
+    offlineLaunchContext?.productionUnits?.length,
+  ]);
 
   const selectedUnits = availableUnits.filter((unit) =>
     selectedUnitIds.includes(unit.id),
@@ -312,6 +346,12 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             ...payload,
             cycle: { ...payload.cycle, created_offline: true },
           },
+          {
+            localContext: {
+              productionUnits: selectedUnits,
+              feedReferences,
+            },
+          },
         );
         Alert.alert(t("saved"), t("cycleLaunchPendingSync"));
         handleGoBack();
@@ -321,6 +361,11 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         await offlineService.saveCycleLaunchOffline({
           ...payload,
           cycle: { ...payload.cycle, created_offline: true },
+        }, {
+          localContext: {
+            productionUnits: selectedUnits,
+            feedReferences,
+          },
         });
         Alert.alert(t("saved"), t("cycleLaunchPendingSync"));
         handleGoBack();
@@ -386,6 +431,10 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
       if (isNetworkError(error)) {
         await offlineService.saveCycleLaunchOffline(payload, {
           attempted: true,
+          localContext: {
+            productionUnits: selectedUnits,
+            feedReferences,
+          },
         });
         Alert.alert(t("saved"), t("cycleLaunchPendingAfterAttempt"));
         return;
