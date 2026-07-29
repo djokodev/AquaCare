@@ -34,6 +34,10 @@ const initialState: AquacultureState = {
   feedingPlans: [],
   sanitaryLogs: [],
   dashboardData: undefined,
+  dashboardRequest: {
+    requestId: null,
+    farmProfileId: null,
+  },
   cycleFeedStatus: {
     data: null,
     loading: false,
@@ -57,10 +61,17 @@ const initialState: AquacultureState = {
 // ne pas afficher d'erreur a l'utilisateur post-deconnexion.
 export const ABORTED_UNAUTHENTICATED = 'ABORTED_UNAUTHENTICATED';
 
+export interface FetchDashboardDataOptions {
+  cycleId?: string;
+  forceAllCycles?: boolean;
+  lightweight?: boolean;
+  farmProfileId?: string;
+}
+
 export const fetchDashboardData = createAsyncThunk(
   'aquaculture/fetchDashboardData',
   async (
-    options: { cycleId?: string; forceAllCycles?: boolean; lightweight?: boolean } | undefined,
+    options: FetchDashboardDataOptions | undefined,
     { getState, rejectWithValue }
   ) => {
     const state = getState() as {
@@ -421,18 +432,42 @@ export const aquacultureSlice = createSlice({
 
   extraReducers: (builder) => {
     builder
-      .addCase(fetchDashboardData.pending, (state) => {
+      .addCase(fetchDashboardData.pending, (state, action) => {
+        state.dashboardRequest.requestId = action.meta.requestId;
+        state.dashboardRequest.farmProfileId =
+          action.meta.arg?.farmProfileId ?? null;
         state.loading.dashboard = true;
         state.error = null;
       })
       .addCase(fetchDashboardData.fulfilled, (state, action) => {
+        if (
+          action.meta.requestId !== state.dashboardRequest.requestId
+          || (action.meta.arg?.farmProfileId ?? null)
+            !== state.dashboardRequest.farmProfileId
+        ) {
+          return;
+        }
         state.loading.dashboard = false;
         state.dashboardData = action.payload;
         state.activeCycles = action.payload.active_cycles;
+        state.dashboardRequest.requestId = null;
+        state.dashboardRequest.farmProfileId = null;
       })
       .addCase(fetchDashboardData.rejected, (state, action) => {
+        if (
+          action.meta.requestId !== state.dashboardRequest.requestId
+          || (action.meta.arg?.farmProfileId ?? null)
+            !== state.dashboardRequest.farmProfileId
+        ) {
+          return;
+        }
         state.loading.dashboard = false;
-        if (action.payload !== ABORTED_UNAUTHENTICATED) {
+        state.dashboardRequest.requestId = null;
+        state.dashboardRequest.farmProfileId = null;
+        if (
+          !action.meta.aborted
+          && action.payload !== ABORTED_UNAUTHENTICATED
+        ) {
           state.error = action.payload as string;
         }
       })

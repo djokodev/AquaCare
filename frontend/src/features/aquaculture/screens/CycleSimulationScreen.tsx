@@ -260,7 +260,10 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         : await launchFirstCycle(launchParams!);
       dispatch(addCreatedProductionCycle(launchResult.productionCycle));
       dispatch(setFarmProfile(launchResult.farmProfile));
-      await dispatch(fetchDashboardData({ forceAllCycles: true })).unwrap();
+      await dispatch(fetchDashboardData({
+        forceAllCycles: true,
+        farmProfileId: launchResult.farmProfile.id,
+      })).unwrap();
       dispatch(setCurrentCycle(launchResult.productionCycle));
 
       navigation.reset({

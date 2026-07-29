@@ -462,6 +462,118 @@ describe('features/aquaculture/store/aquacultureSlice', () => {
     });
   });
 
+  it('conserve la réponse dashboard de la requête ferme la plus récente', () => {
+    const initial = aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState;
+    const farmOneDashboard = {
+      active_cycles: [{ ...activeCycle, id: 'farm-1-cycle' }],
+    } as any;
+    const farmTwoDashboard = {
+      active_cycles: [{
+        ...activeCycle,
+        id: 'farm-2-cycle',
+        farm_profile: 'farm-2',
+      }],
+    } as any;
+    const farmOneArg = { farmProfileId: 'farm-1' };
+    const farmTwoArg = { farmProfileId: 'farm-2' };
+
+    const farmOnePending = aquacultureReducer(
+      initial,
+      fetchDashboardData.pending('request-farm-1', farmOneArg),
+    );
+    const farmTwoPending = aquacultureReducer(
+      farmOnePending,
+      fetchDashboardData.pending('request-farm-2', farmTwoArg),
+    );
+    const farmTwoFulfilled = aquacultureReducer(
+      farmTwoPending,
+      fetchDashboardData.fulfilled(
+        farmTwoDashboard,
+        'request-farm-2',
+        farmTwoArg,
+      ),
+    );
+    const staleFarmOneFulfilled = aquacultureReducer(
+      farmTwoFulfilled,
+      fetchDashboardData.fulfilled(
+        farmOneDashboard,
+        'request-farm-1',
+        farmOneArg,
+      ),
+    );
+
+    expect(staleFarmOneFulfilled.dashboardData).toEqual(farmTwoDashboard);
+    expect(staleFarmOneFulfilled.activeCycles[0].id).toBe('farm-2-cycle');
+    expect(staleFarmOneFulfilled.loading.dashboard).toBe(false);
+  });
+
+  it('ignore une ancienne erreur dashboard après un succès plus récent', () => {
+    const initial = aquacultureReducer(undefined, { type: '@@INIT' }) as AquacultureState;
+    const farmTwoDashboard = {
+      active_cycles: [{
+        ...activeCycle,
+        id: 'farm-2-cycle',
+        farm_profile: 'farm-2',
+      }],
+    } as any;
+    const farmOneArg = { farmProfileId: 'farm-1' };
+    const farmTwoArg = { farmProfileId: 'farm-2' };
+    const farmOnePending = aquacultureReducer(
+      initial,
+      fetchDashboardData.pending('request-farm-1', farmOneArg),
+    );
+    const farmTwoPending = aquacultureReducer(
+      farmOnePending,
+      fetchDashboardData.pending('request-farm-2', farmTwoArg),
+    );
+    const farmTwoFulfilled = aquacultureReducer(
+      farmTwoPending,
+      fetchDashboardData.fulfilled(
+        farmTwoDashboard,
+        'request-farm-2',
+        farmTwoArg,
+      ),
+    );
+    const staleFarmOneRejected = aquacultureReducer(
+      farmTwoFulfilled,
+      fetchDashboardData.rejected(
+        new Error('farm-1 failed'),
+        'request-farm-1',
+        farmOneArg,
+        'farm-1 failed',
+      ),
+    );
+
+    expect(staleFarmOneRejected.dashboardData).toEqual(farmTwoDashboard);
+    expect(staleFarmOneRejected.error).toBeNull();
+    expect(staleFarmOneRejected.loading.dashboard).toBe(false);
+  });
+
+  it('ignore sans erreur le rejet de la requête dashboard annulée', async () => {
+    const store = createStore();
+    mockService.getDashboardData.mockImplementationOnce(
+      () => new Promise(() => undefined),
+    );
+
+    const request = store.dispatch(
+      fetchDashboardData({ farmProfileId: 'farm-1' }),
+    );
+    request.abort();
+    const action = await request;
+
+    expect(fetchDashboardData.rejected.match(action)).toBe(true);
+    if (!fetchDashboardData.rejected.match(action)) {
+      throw new Error('Expected an aborted dashboard request');
+    }
+    expect(action.meta.aborted).toBe(true);
+    expect(store.getState().aquaculture.error).toBeNull();
+    expect(store.getState().aquaculture.loading.dashboard).toBe(false);
+    expect(store.getState().aquaculture.dashboardRequest).toEqual({
+      requestId: null,
+      farmProfileId: null,
+    });
+  });
+
   it('fetchDashboardData utilise la chaine brute de l\'API si disponible', async () => {
     const store = createStore();
     mockService.getDashboardData.mockRejectedValueOnce({ response: { data: 'Service indisponible' } });

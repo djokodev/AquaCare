@@ -7,6 +7,7 @@ import type {
 
 const CACHE_VERSION = 1;
 const CACHE_PREFIX = 'aquacare_cycle_launch_references_v1';
+const updateQueues = new Map<string, Promise<void>>();
 
 export interface CycleLaunchReferenceCache {
   version: typeof CACHE_VERSION;
@@ -30,7 +31,12 @@ const emptyCache = (farmProfileId: string): CycleLaunchReferenceCache => ({
 const load = async (
   farmProfileId: string,
 ): Promise<CycleLaunchReferenceCache | null> => {
-  const raw = await AsyncStorage.getItem(storageKey(farmProfileId));
+  let raw: string | null;
+  try {
+    raw = await AsyncStorage.getItem(storageKey(farmProfileId));
+  } catch {
+    return null;
+  }
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<CycleLaunchReferenceCache>;
@@ -54,11 +60,26 @@ const update = async (
     Pick<CycleLaunchReferenceCache, 'productionUnits' | 'feedReferences'>
   >,
 ): Promise<void> => {
-  const current = (await load(farmProfileId)) ?? emptyCache(farmProfileId);
-  await AsyncStorage.setItem(
-    storageKey(farmProfileId),
-    JSON.stringify({ ...current, ...values, updatedAt: Date.now() }),
-  );
+  const previousUpdate =
+    updateQueues.get(farmProfileId) ?? Promise.resolve();
+  const currentUpdate = previousUpdate
+    .catch(() => undefined)
+    .then(async () => {
+      const current =
+        (await load(farmProfileId)) ?? emptyCache(farmProfileId);
+      await AsyncStorage.setItem(
+        storageKey(farmProfileId),
+        JSON.stringify({ ...current, ...values, updatedAt: Date.now() }),
+      );
+    });
+  updateQueues.set(farmProfileId, currentUpdate);
+  try {
+    await currentUpdate;
+  } finally {
+    if (updateQueues.get(farmProfileId) === currentUpdate) {
+      updateQueues.delete(farmProfileId);
+    }
+  }
 };
 
 export const cycleLaunchReferenceCache = {

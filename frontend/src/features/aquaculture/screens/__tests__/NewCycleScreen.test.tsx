@@ -116,7 +116,9 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     jest.clearAllMocks();
     await AsyncStorage.clear();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
-    mockUseAuth.mockReturnValue({ farmProfile: { farm_name: "Ferme Test" } });
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({
       success: 0,
@@ -1505,6 +1507,103 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
       screen.getByTestId("newCycleUnit-unit-obsolete").props
         .accessibilityState.disabled,
     ).toBe(true);
+  });
+
+  it("bloque immédiatement la soumission pendant le bootstrap d une nouvelle ferme", async () => {
+    const abortDashboard = jest.fn();
+    mockDispatch.mockReturnValue({ abort: abortDashboard });
+    const farmTwoUnit = {
+      ...units[0],
+      id: "unit-farm-2",
+      farm_profile: "farm-2",
+      name: "Bassin ferme 2",
+    };
+    let resolveFarmTwoUnits:
+      ((productionUnits: typeof units) => void) | undefined;
+    const farmTwoUnitsPromise = new Promise<typeof units>((resolve) => {
+      resolveFarmTwoUnits = resolve;
+    });
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme 1" },
+    });
+    mockService.getProductionUnits
+      .mockResolvedValueOnce(units)
+      .mockReturnValueOnce(farmTwoUnitsPromise);
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("newCycleUnit-unit-1")).toBeTruthy(),
+    );
+    fillValidOngoingForm(screen);
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("newCycleSubmit").props.accessibilityState.disabled,
+      ).toBe(false),
+    );
+
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-2", farm_name: "Ferme 2" },
+    });
+    screen.rerender(<NewCycleScreen navigation={navigation} />);
+
+    await waitFor(() => {
+      expect(abortDashboard).toHaveBeenCalled();
+      expect(screen.getByText("cycleLaunchFarmContextLoading")).toBeTruthy();
+      expect(
+        screen.getByTestId("newCycleSubmit").props.accessibilityState.disabled,
+      ).toBe(true);
+    });
+    fireEvent.press(screen.getByTestId("newCycleSubmit"));
+    expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
+    expect(mockOffline.updatePendingCycleLaunch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveFarmTwoUnits?.([farmTwoUnit] as typeof units);
+      await farmTwoUnitsPromise;
+    });
+  });
+
+  it("annule la sauvegarde si la ferme change pendant isOnline", async () => {
+    let resolveSaveConnectivity: ((online: boolean) => void) | undefined;
+    const saveConnectivityPromise = new Promise<boolean>((resolve) => {
+      resolveSaveConnectivity = resolve;
+    });
+    mockOffline.isOnline
+      .mockResolvedValueOnce(true)
+      .mockReturnValueOnce(saveConnectivityPromise)
+      .mockResolvedValue(true);
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme 1" },
+    });
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("newCycleUnit-unit-1")).toBeTruthy(),
+    );
+    fillValidOngoingForm(screen);
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("newCycleSubmit").props.accessibilityState.disabled,
+      ).toBe(false),
+    );
+    fireEvent.press(screen.getByTestId("newCycleSubmit"));
+
+    await waitFor(() =>
+      expect(mockOffline.isOnline).toHaveBeenCalledTimes(2),
+    );
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-2", farm_name: "Ferme 2" },
+    });
+    screen.rerender(<NewCycleScreen navigation={navigation} />);
+    await act(async () => {
+      resolveSaveConnectivity?.(false);
+      await saveConnectivityPromise;
+    });
+
+    expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
+    expect(mockOffline.updatePendingCycleLaunch).not.toHaveBeenCalled();
   });
 
   it("affiche le calendrier ongoing avec la durée restante inclusive", async () => {

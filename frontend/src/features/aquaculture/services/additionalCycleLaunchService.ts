@@ -19,9 +19,35 @@ export class AdditionalCycleLaunchError extends Error {
 interface AdditionalCycleLaunchInput {
   formData: NewCycleData;
   selectedUnits: ProductionUnit[];
+  selectedUnitIds: string[];
   allocationsByUnitId: Record<string, string>;
+  farmProfileId: string | null | undefined;
+  loadedFarmProfileId: string | null;
+  loadingUnits: boolean;
+  unavailableUnitIds?: readonly string[];
   launchUuid: string;
   calibrationUnits?: CycleLaunchCalibrationUnitInput[];
+}
+
+export type ProductionUnitFarmValidationResult =
+  | { valid: true }
+  | {
+      valid: false;
+      reason:
+        | "farm_context_loading"
+        | "farm_context_stale"
+        | "unit_farm_mismatch"
+        | "unit_not_found";
+      unitId?: string;
+    };
+
+interface ProductionUnitFarmValidationInput {
+  selectedUnits: ProductionUnit[];
+  selectedUnitIds: string[];
+  farmProfileId: string | null | undefined;
+  loadedFarmProfileId: string | null;
+  loading: boolean;
+  unavailableUnitIds?: readonly string[];
 }
 
 const toFiniteNumber = (value: string): number | undefined => {
@@ -40,12 +66,64 @@ const toPositiveInteger = (value: string): number | undefined => {
 const getUnitLocalId = (unit: ProductionUnit): string => `existing-${unit.id}`;
 const BIOMASS_TOLERANCE_RATIO = 0.1;
 
+export const validateSelectedProductionUnitsForFarm = ({
+  selectedUnits,
+  selectedUnitIds,
+  farmProfileId,
+  loadedFarmProfileId,
+  loading,
+  unavailableUnitIds = [],
+}: ProductionUnitFarmValidationInput): ProductionUnitFarmValidationResult => {
+  if (loading) {
+    return { valid: false, reason: "farm_context_loading" };
+  }
+  if (!farmProfileId || loadedFarmProfileId !== farmProfileId) {
+    return { valid: false, reason: "farm_context_stale" };
+  }
+
+  const selectedUnitsById = new Map(
+    selectedUnits.map((unit) => [unit.id, unit]),
+  );
+  const unavailableIds = new Set(unavailableUnitIds);
+  for (const unitId of selectedUnitIds) {
+    const unit = selectedUnitsById.get(unitId);
+    if (!unit || unavailableIds.has(unitId)) {
+      return { valid: false, reason: "unit_not_found", unitId };
+    }
+    if (unit.farm_profile !== farmProfileId) {
+      return { valid: false, reason: "unit_farm_mismatch", unitId };
+    }
+  }
+  return { valid: true };
+};
+
 export const validateAdditionalCycleLaunch = ({
   formData,
   selectedUnits,
+  selectedUnitIds,
   allocationsByUnitId,
+  farmProfileId,
+  loadedFarmProfileId,
+  loadingUnits,
+  unavailableUnitIds = [],
   calibrationUnits = [],
 }: Omit<AdditionalCycleLaunchInput, "launchUuid">): string | null => {
+  const farmValidation = validateSelectedProductionUnitsForFarm({
+    selectedUnits,
+    selectedUnitIds,
+    farmProfileId,
+    loadedFarmProfileId,
+    loading: loadingUnits,
+    unavailableUnitIds,
+  });
+  if (!farmValidation.valid) {
+    return {
+      farm_context_loading: "cycleLaunchFarmContextLoading",
+      farm_context_stale: "cycleLaunchFarmContextChanged",
+      unit_farm_mismatch: "cycleLaunchProductionUnitFarmMismatch",
+      unit_not_found: "cycleLaunchProductionUnitNotFound",
+    }[farmValidation.reason];
+  }
   if (!formData.species || !formData.start_date.trim()) {
     return "fillRequiredFields";
   }

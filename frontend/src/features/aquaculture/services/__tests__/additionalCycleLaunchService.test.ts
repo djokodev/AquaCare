@@ -16,6 +16,13 @@ const unit = {
   updated_at: "2026-01-01T00:00:00Z",
 } as const;
 
+const validFarmContext = {
+  selectedUnitIds: ["unit-1"],
+  farmProfileId: "farm-1",
+  loadedFarmProfileId: "farm-1",
+  loadingUnits: false,
+};
+
 const ongoingForm = {
   onboarding_mode: "ongoing",
   cycle_name: "Clarias Nord",
@@ -59,6 +66,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
     (trackingStartDate) => {
       jest.useFakeTimers().setSystemTime(new Date("2026-10-30T12:00:00Z"));
       expect(validateAdditionalCycleLaunch({
+        ...validFarmContext,
         formData: {
           ...ongoingForm,
           tracking_start_date: trackingStartDate,
@@ -73,6 +81,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
   it("accepts the day before harvest and builds two inclusive remaining days", () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-10-27T12:00:00Z"));
     const input = {
+      ...validFarmContext,
       formData: {
         ...ongoingForm,
         tracking_start_date: "2026-10-27",
@@ -92,6 +101,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
   it("rejects an elapsed harvest in both validator and builder", () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-07-29T12:00:00Z"));
     const input = {
+      ...validFarmContext,
       formData: {
         ...ongoingForm,
         start_date: "2026-01-01",
@@ -115,6 +125,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
 
   it("builds an ongoing aggregate without inventing historical weight or cost", () => {
     const payload = buildAdditionalCycleLaunchRequest({
+      ...validFarmContext,
       formData: ongoingForm as any,
       selectedUnits: [unit as any],
       allocationsByUnitId: { "unit-1": "1850" },
@@ -135,6 +146,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
 
   it("validates allocation against the tracking baseline count", () => {
     expect(validateAdditionalCycleLaunch({
+      ...validFarmContext,
       formData: ongoingForm as any,
       selectedUnits: [unit as any],
       allocationsByUnitId: { "unit-1": "2000" },
@@ -143,6 +155,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
 
   it("rejects a declared biomass outside the ten-percent tolerance", () => {
     expect(validateAdditionalCycleLaunch({
+      ...validFarmContext,
       formData: { ...ongoingForm, tracking_start_biomass: "200.00" } as any,
       selectedUnits: [unit as any],
       allocationsByUnitId: { "unit-1": "1850" },
@@ -164,6 +177,7 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
     },
   ])("rejects opening stock with multiple feed identities", (identities) => {
     expect(validateAdditionalCycleLaunch({
+      ...validFarmContext,
       formData: {
         ...ongoingForm,
         initial_feed_stocks: [{
@@ -178,5 +192,45 @@ describe("additionalCycleLaunchService ongoing onboarding", () => {
       selectedUnits: [unit as unknown as ProductionUnit],
       allocationsByUnitId: { "unit-1": "1850" },
     })).toBe("openingStockInvalid");
+  });
+
+  it.each([
+    {
+      context: { ...validFarmContext, loadingUnits: true },
+      error: "cycleLaunchFarmContextLoading",
+    },
+    {
+      context: { ...validFarmContext, loadedFarmProfileId: "farm-2" },
+      error: "cycleLaunchFarmContextChanged",
+    },
+    {
+      context: {
+        ...validFarmContext,
+        selectedUnits: [{ ...unit, farm_profile: "farm-2" }],
+      },
+      error: "cycleLaunchProductionUnitFarmMismatch",
+    },
+    {
+      context: { ...validFarmContext, selectedUnits: [] },
+      error: "cycleLaunchProductionUnitNotFound",
+    },
+    {
+      context: { ...validFarmContext, unavailableUnitIds: ["unit-1"] },
+      error: "cycleLaunchProductionUnitNotFound",
+    },
+  ])("rejects an invalid farm context with $error", ({ context, error }) => {
+    const input = {
+      ...validFarmContext,
+      formData: ongoingForm as any,
+      selectedUnits: [unit as any],
+      allocationsByUnitId: { "unit-1": "1850" },
+      launchUuid: "11111111-1111-4111-8111-111111111111",
+      ...context,
+    };
+
+    expect(validateAdditionalCycleLaunch(input)).toBe(error);
+    expect(() => buildAdditionalCycleLaunchRequest(input)).toThrow(
+      expect.objectContaining({ translationKey: error }),
+    );
   });
 });

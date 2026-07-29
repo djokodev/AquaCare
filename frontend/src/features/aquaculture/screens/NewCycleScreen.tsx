@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Alert, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -93,6 +93,13 @@ const OPENING_STOCK_REFERENCE_ERROR_KEYS: Record<
   invalid_identity: "openingStockInvalid",
 };
 
+class FarmContextChangedError extends Error {
+  constructor() {
+    super("Farm context changed during cycle launch");
+    this.name = "FarmContextChangedError";
+  }
+}
+
 type NewCycleScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
   "NewCycle"
@@ -108,6 +115,8 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const { t } = useTranslation();
   const { farmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
+  const activeFarmIdRef = useRef<string | null>(farmProfile?.id ?? null);
+  activeFarmIdRef.current = farmProfile?.id ?? null;
 
   const offlineLaunch = route?.params?.offlineLaunch;
   const offlineLaunchContext = route?.params?.offlineLaunchContext;
@@ -165,6 +174,9 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
     );
   });
   const [loadingUnits, setLoadingUnits] = useState(true);
+  const [loadedFarmProfileId, setLoadedFarmProfileId] = useState<string | null>(
+    null,
+  );
   const [unitsLoadError, setUnitsLoadError] = useState(false);
   const [offlineReferencesEmpty, setOfflineReferencesEmpty] = useState(false);
   const [unavailablePendingUnitIds, setUnavailablePendingUnitIds] = useState<
@@ -292,24 +304,46 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   useEffect(() => {
     let active = true;
     const isCurrentBootstrap = (): boolean => active;
+    let dashboardRequest: { abort?: () => void } | undefined;
 
     const bootstrap = async () => {
+      const farmProfileId = farmProfile?.id;
+      const historicalPendingUnits = (
+        offlineLaunchContext?.productionUnits ?? []
+      ).filter((unit) => selectedUnitIds.includes(unit.id));
+      setLoadedFarmProfileId(null);
       setLoadingUnits(true);
+      setStockReferenceId("");
+      setFeedReferences([]);
+      setAvailableUnits(
+        editingOfflineLaunchId ? historicalPendingUnits : [],
+      );
+      setUnavailablePendingUnitIds(
+        editingOfflineLaunchId
+          ? historicalPendingUnits.map((unit) => unit.id)
+          : [],
+      );
+      setUnitsLoadError(false);
+      setOfflineReferencesEmpty(false);
+      if (!editingOfflineLaunchId) {
+        setSelectedUnitIds([]);
+        setAllocationsByUnitId({});
+      }
       if (!editingOfflineLaunchId) {
         await runSilentOfflineSync();
         if (!isCurrentBootstrap()) return;
       }
-      dispatch(fetchDashboardData({ lightweight: true }));
-      const farmProfileId = farmProfile?.id;
+      dashboardRequest = dispatch(fetchDashboardData({
+        lightweight: true,
+        farmProfileId,
+      }));
       const cached = farmProfileId
         ? await cycleLaunchReferenceCache.load(farmProfileId)
         : null;
       if (!isCurrentBootstrap()) return;
       const pendingUnitSnapshots = (
         offlineLaunchContext?.productionUnits ?? []
-      ).filter(
-        (unit) => !farmProfileId || unit.farm_profile === farmProfileId,
-      );
+      ).filter((unit) => selectedUnitIds.includes(unit.id));
       const pendingFeedSnapshots = (
         offlineLaunchContext?.feedReferences ?? []
       ).filter(
@@ -329,7 +363,6 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         setAvailableUnits(pendingUnitSnapshots);
         setFeedReferences([]);
       }
-      setLoadingUnits(false);
       const online = await offlineService.isOnline();
       if (!isCurrentBootstrap()) return;
       if (!online) {
@@ -340,6 +373,13 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         setOfflineReferencesEmpty(
           !hasOfflineUnits && (cached?.feedReferences.length ?? 0) === 0,
         );
+        setUnavailablePendingUnitIds(
+          pendingUnitSnapshots
+            .filter((unit) => unit.farm_profile !== farmProfileId)
+            .map((unit) => unit.id),
+        );
+        setLoadedFarmProfileId(farmProfileId ?? null);
+        setLoadingUnits(false);
         return;
       }
       setOfflineReferencesEmpty(false);
@@ -350,11 +390,9 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         });
         if (!isCurrentBootstrap()) return;
         const pendingSnapshots = editingOfflineLaunchId
-          ? (offlineLaunchContext?.productionUnits ?? []).filter(
+          ? pendingUnitSnapshots.filter(
               (snapshot) =>
-                (!farmProfileId || snapshot.farm_profile === farmProfileId)
-                && selectedUnitIds.includes(snapshot.id)
-                && !serverUnits.some((unit) => unit.id === snapshot.id),
+                !serverUnits.some((unit) => unit.id === snapshot.id),
             )
           : [];
         setAvailableUnits([...serverUnits, ...pendingSnapshots]);
@@ -399,10 +437,14 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
           // Cached references remain available when their refresh fails.
         }
       }
+      if (!isCurrentBootstrap()) return;
+      setLoadedFarmProfileId(farmProfileId ?? null);
+      setLoadingUnits(false);
     };
     void bootstrap();
     return () => {
       active = false;
+      dashboardRequest?.abort?.();
     };
   }, [
     dispatch,
@@ -422,7 +464,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         !farmProfile?.id || reference.farm_profile === farmProfile.id,
     );
   const displayFeedReferenceSnapshots = [
-    ...pendingFeedReferenceSnapshots,
+    ...allPendingFeedReferenceSnapshots,
     ...sessionFeedReferenceSnapshots,
   ];
   const validationFeedReferenceSnapshots = [
@@ -444,7 +486,12 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const validationErrorKey = validateAdditionalCycleLaunch({
     formData,
     selectedUnits,
+    selectedUnitIds,
     allocationsByUnitId,
+    farmProfileId: farmProfile?.id,
+    loadedFarmProfileId,
+    loadingUnits,
+    unavailableUnitIds: unavailablePendingUnitIds,
     calibrationUnits,
   });
   const isFormValid = validationErrorKey === null;
@@ -467,7 +514,12 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
     const currentValidationError = validateAdditionalCycleLaunch({
       formData,
       selectedUnits,
+      selectedUnitIds,
       allocationsByUnitId,
+      farmProfileId: farmProfile?.id,
+      loadedFarmProfileId,
+      loadingUnits,
+      unavailableUnitIds: unavailablePendingUnitIds,
       calibrationUnits,
     });
     if (currentValidationError) {
@@ -489,12 +541,27 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
       );
       return;
     }
+    if (!farmProfile?.id) {
+      Alert.alert(t("error"), t("cycleLaunchFarmContextChanged"));
+      return;
+    }
+    const submissionFarmId = farmProfile.id;
+    const ensureSubmissionFarmIsCurrent = (): void => {
+      if (activeFarmIdRef.current !== submissionFarmId) {
+        throw new FarmContextChangedError();
+      }
+    };
 
     setSaving(true);
     const payload = buildAdditionalCycleLaunchRequest({
       formData,
       selectedUnits,
+      selectedUnitIds,
       allocationsByUnitId,
+      farmProfileId: submissionFarmId,
+      loadedFarmProfileId,
+      loadingUnits,
+      unavailableUnitIds: unavailablePendingUnitIds,
       launchUuid: launchRequestId,
       calibrationUnits,
     });
@@ -507,6 +574,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
     });
     try {
       if (editingOfflineLaunchId) {
+        ensureSubmissionFarmIsCurrent();
         await offlineService.updatePendingCycleLaunch(
           editingOfflineLaunchId,
           {
@@ -517,23 +585,32 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             localContext,
           },
         );
+        ensureSubmissionFarmIsCurrent();
         Alert.alert(t("saved"), t("cycleLaunchPendingSync"));
         handleGoBack();
         return;
       }
-      if (!(await offlineService.isOnline())) {
+      const online = await offlineService.isOnline();
+      ensureSubmissionFarmIsCurrent();
+      if (!online) {
         await offlineService.saveCycleLaunchOffline({
           ...payload,
           cycle: { ...payload.cycle, created_offline: true },
         }, {
           localContext,
         });
+        ensureSubmissionFarmIsCurrent();
         Alert.alert(t("saved"), t("cycleLaunchPendingSync"));
         handleGoBack();
         return;
       }
+      ensureSubmissionFarmIsCurrent();
       const launchResult = await aquacultureService.launchProductionCycle(payload);
-      dispatch(fetchDashboardData({ lightweight: true }));
+      ensureSubmissionFarmIsCurrent();
+      dispatch(fetchDashboardData({
+        lightweight: true,
+        farmProfileId: submissionFarmId,
+      }));
 
       const backendSellingPrice =
         launchResult.productionCycle.planned_selling_price_per_kg_fcfa;
@@ -585,11 +662,19 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         },
       ]);
     } catch (error: unknown) {
+      if (error instanceof FarmContextChangedError) {
+        Alert.alert(t("error"), t("cycleLaunchFarmContextChanged"));
+        return;
+      }
       if (error instanceof AdditionalCycleLaunchError) {
         Alert.alert(t("error"), t(error.translationKey));
         return;
       }
       if (isNetworkError(error)) {
+        if (activeFarmIdRef.current !== submissionFarmId) {
+          Alert.alert(t("error"), t("cycleLaunchFarmContextChanged"));
+          return;
+        }
         await offlineService.saveCycleLaunchOffline(payload, {
           attempted: true,
           localContext,
@@ -1013,7 +1098,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             </Card>;
           })() : null}
           {!isFormValid ? <InlineAlert tone="info" message={validationErrorKey ? t(validationErrorKey) : undefined} /> : null}
-          <Button testID="newCycleSubmit" label={t(formData.onboarding_mode === "ongoing" ? "startTracking" : "createCycle")} onPress={handleSave} disabled={!isFormValid} loading={saving} iconLeft="checkmark" />
+          <Button testID="newCycleSubmit" label={t(formData.onboarding_mode === "ongoing" ? "startTracking" : "createCycle")} onPress={handleSave} disabled={!isFormValid || loadingUnits || saving || !farmProfile?.id || loadedFarmProfileId !== farmProfile.id} loading={saving} iconLeft="checkmark" />
         </View>
       </Screen>
     </View>

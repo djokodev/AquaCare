@@ -1225,6 +1225,10 @@ export interface AquacultureState {
 
   // Dashboard
   dashboardData?: DashboardData;
+  dashboardRequest: {
+    requestId: string | null;
+    farmProfileId: string | null;
+  };
 
   // Statut aliments cycle actif
   cycleFeedStatus: {
