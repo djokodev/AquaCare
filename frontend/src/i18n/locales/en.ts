@@ -369,6 +369,8 @@
   cycleLaunchRejectedNextAction: 'Review the data or contact support before preparing another launch.',
   cycleLaunchIdempotencyConflict: 'The launch conflicts with a previous attempt.',
   cycleLaunchFeedReferenceNotFound: 'The feed reference is no longer available.',
+  cycleLaunchFeedReferenceSpeciesMismatch: 'This opening-stock line uses feed that is incompatible with the cycle species. Remove it or restore the matching species.',
+  cycleLaunchFeedReferenceFarmMismatch: 'This opening-stock line belongs to another farm and cannot be submitted from the active farm.',
   cycleLaunchFeedReferenceConflict: 'The feed reference conflicts with a previous attempt.',
   cycleLaunchValidationRejected: 'Some launch data is no longer valid.',
   cycleLaunchResourceNotFound: 'A resource required by this launch is no longer available.',

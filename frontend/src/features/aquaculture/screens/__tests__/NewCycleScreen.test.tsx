@@ -201,6 +201,37 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     ...overrides,
   });
 
+  const fillValidOngoingForm = (
+    screen: ReturnType<typeof render>,
+  ): void => {
+    const trackingDate = getBusinessIsoDate();
+    const startDate = new Date(`${trackingDate}T12:00:00Z`);
+    startDate.setUTCDate(startDate.getUTCDate() - 30);
+
+    fireEvent.press(screen.getByText("ongoingCycleMode"));
+    fireEvent.press(screen.getByText("tilapia"));
+    fireEvent.press(screen.getByTestId("newCycleUnit-unit-1"));
+    fireEvent.changeText(screen.getByTestId("newCycleInitialCount"), "2000");
+    fireEvent.changeText(
+      screen.getByTestId("newCycleStartDate"),
+      startDate.toISOString().slice(0, 10),
+    );
+    fireEvent.changeText(
+      screen.getByTestId("newCycleTrackingDate"),
+      trackingDate,
+    );
+    fireEvent.changeText(screen.getByTestId("newCycleTrackingCount"), "1850");
+    fireEvent.changeText(screen.getByTestId("newCycleTrackingWeight"), "75");
+    fireEvent.changeText(screen.getByTestId("newCycleTargetWeight"), "350");
+    fireEvent.changeText(screen.getByTestId("newCycleDuration"), "150");
+    fireEvent.changeText(screen.getByTestId("newCycleSurvival"), "95");
+    fireEvent.changeText(screen.getByTestId("newCycleSellingPrice"), "2800");
+    fireEvent.changeText(
+      screen.getByTestId("newCycleAllocation-unit-1"),
+      "1850",
+    );
+  };
+
   it("lance un cycle supplémentaire avec une unité existante en un seul appel", async () => {
     const alertSpy = jest
       .spyOn(Alert, "alert")
@@ -887,6 +918,243 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
       "cycleLaunchFeedReferenceNotFound",
     );
     alertSpy.mockRestore();
+  });
+
+  it("bloque une ligne déjà ajoutée après changement d espèce puis la revalide au retour", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    const tilapiaReference = buildFeedReference();
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockService.getFarmFeedReferences.mockResolvedValue([tilapiaReference]);
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    fillValidOngoingForm(screen);
+    fireEvent.press(screen.getByText("existingFeedReference"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Aliment courant")).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByLabelText("Aliment courant"));
+    fireEvent.changeText(screen.getByTestId("newCycleStockQuantity"), "25");
+    fireEvent.press(screen.getByTestId("newCycleAddOpeningStock"));
+    expect(screen.getByText("25 kg · unknownCost")).toBeTruthy();
+
+    fireEvent.press(screen.getByText("clarias"));
+    expect(
+      screen.getByText("cycleLaunchFeedReferenceSpeciesMismatch"),
+    ).toBeTruthy();
+    fireEvent.press(screen.getByText("startTracking"));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "error",
+      "cycleLaunchFeedReferenceSpeciesMismatch",
+    );
+    expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
+    expect(mockOffline.updatePendingCycleLaunch).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByText("tilapia"));
+    expect(
+      screen.queryByText("cycleLaunchFeedReferenceSpeciesMismatch"),
+    ).toBeNull();
+    fireEvent.press(screen.getByText("startTracking"));
+    await waitFor(() =>
+      expect(mockService.launchProductionCycle).toHaveBeenCalledTimes(1),
+    );
+    alertSpy.mockRestore();
+  });
+
+  it("bloque une ligne déjà ajoutée après changement de ferme", async () => {
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(() => undefined);
+    const farmOneReference = buildFeedReference({
+      id: "feed-farm-1",
+      name: "Aliment ferme 1",
+    });
+    const farmTwoReference = buildFeedReference({
+      id: "feed-farm-2",
+      farm_profile: "farm-2",
+      name: "Aliment ferme 2",
+    });
+    const farmTwoUnit = {
+      ...units[0],
+      id: "unit-farm-2",
+      farm_profile: "farm-2",
+      name: "Bassin ferme 2",
+    };
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme 1" },
+    });
+    mockService.getProductionUnits
+      .mockResolvedValueOnce(units)
+      .mockResolvedValueOnce([farmTwoUnit]);
+    mockService.getFarmFeedReferences.mockImplementation(async (farmId) =>
+      farmId === "farm-1" ? [farmOneReference] : [farmTwoReference],
+    );
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    fillValidOngoingForm(screen);
+    fireEvent.press(screen.getByText("existingFeedReference"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Aliment ferme 1")).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByLabelText("Aliment ferme 1"));
+    fireEvent.changeText(screen.getByTestId("newCycleStockQuantity"), "25");
+    fireEvent.press(screen.getByTestId("newCycleAddOpeningStock"));
+
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-2", farm_name: "Ferme 2" },
+    });
+    screen.rerender(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("newCycleUnit-unit-farm-2")).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByTestId("newCycleUnit-unit-farm-2"));
+    fireEvent.changeText(
+      screen.getByTestId("newCycleAllocation-unit-farm-2"),
+      "1850",
+    );
+
+    expect(screen.getByText("Aliment ferme 1")).toBeTruthy();
+    expect(
+      screen.getByText("cycleLaunchFeedReferenceFarmMismatch"),
+    ).toBeTruthy();
+    fireEvent.press(screen.getByText("startTracking"));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "error",
+      "cycleLaunchFeedReferenceFarmMismatch",
+    );
+    expect(mockService.launchProductionCycle).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
+    expect(mockOffline.updatePendingCycleLaunch).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it("ignore une ancienne réponse alimentaire après changement de ferme", async () => {
+    const farmOneReference = buildFeedReference({
+      id: "feed-farm-1",
+      name: "Aliment ferme 1",
+    });
+    const farmTwoReference = buildFeedReference({
+      id: "feed-farm-2",
+      farm_profile: "farm-2",
+      name: "Aliment ferme 2",
+    });
+    let resolveFarmOneReferences:
+      ((references: FarmFeedReference[]) => void) | undefined;
+    const farmOneReferencesPromise = new Promise<FarmFeedReference[]>(
+      (resolve) => {
+        resolveFarmOneReferences = resolve;
+      },
+    );
+    const cacheFeedSpy = jest.spyOn(
+      cycleLaunchReferenceCache,
+      "cacheFeedReferences",
+    );
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme 1" },
+    });
+    mockService.getFarmFeedReferences.mockImplementation((farmId) =>
+      farmId === "farm-1"
+        ? farmOneReferencesPromise
+        : Promise.resolve([farmTwoReference]),
+    );
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    fireEvent.press(screen.getByText("ongoingCycleMode"));
+    fireEvent.press(screen.getByText("tilapia"));
+    fireEvent.press(screen.getByText("existingFeedReference"));
+    await waitFor(() =>
+      expect(mockService.getFarmFeedReferences).toHaveBeenCalledWith("farm-1"),
+    );
+
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-2", farm_name: "Ferme 2" },
+    });
+    screen.rerender(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Aliment ferme 2")).toBeTruthy(),
+    );
+
+    await act(async () => {
+      resolveFarmOneReferences?.([farmOneReference]);
+      await farmOneReferencesPromise;
+    });
+
+    expect(screen.getByLabelText("Aliment ferme 2")).toBeTruthy();
+    expect(screen.queryByLabelText("Aliment ferme 1")).toBeNull();
+    expect(cacheFeedSpy).toHaveBeenCalledWith(
+      "farm-2",
+      [farmTwoReference],
+    );
+    expect(cacheFeedSpy).not.toHaveBeenCalledWith(
+      "farm-1",
+      expect.any(Array),
+    );
+    cacheFeedSpy.mockRestore();
+  });
+
+  it("ignore une ancienne erreur d unités après changement de ferme", async () => {
+    const farmTwoUnit = {
+      ...units[0],
+      id: "unit-farm-2",
+      farm_profile: "farm-2",
+      name: "Bassin ferme 2",
+    };
+    let rejectFarmOneUnits: ((reason?: unknown) => void) | undefined;
+    const farmOneUnitsPromise = new Promise<typeof units>(
+      (_resolve, reject) => {
+        rejectFarmOneUnits = reject;
+      },
+    );
+    const cacheUnitsSpy = jest.spyOn(
+      cycleLaunchReferenceCache,
+      "cacheProductionUnits",
+    );
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme 1" },
+    });
+    mockService.getProductionUnits
+      .mockReturnValueOnce(farmOneUnitsPromise)
+      .mockResolvedValueOnce([farmTwoUnit]);
+
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalledTimes(1),
+    );
+
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-2", farm_name: "Ferme 2" },
+    });
+    screen.rerender(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("newCycleUnit-unit-farm-2")).toBeTruthy(),
+    );
+
+    await act(async () => {
+      rejectFarmOneUnits?.(new Error("ancienne erreur"));
+      await farmOneUnitsPromise.catch(() => undefined);
+    });
+
+    expect(screen.getByTestId("newCycleUnit-unit-farm-2")).toBeTruthy();
+    expect(screen.queryByTestId("newCycleUnit-unit-1")).toBeNull();
+    expect(screen.queryByText("productionUnitsLoadError")).toBeNull();
+    expect(cacheUnitsSpy).toHaveBeenCalledWith("farm-2", [farmTwoUnit]);
+    expect(cacheUnitsSpy).not.toHaveBeenCalledWith(
+      "farm-1",
+      expect.any(Array),
+    );
+    cacheUnitsSpy.mockRestore();
   });
 
   it("préserve le snapshot alimentaire utilisé pendant un round-trip pending", async () => {

@@ -65,6 +65,10 @@ import {
   buildPendingLaunchLocalContext,
   isFeedReferenceSelectable,
   resolveOpeningStockFeedReference,
+  validateOpeningStockFeedReferences,
+} from "@/features/aquaculture/services/cycleLaunchLocalContext";
+import type {
+  OpeningStockReferenceValidationReason,
 } from "@/features/aquaculture/services/cycleLaunchLocalContext";
 import { TRANSACTIONAL_LAUNCH_ERROR_KEYS } from "@/features/aquaculture/utils/aquacultureErrorPresenter";
 import type {
@@ -78,6 +82,16 @@ const SPECIES_OPTIONS = [
   { value: "clarias", labelKey: "clarias", durationDays: 120 },
   { value: "tilapia", labelKey: "tilapia", durationDays: 180 },
 ] as const;
+
+const OPENING_STOCK_REFERENCE_ERROR_KEYS: Record<
+  OpeningStockReferenceValidationReason,
+  string
+> = {
+  reference_not_found: "cycleLaunchFeedReferenceNotFound",
+  species_mismatch: "cycleLaunchFeedReferenceSpeciesMismatch",
+  farm_mismatch: "cycleLaunchFeedReferenceFarmMismatch",
+  invalid_identity: "openingStockInvalid",
+};
 
 type NewCycleScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -165,6 +179,10 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const [calibrationName, setCalibrationName] = useState("");
   const [calibrationVolume, setCalibrationVolume] = useState("");
   const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>([]);
+  const [
+    sessionFeedReferenceSnapshots,
+    setSessionFeedReferenceSnapshots,
+  ] = useState<FarmFeedReference[]>([]);
   const [stockReferenceMode, setStockReferenceMode] = useState<"existing" | "external">("external");
   const [stockReferenceId, setStockReferenceId] = useState("");
   const [stockName, setStockName] = useState("");
@@ -272,15 +290,21 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   }, [farmProfile?.id, feedReferences, formData.species]);
 
   useEffect(() => {
+    let active = true;
+    const isCurrentBootstrap = (): boolean => active;
+
     const bootstrap = async () => {
+      setLoadingUnits(true);
       if (!editingOfflineLaunchId) {
         await runSilentOfflineSync();
+        if (!isCurrentBootstrap()) return;
       }
       dispatch(fetchDashboardData({ lightweight: true }));
       const farmProfileId = farmProfile?.id;
       const cached = farmProfileId
         ? await cycleLaunchReferenceCache.load(farmProfileId)
         : null;
+      if (!isCurrentBootstrap()) return;
       const pendingUnitSnapshots = (
         offlineLaunchContext?.productionUnits ?? []
       ).filter(
@@ -306,7 +330,9 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         setFeedReferences([]);
       }
       setLoadingUnits(false);
-      if (!(await offlineService.isOnline())) {
+      const online = await offlineService.isOnline();
+      if (!isCurrentBootstrap()) return;
+      if (!online) {
         const hasOfflineUnits =
           (cached?.productionUnits.length ?? 0) > 0
           || (offlineLaunchContext?.productionUnits?.length ?? 0) > 0;
@@ -322,6 +348,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
           status: "active",
           purpose: "production",
         });
+        if (!isCurrentBootstrap()) return;
         const pendingSnapshots = editingOfflineLaunchId
           ? (offlineLaunchContext?.productionUnits ?? []).filter(
               (snapshot) =>
@@ -334,14 +361,16 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         setUnavailablePendingUnitIds(
           pendingSnapshots.map((snapshot) => snapshot.id),
         );
-        if (farmProfileId) {
+        if (farmProfileId && isCurrentBootstrap()) {
           await cycleLaunchReferenceCache.cacheProductionUnits(
             farmProfileId,
             serverUnits,
           );
+          if (!isCurrentBootstrap()) return;
         }
         setUnitsLoadError(false);
       } catch {
+        if (!isCurrentBootstrap()) return;
         setUnitsLoadError(
           (cached?.productionUnits.length ?? 0) === 0
           && (offlineLaunchContext?.productionUnits?.length ?? 0) === 0,
@@ -351,6 +380,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         try {
           const serverReferences =
             await aquacultureService.getFarmFeedReferences(farmProfileId);
+          if (!isCurrentBootstrap()) return;
           setFeedReferences(serverReferences);
           setStockReferenceId((currentId) =>
             serverReferences.some(
@@ -363,12 +393,17 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             farmProfileId,
             serverReferences,
           );
+          if (!isCurrentBootstrap()) return;
         } catch {
+          if (!isCurrentBootstrap()) return;
           // Cached references remain available when their refresh fails.
         }
       }
     };
     void bootstrap();
+    return () => {
+      active = false;
+    };
   }, [
     dispatch,
     editingOfflineLaunchId,
@@ -379,18 +414,31 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const selectedUnits = availableUnits.filter((unit) =>
     selectedUnitIds.includes(unit.id),
   );
+  const allPendingFeedReferenceSnapshots =
+    offlineLaunchContext?.feedReferences ?? [];
   const pendingFeedReferenceSnapshots =
-    (offlineLaunchContext?.feedReferences ?? []).filter(
+    allPendingFeedReferenceSnapshots.filter(
       (reference) =>
         !farmProfile?.id || reference.farm_profile === farmProfile.id,
     );
+  const displayFeedReferenceSnapshots = [
+    ...pendingFeedReferenceSnapshots,
+    ...sessionFeedReferenceSnapshots,
+  ];
+  const validationFeedReferenceSnapshots = [
+    ...allPendingFeedReferenceSnapshots,
+    ...sessionFeedReferenceSnapshots,
+  ];
+  const historicalPendingStockLocalIds = new Set(
+    (offlineLaunch?.initial_feed_stocks ?? []).map((stock) => stock.local_id),
+  );
   const hasUnavailablePendingFeedReference =
     formData.initial_feed_stocks.some(
       (stock) =>
         resolveOpeningStockFeedReference({
           stock,
           currentFeedReferences: feedReferences,
-          pendingSnapshots: pendingFeedReferenceSnapshots,
+          pendingSnapshots: displayFeedReferenceSnapshots,
         }).unavailable,
     );
   const validationErrorKey = validateAdditionalCycleLaunch({
@@ -424,6 +472,21 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
     });
     if (currentValidationError) {
       Alert.alert(t("error"), t(currentValidationError));
+      return;
+    }
+    const stockReferenceValidation = validateOpeningStockFeedReferences({
+      stocks: formData.initial_feed_stocks,
+      species: formData.species,
+      farmProfileId: farmProfile?.id,
+      currentFeedReferences: feedReferences,
+      pendingSnapshots: validationFeedReferenceSnapshots,
+      historicalPendingStockLocalIds,
+    });
+    if (!stockReferenceValidation.valid) {
+      Alert.alert(
+        t("error"),
+        t(OPENING_STOCK_REFERENCE_ERROR_KEYS[stockReferenceValidation.reason]),
+      );
       return;
     }
 
@@ -608,6 +671,13 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
       ...current,
       initial_feed_stocks: [...current.initial_feed_stocks, stock],
     }));
+    if (selectedFeedReference) {
+      setSessionFeedReferenceSnapshots((current) =>
+        current.some((reference) => reference.id === selectedFeedReference.id)
+          ? current
+          : [...current, selectedFeedReference],
+      );
+    }
     setStockQuantity("");
     setStockCost("");
     setStockNote("");
@@ -854,7 +924,16 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                   resolveOpeningStockFeedReference({
                     stock,
                     currentFeedReferences: feedReferences,
-                    pendingSnapshots: pendingFeedReferenceSnapshots,
+                    pendingSnapshots: displayFeedReferenceSnapshots,
+                  });
+                const stockReferenceValidation =
+                  validateOpeningStockFeedReferences({
+                    stocks: [stock],
+                    species: formData.species,
+                    farmProfileId: farmProfile?.id,
+                    currentFeedReferences: feedReferences,
+                    pendingSnapshots: validationFeedReferenceSnapshots,
+                    historicalPendingStockLocalIds,
                   });
                 return (
                 <Card key={stock.local_id} variant="outlined">
@@ -871,6 +950,15 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                   {resolvedFeedReference.unavailable ? (
                     <AppText variant="helper" color="error">
                       {t("cycleLaunchReferenceUnavailable")}
+                    </AppText>
+                  ) : null}
+                  {!stockReferenceValidation.valid ? (
+                    <AppText variant="helper" color="error">
+                      {t(
+                        OPENING_STOCK_REFERENCE_ERROR_KEYS[
+                          stockReferenceValidation.reason
+                        ],
+                      )}
                     </AppText>
                   ) : null}
                   <AppText>{stock.quantity_kg} kg · {t(stock.cost_status === "known" ? "knownCost" : "unknownCost")}</AppText>

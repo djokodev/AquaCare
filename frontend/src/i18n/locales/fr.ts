@@ -368,6 +368,8 @@ export const fr = {
   cycleLaunchRejectedNextAction: 'Vérifiez les données ou contactez le support avant de préparer un nouveau lancement.',
   cycleLaunchIdempotencyConflict: 'Le lancement entre en conflit avec une tentative précédente.',
   cycleLaunchFeedReferenceNotFound: 'La référence alimentaire n’est plus disponible.',
+  cycleLaunchFeedReferenceSpeciesMismatch: 'Cette ligne de stock utilise un aliment incompatible avec l’espèce du cycle. Supprimez-la ou rétablissez l’espèce correspondante.',
+  cycleLaunchFeedReferenceFarmMismatch: 'Cette ligne de stock appartient à une autre ferme et ne peut pas être envoyée depuis la ferme active.',
   cycleLaunchFeedReferenceConflict: 'La référence alimentaire entre en conflit avec une tentative précédente.',
   cycleLaunchValidationRejected: 'Certaines données du lancement ne sont plus valides.',
   cycleLaunchResourceNotFound: 'Une ressource nécessaire à ce lancement n’est plus disponible.',

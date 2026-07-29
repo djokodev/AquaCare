@@ -6,6 +6,7 @@ import {
   buildPendingLaunchLocalContext,
   isFeedReferenceSelectable,
   resolveOpeningStockFeedReference,
+  validateOpeningStockFeedReferences,
 } from "../cycleLaunchLocalContext";
 
 const currentReference = {
@@ -143,6 +144,120 @@ describe("feed reference selection and resolution", () => {
   });
 });
 
+describe("validateOpeningStockFeedReferences", () => {
+  it("accepts a compatible historical snapshot but not a new stale line", () => {
+    expect(validateOpeningStockFeedReferences({
+      stocks: [stock],
+      species: "tilapia",
+      farmProfileId: "farm-1",
+      currentFeedReferences: [currentReference],
+      pendingSnapshots: [obsoleteReference],
+      historicalPendingStockLocalIds: new Set([stock.local_id]),
+    })).toEqual({ valid: true });
+
+    expect(validateOpeningStockFeedReferences({
+      stocks: [stock],
+      species: "tilapia",
+      farmProfileId: "farm-1",
+      currentFeedReferences: [currentReference],
+      pendingSnapshots: [obsoleteReference],
+      historicalPendingStockLocalIds: new Set(),
+    })).toEqual({
+      valid: false,
+      stockLocalId: stock.local_id,
+      reason: "reference_not_found",
+    });
+  });
+
+  it("rejects an id reference for another species", () => {
+    expect(validateOpeningStockFeedReferences({
+      stocks: [{ ...stock, feed_reference_id: currentReference.id }],
+      species: "clarias",
+      farmProfileId: "farm-1",
+      currentFeedReferences: [currentReference],
+      pendingSnapshots: [],
+    })).toEqual({
+      valid: false,
+      stockLocalId: stock.local_id,
+      reason: "species_mismatch",
+    });
+  });
+
+  it("rejects a client uuid reference for another species", () => {
+    expect(validateOpeningStockFeedReferences({
+      stocks: [clientUuidStock],
+      species: "clarias",
+      farmProfileId: "farm-1",
+      currentFeedReferences: [obsoleteReference],
+      pendingSnapshots: [],
+    })).toEqual({
+      valid: false,
+      stockLocalId: clientUuidStock.local_id,
+      reason: "species_mismatch",
+    });
+  });
+
+  it("rejects a client uuid snapshot belonging to another farm", () => {
+    expect(validateOpeningStockFeedReferences({
+      stocks: [clientUuidStock],
+      species: "tilapia",
+      farmProfileId: "farm-1",
+      currentFeedReferences: [],
+      pendingSnapshots: [{
+        ...obsoleteReference,
+        farm_profile: "farm-2",
+      }],
+      historicalPendingStockLocalIds: new Set([clientUuidStock.local_id]),
+    })).toEqual({
+      valid: false,
+      stockLocalId: clientUuidStock.local_id,
+      reason: "farm_mismatch",
+    });
+  });
+
+  it("rejects an external feed for another species", () => {
+    const externalStock = {
+      ...stock,
+      feed_reference_id: undefined,
+      external_feed: {
+        client_uuid: "external-1",
+        name: "Aliment externe",
+        pellet_size_mm: "2.00",
+        species: "tilapia" as const,
+      },
+    } satisfies CycleLaunchOpeningStockInput;
+
+    expect(validateOpeningStockFeedReferences({
+      stocks: [externalStock],
+      species: "clarias",
+      farmProfileId: "farm-1",
+      currentFeedReferences: [],
+      pendingSnapshots: [],
+    })).toEqual({
+      valid: false,
+      stockLocalId: stock.local_id,
+      reason: "species_mismatch",
+    });
+  });
+
+  it("rejects mixed identities without matching id to client uuid", () => {
+    expect(validateOpeningStockFeedReferences({
+      stocks: [{
+        ...stock,
+        feed_reference_client_uuid: obsoleteReference.client_uuid ?? undefined,
+      }],
+      species: "tilapia",
+      farmProfileId: "farm-1",
+      currentFeedReferences: [obsoleteReference],
+      pendingSnapshots: [],
+    })).toEqual({
+      valid: false,
+      stockLocalId: stock.local_id,
+      reason: "invalid_identity",
+    });
+  });
+});
+
 describe("buildPendingLaunchLocalContext", () => {
   it("preserves one obsolete snapshot while any id stock references it", () => {
     const context = buildPendingLaunchLocalContext({
@@ -218,6 +333,88 @@ describe("buildPendingLaunchLocalContext", () => {
     });
 
     expect(context.feedReferences).toEqual([synchronizedReference]);
+  });
+
+  it("keeps an exact id snapshot beside a server reference with the same client uuid", () => {
+    const synchronizedReference = {
+      ...obsoleteReference,
+      id: "server-new",
+      name: "Nom serveur",
+    } satisfies FarmFeedReference;
+    const context = buildPendingLaunchLocalContext({
+      selectedUnits: [],
+      currentFeedReferences: [synchronizedReference],
+      previousFeedReferenceSnapshots: [obsoleteReference],
+      initialFeedStocks: [stock],
+      farmProfileId: "farm-1",
+    });
+
+    expect(context.feedReferences).toEqual([
+      synchronizedReference,
+      obsoleteReference,
+    ]);
+    expect(resolveOpeningStockFeedReference({
+      stock,
+      currentFeedReferences: [synchronizedReference],
+      pendingSnapshots: context.feedReferences,
+    })).toEqual({
+      reference: obsoleteReference,
+      identityKind: "id",
+      unavailable: true,
+    });
+  });
+
+  it("preserves both identities for mixed id and client uuid stocks", () => {
+    const synchronizedReference = {
+      ...obsoleteReference,
+      id: "server-new",
+      name: "Nom serveur",
+    } satisfies FarmFeedReference;
+    const context = buildPendingLaunchLocalContext({
+      selectedUnits: [],
+      currentFeedReferences: [synchronizedReference],
+      previousFeedReferenceSnapshots: [obsoleteReference],
+      initialFeedStocks: [stock, clientUuidStock],
+      farmProfileId: "farm-1",
+    });
+
+    expect(context.feedReferences).toEqual([
+      synchronizedReference,
+      obsoleteReference,
+    ]);
+    expect(resolveOpeningStockFeedReference({
+      stock: clientUuidStock,
+      currentFeedReferences: [synchronizedReference],
+      pendingSnapshots: context.feedReferences,
+    })).toMatchObject({
+      reference: synchronizedReference,
+      identityKind: "client_uuid",
+      unavailable: false,
+    });
+  });
+
+  it("removes the old id snapshot when only the client uuid stock remains", () => {
+    const synchronizedReference = {
+      ...obsoleteReference,
+      id: "server-new",
+      name: "Nom serveur",
+    } satisfies FarmFeedReference;
+    const withMixedStocks = buildPendingLaunchLocalContext({
+      selectedUnits: [],
+      currentFeedReferences: [synchronizedReference],
+      previousFeedReferenceSnapshots: [obsoleteReference],
+      initialFeedStocks: [stock, clientUuidStock],
+      farmProfileId: "farm-1",
+    });
+    const withClientUuidOnly = buildPendingLaunchLocalContext({
+      selectedUnits: [],
+      currentFeedReferences: [synchronizedReference],
+      previousFeedReferenceSnapshots: withMixedStocks.feedReferences,
+      initialFeedStocks: [clientUuidStock],
+      farmProfileId: "farm-1",
+    });
+
+    expect(withClientUuidOnly.feedReferences).toEqual([synchronizedReference]);
   });
 
   it("ignores a referenced snapshot belonging to another farm", () => {
