@@ -18,6 +18,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { RouteProp } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -70,11 +71,14 @@ import type {
   ProductionUnitType,
 } from '@/features/aquaculture/types/productionUnits';
 import type { CycleLaunchOpeningStockInput } from '@/types/aquaculture';
+import { hydrateFarmSetupFormFromLaunch } from '@/features/aquaculture/utils/launchHydration';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CreateFarm'>;
+type CreateFarmRouteProp = RouteProp<RootStackParamList, 'CreateFarm'>;
 
 interface Props {
   navigation: NavigationProp;
+  route?: CreateFarmRouteProp;
 }
 
 const SELLING_PRICE_DEFAULTS: Record<string, string> = {
@@ -162,7 +166,7 @@ const areProductionUnitAllocationsEqual = (
       allocation.fish_count === right[index]?.fish_count
   );
 
-export default function CreateFarmScreen({ navigation }: Props) {
+export default function CreateFarmScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
   const { farmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
@@ -175,7 +179,10 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const formatKgEstimate = (value: number): string =>
     new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(value);
 
-  const [form, setForm] = useState<FarmSetupFormState>({
+  const [form, setForm] = useState<FarmSetupFormState>(() =>
+    route?.params?.offlineLaunch
+      ? hydrateFarmSetupFormFromLaunch(route.params.offlineLaunch)
+      : ({
     launchRequestId: createClientUuid(),
     onboardingMode: 'new',
     species: '',
@@ -201,7 +208,8 @@ export default function CreateFarmScreen({ navigation }: Props) {
     trackingStartAverageWeight: '',
     trackingStartBiomass: '',
     initialFeedStocks: [],
-  });
+        } satisfies FarmSetupFormState)
+  );
   const [calibrationName, setCalibrationName] = useState('');
   const [calibrationVolume, setCalibrationVolume] = useState('');
   const [openingStockName, setOpeningStockName] = useState('');
@@ -780,7 +788,10 @@ export default function CreateFarmScreen({ navigation }: Props) {
 
     const result = await dispatch(runCycleSimulation(params));
     if (runCycleSimulation.fulfilled.match(result)) {
-      navigation.navigate('CycleSimulation', { formData: form });
+      navigation.navigate('CycleSimulation', {
+        formData: form,
+        editingOfflineLaunchId: route?.params?.editingOfflineLaunchId,
+      });
     } else {
       const errorMessage =
         typeof result.payload === 'string' && result.payload.trim()

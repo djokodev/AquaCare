@@ -185,15 +185,41 @@ export default function DashboardScreen({ navigation }: any) {
     try {
       const hasPending = await offlineService.hasAnyPendingSync();
       if (hasPending) {
+        const launchesBeforeSync = await offlineService.getOfflineCycleLaunches();
         const result = await offlineService.syncAllOfflineData();
 
         if (result.success > 0) {
-          dispatch(fetchDashboardData(undefined));
-          dispatch(fetchProductionCycles());
+          await refreshAfterCycleLaunchSync(launchesBeforeSync);
         }
       }
     } catch (err) {
       // Sync error handled silently
+    }
+  };
+
+  const refreshAfterCycleLaunchSync = async (
+    launchesBeforeSync: OfflineCycleLaunch[],
+  ) => {
+    const unsyncedIds = new Set(
+      launchesBeforeSync
+        .filter((launch) => launch.sync_status !== "synced")
+        .map((launch) => launch.id),
+    );
+    const launchesAfterSync = await offlineService.getOfflineCycleLaunches();
+    const newlySynced = launchesAfterSync.find(
+      (launch) =>
+        unsyncedIds.has(launch.id) &&
+        launch.sync_status === "synced" &&
+        launch.response?.productionCycle,
+    );
+    await Promise.all([
+      loadFarmProfile(),
+      dispatch(fetchDashboardData(undefined)).unwrap(),
+      dispatch(fetchProductionCycles()).unwrap(),
+      loadPendingCycleLaunches(),
+    ]);
+    if (newlySynced?.response?.productionCycle) {
+      dispatch(setCurrentCycle(newlySynced.response.productionCycle));
     }
   };
 
@@ -610,15 +636,41 @@ export default function DashboardScreen({ navigation }: any) {
                     {t(launch.attempted ? "cycleLaunchLockedAfterAttempt" : "cycleLaunchEditableBeforeAttempt")}
                   </AppText>
                   <View style={{ flexDirection: "row", gap: spacing[2], marginTop: spacing[2] }}>
+                    {!launch.attempted ? (
+                      <Button
+                        label={t("edit")}
+                        variant="outline"
+                        size="small"
+                        fullWidth={false}
+                        onPress={() => {
+                          if (launch.payload.launch_kind === "initial_setup") {
+                            navigation.navigate("CreateFarm", {
+                              offlineLaunch: launch.payload,
+                              editingOfflineLaunchId: launch.id,
+                            });
+                          } else {
+                            navigation.navigate("NewCycle", {
+                              offlineLaunch: launch.payload,
+                              editingOfflineLaunchId: launch.id,
+                            });
+                          }
+                        }}
+                      />
+                    ) : null}
                     <Button
                       label={t("retry")}
                       variant="outline"
                       size="small"
                       fullWidth={false}
-                      onPress={() => {
-                        void offlineService.syncOfflineCycleLaunches().then(
-                          loadPendingCycleLaunches,
-                        );
+                      onPress={async () => {
+                        const launchesBeforeSync =
+                          await offlineService.getOfflineCycleLaunches();
+                        const result = await offlineService.syncOfflineCycleLaunches();
+                        if (result.success > 0) {
+                          await refreshAfterCycleLaunchSync(launchesBeforeSync);
+                        } else {
+                          await loadPendingCycleLaunches();
+                        }
                       }}
                     />
                     <Button

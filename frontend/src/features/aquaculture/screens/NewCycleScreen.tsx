@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { Alert, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { RouteProp } from "@react-navigation/native";
 import { useDispatch } from "react-redux";
-import { getBusinessIsoDate } from "@/utils/businessDate";
+import { getBusinessIsoDate, inclusiveDaysBetween } from "@/utils/businessDate";
 
 import { useAuth } from "@/hooks/useAuth";
 import { AppDispatch } from "@/store/store";
@@ -54,6 +55,7 @@ import {
   getProductionUnitDisplayDimension,
 } from "@/features/aquaculture/utils/productionUnits";
 import { createClientUuid } from "@/utils/clientUuid";
+import { hydrateNewCycleFormFromLaunch } from "@/features/aquaculture/utils/launchHydration";
 import type {
   CycleLaunchCalibrationUnitInput,
   CycleLaunchOpeningStockInput,
@@ -85,17 +87,24 @@ type NewCycleScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
   "NewCycle"
 >;
+type NewCycleScreenRouteProp = RouteProp<RootStackParamList, "NewCycle">;
 
 interface NewCycleScreenProps {
   navigation: NewCycleScreenNavigationProp;
+  route?: NewCycleScreenRouteProp;
 }
 
-export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
+export default function NewCycleScreen({ navigation, route }: NewCycleScreenProps) {
   const { t } = useTranslation();
   const { farmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
 
-  const [formData, setFormData] = useState<NewCycleData>({
+  const offlineLaunch = route?.params?.offlineLaunch;
+  const editingOfflineLaunchId = route?.params?.editingOfflineLaunchId;
+  const [formData, setFormData] = useState<NewCycleData>(() =>
+    offlineLaunch
+      ? hydrateNewCycleFormFromLaunch(offlineLaunch)
+      : ({
     onboarding_mode: "new",
     cycle_name: "",
     species: "",
@@ -117,17 +126,39 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     tracking_start_average_weight: "",
     tracking_start_biomass: "",
     initial_feed_stocks: [],
-  });
+        } satisfies NewCycleData)
+  );
   const [saving, setSaving] = useState(false);
   const [availableUnits, setAvailableUnits] = useState<ProductionUnit[]>([]);
-  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>(() =>
+    (offlineLaunch?.production_units ?? [])
+      .map((unit) => unit.production_unit_id)
+      .filter((id): id is string => Boolean(id)),
+  );
   const [allocationsByUnitId, setAllocationsByUnitId] = useState<
     Record<string, string>
-  >({});
+  >(() => {
+    if (!offlineLaunch) return {};
+    const unitIdByLocalId = new Map(
+      offlineLaunch.production_units
+        .filter((unit) => unit.production_unit_id)
+        .map((unit) => [unit.local_id, unit.production_unit_id as string]),
+    );
+    return Object.fromEntries(
+      offlineLaunch.allocations.flatMap((allocation) => {
+        const unitId = unitIdByLocalId.get(allocation.production_unit_local_id);
+        return unitId ? [[unitId, String(allocation.fish_count)]] : [];
+      }),
+    );
+  });
   const [loadingUnits, setLoadingUnits] = useState(true);
   const [unitsLoadError, setUnitsLoadError] = useState(false);
-  const [launchRequestId] = useState(() => createClientUuid());
-  const [calibrationUnits, setCalibrationUnits] = useState<CycleLaunchCalibrationUnitInput[]>([]);
+  const [launchRequestId] = useState(
+    () => offlineLaunch?.launch_uuid ?? createClientUuid(),
+  );
+  const [calibrationUnits, setCalibrationUnits] = useState<CycleLaunchCalibrationUnitInput[]>(
+    () => offlineLaunch?.calibration_units ?? [],
+  );
   const [calibrationName, setCalibrationName] = useState("");
   const [calibrationVolume, setCalibrationVolume] = useState("");
   const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>([]);
@@ -274,6 +305,18 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
       calibrationUnits,
     });
     try {
+      if (editingOfflineLaunchId) {
+        await offlineService.updatePendingCycleLaunch(
+          editingOfflineLaunchId,
+          {
+            ...payload,
+            cycle: { ...payload.cycle, created_offline: true },
+          },
+        );
+        Alert.alert(t("saved"), t("cycleLaunchPendingSync"));
+        handleGoBack();
+        return;
+      }
       if (!(await offlineService.isOnline())) {
         await offlineService.saveCycleLaunchOffline({
           ...payload,
@@ -302,19 +345,10 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             target_weight_g: Number(
               launchResult.productionCycle.target_harvest_weight_g ?? 0,
             ),
-            cycle_duration_days: Math.max(
-              0,
-              Math.ceil(
-                (
-                  new Date(
-                    launchResult.productionCycle.planned_harvest_date ?? "",
-                  ).getTime()
-                  - new Date(
-                    launchResult.productionCycle.tracking_start_date
-                      ?? launchResult.productionCycle.start_date,
-                  ).getTime()
-                ) / 86_400_000,
-              ),
+            cycle_duration_days: inclusiveDaysBetween(
+              launchResult.productionCycle.tracking_start_date
+                ?? launchResult.productionCycle.start_date,
+              launchResult.productionCycle.planned_harvest_date ?? "",
             ),
             survival_rate: Number(
               launchResult.productionCycle.expected_survival_rate_pct ?? 95,

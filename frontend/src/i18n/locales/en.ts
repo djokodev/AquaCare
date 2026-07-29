@@ -1958,4 +1958,5 @@
   manageCalibrationTanks: 'Create or manage tanks',
   addCalibrationTankToCycleLaunch: 'Add this tank to launch',
   calibrationLaunchUnitsInvalid: 'Each tank must have a unique name and a positive volume.',
+  ongoingCycleBaselineConfirmation: 'Confirm the observed baseline below. Annual projections are hidden because AquaCare only has history from the tracking start date.',
 };

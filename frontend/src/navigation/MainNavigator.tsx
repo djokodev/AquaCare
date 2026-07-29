@@ -96,7 +96,12 @@ export type RootStackParamList = {
         productionUnitName?: string;
       }
     | undefined;
-  NewCycle: undefined;
+  NewCycle:
+    | {
+        offlineLaunch?: import("@/types/aquaculture").CycleLaunchRequest;
+        editingOfflineLaunchId?: string;
+      }
+    | undefined;
   CycleHistory: undefined;
   Notifications:
     | {
@@ -170,8 +175,16 @@ export type RootStackParamList = {
   // Map Screen
   FarmMap: undefined;
   // Farm creation flow
-  CreateFarm: undefined;
-  CycleSimulation: { formData: FarmSetupFormState };
+  CreateFarm:
+    | {
+        offlineLaunch?: import("@/types/aquaculture").CycleLaunchRequest;
+        editingOfflineLaunchId?: string;
+      }
+    | undefined;
+  CycleSimulation: {
+    formData: FarmSetupFormState;
+    editingOfflineLaunchId?: string;
+  };
   // Post-harvest consolidation
   PostHarvestConsolidation: { harvestedCycleId: string };
   // Feed phase ordering

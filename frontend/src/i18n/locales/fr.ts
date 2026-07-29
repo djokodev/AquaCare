@@ -1959,4 +1959,5 @@ export const fr = {
   manageCalibrationTanks: 'Créer ou gérer les bacs',
   addCalibrationTankToCycleLaunch: 'Ajouter ce bac au lancement',
   calibrationLaunchUnitsInvalid: 'Chaque bac doit avoir un nom unique et un volume positif.',
+  ongoingCycleBaselineConfirmation: 'Confirmez la baseline observée ci-dessous. Les projections annuelles sont masquées car AquaCare ne dispose de l’historique qu’à partir du début du suivi.',
 };

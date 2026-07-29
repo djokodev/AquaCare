@@ -91,6 +91,8 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
   const formData = route.params.formData;
+  const editingOfflineLaunchId = route.params.editingOfflineLaunchId;
+  const ongoing = formData.onboardingMode === 'ongoing';
   const densityLocale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
   const formatDensity = (value: number): string =>
     new Intl.NumberFormat(densityLocale, { maximumFractionDigits: 2 }).format(value);
@@ -196,6 +198,29 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
     };
 
     try {
+      if (editingOfflineLaunchId) {
+        const request = buildFirstCycleLaunchRequest(launchParams);
+        await offlineService.updatePendingCycleLaunch(
+          editingOfflineLaunchId,
+          {
+            ...request,
+            cycle: { ...request.cycle, created_offline: true },
+          },
+        );
+        Alert.alert(t('saved'), t('cycleLaunchPendingSync'));
+        navigation.navigate('MainTabs', { screen: 'Dashboard' });
+        return;
+      }
+      if ((await offlineService.isOnline()) === false) {
+        const request = buildFirstCycleLaunchRequest(launchParams);
+        await offlineService.saveCycleLaunchOffline({
+          ...request,
+          cycle: { ...request.cycle, created_offline: true },
+        });
+        Alert.alert(t('saved'), t('cycleLaunchPendingSync'));
+        navigation.navigate('MainTabs', { screen: 'Dashboard' });
+        return;
+      }
       const launchResult = await launchFirstCycle(launchParams);
       dispatch(addCreatedProductionCycle(launchResult.productionCycle));
       dispatch(setFarmProfile(launchResult.farmProfile));
@@ -265,8 +290,14 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       <View style={styles.header}>
         <AppText variant="cardTitle" style={styles.title}>{t('simulationSubtitle')}</AppText>
       </View>
+      {ongoing ? (
+        <InlineAlert
+          tone="info"
+          message={t('ongoingCycleBaselineConfirmation')}
+        />
+      ) : null}
 
-      <Card variant="elevated" style={styles.card}>
+      {!ongoing ? <Card variant="elevated" style={styles.card}>
         <AppText variant="bodyStrong">{t('simulationCycleSummaryTitle')}</AppText>
         <MetricRow label={t('simulationCycleProduction')} value={formatKg(cycleProductionKg)} highlight />
         <MetricRow label={t('simulationCycleRevenue')} value={formatFCFA(cycleRevenue)} />
@@ -306,7 +337,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           value={formatPercent(cycleRoi)}
           highlight
         />
-      </Card>
+      </Card> : null}
 
       <Card variant="elevated" style={styles.card}>
         <AppText variant="bodyStrong">{t('simulationCycleTechnicalTitle')}</AppText>
@@ -388,16 +419,20 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           label={t('simulationPlannedDuration')}
           value={t('simulationDays', { days: currentResult.cycle_duration_days })}
         />
-        <MetricRow
-          label={t('simulationEstimatedHarvestDate')}
-          value={currentResult.cycles_breakdown[0]?.end_date_estimate
-            ? formatLocalDate(currentResult.cycles_breakdown[0].end_date_estimate, densityLocale)
-            : '—'}
-        />
-        <MetricRow
-          label={t('simulationFeedBags')}
-          value={t('myFeedSacks', { count: currentResult.feed_bags_per_cycle })}
-        />
+        {!ongoing ? (
+          <>
+            <MetricRow
+              label={t('simulationEstimatedHarvestDate')}
+              value={currentResult.cycles_breakdown[0]?.end_date_estimate
+                ? formatLocalDate(currentResult.cycles_breakdown[0].end_date_estimate, densityLocale)
+                : '—'}
+            />
+            <MetricRow
+              label={t('simulationFeedBags')}
+              value={t('myFeedSacks', { count: currentResult.feed_bags_per_cycle })}
+            />
+          </>
+        ) : null}
       </Card>
 
       {formData.productionUnitAllocations?.length ? (
@@ -440,7 +475,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         </Card>
       ) : null}
 
-      <Card variant="elevated" style={styles.card}>
+      {!ongoing ? <Card variant="elevated" style={styles.card}>
         <AppText variant="bodyStrong">{t('simulationAnnualProjectionTitle')}</AppText>
         <MetricRow
           label={t('simulationCyclesPerYear')}
@@ -467,7 +502,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
           label={t('simulationAnnualProjectionAquacareFee')}
           value={formatFCFA(annualProjectionAquacareFee)}
         />
-      </Card>
+      </Card> : null}
 
       <InlineAlert tone="info" message={t('simulationOtherCostsInfo')} compact />
 

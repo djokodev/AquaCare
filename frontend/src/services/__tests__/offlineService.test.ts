@@ -1096,4 +1096,49 @@ describe('services/offlineService', () => {
     global.fetch = jest.fn().mockRejectedValueOnce(new Error('offline'));
     await expect(offlineService.isOnline()).resolves.toBe(false);
   });
+
+  it('saveCycleLaunchOffline with default options stores pending non-attempted launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    const launches = await offlineService.getOfflineCycleLaunches();
+    expect(launches).toHaveLength(1);
+    expect(launches[0].sync_status).toBe('pending');
+    expect(launches[0].attempted).toBe(false);
+  });
+
+  it('saveCycleLaunchOffline with attempted:true stores failed attempted launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, { attempted: true });
+    const launches = await offlineService.getOfflineCycleLaunches();
+    expect(launches).toHaveLength(1);
+    expect(launches[0].sync_status).toBe('failed');
+    expect(launches[0].attempted).toBe(true);
+  });
+
+  it('updatePendingCycleLaunch preserves same launch_uuid', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    const updatedPayload = {
+      ...cycleLaunchPayload,
+      cycle: {
+        ...cycleLaunchPayload.cycle,
+        cycle_name: 'Updated Name',
+      },
+    };
+    await offlineService.updatePendingCycleLaunch(
+      cycleLaunchPayload.launch_uuid,
+      updatedPayload,
+    );
+    const launches = await offlineService.getOfflineCycleLaunches();
+    expect(launches).toHaveLength(1);
+    expect(launches[0].payload.launch_uuid).toBe(cycleLaunchPayload.launch_uuid);
+    expect(launches[0].payload.cycle.cycle_name).toBe('Updated Name');
+  });
+
+  it('updatePendingCycleLaunch rejects after attempted launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, { attempted: true });
+    await expect(
+      offlineService.updatePendingCycleLaunch(
+        cycleLaunchPayload.launch_uuid,
+        cycleLaunchPayload,
+      ),
+    ).rejects.toThrow('cycle_launch_locked_after_attempt');
+  });
 });

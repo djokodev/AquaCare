@@ -1,6 +1,7 @@
 import { getProductionUnitCapacity } from "@/features/aquaculture/utils/productionUnits";
 import type { NewCycleData } from "@/features/aquaculture/utils/newCycleForm";
 import type { CycleLaunchCalibrationUnitInput, CycleLaunchRequest, ProductionUnit } from "@/types/aquaculture";
+import { getBusinessIsoDate } from "@/utils/businessDate";
 
 export class AdditionalCycleLaunchError extends Error {
   translationKey: string;
@@ -61,7 +62,7 @@ export const validateAdditionalCycleLaunch = ({
     return "fillRequiredFields";
   }
   if (ongoing) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getBusinessIsoDate();
     if (
       !formData.tracking_start_date ||
       formData.tracking_start_date < formData.start_date ||

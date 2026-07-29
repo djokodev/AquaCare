@@ -1,5 +1,8 @@
 import { aquacultureService } from "../aquacultureService";
-import { launchFirstCycle } from "../firstCycleLaunchService";
+import {
+  buildFirstCycleLaunchRequest,
+  launchFirstCycle,
+} from "../firstCycleLaunchService";
 
 jest.mock("../aquacultureService", () => ({
   aquacultureService: {
@@ -348,5 +351,59 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
       }),
     ).rejects.toThrow("conflict");
     expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledTimes(1);
+  });
+
+  it("utilise le tracking_start_date du formulaire pour un cycle ongoing, pas la simulation", () => {
+    const ongoingForm = {
+      ...formData,
+      onboardingMode: "ongoing" as const,
+      startDate: "2026-06-01",
+      trackingStartDate: "2026-06-15",
+      historicalInitialCount: "2000",
+      historicalInitialWeight: "250",
+      fingerlingsCount: "200",
+      productionUnitAllocations: [
+        { production_unit_local_id: "unit-1", fish_count: "200" },
+      ],
+      trackingStartAverageWeight: "300",
+    };
+    const request = buildFirstCycleLaunchRequest({
+      formData: ongoingForm,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+    expect(request.cycle.start_date).toBe("2026-06-01");
+    expect(request.cycle.initial_count).toBe(2000);
+    expect(request.tracking_baseline?.tracking_start_date).toBe("2026-06-15");
+    expect(request.tracking_baseline?.fish_count).toBe(200);
+  });
+
+  it("ne transmet pas les valeurs de simulation dans le payload ongoing", () => {
+    const ongoingForm = {
+      ...formData,
+      onboardingMode: "ongoing" as const,
+      startDate: "2026-07-01",
+      trackingStartDate: "2026-07-10",
+      historicalInitialCount: "500",
+      historicalInitialWeight: "100",
+      trackingStartAverageWeight: "150",
+    };
+    const request = buildFirstCycleLaunchRequest({
+      formData: ongoingForm,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+    expect(request.cycle.start_date).toBe("2026-07-01");
+    expect(request.cycle.initial_count).toBe(500);
+
+    simulationResult.cycles_breakdown[0].start_date_estimate = "2099-01-01";
+    simulationResult.cycles_breakdown[0].initial_fish_count = 99999;
+    const requestAfterSimChange = buildFirstCycleLaunchRequest({
+      formData: ongoingForm,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+    expect(requestAfterSimChange.cycle.start_date).toBe("2026-07-01");
+    expect(requestAfterSimChange.cycle.initial_count).toBe(500);
   });
 });

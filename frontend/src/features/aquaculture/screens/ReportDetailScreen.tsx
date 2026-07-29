@@ -96,6 +96,8 @@ interface ReportCycleData {
     total_feed_consumed?: number | null;
     survival_rate?: number | null;
     fcr?: number | null;
+    fcr_scope?: 'full_cycle' | 'since_tracking_start' | null;
+    fcr_label?: string | null;
     daily_growth_rate?: number | null;
     specific_growth_rate?: number | null;
     average_daily_feed?: number | null;
@@ -342,6 +344,15 @@ export default function ReportDetailScreen({ navigation, route }: ReportDetailSc
             <AppText variant="label">{section.unit?.production_unit_name || section.cycle?.cycle_name || t('cycle')}</AppText>
             <AppText variant="helper" color="muted">{section.unit?.production_unit_type_display || section.cycle?.species_display || ''}{section.unit?.production_unit_dimension ? ` · ${section.unit.production_unit_dimension}` : ''}</AppText>
             <AppText variant="helper">{t('reportEstimatedFishCount')}: {section.current_metrics?.current_count || 0} · {t('reportFeedConsumed')}: {(section.period_metrics?.total_feed || 0).toFixed(2)} kg · {t('reportCumulativeMortality')}: {section.period_metrics?.total_mortality || 0}</AppText>
+            <AppText variant="helper">
+              {section.current_metrics?.fcr_label
+                || (section.current_metrics?.fcr_scope === 'since_tracking_start'
+                  ? t('fcrSinceAquaCare')
+                  : t('fcrFullStat'))}
+              : {section.current_metrics?.fcr != null
+                ? section.current_metrics.fcr.toFixed(2)
+                : t('notProvided')}
+            </AppText>
           </Card>) : <EmptyState message={t('noReportDataAvailable')} compact />}
         </Card> : null}
         {scopeType === 'unit' ? <Card variant="outlined" style={styles.sectionCard}>

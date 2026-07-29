@@ -4,7 +4,12 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import CycleSimulationScreen from '../CycleSimulationScreen';
-import { FirstCycleLaunchError, launchFirstCycle } from '@/features/aquaculture/services/firstCycleLaunchService';
+import {
+  FirstCycleLaunchError,
+  buildFirstCycleLaunchRequest,
+  launchFirstCycle,
+} from '@/features/aquaculture/services/firstCycleLaunchService';
+import { offlineService } from '@/services/offlineService';
 import {
   addCreatedProductionCycle,
   setCurrentCycle,
@@ -34,6 +39,7 @@ jest.mock('react-i18next', () => {
 
 jest.mock('@/features/aquaculture/services/firstCycleLaunchService', () => ({
   launchFirstCycle: jest.fn(),
+  buildFirstCycleLaunchRequest: jest.fn(),
   FirstCycleLaunchError: class FirstCycleLaunchError extends Error {
     translationKey: string;
 
@@ -44,14 +50,25 @@ jest.mock('@/features/aquaculture/services/firstCycleLaunchService', () => ({
   },
 }));
 
+jest.mock('@/services/offlineService', () => ({
+  offlineService: {
+    isOnline: jest.fn(),
+    saveCycleLaunchOffline: jest.fn(),
+    updatePendingCycleLaunch: jest.fn(),
+  },
+}));
+
 describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   const mockDispatch = jest.fn();
   const mockLaunchFirstCycle = launchFirstCycle as unknown as jest.Mock;
+  const mockBuildRequest = buildFirstCycleLaunchRequest as unknown as jest.Mock;
+  const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const createdProductionCycle = { id: 'cycle-1' } as unknown as ProductionCycle;
   const navigation = {
     goBack: jest.fn(),
     replace: jest.fn(),
     reset: jest.fn(),
+    navigate: jest.fn(),
   } as any;
 
   const currentResult = {
@@ -128,6 +145,12 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOffline.isOnline.mockResolvedValue(true);
+    mockBuildRequest.mockReturnValue({
+      launch_uuid: 'launch-1',
+      launch_kind: 'initial_setup',
+      cycle: { created_offline: false },
+    });
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     (useSelector as unknown as jest.Mock).mockImplementation(
       (selector: (state: any) => unknown) =>
@@ -157,6 +180,25 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       farmProfile: { id: 'farm-profile-1' },
       productionCycle: createdProductionCycle,
       productionUnitIdByLocalId: {},
+    });
+  });
+
+  it('enregistre directement le lancement quand le téléphone est hors ligne', async () => {
+    mockOffline.isOnline.mockResolvedValue(false);
+    const { findByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={buildRoute()} />,
+    );
+
+    fireEvent.press(await findByText('simulationLaunchBtn'));
+
+    await waitFor(() => {
+      expect(mockOffline.saveCycleLaunchOffline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          launch_uuid: 'launch-1',
+          cycle: expect.objectContaining({ created_offline: true }),
+        }),
+      );
+      expect(mockLaunchFirstCycle).not.toHaveBeenCalled();
     });
   });
 
