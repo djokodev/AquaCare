@@ -99,6 +99,9 @@ jest.mock("@/services/offlineService", () => ({
   offlineService: {
     hasAnyPendingSync: jest.fn(),
     syncAllOfflineData: jest.fn(),
+    getOfflineCycleLaunches: jest.fn(),
+    syncOfflineCycleLaunches: jest.fn(),
+    deletePendingCycleLaunch: jest.fn(),
   },
 }));
 
@@ -181,6 +184,12 @@ describe("features/main/screens/DashboardScreen", () => {
       failed: 0,
       details: {} as any,
     });
+    mockOffline.getOfflineCycleLaunches.mockResolvedValue([]);
+    mockOffline.syncOfflineCycleLaunches.mockResolvedValue({
+      success: 0,
+      failed: 0,
+    });
+    mockOffline.deletePendingCycleLaunch.mockResolvedValue();
     mockGetCycleDashboard.mockResolvedValue({
       summary: {
         total_allocations: 3,
@@ -228,6 +237,26 @@ describe("features/main/screens/DashboardScreen", () => {
         },
       }),
     );
+  });
+
+  it("masque la suppression après une tentative réelle de lancement", async () => {
+    mockOffline.getOfflineCycleLaunches.mockResolvedValue([{
+      id: "launch-1",
+      payload: {
+        cycle: { cycle_name: "Cycle verrouillé" },
+        launch_kind: "additional_cycle",
+      },
+      attempted: true,
+      sync_status: "uncertain",
+    } as any]);
+
+    const { getByText, queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+    await waitFor(() => expect(getByText("Cycle verrouillé")).toBeTruthy());
+    expect(queryByText("delete")).toBeNull();
+    expect(queryByText("edit")).toBeNull();
+    expect(getByText("retry")).toBeTruthy();
   });
 
   it("garde le sélecteur disponible quand le dashboard est scoped mais deux cycles sont actifs", async () => {

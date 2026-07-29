@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { useDispatch } from "react-redux";
-import { getBusinessIsoDate, inclusiveDaysBetween } from "@/utils/businessDate";
+import {
+  getBusinessIsoDate,
+  getOngoingCycleSchedule,
+  inclusiveDaysBetween,
+} from "@/utils/businessDate";
 
 import { useAuth } from "@/hooks/useAuth";
 import { AppDispatch } from "@/store/store";
@@ -56,6 +60,7 @@ import {
 } from "@/features/aquaculture/utils/productionUnits";
 import { createClientUuid } from "@/utils/clientUuid";
 import { hydrateNewCycleFormFromLaunch } from "@/features/aquaculture/utils/launchHydration";
+import { cycleLaunchReferenceCache } from "@/features/aquaculture/services/cycleLaunchReferenceCache";
 import type {
   CycleLaunchCalibrationUnitInput,
   CycleLaunchOpeningStockInput,
@@ -156,6 +161,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   });
   const [loadingUnits, setLoadingUnits] = useState(true);
   const [unitsLoadError, setUnitsLoadError] = useState(false);
+  const [offlineReferencesEmpty, setOfflineReferencesEmpty] = useState(false);
   const [launchRequestId] = useState(
     () => offlineLaunch?.launch_uuid ?? createClientUuid(),
   );
@@ -246,15 +252,41 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
         await runSilentOfflineSync();
       }
       dispatch(fetchDashboardData({ lightweight: true }));
+      const farmProfileId = farmProfile?.id;
+      const cached = farmProfileId
+        ? await cycleLaunchReferenceCache.load(farmProfileId)
+        : null;
+      if (cached) {
+        setAvailableUnits((current) => [
+          ...cached.productionUnits,
+          ...current.filter(
+            (unit) =>
+              !cached.productionUnits.some((cachedUnit) => cachedUnit.id === unit.id),
+          ),
+        ]);
+        setFeedReferences((current) => [
+          ...cached.feedReferences,
+          ...current.filter(
+            (reference) =>
+              !cached.feedReferences.some(
+                (cachedReference) => cachedReference.id === reference.id,
+              ),
+          ),
+        ]);
+      }
+      setLoadingUnits(false);
       if (!(await offlineService.isOnline())) {
-        setLoadingUnits(false);
-        setUnitsLoadError(
-          (offlineLaunchContext?.productionUnits?.length ?? 0) === 0,
+        const hasOfflineUnits =
+          (cached?.productionUnits.length ?? 0) > 0
+          || (offlineLaunchContext?.productionUnits?.length ?? 0) > 0;
+        setUnitsLoadError(false);
+        setOfflineReferencesEmpty(
+          !hasOfflineUnits && (cached?.feedReferences.length ?? 0) === 0,
         );
         return;
       }
+      setOfflineReferencesEmpty(false);
       try {
-        setLoadingUnits(true);
         const serverUnits = await aquacultureService.getProductionUnits({
           status: "active",
           purpose: "production",
@@ -265,24 +297,39 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             (localUnit) => !serverUnits.some((unit) => unit.id === localUnit.id),
           ),
         ]);
-        if (farmProfile?.id) {
+        if (farmProfileId) {
+          await cycleLaunchReferenceCache.cacheProductionUnits(
+            farmProfileId,
+            serverUnits,
+          );
+        }
+        setUnitsLoadError(false);
+      } catch {
+        setUnitsLoadError(
+          (cached?.productionUnits.length ?? 0) === 0
+          && (offlineLaunchContext?.productionUnits?.length ?? 0) === 0,
+        );
+      }
+      if (farmProfileId) {
+        try {
           const serverReferences =
-            await aquacultureService.getFarmFeedReferences(farmProfile.id);
+            await aquacultureService.getFarmFeedReferences(farmProfileId);
           setFeedReferences((localReferences) => [
             ...serverReferences,
             ...localReferences.filter(
               (localReference) =>
                 !serverReferences.some(
                   (reference) => reference.id === localReference.id,
-                ),
+              ),
             ),
           ]);
+          await cycleLaunchReferenceCache.cacheFeedReferences(
+            farmProfileId,
+            serverReferences,
+          );
+        } catch {
+          // Cached references remain available when their refresh fails.
         }
-        setUnitsLoadError(false);
-      } catch {
-        setUnitsLoadError(true);
-      } finally {
-        setLoadingUnits(false);
       }
     };
     void bootstrap();
@@ -567,7 +614,8 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             <AppText color="muted">{t("newCycleSelectUnitsDescription")}</AppText>
             {loadingUnits ? <LoadingState compact message={t("productionUnitsLoading")} /> : null}
             {unitsLoadError ? <ErrorState compact message={t("productionUnitsLoadError")} /> : null}
-            {!loadingUnits && !unitsLoadError && availableUnits.length === 0 ? <EmptyState compact message={t("newCycleNoExistingUnits")} /> : null}
+            {offlineReferencesEmpty ? <EmptyState compact message={t("cycleLaunchOfflineReferencesEmpty")} /> : null}
+            {!loadingUnits && !unitsLoadError && !offlineReferencesEmpty && availableUnits.length === 0 ? <EmptyState compact message={t("newCycleNoExistingUnits")} /> : null}
             {!loadingUnits && !unitsLoadError ? availableUnits.map((unit) => {
               const selected = selectedUnitIds.includes(unit.id);
               const unitTypeKey = unit.unit_type === "pond" ? "productionUnitTypePond" : unit.unit_type === "cage" ? "productionUnitTypeCage" : "productionUnitTypeTank";
@@ -728,14 +776,32 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             <TextField label={t("fingerlingsCostFcfa")} value={formData.fingerlings_cost_fcfa} onChangeText={(value) => setFormData((prev) => ({ ...prev, fingerlings_cost_fcfa: value }))} placeholder={t("zeroValuePlaceholder")} keyboardType="numeric" suffix={numberSuffix("FCFA")} />
             <TextField label={t("otherOperationalCosts")} value={formData.other_operational_costs_fcfa} onChangeText={(value) => setFormData((prev) => ({ ...prev, other_operational_costs_fcfa: value }))} placeholder={t("zeroValuePlaceholder")} keyboardType="numeric" suffix={numberSuffix("FCFA")} />
           </View>
-          {formData.initial_count && formData.initial_average_weight ? (() => {
+          {formData.initial_count && (
+            formData.initial_average_weight
+            || formData.onboarding_mode === "ongoing"
+          ) ? (() => {
             const density = estimateDensityValue();
             const expectedDuration = formData.planned_cycle_duration_days || getSelectedSpecies()?.durationDays;
+            const ongoingSchedule =
+              formData.onboarding_mode === "ongoing"
+                ? getOngoingCycleSchedule(
+                    formData.start_date,
+                    formData.tracking_start_date,
+                    Number(expectedDuration),
+                  )
+                : null;
             return <Card variant="outlined" style={{ gap: spacing[2] }}>
               <AppText variant="sectionTitle">{t("autoCalculations")}</AppText>
               <AppText color="muted">{t("initialBiomass")}: <AppText color="link">{estimateInitialBiomass()} kg</AppText></AppText>
               {formData.pond_surface_m2 || formData.pond_volume_m3 ? <AppText color="muted">{t("initialDensity")}: <AppText color="link">{density.value} {density.unit}</AppText></AppText> : null}
               {expectedDuration ? <AppText color="muted">{t("expectedDuration")}: <AppText color="link">{expectedDuration} {t("days")}</AppText></AppText> : null}
+              {ongoingSchedule ? (
+                <>
+                  <AppText testID="ongoingTotalDuration" color="muted">{t("ongoingTotalDuration", { count: ongoingSchedule.totalDurationDays })}</AppText>
+                  <AppText testID="ongoingPlannedHarvestDate" color="muted">{t("ongoingPlannedHarvestDate", { date: ongoingSchedule.plannedHarvestDate })}</AppText>
+                  <AppText testID="ongoingRemainingDuration" color="muted">{t("ongoingRemainingDuration", { count: ongoingSchedule.remainingDurationDays })}</AppText>
+                </>
+              ) : null}
             </Card>;
           })() : null}
           {!isFormValid ? <InlineAlert tone="info" message={validationErrorKey ? t(validationErrorKey) : undefined} /> : null}

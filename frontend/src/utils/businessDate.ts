@@ -45,3 +45,43 @@ export function inclusiveDaysBetween(startIso: string, endIso: string): number {
   const diffDays = Math.round(diffMs / 86_400_000);
   return Math.max(0, diffDays + 1);
 }
+
+/** Adds a duration whose first day is the start date, matching the backend. */
+export function plannedHarvestIsoDate(
+  startIso: string,
+  durationDays: number,
+): string | null {
+  if (!Number.isInteger(durationDays) || durationDays <= 0) return null;
+  if (inclusiveDaysBetween(startIso, startIso) !== 1) return null;
+  const [year, month, day] = startIso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + durationDays - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+export interface OngoingCycleSchedule {
+  totalDurationDays: number;
+  plannedHarvestDate: string;
+  remainingDurationDays: number;
+}
+
+export function getOngoingCycleSchedule(
+  startIso: string,
+  trackingStartIso: string,
+  durationDays: number,
+): OngoingCycleSchedule | null {
+  const plannedHarvestDate = plannedHarvestIsoDate(startIso, durationDays);
+  if (!plannedHarvestDate || trackingStartIso >= plannedHarvestDate) {
+    return null;
+  }
+  const remainingDurationDays = inclusiveDaysBetween(
+    trackingStartIso,
+    plannedHarvestDate,
+  );
+  if (remainingDurationDays <= 0) return null;
+  return {
+    totalDurationDays: durationDays,
+    plannedHarvestDate,
+    remainingDurationDays,
+  };
+}

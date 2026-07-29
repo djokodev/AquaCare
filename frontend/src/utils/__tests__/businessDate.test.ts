@@ -1,4 +1,9 @@
-import { getBusinessIsoDate, inclusiveDaysBetween } from '@/utils/businessDate';
+import {
+  getBusinessIsoDate,
+  getOngoingCycleSchedule,
+  inclusiveDaysBetween,
+  plannedHarvestIsoDate,
+} from '@/utils/businessDate';
 
 describe('getBusinessIsoDate', () => {
   it('uses the AquaCare farm timezone for dates near midnight UTC', () => {
@@ -21,5 +26,21 @@ describe('inclusiveDaysBetween', () => {
 
   it('returns 0 for end before start', () => {
     expect(inclusiveDaysBetween('2026-07-10', '2026-07-01')).toBe(0);
+  });
+});
+
+describe('businessDate cycle schedule', () => {
+  it('uses the backend inclusive harvest convention', () => {
+    expect(plannedHarvestIsoDate('2026-06-01', 150)).toBe('2026-10-28');
+    expect(getOngoingCycleSchedule('2026-06-01', '2026-07-20', 150)).toEqual({
+      totalDurationDays: 150,
+      plannedHarvestDate: '2026-10-28',
+      remainingDurationDays: 101,
+    });
+  });
+
+  it('rejects a tracking baseline on or after harvest', () => {
+    expect(getOngoingCycleSchedule('2026-06-01', '2026-10-28', 150)).toBeNull();
+    expect(getOngoingCycleSchedule('2026-06-01', '2026-10-29', 150)).toBeNull();
   });
 });

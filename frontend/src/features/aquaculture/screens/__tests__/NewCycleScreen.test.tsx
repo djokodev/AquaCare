@@ -8,6 +8,7 @@ import { useDispatch } from "react-redux";
 import { useAuth } from "@/hooks/useAuth";
 import { isNetworkError, parseApiError } from "@/utils/errorParser";
 import { getBusinessIsoDate } from "@/utils/businessDate";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 jest.mock("react-redux", () => ({
   useDispatch: jest.fn(),
@@ -105,8 +106,9 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     },
   ] as any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    await AsyncStorage.clear();
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     mockUseAuth.mockReturnValue({ farmProfile: { farm_name: "Ferme Test" } });
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
@@ -118,6 +120,7 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     mockOffline.saveCycleLaunchOffline.mockResolvedValue(undefined as any);
     mockOffline.updatePendingCycleLaunch.mockResolvedValue(undefined as any);
     mockService.getProductionUnits.mockResolvedValue(units);
+    mockService.getFarmFeedReferences.mockResolvedValue([]);
     mockIsNetworkError.mockReturnValue(false);
     mockService.launchProductionCycle.mockResolvedValue({
       productionCycle: { id: "cycle-2" },
@@ -484,4 +487,106 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
       alertSpy.mockRestore();
     },
   );
+
+  it("recharge unités et aliments du cache après un vrai remontage hors ligne", async () => {
+    const feedReferences = [{
+      id: "feed-1",
+      farm_profile: "farm-1",
+      name: "Tilapia 2 mm",
+      species: "tilapia",
+      pellet_size_mm: "2.00",
+    }] as any;
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockService.getFarmFeedReferences.mockResolvedValue(feedReferences);
+
+    const online = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(mockService.getFarmFeedReferences).toHaveBeenCalledWith("farm-1"),
+    );
+    online.unmount();
+
+    jest.clearAllMocks();
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockOffline.isOnline.mockResolvedValue(false);
+    const offline = render(<NewCycleScreen navigation={navigation} />);
+
+    await waitFor(() =>
+      expect(offline.getByTestId("newCycleUnit-unit-1")).toBeTruthy(),
+    );
+    fireEvent.press(offline.getByText("ongoingCycleMode"));
+    fireEvent.press(offline.getByText("tilapia"));
+    fireEvent.press(offline.getByText("existingFeedReference"));
+    expect(offline.getByText("Tilapia 2 mm")).toBeTruthy();
+    expect(mockService.getProductionUnits).not.toHaveBeenCalled();
+    expect(mockService.getFarmFeedReferences).not.toHaveBeenCalled();
+  });
+
+  it("ignore le cache d une autre ferme au démarrage hors ligne", async () => {
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme 1" },
+    });
+    const online = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    online.unmount();
+
+    jest.clearAllMocks();
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-2", farm_name: "Ferme 2" },
+    });
+    mockOffline.isOnline.mockResolvedValue(false);
+    const offline = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(offline.getByText("cycleLaunchOfflineReferencesEmpty")).toBeTruthy(),
+    );
+    expect(offline.queryByTestId("newCycleUnit-unit-1")).toBeNull();
+  });
+
+  it("conserve le cache affiché quand le rafraîchissement serveur échoue", async () => {
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    const firstMount = render(<NewCycleScreen navigation={navigation} />);
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    firstMount.unmount();
+
+    jest.clearAllMocks();
+    mockUseAuth.mockReturnValue({
+      farmProfile: { id: "farm-1", farm_name: "Ferme Test" },
+    });
+    mockOffline.isOnline.mockResolvedValue(true);
+    mockService.getProductionUnits.mockRejectedValue(new Error("server down"));
+    mockService.getFarmFeedReferences.mockRejectedValue(new Error("server down"));
+    const fallback = render(<NewCycleScreen navigation={navigation} />);
+
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    expect(fallback.getByTestId("newCycleUnit-unit-1")).toBeTruthy();
+    expect(fallback.queryByText("productionUnitsLoadError")).toBeNull();
+  });
+
+  it("affiche le calendrier ongoing avec la durée restante inclusive", async () => {
+    const { getByTestId, getByText } = render(
+      <NewCycleScreen navigation={navigation} />,
+    );
+    await waitFor(() => expect(mockService.getProductionUnits).toHaveBeenCalled());
+    fireEvent.press(getByText("ongoingCycleMode"));
+    fireEvent.press(getByText("tilapia"));
+    fireEvent.changeText(getByTestId("newCycleInitialCount"), "2000");
+    fireEvent.changeText(getByTestId("newCycleStartDate"), "2026-06-01");
+    fireEvent.changeText(getByTestId("newCycleTrackingDate"), "2026-07-20");
+    fireEvent.changeText(getByTestId("newCycleDuration"), "150");
+
+    expect(getByTestId("ongoingTotalDuration")).toBeTruthy();
+    expect(getByTestId("ongoingPlannedHarvestDate")).toBeTruthy();
+    expect(getByTestId("ongoingRemainingDuration")).toBeTruthy();
+  });
 });

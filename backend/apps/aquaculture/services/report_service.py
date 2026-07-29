@@ -834,10 +834,33 @@ class ReportService(BaseService):
                 else "Full-cycle FCR"
             ),
         )
-        feed_data_complete = all(
+        has_feed_observation = bool(feed_logs)
+        feed_data_complete = has_feed_observation and all(
             log.feed_quantity is not None for log in feed_logs
         )
-        data_complete = feed_data_complete and harvest_data_complete
+        biomass_values_complete = all(
+            value is not None
+            for value in (
+                initial_biomass_kg,
+                current_biomass_kg,
+                harvested_biomass_kg,
+            )
+        )
+        biomass_gain = (
+            current_biomass_kg + harvested_biomass_kg - initial_biomass_kg
+            if biomass_values_complete
+            else None
+        )
+        unavailable_reason = None
+        if not has_feed_observation:
+            unavailable_reason = "no_feed_observation"
+        elif not feed_data_complete:
+            unavailable_reason = "incomplete_feed_data"
+        elif not harvest_data_complete:
+            unavailable_reason = "incomplete_harvest_data"
+        elif biomass_gain is None or biomass_gain <= 0:
+            unavailable_reason = "non_positive_biomass_gain"
+        data_complete = unavailable_reason is None
         value = ReportFcrService.calculate(
             feed_consumed_kg=feed_consumed_kg,
             initial_biomass_kg=initial_biomass_kg,
@@ -850,9 +873,7 @@ class ReportService(BaseService):
             "scope": scope,
             "label": label,
             "data_complete": data_complete,
-            "unavailable_reason": (
-                None if data_complete else "incomplete_tracked_data"
-            ),
+            "unavailable_reason": unavailable_reason,
         }
 
     @staticmethod
@@ -1438,12 +1459,8 @@ class ReportService(BaseService):
                 Prefetch(
                     "daily_logs",
                     queryset=CycleLog.objects.filter(
+                        log_date__gte=cycle.analysis_start_date,
                         log_date__lte=period_end,
-                        **(
-                            {"log_date__gte": cycle.analysis_start_date}
-                            if cycle.has_partial_history
-                            else {}
-                        ),
                     ).order_by("-log_date", "-log_time"),
                     to_attr="cumulative_daily_logs",
                 ),
@@ -1457,12 +1474,8 @@ class ReportService(BaseService):
                 Prefetch(
                     "unit_partial_harvests",
                     queryset=PartialHarvest.objects.filter(
+                        harvest_date__gte=cycle.analysis_start_date,
                         harvest_date__lte=period_end,
-                        **(
-                            {"harvest_date__gte": cycle.analysis_start_date}
-                            if cycle.has_partial_history
-                            else {}
-                        ),
                     ).order_by(
                         "-harvest_date", "-created_at"
                     ),
@@ -2091,12 +2104,8 @@ class ReportService(BaseService):
         )
         cumulative_daily_logs = list(
             allocation.daily_logs.filter(
+                log_date__gte=cycle.analysis_start_date,
                 log_date__lte=period_end,
-                **(
-                    {"log_date__gte": cycle.analysis_start_date}
-                    if cycle.has_partial_history
-                    else {}
-                ),
             ).order_by("-log_date", "-log_time")
         )
         period_sanitary_logs = list(
@@ -2128,12 +2137,8 @@ class ReportService(BaseService):
             cumulative_sanitary_logs=cumulative_sanitary_logs,
             cumulative_partial_harvests=list(
                 allocation.unit_partial_harvests.filter(
+                    harvest_date__gte=cycle.analysis_start_date,
                     harvest_date__lte=period_end,
-                    **(
-                        {"harvest_date__gte": cycle.analysis_start_date}
-                        if cycle.has_partial_history
-                        else {}
-                    ),
                 )
             ),
         )
@@ -2750,6 +2755,33 @@ class ReportService(BaseService):
         )
         common_fcr_scope = next(iter(fcr_scopes)) if len(fcr_scopes) == 1 else None
         common_fcr_label = next(iter(fcr_labels)) if len(fcr_labels) == 1 else None
+        section_fcr_reasons = [
+            (section.get("cumulative_metrics") or {}).get(
+                "fcr_unavailable_reason"
+            )
+            for section in sections
+            if (section.get("cumulative_metrics") or {}).get(
+                "fcr_unavailable_reason"
+            )
+        ]
+        total_biomass_gain = (
+            total_current_biomass
+            + total_harvested_biomass
+            - total_initial_biomass
+        )
+        aggregate_unavailable_reason = (
+            section_fcr_reasons[0] if section_fcr_reasons else None
+        )
+        if (
+            aggregate_unavailable_reason is None
+            and total_biomass_gain <= 0
+        ):
+            aggregate_unavailable_reason = "non_positive_biomass_gain"
+        aggregate_fcr_complete = (
+            fcr_data_complete
+            and common_fcr_scope is not None
+            and aggregate_unavailable_reason is None
+        )
         dashboard_fcr = ReportFcrService.calculate(
             feed_consumed_kg=sum(
                 float(
@@ -2761,16 +2793,14 @@ class ReportService(BaseService):
             initial_biomass_kg=total_initial_biomass,
             current_biomass_kg=total_current_biomass,
             harvested_biomass_kg=total_harvested_biomass,
-            harvest_data_complete=(
-                fcr_data_complete and common_fcr_scope is not None
-            ),
+            harvest_data_complete=aggregate_fcr_complete,
         )
         payload["cycle_dashboard"]["fcr"] = dashboard_fcr
         payload["cycle_dashboard"]["fcr_scope"] = common_fcr_scope
         payload["cycle_dashboard"]["fcr_label"] = common_fcr_label
-        payload["cycle_dashboard"]["fcr_data_complete"] = fcr_data_complete
+        payload["cycle_dashboard"]["fcr_data_complete"] = aggregate_fcr_complete
         payload["cycle_dashboard"]["fcr_unavailable_reason"] = (
-            None if fcr_data_complete else "incomplete_tracked_data"
+            aggregate_unavailable_reason
         )
         if not all("cumulative_metrics" in section for section in sections):
             legacy_metrics = (sections[0].get("current_metrics") or {}) if sections else {}

@@ -220,7 +220,11 @@ class TestUnitCycleAwareReportPayloads:
 
     def test_unit_daily_report_separates_period_logs_from_cumulative_summary(self):
         farm_profile = FarmProfileFactory()
-        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+        )
         allocation = _create_allocation(
             cycle,
             _create_unit(farm_profile, "Bassin période", "3.00"),
@@ -865,6 +869,7 @@ class TestUnitCycleAwareReportPayloads:
             cycle_name="Cycle Clarias Juin 2026",
             species="clarias",
             status="active",
+            start_date=yesterday,
             initial_count=1800,
             current_count=1770,
             current_average_weight=Decimal("100.00"),
@@ -1049,6 +1054,7 @@ class TestUnitCycleAwareReportPayloads:
             cycle_name="Cycle Etat Courant",
             species="clarias",
             status="active",
+            start_date=yesterday,
             initial_count=900,
             current_count=900,
             current_average_weight=Decimal("20.00"),

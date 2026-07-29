@@ -633,7 +633,13 @@ export default function DashboardScreen({ navigation }: any) {
                     {launch.payload.cycle.cycle_name ?? t("newCycleTitle")}
                   </AppText>
                   <AppText color="muted">
-                    {t(launch.attempted ? "cycleLaunchLockedAfterAttempt" : "cycleLaunchEditableBeforeAttempt")}
+                    {t(
+                      launch.sync_status === "rejected"
+                        ? "cycleLaunchRejected"
+                        : launch.attempted
+                          ? "cycleLaunchLockedAfterAttempt"
+                          : "cycleLaunchEditableBeforeAttempt",
+                    )}
                   </AppText>
                   <View style={{ flexDirection: "row", gap: spacing[2], marginTop: spacing[2] }}>
                     {!launch.attempted ? (
@@ -659,33 +665,37 @@ export default function DashboardScreen({ navigation }: any) {
                         }}
                       />
                     ) : null}
-                    <Button
-                      label={t("retry")}
-                      variant="outline"
-                      size="small"
-                      fullWidth={false}
-                      onPress={async () => {
-                        const launchesBeforeSync =
-                          await offlineService.getOfflineCycleLaunches();
-                        const result = await offlineService.syncOfflineCycleLaunches();
-                        if (result.success > 0) {
-                          await refreshAfterCycleLaunchSync(launchesBeforeSync);
-                        } else {
-                          await loadPendingCycleLaunches();
-                        }
-                      }}
-                    />
-                    <Button
-                      label={t("delete")}
-                      variant="danger"
-                      size="small"
-                      fullWidth={false}
-                      onPress={() => {
-                        void offlineService.deletePendingCycleLaunch(launch.id).then(
-                          loadPendingCycleLaunches,
-                        );
-                      }}
-                    />
+                    {launch.sync_status !== "rejected" ? (
+                      <Button
+                        label={t("retry")}
+                        variant="outline"
+                        size="small"
+                        fullWidth={false}
+                        onPress={async () => {
+                          const launchesBeforeSync =
+                            await offlineService.getOfflineCycleLaunches();
+                          const result = await offlineService.syncOfflineCycleLaunches();
+                          if (result.success > 0) {
+                            await refreshAfterCycleLaunchSync(launchesBeforeSync);
+                          } else {
+                            await loadPendingCycleLaunches();
+                          }
+                        }}
+                      />
+                    ) : null}
+                    {!launch.attempted && launch.sync_status === "pending" ? (
+                      <Button
+                        label={t("delete")}
+                        variant="danger"
+                        size="small"
+                        fullWidth={false}
+                        onPress={() => {
+                          void offlineService.deletePendingCycleLaunch(launch.id).then(
+                            loadPendingCycleLaunches,
+                          );
+                        }}
+                      />
+                    ) : null}
                   </View>
                 </Card>
               ))}
