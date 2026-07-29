@@ -7,8 +7,13 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
-from django.utils.translation import gettext_lazy as _
 
+from ..domain.exceptions import (
+    FeedReferenceConflict,
+    FeedReferenceInvalid,
+    FeedReferenceNotFound,
+    FeedReferenceSpeciesMismatch,
+)
 from ..models import CycleFeedStockEntry, ProductionCycle
 from .cycle_store_service import CycleStorePayload, CycleStoreService
 from .feed_reference_service import FeedReferenceService
@@ -81,30 +86,33 @@ class CycleStoreApplicationService:
             and feed_reference_by_client_uuid is not None
             and feed_reference_by_id.id != feed_reference_by_client_uuid.id
         ):
-            raise ValueError(_('L’identifiant et le client_uuid désignent deux aliments différents.'))
+            raise FeedReferenceConflict()
 
         feed_reference = feed_reference_by_id or feed_reference_by_client_uuid
         if feed_reference is not None:
             pass
         elif command.external_feed or (command.label and command.feed_size_mm is not None):
-            feed_reference = FeedReferenceService.create(
-                user=user,
-                farm_profile=cycle.farm_profile,
-                data={
-                    **(command.external_feed or {
-                        'name': command.label,
-                        'species': cycle.species,
-                        'pellet_size_mm': command.feed_size_mm,
-                    }),
-                    'source': 'external',
-                },
-            )
+            try:
+                feed_reference = FeedReferenceService.create(
+                    user=user,
+                    farm_profile=cycle.farm_profile,
+                    data={
+                        **(command.external_feed or {
+                            'name': command.label,
+                            'species': cycle.species,
+                            'pellet_size_mm': command.feed_size_mm,
+                        }),
+                        'source': 'external',
+                    },
+                )
+            except ValueError as exc:
+                raise FeedReferenceInvalid() from exc
         else:
-            raise ValueError(_('Une référence aliment est requise.'))
+            raise FeedReferenceNotFound()
         if feed_reference.farm_profile_id != cycle.farm_profile_id:
-            raise PermissionError(_('Cet aliment appartient à une autre ferme.'))
+            raise FeedReferenceNotFound()
         if feed_reference.species != cycle.species:
-            raise ValueError(_('Cet aliment ne correspond pas à l’espèce du cycle.'))
+            raise FeedReferenceSpeciesMismatch()
         return CycleStoreService.declare_manual_stock(
             user=user,
             cycle=cycle,
@@ -144,27 +152,30 @@ class CycleStoreApplicationService:
             and feed_reference_by_client_uuid is not None
             and feed_reference_by_id.id != feed_reference_by_client_uuid.id
         ):
-            raise ValueError(_('L’identifiant et le client_uuid désignent deux aliments différents.'))
+            raise FeedReferenceConflict()
         feed_reference = feed_reference_by_id or feed_reference_by_client_uuid
         if feed_reference is None and external_feed:
             requested_species = external_feed.get('species')
             if requested_species not in (None, cycle.species):
-                raise ValueError(_('Cet aliment ne correspond pas à l’espèce du cycle.'))
-            feed_reference = FeedReferenceService.create(
-                user=user,
-                farm_profile=cycle.farm_profile,
-                data={
-                    **external_feed,
-                    'species': cycle.species,
-                    'source': 'external',
-                },
-            )
+                raise FeedReferenceSpeciesMismatch()
+            try:
+                feed_reference = FeedReferenceService.create(
+                    user=user,
+                    farm_profile=cycle.farm_profile,
+                    data={
+                        **external_feed,
+                        'species': cycle.species,
+                        'source': 'external',
+                    },
+                )
+            except ValueError as exc:
+                raise FeedReferenceInvalid() from exc
         if feed_reference is None:
-            raise ValueError(_('Une référence aliment est requise.'))
+            raise FeedReferenceNotFound()
         if feed_reference.farm_profile_id != cycle.farm_profile_id:
-            raise PermissionError(_('Cet aliment appartient à une autre ferme.'))
+            raise FeedReferenceNotFound()
         if feed_reference.species != cycle.species:
-            raise ValueError(_('Cet aliment ne correspond pas à l’espèce du cycle.'))
+            raise FeedReferenceSpeciesMismatch()
         return feed_reference
 
     @classmethod

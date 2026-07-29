@@ -1081,11 +1081,16 @@ class ProductionCycle(models.Model):
                 condition=(
                     ~Q(onboarding_mode='ongoing')
                     | Q(
+                        tracking_start_date__isnull=False,
                         tracking_start_date__gte=models.F('start_date'),
+                        tracking_start_count__isnull=False,
                         tracking_start_count__gt=0,
                         tracking_start_count__lte=models.F('initial_count'),
+                        tracking_start_average_weight__isnull=False,
                         tracking_start_average_weight__gt=Decimal('0'),
+                        tracking_start_biomass__isnull=False,
                         tracking_start_biomass__gt=Decimal('0'),
+                        tracking_start_biomass_source__isnull=False,
                     )
                 ),
                 name='aq_ongoing_cycle_baseline_ck',

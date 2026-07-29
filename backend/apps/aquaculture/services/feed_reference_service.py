@@ -8,7 +8,10 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from ..domain.exceptions import FeedReferenceIdempotencyConflict
+from ..domain.exceptions import (
+    FeedReferenceIdempotencyConflict,
+    FeedReferenceNotFound,
+)
 from ..models import FarmFeedReference
 
 
@@ -165,9 +168,9 @@ class FeedReferenceService:
     def get_owned(*, user, reference_id) -> FarmFeedReference:
         reference = FarmFeedReference.objects.for_api().filter(pk=reference_id).first()
         if reference is None:
-            raise ValueError(_('Référence aliment introuvable.'))
+            raise FeedReferenceNotFound()
         if reference.farm_profile.user_id != user.id:
-            raise PermissionError(_('Cette référence aliment ne vous appartient pas.'))
+            raise FeedReferenceNotFound()
         return reference
 
     @staticmethod
@@ -175,7 +178,7 @@ class FeedReferenceService:
         """Résout une identité offline sans accepter une référence d'une autre ferme."""
         reference = FarmFeedReference.objects.for_api().filter(client_uuid=client_uuid).first()
         if reference is None:
-            raise ValueError(_('Référence aliment introuvable.'))
+            raise FeedReferenceNotFound()
         if reference.farm_profile_id != farm_profile.id or farm_profile.user_id != user.id:
-            raise PermissionError(_('Cette référence aliment ne vous appartient pas.'))
+            raise FeedReferenceNotFound()
         return reference

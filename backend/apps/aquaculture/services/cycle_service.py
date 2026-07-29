@@ -201,10 +201,9 @@ class ProductionCycleService(BaseService):
         # Normaliser et compléter les paramètres économiques.
         ProductionCycleService._apply_economic_defaults(cycle_data)
 
-        # 1. Validation métier approfondie
-        ProductionCycleService._validate_cycle_business_rules(cycle_data)
-
-        # 2. L'historique et la baseline sont deux sources distinctes.
+        # 1. L'historique et la baseline sont deux sources distinctes.
+        # La baseline doit être résolue avant la validation de densité afin
+        # qu'un cycle repris utilise l'effectif réellement présent.
         initial_weight = cycle_data.get('initial_average_weight')
         initial_biomass = (
             AquacultureCalculator.calculate_biomass(
@@ -254,7 +253,7 @@ class ProductionCycleService(BaseService):
                 **(exc.context or {}),
             }) from exc
 
-        # 3. Préparation données complètes
+        # 2. Préparation des données complètes et validation métier.
         cycle_data_complete = {
             **cycle_data,
             'farm_profile': farm_profile,
@@ -270,8 +269,9 @@ class ProductionCycleService(BaseService):
             'total_feed_consumed': Decimal('0'),
             'status': 'active',
         }
+        ProductionCycleService._validate_cycle_business_rules(cycle_data_complete)
 
-        # 4. Création du cycle
+        # 3. Création du cycle
         cycle = ProductionCycle.objects.create(**cycle_data_complete)
 
         # Le plan initial est un snapshot métier du lancement, jamais un effet
@@ -1592,14 +1592,22 @@ class ProductionCycleService(BaseService):
         # Si le cycle est lancé avec plusieurs types d'infrastructure,
         # la densité globale n'a plus de sens et la validation se fait
         # au niveau des allocations par unité.
-        if initial_count and len(normalized_infrastructure_types) <= 1:
+        # Pour un cycle repris, la densité actuelle est calculée avec
+        # l'effectif de baseline (tracking_start_count), pas avec
+        # l'effectif historique (initial_count).
+        effective_count = (
+            cycle_data.get('tracking_start_count')
+            if onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING
+            else initial_count
+        )
+        if effective_count and len(normalized_infrastructure_types) <= 1:
             is_pond = ProductionCycleService._is_pond_infrastructure(
                 normalized_infrastructure_types or infrastructure_types
             )
             pond_volume = cycle_data.get('pond_volume_m3')
 
             if is_pond and pond_surface:
-                density = initial_count / float(pond_surface)
+                density = effective_count / float(pond_surface)
                 max_allowed = ProductionCycleService.MAX_STOCKING_DENSITY_POND_PER_M2
                 if density > max_allowed:
                     raise InvalidDensityError(
@@ -1610,7 +1618,7 @@ class ProductionCycleService(BaseService):
                         % {'density': density, 'max_allowed': max_allowed}
                     )
             elif pond_volume:
-                density = initial_count / float(pond_volume)
+                density = effective_count / float(pond_volume)
                 max_allowed = ProductionCycleService.MAX_STOCKING_DENSITY_TANK_PER_M3
                 if density > max_allowed:
                     raise InvalidDensityError(

@@ -26,7 +26,7 @@ from aquaculture.services.cycle_store_application_service import (
 )
 from aquaculture.services.cycle_store_service import CycleStoreService
 from aquaculture.services.log_service import CycleLogService
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -379,6 +379,76 @@ def test_target_weight_reached_creates_zero_remaining_plan_with_warning(
 
 
 @pytest.mark.django_db
+def test_ongoing_density_uses_baseline_count_not_historical_count(
+    auth_client,
+    farm_profile,
+):
+    """Density is validated against tracking_start_count, not initial_count."""
+    payload = ongoing_launch_payload()
+    # Historical count (2000) exceeds pond capacity of 1200
+    # Baseline count (1000) is within capacity
+    payload['cycle']['initial_count'] = 2000
+    payload['cycle']['tracking_start_count'] = 1000
+    payload['production_units'] = [{
+        'local_id': 'pond-a',
+        'source': 'new',
+        'name': 'Bassin A',
+        'unit_type': 'tank',
+        'volume_m3': 5,  # capacity = 5 * 300 = 1500 fish
+    }]
+    payload['allocations'] = [{
+        'production_unit_local_id': 'pond-a',
+        'fish_count': 1000,
+    }]
+    payload['tracking_baseline'] = {
+        'tracking_start_date': payload['cycle']['start_date'],
+        'fish_count': 1000,
+        'average_weight_g': '150.00',
+        'biomass_kg': None,
+    }
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_density_rejects_when_baseline_count_exceeds_capacity(
+    auth_client,
+    farm_profile,
+):
+    """Density is rejected when tracking_start_count exceeds capacity."""
+    payload = ongoing_launch_payload()
+    payload['cycle']['initial_count'] = 2000
+    payload['cycle']['tracking_start_count'] = 2000
+    payload['production_units'] = [{
+        'local_id': 'pond-a',
+        'source': 'new',
+        'name': 'Bassin A',
+        'unit_type': 'tank',
+        'volume_m3': 5,  # capacity = 5 * 300 = 1500 fish
+    }]
+    payload['allocations'] = [{
+        'production_unit_local_id': 'pond-a',
+        'fish_count': 2000,
+    }]
+    payload['tracking_baseline'] = {
+        'tracking_start_date': payload['cycle']['start_date'],
+        'fish_count': 2000,
+        'average_weight_g': '150.00',
+        'biomass_kg': None,
+    }
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db(transaction=True)
 def test_feed_stock_cost_status_database_constraint(
     auth_client,
     farm_profile,
@@ -404,3 +474,315 @@ def test_feed_stock_cost_status_database_constraint(
             entry_kind='manual_supply',
             entry_date=cycle.tracking_start_date,
         )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_cycle_baseline_not_null_constraint(
+    auth_client,
+    farm_profile,
+):
+    """PostgreSQL rejects every NULL ongoing baseline component at insertion."""
+    if connection.vendor != 'postgresql':
+        pytest.skip('PostgreSQL constraint integration test')
+
+    today = timezone.localdate()
+    baseline_values = {
+        'tracking_start_date': today,
+        'tracking_start_count': 100,
+        'tracking_start_average_weight': Decimal('150.00'),
+        'tracking_start_biomass': Decimal('15.00'),
+    }
+
+    for null_field in baseline_values:
+        kwargs = {k: v for k, v in baseline_values.items()}
+        kwargs[null_field] = None
+        cycle = ProductionCycle(
+            farm_profile=farm_profile,
+            onboarding_mode='ongoing',
+            cycle_name='Constraint Test',
+            species='clarias',
+            start_date=today - timedelta(days=30),
+            initial_count=200,
+            current_count=100,
+            current_average_weight=Decimal('150.00'),
+            current_biomass=Decimal('15.00'),
+            total_feed_consumed=Decimal('0'),
+            status='active',
+            **kwargs,
+        )
+        with pytest.raises(IntegrityError):
+            with transaction.atomic():
+                ProductionCycle.objects.bulk_create([cycle])
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_cycle_baseline_constraint_passes_for_valid_new_cycle(
+    auth_client,
+    farm_profile,
+):
+    """A new-mode cycle with default tracking_start_* values passes the constraint."""
+    today = timezone.localdate()
+    cycle = ProductionCycle.objects.create(
+        farm_profile=farm_profile,
+        onboarding_mode='new',
+        cycle_name='Valid New',
+        species='tilapia',
+        start_date=today,
+        initial_count=100,
+        initial_average_weight=Decimal('50.00'),
+        current_count=100,
+        current_average_weight=Decimal('50.00'),
+        current_biomass=Decimal('5.00'),
+        total_feed_consumed=Decimal('0'),
+        status='active',
+        tracking_start_date=today,
+        tracking_start_count=100,
+        tracking_start_average_weight=Decimal('50.00'),
+        tracking_start_biomass=Decimal('5.00'),
+        tracking_start_biomass_source='calculated',
+    )
+    assert cycle.pk is not None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_fcr_scope_in_dashboard(
+    auth_client,
+    farm_profile,
+):
+    """An ongoing cycle with complete tracked data shows FCR with scope since_tracking_start."""
+    today = timezone.localdate()
+    tracking_start = today - timedelta(days=30)
+    payload = ongoing_launch_payload()
+    payload['cycle']['start_date'] = (today - timedelta(days=60)).isoformat()
+    payload['cycle']['tracking_start_date'] = tracking_start.isoformat()
+    payload['cycle']['planned_harvest_date'] = (today + timedelta(days=60)).isoformat()
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    cycle_id = response.data['production_cycle']['id']
+    cycle = ProductionCycle.objects.get(pk=cycle_id)
+
+    # Add tracked logs after baseline
+    with transaction.atomic():
+        for day_offset in range(1, 5):
+            CycleLog.objects.create(
+                cycle=cycle,
+                log_date=tracking_start + timedelta(days=day_offset),
+                mortality_count=0,
+                feed_quantity=Decimal('10.00'),
+                average_weight=Decimal('200.00'),
+            )
+    cycle.total_feed_consumed = Decimal('40.00')
+    cycle.current_biomass = Decimal('30.00')
+    cycle.fcr = Decimal('40.00') / (Decimal('30.00') - Decimal('140.00')).copy_abs()
+    cycle.save()
+
+    response = auth_client.get(
+        reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': cycle_id}),
+    )
+    assert response.status_code == status.HTTP_200_OK
+    dashboard = response.data
+    assert dashboard['cycle']['fcr'] is not None
+    assert dashboard['cycle']['history_scope'] == 'since_tracking_start'
+
+
+@pytest.mark.django_db(transaction=True)
+def test_new_cycle_fcr_scope_full_cycle(
+    auth_client,
+    farm_profile,
+):
+    """A new cycle with complete data shows FCR with scope full_cycle."""
+    today = timezone.localdate()
+    payload = ongoing_launch_payload()
+    payload['cycle']['onboarding_mode'] = 'new'
+    payload['cycle']['initial_average_weight'] = '50.00'
+    payload.pop('tracking_baseline', None)
+    payload['cycle']['start_date'] = (today - timedelta(days=30)).isoformat()
+    payload['cycle']['planned_harvest_date'] = (today + timedelta(days=90)).isoformat()
+    # Allocations must sum to initial_count for new cycles
+    payload['allocations'] = [
+        {'production_unit_local_id': 'unit-a', 'fish_count': 1200},
+        {'production_unit_local_id': 'unit-b', 'fish_count': 800},
+    ]
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    cycle_id = response.data['production_cycle']['id']
+    cycle = ProductionCycle.objects.get(pk=cycle_id)
+
+    with transaction.atomic():
+        for day_offset in range(1, 5):
+            CycleLog.objects.create(
+                cycle=cycle,
+                log_date=cycle.start_date + timedelta(days=day_offset),
+                mortality_count=0,
+                feed_quantity=Decimal('10.00'),
+                average_weight=Decimal('100.00'),
+            )
+    cycle.total_feed_consumed = Decimal('40.00')
+    cycle.current_biomass = Decimal('20.00')
+    cycle.fcr = Decimal('40.00') / Decimal('20.00')
+    cycle.save()
+
+    response = auth_client.get(
+        reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': cycle_id}),
+    )
+    assert response.status_code == status.HTTP_200_OK
+    dashboard = response.data
+    assert dashboard['cycle']['fcr'] is not None
+    assert dashboard['cycle']['history_scope'] == 'full_cycle'
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_fcr_null_in_dashboard_when_data_incomplete(
+    auth_client,
+    farm_profile,
+):
+    """An ongoing cycle with incomplete feed data shows fcr=None in dashboard."""
+    today = timezone.localdate()
+    tracking_start = today - timedelta(days=30)
+    payload = ongoing_launch_payload()
+    payload['cycle']['start_date'] = (today - timedelta(days=60)).isoformat()
+    payload['cycle']['tracking_start_date'] = tracking_start.isoformat()
+    payload['cycle']['planned_harvest_date'] = (today + timedelta(days=60)).isoformat()
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    cycle_id = response.data['production_cycle']['id']
+    cycle = ProductionCycle.objects.get(pk=cycle_id)
+
+    cycle.total_feed_consumed = Decimal('0')
+    cycle.save()
+
+    response = auth_client.get(
+        reverse('aquaculture:production-cycle-dashboard', kwargs={'pk': cycle_id}),
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['cycle']['fcr'] is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_launch_rejects_unknown_feed_reference_id(
+    auth_client,
+    farm_profile,
+):
+    """A non-existent feed_reference_id returns 404, not 500."""
+    payload = ongoing_launch_payload()
+    payload['initial_feed_stocks'] = [{
+        'local_id': 'stock-1',
+        'feed_reference_id': '00000000-0000-0000-0000-000000000000',
+        'quantity_kg': '100.00',
+        'cost_status': 'known',
+        'total_cost_fcfa': '50000.00',
+    }]
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data['code'] == 'feed_reference_not_found'
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_launch_rejects_unknown_feed_reference_client_uuid(
+    auth_client,
+    farm_profile,
+):
+    """A non-existent feed_reference_client_uuid returns 404, not 500."""
+    payload = ongoing_launch_payload()
+    payload['initial_feed_stocks'] = [{
+        'local_id': 'stock-1',
+        'feed_reference_client_uuid': '00000000-0000-0000-0000-000000000000',
+        'quantity_kg': '100.00',
+        'cost_status': 'known',
+        'total_cost_fcfa': '50000.00',
+    }]
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data['code'] == 'feed_reference_not_found'
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_launch_rejects_feed_reference_from_another_farm(
+    auth_client,
+    farm_profile,
+    user_factory,
+):
+    """A feed reference owned by another farm returns 404 (no cross-farm leak)."""
+    other_user = user_factory()
+    reference = FarmFeedReference.objects.create(
+        farm_profile=other_user.farm_profile,
+        source='external',
+        name='Other Farm Feed',
+        normalized_name='other farm feed',
+        species='clarias',
+        pellet_size_mm=Decimal('2.00'),
+    )
+    payload = ongoing_launch_payload()
+    payload['initial_feed_stocks'] = [{
+        'local_id': 'stock-1',
+        'feed_reference_id': str(reference.id),
+        'quantity_kg': '100.00',
+        'cost_status': 'known',
+        'total_cost_fcfa': '50000.00',
+    }]
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data['code'] == 'feed_reference_not_found'
+    # No cycle, unit, allocation, stock, or reference should have been created
+    assert ProductionCycle.objects.count() == 0
+    assert ProductionUnit.objects.count() == 0
+    assert CycleUnitAllocation.objects.count() == 0
+    assert CycleFeedStockEntry.objects.count() == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ongoing_launch_rejects_species_mismatch_feed_reference(
+    auth_client,
+    farm_profile,
+):
+    """A feed reference with wrong species returns 400, not 500."""
+    reference = FarmFeedReference.objects.create(
+        farm_profile=farm_profile,
+        source='external',
+        name='Tilapia Feed',
+        normalized_name='tilapia feed',
+        species='tilapia',
+        pellet_size_mm=Decimal('2.00'),
+    )
+    payload = ongoing_launch_payload()
+    payload['cycle']['species'] = 'clarias'
+    payload['initial_feed_stocks'] = [{
+        'local_id': 'stock-1',
+        'feed_reference_id': str(reference.id),
+        'quantity_kg': '100.00',
+        'cost_status': 'known',
+        'total_cost_fcfa': '50000.00',
+    }]
+    response = auth_client.post(
+        reverse('aquaculture:production_cycle_launch'),
+        payload,
+        format='json',
+    )
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data['code'] == 'feed_reference_species_mismatch'
+    assert ProductionCycle.objects.count() == 0
+    assert CycleFeedStockEntry.objects.count() == 0

@@ -1114,10 +1114,11 @@ class ReportService(BaseService):
         stored_total = ReportService._to_float(cycle.total_feed_consumed)
         stored_total = stored_total if stored_total and stored_total > 0 else None
         log_dates = {log.log_date for log in logs}
+        analysis_start_date = cycle.analysis_start_date
         expected_log_dates = {
-            cycle.start_date + timedelta(days=offset)
-            for offset in range((period_end - cycle.start_date).days + 1)
-        } if cycle.start_date <= period_end else set()
+            analysis_start_date + timedelta(days=offset)
+            for offset in range((period_end - analysis_start_date).days + 1)
+        } if analysis_start_date <= period_end else set()
         log_history_complete = (
             bool(expected_log_dates)
             and expected_log_dates.issubset(log_dates)
@@ -1412,9 +1413,19 @@ class ReportService(BaseService):
                 ).order_by("-log_date", "-log_time")
             )
             sanitary_logs = global_period_sanitary_logs
-            cumulative_logs = list(cycle.logs.filter(log_date__lte=period_end))
-            partial_harvests = list(cycle.partial_harvests.filter(harvest_date__lte=period_end))
-            cumulative_sanitary_logs = list(cycle.sanitary_logs.filter(event_date__lte=period_end))
+            cumulative_logs = list(
+                cycle.logs.filter(
+                    log_date__gte=cycle.analysis_start_date,
+                    log_date__lte=period_end,
+                )
+            )
+            partial_harvests = list(
+                cycle.partial_harvests.filter(
+                    harvest_date__gte=cycle.analysis_start_date,
+                    harvest_date__lte=period_end,
+                )
+            )
+            cumulative_sanitary_logs = global_cumulative_sanitary_logs
             feed_resolution = ReportService._resolve_legacy_cumulative_feed(
                 cycle=cycle,
                 logs=cumulative_logs,
@@ -1514,9 +1525,22 @@ class ReportService(BaseService):
                 else None
             )
             fcr_data_reliable = (
-                cycle.history_scope == ProductionCycle.HISTORY_SCOPE_FULL_CYCLE
-                and feed_resolution["history_complete"]
+                feed_resolution["history_complete"]
                 and (legacy_reconstructed or not cumulative_logs)
+            )
+            fcr_scope = cycle.history_scope
+            fcr_label = ReportService._pick_text(
+                ReportService._resolve_language_code(farm_profile.user),
+                (
+                    "FCR depuis le démarrage du suivi AquaCare"
+                    if cycle.has_partial_history
+                    else "FCR du cycle complet"
+                ),
+                (
+                    "FCR since AquaCare tracking started"
+                    if cycle.has_partial_history
+                    else "Full-cycle FCR"
+                ),
             )
             legacy_fcr = ReportFcrService.calculate(
                 feed_consumed_kg=total_feed,
@@ -1687,6 +1711,8 @@ class ReportService(BaseService):
                             "total_feed_consumed": total_feed,
                             "survival_rate": legacy_survival,
                             "fcr": legacy_fcr,
+                            "fcr_scope": fcr_scope,
+                            "fcr_label": fcr_label,
                             "daily_growth_rate": ReportService._to_float(
                                 getattr(cycle_metrics, "daily_growth_rate", None)
                             ),
@@ -2239,7 +2265,12 @@ class ReportService(BaseService):
 
             total_feed = ReportService._to_float(logs_agg.get("total_feed"))
             total_mortality = int(logs_agg.get("total_mortality") or 0)
-            cumulative_logs = list(cycle.logs.filter(log_date__lte=period_end).only("feed_quantity", "mortality_count"))
+            cumulative_logs = list(
+                cycle.logs.filter(
+                    log_date__gte=cycle.analysis_start_date,
+                    log_date__lte=period_end,
+                ).only("feed_quantity", "mortality_count")
+            )
             cumulative_feed = sum(float(log.feed_quantity or 0) for log in cumulative_logs)
             cumulative_mortality = sum(int(log.mortality_count or 0) for log in cumulative_logs)
             current_count_snapshot = (
@@ -2262,7 +2293,12 @@ class ReportService(BaseService):
                 or ReportService._to_float(DEFAULT_FEED_PRICE_PER_KG)
                 or 0.0
             )
-            cumulative_logs = list(cycle.logs.filter(log_date__lte=period_end).only("feed_quantity"))
+            cumulative_logs = list(
+                cycle.logs.filter(
+                    log_date__gte=cycle.analysis_start_date,
+                    log_date__lte=period_end,
+                ).only("feed_quantity")
+            )
             feed_consumed_kg = cumulative_feed
             if not cumulative_logs:
                 feed_consumed_kg = ReportService._to_float(cycle.total_feed_consumed) or 0.0
@@ -2576,7 +2612,7 @@ class ReportService(BaseService):
             float((section.get("cumulative_metrics") or {}).get("harvested_biomass_kg") or 0)
             for section in sections
         )
-        payload["cycle_dashboard"]["fcr"] = ReportFcrService.calculate(
+        dashboard_fcr = ReportFcrService.calculate(
             feed_consumed_kg=(
                 float(global_economic.get("feed_consumed_kg") or 0)
                 or sum(float((section.get("cumulative_metrics") or {}).get("total_feed") or 0) for section in sections)
@@ -2588,9 +2624,22 @@ class ReportService(BaseService):
                 (section.get("cumulative_metrics") or {}).get("fcr") is not None for section in sections
             ),
         )
+        payload["cycle_dashboard"]["fcr"] = dashboard_fcr
+        payload["cycle_dashboard"]["fcr_scope"] = (
+            sections[0].get("current_metrics", {}).get("fcr_scope")
+            if sections and dashboard_fcr is not None
+            else None
+        )
+        payload["cycle_dashboard"]["fcr_label"] = (
+            sections[0].get("current_metrics", {}).get("fcr_label")
+            if sections and dashboard_fcr is not None
+            else None
+        )
         if not all("cumulative_metrics" in section for section in sections):
             legacy_metrics = (sections[0].get("current_metrics") or {}) if sections else {}
             payload["cycle_dashboard"]["fcr"] = legacy_metrics.get("fcr")
+            payload["cycle_dashboard"]["fcr_scope"] = legacy_metrics.get("fcr_scope")
+            payload["cycle_dashboard"]["fcr_label"] = legacy_metrics.get("fcr_label")
         payload["cost_breakdown"] = cost_breakdown
         legacy_fallbacks_used = list(
             existing_metadata.get("legacy_fallbacks_used")

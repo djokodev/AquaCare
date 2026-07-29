@@ -214,7 +214,60 @@ class FeedReferenceIdempotencyConflict(OfflineSyncConflictError):
     def __init__(self):
         super().__init__({
             'code': self.default_code,
-            'detail': _('Cet UUID correspond à une autre référence d’aliment.'),
+            'detail': _('Cet UUID correspond à une autre référence d\'aliment.'),
+        })
+
+
+class FeedReferenceNotFound(AquacultureBusinessException):
+    """La référence aliment demandée n'existe pas ou n'est pas accessible."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    default_code = 'feed_reference_not_found'
+    default_detail = _('Référence aliment introuvable.')
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': self.default_detail,
+        })
+
+
+class FeedReferenceConflict(BusinessRuleViolation):
+    """Deux identifiants de référence aliment désignent des aliments différents."""
+
+    default_code = 'feed_reference_conflict'
+    default_detail = _('Les identifiants fournis désignent des aliments différents.')
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': self.default_detail,
+        })
+
+
+class FeedReferenceSpeciesMismatch(BusinessRuleViolation):
+    """La référence aliment ne correspond pas à l'espèce du cycle."""
+
+    default_code = 'feed_reference_species_mismatch'
+    default_detail = _("Cet aliment ne correspond pas à l'espèce du cycle.")
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': self.default_detail,
+        })
+
+
+class FeedReferenceInvalid(BusinessRuleViolation):
+    """Une référence externe ne respecte pas le contrat métier."""
+
+    default_code = 'feed_reference_invalid'
+    default_detail = _("La référence alimentaire fournie est invalide.")
+
+    def __init__(self):
+        super().__init__({
+            'code': self.default_code,
+            'detail': self.default_detail,
         })
 
 
