@@ -722,6 +722,10 @@ class TestProductionCycleViewSet:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['summary']['has_allocations'] is False
         assert response.data['summary']['data_source'] == 'legacy_cycle'
+        assert response.data['summary']['days_active'] == production_cycle.days_active()
+        assert response.data['summary']['days_tracked'] == production_cycle.days_tracked()
+        assert response.data['summary']['historical_count_gap'] == 0
+        assert response.data['summary']['history_scope'] == 'full_cycle'
         assert response.data['summary']['total_allocations'] == 0
         assert response.data['summary']['total_estimated_current_fish_count'] == production_cycle.current_count
         assert response.data['summary']['total_mortality_count'] == 4

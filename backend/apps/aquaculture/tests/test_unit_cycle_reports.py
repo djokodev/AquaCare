@@ -500,6 +500,9 @@ class TestUnitCycleAwareReportPayloads:
             start_date=date(2026, 7, 1),
             total_feed_consumed=Decimal("77.50"),
         )
+        ProductionCycle.objects.filter(id=stored_cycle.id).update(
+            updated_at=timezone.make_aware(datetime(2026, 7, 31, 10, 0)),
+        )
         stored_cycle.refresh_from_db()
         stored_resolution = ReportService._resolve_legacy_cumulative_feed(
             cycle=stored_cycle,

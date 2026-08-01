@@ -130,9 +130,17 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
   );
   const hasExistingCycle = Boolean(currentCycle || (dashboardData?.active_cycles?.length ?? 0) > 0);
   const requiresAdditionalCycleFlow = farmSetupCompleted || hasExistingCycle;
-  const launchButtonLabel = requiresAdditionalCycleFlow
-    ? t('simulationLaunchAdditionalBtn')
-    : t('simulationLaunchBtn');
+  const launchButtonLabel = ongoing
+    ? t('cycleVerificationConfirmBtn')
+    : requiresAdditionalCycleFlow
+      ? t('simulationLaunchAdditionalBtn')
+      : t('simulationLaunchBtn');
+  const openingStockCount = formData.initialFeedStocks?.length ?? 0;
+  const openingStockSummary = openingStockCount === 0
+    ? t('cycleVerificationOpeningStockNone')
+    : openingStockCount === 1
+      ? t('cycleVerificationOpeningStockOne')
+      : t('cycleVerificationOpeningStockMany', { count: openingStockCount });
   const productionUnitsDensityPreview = useMemo(
     () =>
       getProductionUnitsDensityPreview({
@@ -326,14 +334,18 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
 
   return (
     <Screen scroll style={styles.content}>
-      <View style={styles.header}>
-        <AppText variant="cardTitle" style={styles.title}>{t('simulationSubtitle')}</AppText>
-      </View>
+      {!ongoing ? (
+        <View style={styles.header}>
+          <AppText variant="cardTitle" style={styles.title}>
+            {t('simulationSubtitle')}
+          </AppText>
+        </View>
+      ) : null}
       {ongoing ? (
         <>
           <InlineAlert
             tone="info"
-            message={t('ongoingCycleBaselineConfirmation')}
+            message={t('cycleVerificationIntro')}
           />
           {!ongoingSchedule ? (
             <InlineAlert
@@ -342,7 +354,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
             />
           ) : null}
           <Card variant="elevated" style={styles.card}>
-            <AppText variant="bodyStrong">{t('trackingStartSituation')}</AppText>
+            <AppText variant="bodyStrong">{t('cycleVerificationDataTitle')}</AppText>
             <MetricRow label={t('historicalStartDate')} value={formData.startDate} />
             <MetricRow
               label={t('historicalInitialCount')}
@@ -378,8 +390,8 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
               ).toFixed(2)} kg`}
             />
             <MetricRow
-              label={t('openingStockLines')}
-              value={String(formData.initialFeedStocks?.length ?? 0)}
+              label={t('openingFeedStock')}
+              value={openingStockSummary}
             />
           </Card>
         </>
@@ -428,14 +440,20 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
       </Card> : null}
 
       <Card variant="elevated" style={styles.card}>
-        <AppText variant="bodyStrong">{t('simulationCycleTechnicalTitle')}</AppText>
+        <AppText variant="bodyStrong">
+          {t(ongoing ? 'cycleVerificationPlanningTitle' : 'simulationCycleTechnicalTitle')}
+        </AppText>
         <MetricRow label={t('simulationSpecies')} value={speciesLabel} />
-        <MetricRow label={t('simulationFingerlingsCount')} value={fingerlingsCountLabel} />
-        <MetricRow
-          label={t('simulationTotalCapacity')}
-          value={totalCapacityLabel}
-        />
-        {productionUnitsDensityPreview?.kind === 'single' ? (
+        {!ongoing ? (
+          <>
+            <MetricRow label={t('simulationFingerlingsCount')} value={fingerlingsCountLabel} />
+            <MetricRow
+              label={t('simulationTotalCapacity')}
+              value={totalCapacityLabel}
+            />
+          </>
+        ) : null}
+        {!ongoing && productionUnitsDensityPreview?.kind === 'single' ? (
           productionUnitsDensityPreview.isAtMax ? (
             <MetricRow
               label={t('simulationDensity')}
@@ -465,7 +483,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
               />
             </>
           )
-        ) : productionUnitsDensityPreview?.kind === 'mixed' ? (
+        ) : !ongoing && productionUnitsDensityPreview?.kind === 'mixed' ? (
           <>
             <MetricRow
               label={t('simulationDensity')}
@@ -479,7 +497,7 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
               <AppText variant="helper" color="muted">{t('simulationDensityByUnitNote')}</AppText>
             ) : null}
           </>
-        ) : legacyStockingDensityCheck ? (
+        ) : !ongoing && legacyStockingDensityCheck ? (
           <>
             <MetricRow
               label={t('simulationCurrentDensity')}
@@ -576,9 +594,14 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
                 <View key={group.unitNames.join('|')} style={styles.allocationGroup}>
                   {index > 0 ? <Divider /> : null}
                   <AppText variant="label">{group.unitNames.join(' → ')}</AppText>
-                  <MetricRow label={t('simulationFingerlingsCount')} value={allocationLabel} />
+                  <MetricRow
+                    label={t(ongoing ? 'fishPresentAtTrackingStart' : 'simulationFingerlingsCount')}
+                    value={allocationLabel}
+                  />
                   <MetricRow label={t('simulationDensity')} value={densityLabel} />
-                  <MetricRow label={t('simulationCycleProduction')} value={productionLabel} />
+                  {!ongoing ? (
+                    <MetricRow label={t('simulationCycleProduction')} value={productionLabel} />
+                  ) : null}
                 </View>
               );
             })}
@@ -615,7 +638,9 @@ export default function CycleSimulationScreen({ navigation, route }: Props) {
         />
       </Card> : null}
 
-      <InlineAlert tone="info" message={t('simulationOtherCostsInfo')} compact />
+      {!ongoing ? (
+        <InlineAlert tone="info" message={t('simulationOtherCostsInfo')} compact />
+      ) : null}
 
       <Button
         label={t('simulationModifyBtn')}

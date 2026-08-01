@@ -8,6 +8,8 @@ import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice'
 import { offlineService } from '@/services/offlineService';
 
 let mockLanguage = 'fr';
+const mockGetProducts = jest.fn();
+const mockGetFarmFeedReferences = jest.fn();
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -34,6 +36,19 @@ jest.mock('@/services/offlineService', () => ({
   },
 }));
 
+jest.mock('@/features/commerce/services/commerceApi', () => ({
+  __esModule: true,
+  default: {
+    getProducts: (...args: unknown[]) => mockGetProducts(...args),
+  },
+}));
+
+jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
+  aquacultureService: {
+    getFarmFeedReferences: (...args: unknown[]) => mockGetFarmFeedReferences(...args),
+  },
+}));
+
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -45,7 +60,7 @@ jest.mock('react-native-safe-area-context', () => {
 
 jest.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
-    farmProfile: { farm_name: 'Ferme Test' },
+    farmProfile: { id: 'farm-1', farm_name: 'Ferme Test' },
   }),
 }));
 
@@ -78,6 +93,24 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     mockOffline.isOnline.mockResolvedValue(true);
     mockOffline.saveCycleLaunchOffline.mockResolvedValue('launch-1');
     mockOffline.updatePendingCycleLaunch.mockResolvedValue();
+    mockGetProducts.mockImplementation(({ species }: { species: string }) =>
+      Promise.resolve(
+        species === 'catfish'
+          ? [
+              { pellet_size_mm: '2.00' },
+              { pellet_size_mm: '6.00' },
+              { pellet_size_mm: '9.00' },
+            ]
+          : [
+              { pellet_size_mm: '1.35' },
+              { pellet_size_mm: '2.00' },
+              { pellet_size_mm: '4.00' },
+            ],
+      ),
+    );
+    mockGetFarmFeedReferences.mockResolvedValue([
+      { species: 'clarias', pellet_size_mm: '3.50' },
+    ]);
     (useSelector as unknown as jest.Mock).mockImplementation(
       (selector: (state: any) => unknown) =>
         selector({
@@ -122,6 +155,10 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
         '900',
       );
       if (ongoing) {
+        fireEvent.press(getByTestId('createFarmStartDate'));
+        fireEvent.press(getByTestId('createFarmStartDate-previous-month'));
+        fireEvent.press(getByTestId('createFarmStartDate-day-2026-07-01'));
+        fireEvent.press(getByText('confirm'));
         fireEvent.changeText(
           getByTestId('createFarmHistoricalInitialCount'),
           '1000',
@@ -132,7 +169,7 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
         );
       }
 
-      fireEvent.press(getByText('createFarmSimulateBtn'));
+      fireEvent.press(getByTestId('createFarmSimulateButton'));
 
       await waitFor(() => {
         expect(mockOffline.saveCycleLaunchOffline).toHaveBeenCalledWith(
@@ -196,7 +233,7 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
         editingOfflineLaunchId: pendingPayload.launch_uuid,
       },
     } as any;
-    const { getByPlaceholderText, getByText } = render(
+    const { getByPlaceholderText, getByTestId } = render(
       <CreateFarmScreen navigation={navigation} route={route} />,
     );
 
@@ -206,7 +243,7 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
           .value,
       ).toBe('1850');
     });
-    fireEvent.press(getByText('createFarmSimulateBtn'));
+    fireEvent.press(getByTestId('createFarmSimulateButton'));
 
     await waitFor(() => {
       expect(mockOffline.updatePendingCycleLaunch).toHaveBeenCalledWith(
@@ -230,6 +267,86 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     expect(getByText('currentFarm')).toBeTruthy();
     expect(getByText('Ferme Test')).toBeTruthy();
     expect(getByText('createFarmTitle')).toBeTruthy();
+  });
+
+  it('simplifie la déclaration du stock pour un cycle déjà en cours', async () => {
+    const screen = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(screen.getByText('ongoingCycleMode'));
+    expect(
+      screen.getByTestId('createFarmStartDate').props.accessibilityValue,
+    ).toEqual({ text: 'selectDate' });
+    expect(screen.queryByText(/ongoingCycleActualStartDate/)).toBeNull();
+    expect(screen.getByText(/declaredHistory/)).toBeTruthy();
+    expect(screen.getByText(/trackingStartSituation/)).toBeTruthy();
+    expect(
+      screen.getByTestId('createFarmTrackingStartDate').props.accessibilityValue,
+    ).not.toEqual({ text: 'selectDate' });
+    expect(
+      screen.queryByText('ongoingCycleTrackingDateInvalid'),
+    ).toBeNull();
+    fireEvent.press(screen.getByText('createFarmSpeciesTilapia'));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('createFarmOpeningStockPelletSize-1.35'),
+      ).toBeTruthy();
+    });
+
+    expect(
+      screen.queryByText('preTrackingEventsNotReconstructed'),
+    ).toBeNull();
+    expect(screen.queryByText('knownCost')).toBeNull();
+    expect(screen.queryByText('unknownCost')).toBeNull();
+    expect(screen.getByText('stockCostHint')).toBeTruthy();
+
+    fireEvent.changeText(
+      screen.getByTestId('createFarmOpeningStockName'),
+      'Aliment local',
+    );
+    fireEvent.press(
+      screen.getByTestId('createFarmOpeningStockPelletSize-4'),
+    );
+    fireEvent.changeText(
+      screen.getByTestId('createFarmOpeningStockQuantity'),
+      '25',
+    );
+    fireEvent.changeText(
+      screen.getByTestId('createFarmOpeningStockCost'),
+      '12000',
+    );
+    fireEvent.press(screen.getByText('addOpeningStock'));
+
+    expect(screen.getByText('4 mm · 25 kg · knownCost')).toBeTruthy();
+  });
+
+  it('adapte les granulométries au catalogue de l espèce sélectionnée', async () => {
+    const screen = render(<CreateFarmScreen navigation={navigation} />);
+
+    fireEvent.press(screen.getByText('ongoingCycleMode'));
+    fireEvent.press(screen.getByText('createFarmSpeciesTilapia'));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('createFarmOpeningStockPelletSize-1.35'),
+      ).toBeTruthy();
+    });
+    expect(
+      screen.queryByTestId('createFarmOpeningStockPelletSize-6'),
+    ).toBeNull();
+
+    fireEvent.press(screen.getByText('createFarmSpeciesClarias'));
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('createFarmOpeningStockPelletSize-6'),
+      ).toBeTruthy();
+      expect(
+        screen.getByTestId('createFarmOpeningStockPelletSize-3.5'),
+      ).toBeTruthy();
+    });
+    expect(
+      screen.queryByTestId('createFarmOpeningStockPelletSize-1.35'),
+    ).toBeNull();
+    expect(mockGetProducts).toHaveBeenCalledWith({ species: 'tilapia' });
+    expect(mockGetProducts).toHaveBeenCalledWith({ species: 'catfish' });
   });
 
   it('permet de préparer les bacs de calibrage sans perdre le formulaire', () => {

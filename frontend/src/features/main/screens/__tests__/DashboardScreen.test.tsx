@@ -198,6 +198,10 @@ describe("features/main/screens/DashboardScreen", () => {
     mockOffline.deletePendingCycleLaunch.mockResolvedValue();
     mockGetCycleDashboard.mockResolvedValue({
       summary: {
+        days_active: 120,
+        days_tracked: 120,
+        historical_count_gap: 0,
+        history_scope: "full_cycle",
         total_allocations: 3,
         total_estimated_current_fish_count: 1800,
         estimated_market_value_fcfa: '302400000.00',
@@ -613,6 +617,47 @@ describe("features/main/screens/DashboardScreen", () => {
     fireEvent.press(getByText("changeSessionCycle"));
     expect(navigation.navigate).toHaveBeenCalledWith("CycleSessionEntry", {
       showBackToDashboard: true,
+    });
+  });
+
+  it("masque les métriques de reprise pour un cycle suivi depuis son démarrage", async () => {
+    const { queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    await waitFor(() =>
+      expect(mockGetCycleDashboard).toHaveBeenCalledWith(cycleA.id),
+    );
+    expect(queryByText("cycleRealAge")).toBeNull();
+    expect(queryByText("daysTrackedByAquaCare")).toBeNull();
+    expect(queryByText(/untrackedPeriod/)).toBeNull();
+  });
+
+  it("affiche l âge réel et les jours suivis sans exposer l écart historique", async () => {
+    mockGetCycleDashboard.mockResolvedValue({
+      summary: {
+        days_active: 60,
+        days_tracked: 30,
+        historical_count_gap: 800,
+        history_scope: "since_tracking_start",
+        total_allocations: 2,
+        total_estimated_current_fish_count: 1200,
+        estimated_market_value_fcfa: "30000.00",
+        direct_production_cost_fcfa: "150000.00",
+        cycle_progress_pct: 50,
+        days_remaining: 60,
+      },
+    });
+
+    const { getByText, queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    await waitFor(() => {
+      expect(getByText("cycleRealAge")).toBeTruthy();
+      expect(getByText("daysTrackedByAquaCare")).toBeTruthy();
+      expect(queryByText(/untrackedPeriod/)).toBeNull();
+      expect(queryByText(/unclassifiedHistoricalGap/)).toBeNull();
     });
   });
 

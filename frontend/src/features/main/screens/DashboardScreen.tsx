@@ -352,6 +352,8 @@ export default function DashboardScreen({ navigation }: any) {
   }, [currentCycle?.id, dispatch, loadCurrentCycleDashboard, loadFarmProfile, loadPendingCycleLaunches]);
 
   const cycleSummary = currentCycleDashboard?.summary;
+  const hasPartialCycleHistory =
+    cycleSummary?.history_scope === "since_tracking_start";
   const cycleDashboardInitialLoading = Boolean(
     primaryActiveCycleId && !cycleSummary && !cycleDashboardError,
   );
@@ -557,12 +559,6 @@ export default function DashboardScreen({ navigation }: any) {
                 {cycleDashboardError ? (
                   <InlineAlert tone="error" message={t(cycleDashboardError)} />
                 ) : null}
-                {cycleSummary?.history_scope === "since_tracking_start" ? (
-                  <InlineAlert
-                    tone="info"
-                    message={`${t("untrackedPeriod")} · ${t("unclassifiedHistoricalGap")}: ${cycleSummary.historical_count_gap ?? 0}`}
-                  />
-                ) : null}
                 <DashboardHeroCard
                   label={t("dashboardEstimatedMarketValue")}
                   value={formatDashboardCurrency(
@@ -594,28 +590,32 @@ export default function DashboardScreen({ navigation }: any) {
                     unit={t("dashboardDirectProductionCostUnit")}
                     unavailableLabel={t("dashboardDataUnavailable")}
                   />
-                  <DashboardMetricCard
-                    label={t("cycleRealAge")}
-                    value={formatDashboardNumber(
-                      cycleSummary?.days_active,
-                      locale,
-                      { maximumFractionDigits: 0 },
-                    )}
-                    unit={t("days")}
-                    tone="slate"
-                    unavailableLabel={t("dashboardDataUnavailable")}
-                  />
-                  <DashboardMetricCard
-                    label={t("daysTrackedByAquaCare")}
-                    value={formatDashboardNumber(
-                      cycleSummary?.days_tracked,
-                      locale,
-                      { maximumFractionDigits: 0 },
-                    )}
-                    unit={t("days")}
-                    tone="info"
-                    unavailableLabel={t("dashboardDataUnavailable")}
-                  />
+                  {hasPartialCycleHistory ? (
+                    <>
+                      <DashboardMetricCard
+                        label={t("cycleRealAge")}
+                        value={formatDashboardNumber(
+                          cycleSummary.days_active,
+                          locale,
+                          { maximumFractionDigits: 0 },
+                        )}
+                        unit={t("days")}
+                        tone="slate"
+                        unavailableLabel={t("dashboardDataUnavailable")}
+                      />
+                      <DashboardMetricCard
+                        label={t("daysTrackedByAquaCare")}
+                        value={formatDashboardNumber(
+                          cycleSummary.days_tracked,
+                          locale,
+                          { maximumFractionDigits: 0 },
+                        )}
+                        unit={t("days")}
+                        tone="info"
+                        unavailableLabel={t("dashboardDataUnavailable")}
+                      />
+                    </>
+                  ) : null}
                   <DashboardMetricCard
                     label={t("currentFish")}
                     value={formatDashboardNumber(

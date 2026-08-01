@@ -223,15 +223,20 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       trackingStartAverageWeight: '75',
       fingerlingsCount: '2100',
     });
-    const { getByText } = render(
+    const { getByText, queryByText } = render(
       <CycleSimulationScreen navigation={navigation} route={route} />,
     );
 
     expect(mockDispatch).not.toHaveBeenCalled();
+    expect(queryByText('cycleVerificationSubtitle')).toBeNull();
+    expect(getByText('cycleVerificationIntro')).toBeTruthy();
     expect(getByText('historicalStartDate')).toBeTruthy();
-    expect(getByText('trackingStartSituation')).toBeTruthy();
+    expect(getByText('cycleVerificationDataTitle')).toBeTruthy();
+    expect(getByText('cycleVerificationPlanningTitle')).toBeTruthy();
     expect(getByText('baselineBiomass')).toBeTruthy();
-    fireEvent.press(getByText('simulationLaunchBtn'));
+    expect(queryByText('simulationOtherCostsInfo')).toBeNull();
+    expect(queryByText('simulationCycleProduction')).toBeNull();
+    fireEvent.press(getByText('cycleVerificationConfirmBtn'));
 
     await waitFor(() =>
       expect(mockLaunchFirstCycleFromForm).toHaveBeenCalledWith(
@@ -285,7 +290,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     );
 
     expect(getByText('ongoingCyclePlannedHarvestElapsed')).toBeTruthy();
-    fireEvent.press(getByText('simulationLaunchBtn'));
+    fireEvent.press(getByText('cycleVerificationConfirmBtn'));
     expect(mockBuildRequestFromForm).not.toHaveBeenCalled();
     expect(mockLaunchFirstCycleFromForm).not.toHaveBeenCalled();
     expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
@@ -306,7 +311,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     );
 
     expect(getByText('ongoingCyclePlannedHarvestElapsed')).toBeTruthy();
-    fireEvent.press(getByText('simulationLaunchBtn'));
+    fireEvent.press(getByText('cycleVerificationConfirmBtn'));
     expect(mockBuildRequestFromForm).not.toHaveBeenCalled();
     expect(mockLaunchFirstCycleFromForm).not.toHaveBeenCalled();
     expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();

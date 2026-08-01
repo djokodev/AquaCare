@@ -1,8 +1,10 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as estimators from '../../domain/estimators';
 import { MessageComposer } from '../MessageComposer';
+import { colors } from '@/theme';
 
 const mockRequestMediaLibraryPermissionsAsync = jest.fn(() =>
   Promise.resolve({ status: 'granted' })
@@ -47,6 +49,19 @@ describe('features/chat/components/MessageComposer', () => {
       expect(onSendMessage).toHaveBeenCalledWith('Bonjour', undefined, 'none');
     });
     expect(screen.queryByDisplayValue('Bonjour')).toBeNull();
+  });
+
+  it('garde l icône d envoi visible quand le message est vide', () => {
+    const screen = render(<MessageComposer onSendMessage={jest.fn()} />);
+    const sendButton = screen.getByTestId('messageComposerSendButton');
+
+    expect(sendButton.props.accessibilityState).toMatchObject({ disabled: true });
+    expect(sendButton.findByType(Ionicons).props.color).toBe(colors.text.muted);
+
+    fireEvent.changeText(screen.getByPlaceholderText('chatPlaceholder'), 'Bonjour');
+
+    expect(sendButton.props.accessibilityState).toMatchObject({ disabled: false });
+    expect(sendButton.findByType(Ionicons).props.color).toBe(colors.brand.primary);
   });
 
   it('empêche deux envois pendant une requête en attente', async () => {

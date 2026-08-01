@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Alert, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
@@ -77,6 +77,10 @@ import type {
   FarmFeedReference,
   ProductionUnit,
 } from "@/types/aquaculture";
+import {
+  getOfflineCatalogPelletSizes,
+  normalizePelletSizeOptions,
+} from "@/features/aquaculture/utils/pelletSizeOptions";
 
 const SPECIES_OPTIONS = [
   { value: "clarias", labelKey: "clarias", durationDays: 120 },
@@ -200,7 +204,6 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
   const [stockName, setStockName] = useState("");
   const [stockPelletSize, setStockPelletSize] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
-  const [stockCostStatus, setStockCostStatus] = useState<"known" | "unknown">("unknown");
   const [stockCost, setStockCost] = useState("");
   const [stockNote, setStockNote] = useState("");
 
@@ -218,6 +221,15 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
 
   const getSelectedSpecies = () =>
     SPECIES_OPTIONS.find((option) => option.value === formData.species);
+
+  const stockPelletSizeOptions = formData.species
+    ? normalizePelletSizeOptions([
+        ...getOfflineCatalogPelletSizes(formData.species),
+        ...feedReferences
+          .filter((reference) => reference.species === formData.species)
+          .map((reference) => reference.pellet_size_mm),
+      ])
+    : [];
 
   const estimateInitialBiomass = () => {
     const count = parseFormNumber(formData.initial_count);
@@ -714,13 +726,14 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
       Alert.alert(t("error"), t("cycleLaunchFeedReferenceNotFound"));
       return;
     }
+    const normalizedStockCost = stockCost.trim().replace(",", ".");
+    const hasKnownStockCost = normalizedStockCost.length > 0;
     const localId = createClientUuid();
     const common = {
       local_id: localId,
       quantity_kg: stockQuantity.replace(",", "."),
-      cost_status: stockCostStatus,
-      total_cost_fcfa:
-        stockCostStatus === "known" ? stockCost.replace(",", ".") : null,
+      cost_status: hasKnownStockCost ? "known" : "unknown",
+      total_cost_fcfa: hasKnownStockCost ? normalizedStockCost : null,
       note: stockNote.trim(),
     } satisfies Omit<
       CycleLaunchOpeningStockInput,
@@ -743,7 +756,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
           };
     if (
       !(Number(stock.quantity_kg) > 0) ||
-      (stockCostStatus === "known" && !(Number(stock.total_cost_fcfa) >= 0)) ||
+      (hasKnownStockCost && !(Number(stock.total_cost_fcfa) >= 0)) ||
       (
         stockReferenceMode === "external"
         && (!stockName.trim() || !(Number(stockPelletSize) > 0))
@@ -884,7 +897,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
               );
             }) : null}
           </View>
-          <View style={{ gap: spacing[3] }}>
+          <View style={styles.ongoingSection}>
             <AppText variant="sectionTitle">
               {t(formData.onboarding_mode === "ongoing" ? "declaredHistory" : "initialStocking")}
             </AppText>
@@ -894,7 +907,7 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
             <TextField testID="newCycleName" label={t("cycleName")} value={formData.cycle_name} onChangeText={(value) => setFormData((prev) => ({ ...prev, cycle_name: value }))} placeholder={t("cycleNamePlaceholder")} />
           </View>
           {formData.onboarding_mode === "ongoing" ? (
-            <View style={{ gap: spacing[3] }}>
+            <View style={styles.ongoingSection}>
               <AppText variant="sectionTitle">{t("trackingStartSituation")}</AppText>
               <TextField
                 testID="newCycleTrackingDate"
@@ -939,11 +952,10 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                   ).toFixed(2)} kg
                 </AppText>
               ) : null}
-              <InlineAlert tone="info" message={t("preTrackingEventsNotReconstructed")} />
             </View>
           ) : null}
           {formData.onboarding_mode === "ongoing" ? (
-            <View style={{ gap: spacing[3] }}>
+            <View style={styles.ongoingSection}>
               <AppText variant="sectionTitle">{t("openingFeedStock")}</AppText>
               <AppText color="muted">{t("openingFeedStockDescription")}</AppText>
               {hasUnavailablePendingFeedReference ? (
@@ -986,22 +998,56 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                 </View>
               ) : (
                 <>
-                  <TextField label={t("feedName")} value={stockName} onChangeText={setStockName} />
-                  <TextField label={t("pelletSize")} value={stockPelletSize} onChangeText={setStockPelletSize} keyboardType="decimal-pad" suffix={numberSuffix("mm")} />
+                  <TextField
+                    testID="newCycleStockName"
+                    label={t("feedName")}
+                    value={stockName}
+                    onChangeText={setStockName}
+                  />
+                  <View style={styles.pelletSizeField}>
+                    <AppText variant="label">{t("pelletSize")}</AppText>
+                    {stockPelletSizeOptions.length > 0 ? (
+                      <View style={styles.pelletSizeOptions}>
+                        {stockPelletSizeOptions.map((size) => (
+                          <Button
+                            key={size}
+                            testID={`newCyclePelletSize-${size}`}
+                            label={t("storePelletSizeChip", { size })}
+                            size="small"
+                            fullWidth={false}
+                            variant={
+                              Number(stockPelletSize) === Number(size)
+                                ? "primary"
+                                : "outline"
+                            }
+                            onPress={() => setStockPelletSize(size)}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <AppText variant="helper" color="muted">
+                        {t("selectSpeciesForPelletSize")}
+                      </AppText>
+                    )}
+                  </View>
                 </>
               )}
-              <TextField testID="newCycleStockQuantity" label={t("quantityKg")} value={stockQuantity} onChangeText={setStockQuantity} keyboardType="decimal-pad" suffix={numberSuffix("kg")} />
-              <SegmentedControl
-                value={stockCostStatus}
-                options={[
-                  { value: "known", label: t("knownCost") },
-                  { value: "unknown", label: t("unknownCost") },
-                ]}
-                onChange={setStockCostStatus}
+              <TextField
+                testID="newCycleStockQuantity"
+                label={t("quantityKg")}
+                value={stockQuantity}
+                onChangeText={setStockQuantity}
+                keyboardType="decimal-pad"
               />
-              {stockCostStatus === "known" ? (
-                <TextField label={t("totalCostFcfa")} value={stockCost} onChangeText={setStockCost} keyboardType="decimal-pad" suffix={numberSuffix("FCFA")} />
-              ) : null}
+              <TextField
+                testID="newCycleStockCost"
+                label={t("totalCostFcfa")}
+                hint={t("stockCostHint")}
+                value={stockCost}
+                onChangeText={setStockCost}
+                keyboardType="decimal-pad"
+                suffix={numberSuffix("FCFA")}
+              />
               <TextField label={t("notes")} value={stockNote} onChangeText={setStockNote} />
               <Button testID="newCycleAddOpeningStock" label={t("addOpeningStock")} variant="outline" onPress={addOpeningStock} />
               {formData.initial_feed_stocks.map((stock) => {
@@ -1027,9 +1073,11 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
                       ?? resolvedFeedReference.reference?.name
                       ?? t("feed")}
                   </AppText>
-                  {resolvedFeedReference.reference?.pellet_size_mm ? (
+                  {stock.external_feed?.pellet_size_mm
+                  || resolvedFeedReference.reference?.pellet_size_mm ? (
                     <AppText color="muted">
-                      {resolvedFeedReference.reference.pellet_size_mm} mm
+                      {stock.external_feed?.pellet_size_mm
+                        ?? resolvedFeedReference.reference?.pellet_size_mm} mm
                     </AppText>
                   ) : null}
                   {resolvedFeedReference.unavailable ? (
@@ -1104,3 +1152,18 @@ export default function NewCycleScreen({ navigation, route }: NewCycleScreenProp
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  ongoingSection: {
+    gap: spacing[3],
+    paddingTop: spacing[4],
+  },
+  pelletSizeField: {
+    gap: spacing[2],
+  },
+  pelletSizeOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+  },
+});

@@ -8,6 +8,7 @@ export { AppHeader } from './AppHeader';
 export { Screen } from './Screen';
 export { FormField } from './FormField';
 export { TextField } from './TextField';
+export { DatePickerField } from './DatePickerField';
 export { MultilineTextField } from './MultilineTextField';
 export { SelectionModal, type SelectionOption } from './SelectionModal';
 export { SegmentedControl, type SegmentedControlOption } from './SegmentedControl';

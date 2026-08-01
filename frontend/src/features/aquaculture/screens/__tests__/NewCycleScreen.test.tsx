@@ -358,6 +358,42 @@ describe("features/aquaculture/screens/NewCycleScreen", () => {
     expect(payload.allocations[0].fish_count).toBe(1850);
   });
 
+  it("présente une saisie simplifiée du stock d ouverture", async () => {
+    const screen = render(<NewCycleScreen navigation={navigation} />);
+
+    await waitFor(() =>
+      expect(mockService.getProductionUnits).toHaveBeenCalled(),
+    );
+    fireEvent.press(screen.getByText("ongoingCycleMode"));
+    fireEvent.press(screen.getByText("tilapia"));
+
+    expect(
+      screen.queryByText("preTrackingEventsNotReconstructed"),
+    ).toBeNull();
+    expect(screen.getByText("stockCostHint")).toBeTruthy();
+    expect(screen.queryByText("knownCost")).toBeNull();
+    expect(screen.queryByText("unknownCost")).toBeNull();
+    expect(screen.getByText("quantityKg")).toBeTruthy();
+
+    fireEvent.changeText(
+      screen.getByTestId("newCycleStockName"),
+      "Aliment local",
+    );
+    fireEvent.press(screen.getByTestId("newCyclePelletSize-3.5"));
+    fireEvent.changeText(
+      screen.getByTestId("newCycleStockQuantity"),
+      "25",
+    );
+    fireEvent.changeText(
+      screen.getByTestId("newCycleStockCost"),
+      "12000",
+    );
+    fireEvent.press(screen.getByTestId("newCycleAddOpeningStock"));
+
+    expect(screen.getByText("3.5 mm")).toBeTruthy();
+    expect(screen.getByText("25 kg · knownCost")).toBeTruthy();
+  });
+
   it("conserve exactement le lancement agrégé après une réponse réseau incertaine", async () => {
     const alertSpy = jest
       .spyOn(Alert, "alert")

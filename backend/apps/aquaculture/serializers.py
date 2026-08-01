@@ -1846,6 +1846,15 @@ class ProductionUnitDashboardSerializer(serializers.Serializer):
 class CycleDashboardSummarySerializer(serializers.Serializer):
     """Indicateurs agrégés du dashboard global d'un cycle."""
 
+    days_active = serializers.IntegerField()
+    days_tracked = serializers.IntegerField()
+    historical_count_gap = serializers.IntegerField()
+    history_scope = serializers.ChoiceField(
+        choices=[
+            ProductionCycle.HISTORY_SCOPE_FULL_CYCLE,
+            ProductionCycle.HISTORY_SCOPE_SINCE_TRACKING_START,
+        ],
+    )
     total_allocations = serializers.IntegerField()
     total_initial_fish_count = serializers.IntegerField()
     total_estimated_current_fish_count = serializers.IntegerField()

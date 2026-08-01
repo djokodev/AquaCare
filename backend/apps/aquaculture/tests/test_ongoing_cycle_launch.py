@@ -554,7 +554,7 @@ def test_ongoing_fcr_scope_in_dashboard(
     tracking_start = today - timedelta(days=30)
     payload = ongoing_launch_payload()
     payload['cycle']['start_date'] = (today - timedelta(days=60)).isoformat()
-    payload['cycle']['tracking_start_date'] = tracking_start.isoformat()
+    payload['tracking_baseline']['tracking_start_date'] = tracking_start.isoformat()
     payload['cycle']['planned_harvest_date'] = (today + timedelta(days=60)).isoformat()
     response = auth_client.post(
         reverse('aquaculture:production_cycle_launch'),
@@ -587,6 +587,10 @@ def test_ongoing_fcr_scope_in_dashboard(
     dashboard = response.data
     assert dashboard['cycle']['fcr'] is not None
     assert dashboard['cycle']['history_scope'] == 'since_tracking_start'
+    assert dashboard['summary']['days_active'] == 60
+    assert dashboard['summary']['days_tracked'] == 30
+    assert dashboard['summary']['historical_count_gap'] == 150
+    assert dashboard['summary']['history_scope'] == 'since_tracking_start'
 
 
 @pytest.mark.django_db(transaction=True)

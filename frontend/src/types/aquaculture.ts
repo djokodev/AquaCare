@@ -652,10 +652,10 @@ export interface ProductionUnitDashboard {
 }
 
 export interface CycleDashboardSummary {
-  days_active?: number;
-  days_tracked?: number;
-  historical_count_gap?: number;
-  history_scope?: CycleHistoryScope;
+  days_active: number;
+  days_tracked: number;
+  historical_count_gap: number;
+  history_scope: CycleHistoryScope;
   total_allocations: number;
   total_initial_fish_count?: number;
   total_estimated_current_fish_count: number;

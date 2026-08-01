@@ -364,26 +364,36 @@ export const validateFarmSetupForm = (
   const hasProductionUnits = form.productionUnits.length > 0;
   const ongoing = form.onboardingMode === 'ongoing';
   const cycleDuration = getValidCycleDuration(form.cycleDuration);
+  const startDate = form.startDate.trim();
 
   if (!form.species) errors.species = 'required';
+  if (ongoing && !startDate) {
+    errors.startDate = 'ongoingCycleHistoricalStartRequired';
+  } else if (startDate && !isValidISODate(startDate)) {
+    errors.startDate = 'createFarmInvalidDateError';
+  }
   if (ongoing) {
     const historicalCount = parseStrictInteger(form.historicalInitialCount ?? '');
     const trackingWeight = parseStrictNumber(form.trackingStartAverageWeight ?? '');
     if (!historicalCount || historicalCount < (fingerlingsCount ?? 0)) {
       errors.historicalInitialCount = 'ongoingCycleCurrentCountInvalid';
     }
+    const trackingStartDate = form.trackingStartDate ?? '';
+    const hasValidStartDate = isValidISODate(startDate);
     if (
-      !form.trackingStartDate ||
-      !isValidISODate(form.trackingStartDate) ||
-      form.trackingStartDate < form.startDate ||
-      form.trackingStartDate > todayISO()
+      !trackingStartDate ||
+      !isValidISODate(trackingStartDate) ||
+      trackingStartDate > todayISO()
     ) {
       errors.trackingStartDate = 'ongoingCycleTrackingDateInvalid';
+    } else if (hasValidStartDate && trackingStartDate < startDate) {
+      errors.trackingStartDate = 'ongoingCycleTrackingDateInvalid';
     } else if (
-      cycleDuration !== undefined
+      hasValidStartDate
+      && cycleDuration !== undefined
       && getOngoingCycleSchedule(
-        form.startDate,
-        form.trackingStartDate,
+        startDate,
+        trackingStartDate,
         cycleDuration,
       ) === null
     ) {
@@ -442,10 +452,6 @@ export const validateFarmSetupForm = (
     if (capacityCount !== null && fingerlingsCount > capacityCount) {
       errors.fingerlingsCount = 'createFarmStockingDensityError';
     }
-  }
-
-  if (form.startDate.trim() && !isValidISODate(form.startDate.trim())) {
-    errors.startDate = 'createFarmInvalidDateError';
   }
 
   if (!form.cycleDuration.trim()) {

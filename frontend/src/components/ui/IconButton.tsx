@@ -9,7 +9,7 @@ interface IconButtonProps {
   accessibilityLabel: string;
   onPress: () => void;
   variant?: 'surface' | 'ghost' | 'danger';
-  tone?: 'default' | 'inverse' | 'danger';
+  tone?: 'default' | 'inverse' | 'muted' | 'danger';
   disabled?: boolean;
   badge?: number;
   accessibilityState?: AccessibilityState;
@@ -33,6 +33,8 @@ export function IconButton({
   const surface = variant === 'surface';
   const color = tone === 'inverse'
     ? colors.text.inverse
+    : tone === 'muted'
+      ? colors.text.muted
     : tone === 'danger' || danger
       ? colors.status.error
       : surface

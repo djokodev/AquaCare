@@ -470,13 +470,17 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="CycleSimulation"
         component={CycleSimulationScreen}
-        options={{
+        options={({ route }) => ({
           headerShown: true,
           headerStyle: { backgroundColor: colors.brand.primary },
           headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
-          title: t('simulationNavTitle'),
-        }}
+          title: t(
+            route.params.formData.onboardingMode === 'ongoing'
+              ? 'cycleVerificationNavTitle'
+              : 'simulationNavTitle'
+          ),
+        })}
       />
       <RootStack.Screen
         name="PostHarvestConsolidation"
