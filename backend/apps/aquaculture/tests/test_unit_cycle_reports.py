@@ -87,9 +87,144 @@ def _create_sanitary_log(
 
 @pytest.mark.django_db
 class TestUnitCycleAwareReportPayloads:
+    @pytest.mark.parametrize(
+        ("onboarding_mode", "expected_scope"),
+        [
+            ("new", "full_cycle"),
+            ("ongoing", "since_tracking_start"),
+        ],
+    )
+    def test_allocated_cycle_report_exposes_scoped_fcr(
+        self,
+        onboarding_mode,
+        expected_scope,
+    ):
+        farm_profile = FarmProfileFactory()
+        analysis_start = date(2026, 7, 10)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            onboarding_mode=onboarding_mode,
+            start_date=(
+                date(2026, 6, 1)
+                if onboarding_mode == "ongoing"
+                else analysis_start
+            ),
+            initial_count=1000,
+            initial_average_weight=(
+                None if onboarding_mode == "ongoing" else Decimal("10.00")
+            ),
+            initial_biomass=(
+                None if onboarding_mode == "ongoing" else Decimal("10.00")
+            ),
+            tracking_start_date=analysis_start,
+            tracking_start_count=1000,
+            tracking_start_average_weight=Decimal("10.00"),
+            tracking_start_biomass=Decimal("10.00"),
+            tracking_start_biomass_source="calculated",
+        )
+        allocations = [
+            _create_allocation(
+                cycle,
+                _create_unit(farm_profile, f"Bassin {index}", "3.00"),
+                500,
+                500,
+                "25.00",
+            )
+            for index in (1, 2)
+        ]
+        for allocation in allocations:
+            _create_cycle_log(
+                cycle=cycle,
+                allocation=allocation,
+                log_date=analysis_start + timedelta(days=1),
+                mortality_count=0,
+                feed_quantity="10.00",
+                average_weight="50.00",
+            )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=analysis_start,
+            period_end=analysis_start + timedelta(days=2),
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+
+        assert payload["cycle_dashboard"]["fcr"] == 0.5
+        assert payload["cycle_dashboard"]["fcr_scope"] == expected_scope
+        assert payload["cycle_dashboard"]["fcr_data_complete"] is True
+        for section in payload["cycles"]:
+            assert section["current_metrics"]["fcr"] == 0.5
+            assert section["current_metrics"]["fcr_scope"] == expected_scope
+            assert section["current_metrics"]["fcr_data_complete"] is True
+
+    def test_allocated_ongoing_report_hides_fcr_when_feed_is_incomplete(self):
+        farm_profile = FarmProfileFactory()
+        analysis_start = date(2026, 7, 10)
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            onboarding_mode="ongoing",
+            start_date=date(2026, 6, 1),
+            initial_count=1000,
+            initial_average_weight=None,
+            initial_biomass=None,
+            tracking_start_date=analysis_start,
+            tracking_start_count=1000,
+            tracking_start_average_weight=Decimal("10.00"),
+            tracking_start_biomass=Decimal("10.00"),
+            tracking_start_biomass_source="calculated",
+        )
+        allocations = [
+            _create_allocation(
+                cycle,
+                _create_unit(farm_profile, f"Bassin incomplet {index}", "3.00"),
+                500,
+                500,
+                "25.00",
+            )
+            for index in (1, 2)
+        ]
+        for index, allocation in enumerate(allocations):
+            _create_cycle_log(
+                cycle=cycle,
+                allocation=allocation,
+                log_date=analysis_start + timedelta(days=1),
+                mortality_count=0,
+                feed_quantity=None if index == 0 else "10.00",
+                average_weight="50.00",
+            )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="weekly",
+            period_start=analysis_start,
+            period_end=analysis_start + timedelta(days=2),
+            scope_type="cycle",
+            cycle_id=str(cycle.id),
+        )
+
+        assert payload["cycle_dashboard"]["fcr"] is None
+        assert (
+            payload["cycle_dashboard"]["fcr_scope"]
+            == "since_tracking_start"
+        )
+        assert payload["cycle_dashboard"]["fcr_data_complete"] is False
+        assert payload["cycles"][0]["current_metrics"]["fcr"] is None
+        assert (
+            payload["cycles"][0]["current_metrics"]["fcr_data_complete"]
+            is False
+        )
+
     def test_unit_daily_report_separates_period_logs_from_cumulative_summary(self):
         farm_profile = FarmProfileFactory()
-        cycle = ProductionCycleFactory(farm_profile=farm_profile, status="active")
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+        )
         allocation = _create_allocation(
             cycle,
             _create_unit(farm_profile, "Bassin période", "3.00"),
@@ -364,6 +499,9 @@ class TestUnitCycleAwareReportPayloads:
             farm_profile=farm_profile,
             start_date=date(2026, 7, 1),
             total_feed_consumed=Decimal("77.50"),
+        )
+        ProductionCycle.objects.filter(id=stored_cycle.id).update(
+            updated_at=timezone.make_aware(datetime(2026, 7, 31, 10, 0)),
         )
         stored_cycle.refresh_from_db()
         stored_resolution = ReportService._resolve_legacy_cumulative_feed(
@@ -734,6 +872,7 @@ class TestUnitCycleAwareReportPayloads:
             cycle_name="Cycle Clarias Juin 2026",
             species="clarias",
             status="active",
+            start_date=yesterday,
             initial_count=1800,
             current_count=1770,
             current_average_weight=Decimal("100.00"),
@@ -918,6 +1057,7 @@ class TestUnitCycleAwareReportPayloads:
             cycle_name="Cycle Etat Courant",
             species="clarias",
             status="active",
+            start_date=yesterday,
             initial_count=900,
             current_count=900,
             current_average_weight=Decimal("20.00"),

@@ -11,6 +11,8 @@ import type { DeliveryMethod, OrderStatus } from "./commerce";
 export type Species = "tilapia" | "clarias";
 export type CycleStatus = "planned" | "active" | "harvested" | "cancelled";
 export type ProductionCycleKind = "standard" | "calibration";
+export type CycleOnboardingMode = "new" | "ongoing";
+export type CycleHistoryScope = "full_cycle" | "since_tracking_start";
 export type ReportType = "daily" | "weekly" | "monthly";
 export type ReportStatus = "draft" | "validated" | "pending";
 export type ReportScopeType = "cycle" | "unit";
@@ -58,8 +60,14 @@ export interface ProductionCycle {
   // Donnees initiales
   start_date: string;
   initial_count: number;
-  initial_average_weight: number;
-  initial_biomass: number;
+  initial_average_weight: number | null;
+  initial_biomass: number | null;
+  onboarding_mode?: CycleOnboardingMode;
+  tracking_start_date?: string;
+  tracking_start_count?: number;
+  tracking_start_average_weight?: number;
+  tracking_start_biomass?: number;
+  tracking_start_biomass_source?: "calculated" | "declared";
 
   // Projection economique
   target_harvest_weight_g?: number;
@@ -87,6 +95,10 @@ export interface ProductionCycle {
   survival_rate?: number;
   fcr?: number;
   days_active?: number;
+  days_tracked?: number;
+  historical_count_gap?: number;
+  has_partial_history?: boolean;
+  history_scope?: CycleHistoryScope;
   current_density_kg_m3?: number;
 
   // Metriques avancees depuis CycleMetrics (backend)
@@ -446,6 +458,45 @@ export interface CycleLaunchCalibrationUnitInput {
   volume_m3: number;
 }
 
+export interface CycleTrackingBaselineInput {
+  tracking_start_date: string;
+  fish_count: number;
+  average_weight_g: string;
+  biomass_kg?: string | null;
+}
+
+export interface CycleLaunchExternalFeedInput {
+  client_uuid: string;
+  name: string;
+  pellet_size_mm: string;
+  brand?: string;
+  species?: Species;
+}
+
+export interface CycleLaunchOpeningStockInput {
+  local_id: string;
+  feed_reference_id?: string;
+  feed_reference_client_uuid?: string;
+  external_feed?: CycleLaunchExternalFeedInput;
+  quantity_kg: string;
+  cost_status: "known" | "unknown";
+  total_cost_fcfa: string | null;
+  note?: string;
+}
+
+export interface CycleLaunchOpeningStockEntry {
+  id: string;
+  client_uuid: string | null;
+  cycle: string;
+  feed_reference: string | null;
+  quantity_kg: string;
+  total_cost_fcfa: string | null;
+  entry_date: string;
+  entry_kind: "opening_balance" | "manual_supply" | "order_receipt";
+  cost_status: "known" | "unknown";
+  note: string;
+}
+
 export interface CycleLaunchRequest {
   launch_uuid: string;
   launch_kind: "initial_setup" | "additional_cycle";
@@ -456,11 +507,12 @@ export interface CycleLaunchRequest {
     planned_selling_price_per_kg_fcfa?: number;
   };
   cycle: {
+    onboarding_mode: CycleOnboardingMode;
     cycle_name?: string;
     species: Species;
     start_date: string;
     initial_count: number;
-    initial_average_weight?: number;
+    initial_average_weight?: string | null;
     target_harvest_weight_g?: number;
     planned_cycle_duration_days: number;
     expected_survival_rate_pct: number;
@@ -470,9 +522,11 @@ export interface CycleLaunchRequest {
     planned_feed_bags?: number;
     created_offline: boolean;
   };
+  tracking_baseline?: CycleTrackingBaselineInput;
   production_units: CycleLaunchUnitInput[];
   allocations: CycleLaunchAllocationInput[];
   calibration_units?: CycleLaunchCalibrationUnitInput[];
+  initial_feed_stocks?: CycleLaunchOpeningStockInput[];
 }
 
 export interface CycleLaunchResponse {
@@ -483,6 +537,9 @@ export interface CycleLaunchResponse {
   productionUnits: ProductionUnit[];
   cycleUnitAllocations: CycleUnitAllocation[];
   productionUnitIdByLocalId: Record<string, string>;
+  openingFeedReferences: FarmFeedReference[];
+  openingStockEntries: CycleLaunchOpeningStockEntry[];
+  openingStockEntryIdByLocalId: Record<string, string>;
 }
 
 export interface ProductionUnitDraft {
@@ -595,6 +652,10 @@ export interface ProductionUnitDashboard {
 }
 
 export interface CycleDashboardSummary {
+  days_active: number;
+  days_tracked: number;
+  historical_count_gap: number;
+  history_scope: CycleHistoryScope;
   total_allocations: number;
   total_initial_fish_count?: number;
   total_estimated_current_fish_count: number;
@@ -1018,6 +1079,11 @@ export interface CycleStoreSummary {
   feed_consumed_kg: string;
   estimated_feed_remaining_kg: string;
   feed_expenses_fcfa: string;
+  known_feed_expenses_fcfa?: string;
+  known_opening_stock_cost_fcfa?: string;
+  tracked_feed_expenses_fcfa?: string;
+  unknown_cost_entries_count?: number;
+  cost_history_complete?: boolean;
   pending_orders_count: number;
   pending_order_amount_fcfa: string;
   pending_order_feed_kg: string;
@@ -1159,6 +1225,10 @@ export interface AquacultureState {
 
   // Dashboard
   dashboardData?: DashboardData;
+  dashboardRequest: {
+    requestId: string | null;
+    farmProfileId: string | null;
+  };
 
   // Statut aliments cycle actif
   cycleFeedStatus: {

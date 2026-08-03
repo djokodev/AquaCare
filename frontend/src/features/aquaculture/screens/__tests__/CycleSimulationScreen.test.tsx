@@ -4,7 +4,14 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import CycleSimulationScreen from '../CycleSimulationScreen';
-import { FirstCycleLaunchError, launchFirstCycle } from '@/features/aquaculture/services/firstCycleLaunchService';
+import {
+  FirstCycleLaunchError,
+  buildFirstCycleLaunchRequest,
+  buildFirstCycleLaunchRequestFromForm,
+  launchFirstCycle,
+  launchFirstCycleFromForm,
+} from '@/features/aquaculture/services/firstCycleLaunchService';
+import { offlineService } from '@/services/offlineService';
 import {
   addCreatedProductionCycle,
   setCurrentCycle,
@@ -23,9 +30,21 @@ jest.mock('react-i18next', () => {
     ...actual,
     useTranslation: () => ({
       i18n: { language: 'en' },
-      t: (key: string, options?: { days?: number; count?: number }) => {
+      t: (
+        key: string,
+        options?: { days?: number; count?: number; date?: string },
+      ) => {
         if (key === 'simulationDays') return `${options?.days} days`;
         if (key === 'myFeedSacks') return `${options?.count} sacks`;
+        if (key === 'ongoingTotalDuration') {
+          return `total:${options?.count}`;
+        }
+        if (key === 'ongoingPlannedHarvestDate') {
+          return `harvest:${options?.date}`;
+        }
+        if (key === 'ongoingRemainingDuration') {
+          return `remaining:${options?.count}`;
+        }
         return key;
       },
     }),
@@ -34,6 +53,9 @@ jest.mock('react-i18next', () => {
 
 jest.mock('@/features/aquaculture/services/firstCycleLaunchService', () => ({
   launchFirstCycle: jest.fn(),
+  launchFirstCycleFromForm: jest.fn(),
+  buildFirstCycleLaunchRequest: jest.fn(),
+  buildFirstCycleLaunchRequestFromForm: jest.fn(),
   FirstCycleLaunchError: class FirstCycleLaunchError extends Error {
     translationKey: string;
 
@@ -44,14 +66,29 @@ jest.mock('@/features/aquaculture/services/firstCycleLaunchService', () => ({
   },
 }));
 
+jest.mock('@/services/offlineService', () => ({
+  offlineService: {
+    isOnline: jest.fn(),
+    saveCycleLaunchOffline: jest.fn(),
+    updatePendingCycleLaunch: jest.fn(),
+  },
+}));
+
 describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   const mockDispatch = jest.fn();
   const mockLaunchFirstCycle = launchFirstCycle as unknown as jest.Mock;
+  const mockLaunchFirstCycleFromForm =
+    launchFirstCycleFromForm as unknown as jest.Mock;
+  const mockBuildRequest = buildFirstCycleLaunchRequest as unknown as jest.Mock;
+  const mockBuildRequestFromForm =
+    buildFirstCycleLaunchRequestFromForm as unknown as jest.Mock;
+  const mockOffline = offlineService as jest.Mocked<typeof offlineService>;
   const createdProductionCycle = { id: 'cycle-1' } as unknown as ProductionCycle;
   const navigation = {
     goBack: jest.fn(),
     replace: jest.fn(),
     reset: jest.fn(),
+    navigate: jest.fn(),
   } as any;
 
   const currentResult = {
@@ -128,6 +165,17 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOffline.isOnline.mockResolvedValue(true);
+    mockBuildRequest.mockReturnValue({
+      launch_uuid: 'launch-1',
+      launch_kind: 'initial_setup',
+      cycle: { created_offline: false },
+    });
+    mockBuildRequestFromForm.mockReturnValue({
+      launch_uuid: 'launch-ongoing-1',
+      launch_kind: 'initial_setup',
+      cycle: { onboarding_mode: 'ongoing', created_offline: false },
+    });
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     (useSelector as unknown as jest.Mock).mockImplementation(
       (selector: (state: any) => unknown) =>
@@ -157,6 +205,134 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
       farmProfile: { id: 'farm-profile-1' },
       productionCycle: createdProductionCycle,
       productionUnitIdByLocalId: {},
+    });
+    mockLaunchFirstCycleFromForm.mockResolvedValue({
+      farmProfile: { id: 'farm-profile-1' },
+      productionCycle: createdProductionCycle,
+      productionUnitIdByLocalId: {},
+    });
+  });
+
+  it('confirme et lance un ongoing sans appeler la simulation legacy', async () => {
+    const route = buildRoute({
+      onboardingMode: 'ongoing',
+      startDate: '2026-06-01',
+      historicalInitialCount: '2200',
+      historicalInitialWeight: '',
+      trackingStartDate: '2026-07-20',
+      trackingStartAverageWeight: '75',
+      fingerlingsCount: '2100',
+    });
+    const { getByText, queryByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />,
+    );
+
+    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(queryByText('cycleVerificationSubtitle')).toBeNull();
+    expect(getByText('cycleVerificationIntro')).toBeTruthy();
+    expect(getByText('historicalStartDate')).toBeTruthy();
+    expect(getByText('cycleVerificationDataTitle')).toBeTruthy();
+    expect(getByText('cycleVerificationPlanningTitle')).toBeTruthy();
+    expect(getByText('baselineBiomass')).toBeTruthy();
+    expect(queryByText('simulationOtherCostsInfo')).toBeNull();
+    expect(queryByText('simulationCycleProduction')).toBeNull();
+    fireEvent.press(getByText('cycleVerificationConfirmBtn'));
+
+    await waitFor(() =>
+      expect(mockLaunchFirstCycleFromForm).toHaveBeenCalledWith(
+        expect.objectContaining({ formData: route.params.formData }),
+      ),
+    );
+    expect(mockBuildRequest).not.toHaveBeenCalled();
+    expect(mockLaunchFirstCycle).not.toHaveBeenCalled();
+  });
+
+  it('affiche le calendrier complet et la durée restante du setup ongoing', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-27T12:00:00Z'));
+    const route = buildRoute({
+      onboardingMode: 'ongoing',
+      startDate: '2026-06-01',
+      cycleDuration: '150',
+      historicalInitialCount: '2200',
+      trackingStartDate: '2026-10-27',
+      trackingStartAverageWeight: '75',
+      fingerlingsCount: '2100',
+    });
+    const { getByTestId } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />,
+    );
+
+    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(getByTestId('simulationOngoingTotalDuration')).toBeTruthy();
+    expect(getByTestId('simulationOngoingPlannedHarvestDate')).toBeTruthy();
+    expect(getByTestId('simulationOngoingRemainingDuration')).toBeTruthy();
+    expect(getByTestId('simulationOngoingTotalDuration').props.children).toBe(
+      'total:150',
+    );
+    expect(getByTestId('simulationOngoingRemainingDuration').props.children).toBe(
+      'remaining:2',
+    );
+    jest.useRealTimers();
+  });
+
+  it('désactive le lancement ongoing lorsque la récolte est déjà atteinte', () => {
+    const route = buildRoute({
+      onboardingMode: 'ongoing',
+      startDate: '2026-06-01',
+      cycleDuration: '150',
+      historicalInitialCount: '2200',
+      trackingStartDate: '2026-10-28',
+      trackingStartAverageWeight: '75',
+      fingerlingsCount: '2100',
+    });
+    const { getByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />,
+    );
+
+    expect(getByText('ongoingCyclePlannedHarvestElapsed')).toBeTruthy();
+    fireEvent.press(getByText('cycleVerificationConfirmBtn'));
+    expect(mockBuildRequestFromForm).not.toHaveBeenCalled();
+    expect(mockLaunchFirstCycleFromForm).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
+  });
+
+  it('désactive le lancement ongoing lorsque la récolte est déjà passée', () => {
+    const route = buildRoute({
+      onboardingMode: 'ongoing',
+      startDate: '2026-01-01',
+      cycleDuration: '150',
+      historicalInitialCount: '2200',
+      trackingStartDate: '2026-05-29',
+      trackingStartAverageWeight: '75',
+      fingerlingsCount: '2100',
+    });
+    const { getByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={route} />,
+    );
+
+    expect(getByText('ongoingCyclePlannedHarvestElapsed')).toBeTruthy();
+    fireEvent.press(getByText('cycleVerificationConfirmBtn'));
+    expect(mockBuildRequestFromForm).not.toHaveBeenCalled();
+    expect(mockLaunchFirstCycleFromForm).not.toHaveBeenCalled();
+    expect(mockOffline.saveCycleLaunchOffline).not.toHaveBeenCalled();
+  });
+
+  it('enregistre directement le lancement quand le téléphone est hors ligne', async () => {
+    mockOffline.isOnline.mockResolvedValue(false);
+    const { findByText } = render(
+      <CycleSimulationScreen navigation={navigation} route={buildRoute()} />,
+    );
+
+    fireEvent.press(await findByText('simulationLaunchBtn'));
+
+    await waitFor(() => {
+      expect(mockOffline.saveCycleLaunchOffline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          launch_uuid: 'launch-1',
+          cycle: expect.objectContaining({ created_offline: true }),
+        }),
+      );
+      expect(mockLaunchFirstCycle).not.toHaveBeenCalled();
     });
   });
 

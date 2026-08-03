@@ -11,7 +11,7 @@ Responsabilités des signals :
 
 Architecture : Signal → Service Layer (découplage complet)
 """
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.db.models.signals import post_delete, post_save, pre_save
@@ -54,18 +54,32 @@ def calculate_initial_biomass(sender, instance, **kwargs):
     """
     if instance._state.adding:  # New cycle being created
         # Only initialize if values are missing (avoid overriding service logic)
-        if instance.initial_biomass is None:
+        if instance.initial_biomass is None and instance.initial_average_weight is not None:
             instance.initial_biomass = AquacultureCalculator.calculate_biomass(
                 instance.initial_count,
                 instance.initial_average_weight
             )
 
+        if instance.tracking_start_date is None:
+            instance.tracking_start_date = instance.start_date
+        if instance.tracking_start_count is None:
+            instance.tracking_start_count = instance.initial_count
+        if instance.tracking_start_average_weight is None:
+            instance.tracking_start_average_weight = instance.initial_average_weight
+        if (
+            instance.tracking_start_biomass is None
+            and instance.tracking_start_average_weight is not None
+        ):
+            instance.tracking_start_biomass = AquacultureCalculator.calculate_biomass(
+                instance.tracking_start_count,
+                instance.tracking_start_average_weight,
+            )
         if instance.current_count is None:
-            instance.current_count = instance.initial_count
+            instance.current_count = instance.tracking_start_count
         if instance.current_average_weight is None:
-            instance.current_average_weight = instance.initial_average_weight
+            instance.current_average_weight = instance.tracking_start_average_weight
         if instance.current_biomass is None:
-            instance.current_biomass = instance.initial_biomass
+            instance.current_biomass = instance.tracking_start_biomass
         if instance.survival_rate is None:
             instance.survival_rate = Decimal('100.00')
 
@@ -102,8 +116,8 @@ def create_cycle_metrics(sender, instance, created, **kwargs):
         )
 
         # Create first week sampling reminder
-        sampling_date = instance.start_date + timedelta(days=7)
-        if sampling_date >= date.today():
+        sampling_date = instance.analysis_start_date + timedelta(days=7)
+        if sampling_date >= timezone.localdate():
             NotificationService.create_notification(
                 user=instance.farm_profile.user,
                 notification_type='sampling_reminder',

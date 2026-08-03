@@ -18,6 +18,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { RouteProp } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +28,7 @@ import {
   AppText,
   Button,
   Card,
+  DatePickerField,
   TextField,
 } from '@/components/ui';
 import { colors, radii, sizing, spacing } from '@/theme';
@@ -34,6 +36,8 @@ import { INPUT_LIMITS } from '@/domain/aquaculture/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { runCycleSimulation } from '@/features/aquaculture/store/farmSetupSlice';
+import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
+import commerceApi from '@/features/commerce/services/commerceApi';
 import {
   buildCycleSimulationInput,
   getCycleProductionEstimate,
@@ -69,17 +73,44 @@ import type {
   ProductionUnitFishAllocationDraft,
   ProductionUnitType,
 } from '@/features/aquaculture/types/productionUnits';
+import type { CycleLaunchOpeningStockInput } from '@/types/aquaculture';
+import { hydrateFarmSetupFormFromLaunch } from '@/features/aquaculture/utils/launchHydration';
+import { offlineService } from '@/services/offlineService';
+import {
+  buildFirstCycleLaunchRequestFromForm,
+  FirstCycleLaunchError,
+} from '@/features/aquaculture/services/firstCycleLaunchService';
+import {
+  getOfflineCatalogPelletSizes,
+  normalizePelletSizeOptions,
+} from '@/features/aquaculture/utils/pelletSizeOptions';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'CreateFarm'>;
+type CreateFarmRouteProp = RouteProp<RootStackParamList, 'CreateFarm'>;
 
 interface Props {
   navigation: NavigationProp;
+  route?: CreateFarmRouteProp;
 }
 
 const SELLING_PRICE_DEFAULTS: Record<string, string> = {
   tilapia: '2800',
   clarias: '2000',
   autre: '2800',
+};
+
+const isoDateToLocalDate = (value?: string): Date | undefined => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? '');
+  if (!match) {
+    return undefined;
+  }
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
 };
 
 const FINGERLINGS_DEFAULTS: Record<string, string> = {
@@ -161,7 +192,7 @@ const areProductionUnitAllocationsEqual = (
       allocation.fish_count === right[index]?.fish_count
   );
 
-export default function CreateFarmScreen({ navigation }: Props) {
+export default function CreateFarmScreen({ navigation, route }: Props) {
   const { t, i18n } = useTranslation();
   const { farmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
@@ -170,12 +201,20 @@ export default function CreateFarmScreen({ navigation }: Props) {
     (s: RootState) => s.farmSetup.cycleSimulation
   );
   const numberLocale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
+  const todayDate = useMemo(
+    () => isoDateToLocalDate(todayISO()) ?? new Date(),
+    [],
+  );
   const formatNumber = (value: number): string => new Intl.NumberFormat(numberLocale).format(value);
   const formatKgEstimate = (value: number): string =>
     new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 1 }).format(value);
 
-  const [form, setForm] = useState<FarmSetupFormState>({
+  const [form, setForm] = useState<FarmSetupFormState>(() =>
+    route?.params?.offlineLaunch
+      ? hydrateFarmSetupFormFromLaunch(route.params.offlineLaunch)
+      : ({
     launchRequestId: createClientUuid(),
+    onboardingMode: 'new',
     species: '',
     infraType: '',
     unitCount: '',
@@ -193,19 +232,42 @@ export default function CreateFarmScreen({ navigation }: Props) {
     productionUnits: [],
     productionUnitAllocations: [],
     calibrationUnits: [],
-  });
+    historicalInitialCount: '',
+    historicalInitialWeight: '',
+    trackingStartDate: todayISO(),
+    trackingStartAverageWeight: '',
+    trackingStartBiomass: '',
+    initialFeedStocks: [],
+        } satisfies FarmSetupFormState)
+  );
   const [calibrationName, setCalibrationName] = useState('');
   const [calibrationVolume, setCalibrationVolume] = useState('');
+  const [openingStockName, setOpeningStockName] = useState('');
+  const [openingStockPelletSize, setOpeningStockPelletSize] = useState('');
+  const [openingStockQuantity, setOpeningStockQuantity] = useState('');
+  const [openingStockCost, setOpeningStockCost] = useState('');
+  const [catalogPelletSizes, setCatalogPelletSizes] = useState<
+    Partial<Record<'tilapia' | 'clarias', string[]>>
+  >({});
   const [singleUnitDraft, setSingleUnitDraft] = useState<UnitDraftState>(getDefaultSingleDraft());
   const [bulkUnitDraft, setBulkUnitDraft] = useState<BulkUnitDraftState>(getDefaultBulkDraft());
   const [singleUnitErrors, setSingleUnitErrors] = useState<ProductionUnitDraftErrors>({});
   const [bulkUnitErrors, setBulkUnitErrors] = useState<BulkUnitDraftErrors>({});
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
   const [singleFormOffsetY, setSingleFormOffsetY] = useState(0);
-  const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>('auto');
-  const [fingerlingsCountMode, setFingerlingsCountMode] = useState<'auto' | 'manual'>('auto');
+  const isEditingOfflineLaunch = Boolean(route?.params?.editingOfflineLaunchId);
+  const [allocationMode, setAllocationMode] = useState<'auto' | 'manual'>(
+    isEditingOfflineLaunch ? 'manual' : 'auto',
+  );
+  const [fingerlingsCountMode, setFingerlingsCountMode] = useState<'auto' | 'manual'>(
+    isEditingOfflineLaunch ? 'manual' : 'auto',
+  );
   const [isCycleDurationCustomized, setIsCycleDurationCustomized] = useState(false);
   const formErrors = useMemo(() => validateFarmSetupForm(form), [form]);
+  const openingStockPelletSizeOptions =
+    form.species === 'tilapia' || form.species === 'clarias'
+      ? catalogPelletSizes[form.species] ?? getOfflineCatalogPelletSizes(form.species)
+      : [];
   const cycleDurationErrorKey = formErrors.cycleDuration;
   const fingerlingsCountLimitError =
     formErrors.fingerlingsCount === 'createFarmFishCountLimitError'
@@ -348,6 +410,63 @@ export default function CreateFarmScreen({ navigation }: Props) {
   );
 
   useEffect(() => {
+    if (form.species !== 'tilapia' && form.species !== 'clarias') {
+      setOpeningStockPelletSize('');
+      return;
+    }
+
+    const selectedSpecies = form.species;
+    setOpeningStockPelletSize('');
+    let active = true;
+
+    const loadPelletSizes = async () => {
+      try {
+        const [products, references] = await Promise.all([
+          commerceApi.getProducts({
+            species: selectedSpecies === 'clarias' ? 'catfish' : 'tilapia',
+          }),
+          farmProfile?.id
+            ? aquacultureService.getFarmFeedReferences(farmProfile.id)
+            : Promise.resolve([]),
+        ]);
+        if (!active) {
+          return;
+        }
+
+        const resolvedSizes = normalizePelletSizeOptions([
+          ...products.map((product) => product.pellet_size_mm),
+          ...references
+            .filter((reference) => reference.species === selectedSpecies)
+            .map((reference) => reference.pellet_size_mm),
+        ]);
+        const nextSizes =
+          resolvedSizes.length > 0
+            ? resolvedSizes
+            : getOfflineCatalogPelletSizes(selectedSpecies);
+        setCatalogPelletSizes((current) => ({
+          ...current,
+          [selectedSpecies]: nextSizes,
+        }));
+        setOpeningStockPelletSize((current) =>
+          current && !nextSizes.includes(current) ? '' : current,
+        );
+      } catch {
+        if (active) {
+          setCatalogPelletSizes((current) => ({
+            ...current,
+            [selectedSpecies]: getOfflineCatalogPelletSizes(selectedSpecies),
+          }));
+        }
+      }
+    };
+
+    void loadPelletSizes();
+    return () => {
+      active = false;
+    };
+  }, [farmProfile?.id, form.species]);
+
+  useEffect(() => {
     if (allocationMode === 'manual') {
       return;
     }
@@ -374,13 +493,18 @@ export default function CreateFarmScreen({ navigation }: Props) {
   const getFieldLabel = (field: keyof FarmSetupFormState): string => {
     const labelByField: Record<keyof FarmSetupFormState, string> = {
       launchRequestId: '',
+      onboardingMode: t('cycleOnboardingMode'),
       species: t('createFarmSpeciesLabel'),
       infraType: t('createFarmInfraLabel'),
       unitCount: t('createFarmUnitCountLabel'),
       unitVolume: t('createFarmUnitVolumeLabel'),
       unitSurface: t('createFarmUnitSurfaceLabel'),
       annualTarget: t('createFarmCycleProductionLabel'),
-      startDate: t('createFarmStartDateLabel'),
+      startDate: t(
+        form.onboardingMode === 'ongoing'
+          ? 'ongoingCycleActualStartDate'
+          : 'createFarmStartDateLabel'
+      ),
       cycleDuration: t('createFarmCycleDurationLabel'),
       fingerlingsPrice: t('createFarmFingerlingsLabel'),
       sellingPrice: t('createFarmSellingPriceLabel'),
@@ -391,9 +515,32 @@ export default function CreateFarmScreen({ navigation }: Props) {
       productionUnits: t('createFarmProductionUnitsSectionTitle'),
       productionUnitAllocations: t('createFarmProductionUnitAllocationSectionTitle'),
       calibrationUnits: t('prepareCalibrationTanks'),
+      historicalInitialCount: t('initialCount'),
+      historicalInitialWeight: t('historicalInitialWeightOptional'),
+      trackingStartDate: t('trackingStartDate'),
+      trackingStartAverageWeight: t('observedAverageWeight'),
+      trackingStartBiomass: t('measuredBiomassOptional'),
+      initialFeedStocks: t('openingFeedStock'),
     };
 
     return labelByField[field];
+  };
+
+  const handleOnboardingModeChange = (mode: 'new' | 'ongoing') => {
+    setForm((current) => {
+      if (current.onboardingMode === mode) {
+        return current;
+      }
+      return {
+        ...current,
+        onboardingMode: mode,
+        startDate: mode === 'ongoing' ? '' : current.startDate || todayISO(),
+        trackingStartDate:
+          mode === 'ongoing'
+            ? current.trackingStartDate || todayISO()
+            : current.trackingStartDate,
+      };
+    });
   };
 
   const clearSingleUnitFieldErrors = () => {
@@ -755,11 +902,53 @@ export default function CreateFarmScreen({ navigation }: Props) {
       return;
     }
 
-    const params = buildCycleSimulationInput(form);
+    const launchKind = 'initial_setup' as const;
+    if (isEditingOfflineLaunch || !(await offlineService.isOnline())) {
+      try {
+        const request = buildFirstCycleLaunchRequestFromForm({
+          formData: form,
+          launchKind,
+        });
+        const offlinePayload = {
+          ...request,
+          cycle: { ...request.cycle, created_offline: true },
+        };
+        if (route?.params?.editingOfflineLaunchId) {
+          await offlineService.updatePendingCycleLaunch(
+            route.params.editingOfflineLaunchId,
+            offlinePayload,
+          );
+        } else {
+          await offlineService.saveCycleLaunchOffline(offlinePayload, {
+            attempted: false,
+          });
+        }
+        Alert.alert(t('saved'), t('cycleLaunchPendingSync'));
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs', params: { screen: 'Dashboard' } }],
+        });
+      } catch (error) {
+        const message = error instanceof FirstCycleLaunchError
+          ? t(error.translationKey)
+          : t('simulationErrorRetry');
+        Alert.alert(t('error'), message);
+      }
+      return;
+    }
 
+    if (form.onboardingMode === 'ongoing') {
+      navigation.navigate('CycleSimulation', { formData: form });
+      return;
+    }
+
+    const params = buildCycleSimulationInput(form);
     const result = await dispatch(runCycleSimulation(params));
     if (runCycleSimulation.fulfilled.match(result)) {
-      navigation.navigate('CycleSimulation', { formData: form });
+      navigation.navigate('CycleSimulation', {
+        formData: form,
+        editingOfflineLaunchId: route?.params?.editingOfflineLaunchId,
+      });
     } else {
       const errorMessage =
         typeof result.payload === 'string' && result.payload.trim()
@@ -793,6 +982,42 @@ export default function CreateFarmScreen({ navigation }: Props) {
     setCalibrationVolume('');
   };
 
+  const addOpeningStock = () => {
+    const quantity = Number(openingStockQuantity.replace(',', '.'));
+    const pelletSize = Number(openingStockPelletSize.replace(',', '.'));
+    const normalizedCost = openingStockCost.trim().replace(',', '.');
+    const hasKnownCost = normalizedCost.length > 0;
+    const cost = Number(normalizedCost);
+    if (
+      !openingStockName.trim()
+      || !(quantity > 0)
+      || !(pelletSize > 0)
+      || (hasKnownCost && !(cost >= 0))
+    ) {
+      Alert.alert(t('error'), t('openingStockInvalid'));
+      return;
+    }
+    const stock: CycleLaunchOpeningStockInput = {
+      local_id: createClientUuid(),
+      external_feed: {
+        client_uuid: createClientUuid(),
+        name: openingStockName.trim(),
+        pellet_size_mm: String(pelletSize),
+      },
+      quantity_kg: String(quantity),
+      cost_status: hasKnownCost ? 'known' : 'unknown',
+      total_cost_fcfa: hasKnownCost ? String(cost) : null,
+    };
+    setForm((current) => ({
+      ...current,
+      initialFeedStocks: [...(current.initialFeedStocks ?? []), stock],
+    }));
+    setOpeningStockName('');
+    setOpeningStockPelletSize('');
+    setOpeningStockQuantity('');
+    setOpeningStockCost('');
+  };
+
   const singleDraftUsesSurface = singleUnitDraft.unit_type === 'pond';
   const bulkDraftUsesSurface = bulkUnitDraft.unit_type === 'pond';
 
@@ -813,6 +1038,20 @@ export default function CreateFarmScreen({ navigation }: Props) {
         <AppText variant="caption" color="muted">{t('currentFarm')}</AppText>
         <AppText variant="cardTitle">{farmProfile?.farm_name || t('farmNotDefined')}</AppText>
       </Card>
+
+      <FieldLabel label={t('cycleOnboardingMode')} required />
+      <View style={styles.chipRow}>
+        <Chip
+          label={t('newCycleMode')}
+          selected={form.onboardingMode !== 'ongoing'}
+          onPress={() => handleOnboardingModeChange('new')}
+        />
+        <Chip
+          label={t('ongoingCycleMode')}
+          selected={form.onboardingMode === 'ongoing'}
+          onPress={() => handleOnboardingModeChange('ongoing')}
+        />
+      </View>
 
       <FieldLabel label={t('createFarmSpeciesLabel')} required />
       <View style={styles.chipRow}>
@@ -1061,7 +1300,132 @@ export default function CreateFarmScreen({ navigation }: Props) {
         onChangeText={v => setField('fingerlingsPrice', v)}
       />
 
-      <FieldLabel label={t('createFarmFingerlingsCountLabel')} required />
+      {form.onboardingMode === 'ongoing' ? (
+        <>
+          <FieldLabel label={t('declaredHistory')} required />
+          <DatePickerField
+            testID="createFarmStartDate"
+            label={t('declaredHistory')}
+            showLabel={false}
+            required
+            value={form.startDate}
+            onChange={v => setField('startDate', v)}
+            maximumDate={todayDate}
+            error={formErrors.startDate ? t(formErrors.startDate) : undefined}
+          />
+          <FieldLabel label={t('initialCount')} required />
+          <TextField
+            testID="createFarmHistoricalInitialCount"
+            value={form.historicalInitialCount ?? ''}
+            onChangeText={v => setField('historicalInitialCount', sanitizePositiveIntegerInput(v))}
+            keyboardType="numeric"
+            error={formErrors.historicalInitialCount ? t(formErrors.historicalInitialCount) : undefined}
+          />
+          <FieldLabel label={t('historicalInitialWeightOptional')} />
+          <TextField
+            testID="createFarmHistoricalInitialWeight"
+            value={form.historicalInitialWeight ?? ''}
+            onChangeText={v => setField('historicalInitialWeight', v)}
+            keyboardType="decimal-pad"
+          />
+          <FieldLabel label={t('trackingStartSituation')} required />
+          <DatePickerField
+            testID="createFarmTrackingStartDate"
+            label={t('trackingStartSituation')}
+            showLabel={false}
+            required
+            value={form.trackingStartDate ?? ''}
+            onChange={v => setField('trackingStartDate', v)}
+            minimumDate={isoDateToLocalDate(form.startDate)}
+            maximumDate={todayDate}
+            error={formErrors.trackingStartDate ? t(formErrors.trackingStartDate) : undefined}
+          />
+          <FieldLabel label={t('observedAverageWeight')} required />
+          <TextField
+            testID="createFarmTrackingStartWeight"
+            value={form.trackingStartAverageWeight ?? ''}
+            onChangeText={v => setField('trackingStartAverageWeight', v)}
+            keyboardType="decimal-pad"
+            error={formErrors.trackingStartAverageWeight ? t(formErrors.trackingStartAverageWeight) : undefined}
+          />
+          <FieldLabel label={t('measuredBiomassOptional')} />
+          <TextField
+            value={form.trackingStartBiomass ?? ''}
+            onChangeText={v => setField('trackingStartBiomass', v)}
+            keyboardType="decimal-pad"
+            error={formErrors.trackingStartBiomass ? t(formErrors.trackingStartBiomass) : undefined}
+          />
+          <AppText variant="sectionTitle" style={styles.openingStockSectionTitle}>
+            {t('openingFeedStock')}
+          </AppText>
+          <AppText variant="helper" color="muted">{t('openingFeedStockDescription')}</AppText>
+          <FieldLabel label={t('feedName')} />
+          <TextField
+            testID="createFarmOpeningStockName"
+            value={openingStockName}
+            onChangeText={setOpeningStockName}
+          />
+          <FieldLabel label={t('pelletSize')} />
+          <View style={styles.pelletSizeOptions}>
+            {openingStockPelletSizeOptions.map((size) => (
+              <Button
+                key={size}
+                testID={`createFarmOpeningStockPelletSize-${size}`}
+                label={t('storePelletSizeChip', { size })}
+                size="small"
+                fullWidth={false}
+                variant={
+                  openingStockPelletSize === size ? 'primary' : 'outline'
+                }
+                onPress={() => setOpeningStockPelletSize(size)}
+              />
+            ))}
+          </View>
+          <FieldLabel label={t('quantityKg')} />
+          <TextField
+            testID="createFarmOpeningStockQuantity"
+            value={openingStockQuantity}
+            onChangeText={setOpeningStockQuantity}
+            keyboardType="decimal-pad"
+          />
+          <TextField
+            testID="createFarmOpeningStockCost"
+            label={t('totalCostFcfa')}
+            value={openingStockCost}
+            onChangeText={setOpeningStockCost}
+            keyboardType="decimal-pad"
+            hint={t('stockCostHint')}
+          />
+          <Button label={t('addOpeningStock')} variant="outline" onPress={addOpeningStock} />
+          {(form.initialFeedStocks ?? []).length > 0 ? (
+            <View style={styles.openingStockList}>
+              {(form.initialFeedStocks ?? []).map((stock) => (
+                <Card key={stock.local_id} variant="outlined">
+                  <AppText variant="bodyStrong">{stock.external_feed?.name}</AppText>
+                  <AppText>
+                    {stock.external_feed?.pellet_size_mm} mm · {stock.quantity_kg} kg ·{' '}
+                    {t(stock.cost_status === 'known' ? 'knownCost' : 'unknownCost')}
+                  </AppText>
+                  <View style={styles.unitCardActions}>
+                    <Button
+                      label={t('remove')}
+                      variant="danger"
+                      size="small"
+                      fullWidth={false}
+                      onPress={() => setForm((current) => ({
+                        ...current,
+                        initialFeedStocks: (current.initialFeedStocks ?? []).filter((item) => item.local_id !== stock.local_id),
+                      }))}
+                    />
+                  </View>
+                </Card>
+              ))}
+            </View>
+          ) : null}
+        </>
+      ) : null}
+
+      <FieldLabel label={t(form.onboardingMode === 'ongoing' ? 'fishPresentAtTrackingStart' : 'createFarmFingerlingsCountLabel')} required />
       <TextField
         error={
           fingerlingsCountLimitError ??
@@ -1247,12 +1611,16 @@ export default function CreateFarmScreen({ navigation }: Props) {
       />
       <AppText variant="helper" color="muted" style={styles.readonlyHelper}>{t('createFarmCycleProductionHelper')}</AppText>
 
-      <FieldLabel label={t('createFarmStartDateLabel')} />
-      <TextField
-        placeholder={t('createFarmStartDatePlaceholder')}
-        value={form.startDate}
-        onChangeText={v => setField('startDate', v)}
-      />
+      {form.onboardingMode !== 'ongoing' ? (
+        <DatePickerField
+          testID="createFarmStartDate"
+          label={t('createFarmStartDateLabel')}
+          value={form.startDate}
+          onChange={v => setField('startDate', v)}
+          maximumDate={addDays(todayDate, 30)}
+          error={formErrors.startDate ? t(formErrors.startDate) : undefined}
+        />
+      ) : null}
 
       <FieldLabel label={t('createFarmCycleDurationLabel')} required />
       <TextField
@@ -1357,7 +1725,11 @@ export default function CreateFarmScreen({ navigation }: Props) {
       {/* CTA */}
       <Button
         testID="createFarmSimulateButton"
-        label={t('createFarmSimulateBtn')}
+        label={t(
+          form.onboardingMode === 'ongoing'
+            ? 'cycleVerificationReviewBtn'
+            : 'createFarmSimulateBtn'
+        )}
         onPress={handleSimulate}
         loading={simLoading}
         style={styles.simulateButton}
@@ -1433,6 +1805,16 @@ const styles = StyleSheet.create({
   productionUnitsHeading: {
     marginTop: spacing[5],
     marginBottom: spacing[3],
+  },
+  openingStockSectionTitle: {
+    marginTop: spacing[8],
+    marginBottom: spacing[2],
+  },
+  pelletSizeOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
+    marginBottom: spacing[1],
   },
   choiceChip: {
     minHeight: sizing.touchTargetMinimum,
@@ -1559,6 +1941,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginTop: 14,
+  },
+  openingStockList: {
+    gap: spacing[3],
+    marginTop: spacing[3],
   },
   fieldLabel: {
     fontSize: 14,

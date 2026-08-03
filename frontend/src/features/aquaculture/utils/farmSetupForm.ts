@@ -18,15 +18,23 @@ import type {
   CycleSimulationInput,
   FarmSetupData,
 } from '@/features/aquaculture/types/farmSetup';
-import type { CycleLaunchCalibrationUnitInput } from '@/types/aquaculture';
+import type {
+  CycleLaunchCalibrationUnitInput,
+  CycleLaunchOpeningStockInput,
+  CycleOnboardingMode,
+} from '@/types/aquaculture';
 import { INPUT_LIMITS } from '@/domain/aquaculture/constants';
-import { getBusinessIsoDate } from '@/utils/businessDate';
+import {
+  getBusinessIsoDate,
+  getOngoingCycleSchedule,
+} from '@/utils/businessDate';
 
 export type FarmSetupSpecies = 'tilapia' | 'clarias' | 'autre';
 export type FarmSetupInfraType = 'etang' | 'cage_flottante' | 'bac_hors_sol' | 'bac_en_sol';
 
 export interface FarmSetupFormState {
   launchRequestId: string;
+  onboardingMode?: CycleOnboardingMode;
   species: FarmSetupSpecies | '';
   infraType: FarmSetupInfraType | '';
   unitCount: string;
@@ -44,6 +52,12 @@ export interface FarmSetupFormState {
   productionUnits: ProductionUnitDraft[];
   productionUnitAllocations: ProductionUnitFishAllocationDraft[];
   calibrationUnits?: CycleLaunchCalibrationUnitInput[];
+  historicalInitialCount?: string;
+  historicalInitialWeight?: string;
+  trackingStartDate?: string;
+  trackingStartAverageWeight?: string;
+  trackingStartBiomass?: string;
+  initialFeedStocks?: CycleLaunchOpeningStockInput[];
 }
 
 export type FarmSetupFormErrors = Partial<Record<keyof FarmSetupFormState, string>>;
@@ -348,8 +362,57 @@ export const validateFarmSetupForm = (
   const unitCount = parseStrictInteger(form.unitCount);
   const fingerlingsCount = parseStrictInteger(form.fingerlingsCount);
   const hasProductionUnits = form.productionUnits.length > 0;
+  const ongoing = form.onboardingMode === 'ongoing';
+  const cycleDuration = getValidCycleDuration(form.cycleDuration);
+  const startDate = form.startDate.trim();
 
   if (!form.species) errors.species = 'required';
+  if (ongoing && !startDate) {
+    errors.startDate = 'ongoingCycleHistoricalStartRequired';
+  } else if (startDate && !isValidISODate(startDate)) {
+    errors.startDate = 'createFarmInvalidDateError';
+  }
+  if (ongoing) {
+    const historicalCount = parseStrictInteger(form.historicalInitialCount ?? '');
+    const trackingWeight = parseStrictNumber(form.trackingStartAverageWeight ?? '');
+    if (!historicalCount || historicalCount < (fingerlingsCount ?? 0)) {
+      errors.historicalInitialCount = 'ongoingCycleCurrentCountInvalid';
+    }
+    const trackingStartDate = form.trackingStartDate ?? '';
+    const hasValidStartDate = isValidISODate(startDate);
+    if (
+      !trackingStartDate ||
+      !isValidISODate(trackingStartDate) ||
+      trackingStartDate > todayISO()
+    ) {
+      errors.trackingStartDate = 'ongoingCycleTrackingDateInvalid';
+    } else if (hasValidStartDate && trackingStartDate < startDate) {
+      errors.trackingStartDate = 'ongoingCycleTrackingDateInvalid';
+    } else if (
+      hasValidStartDate
+      && cycleDuration !== undefined
+      && getOngoingCycleSchedule(
+        startDate,
+        trackingStartDate,
+        cycleDuration,
+      ) === null
+    ) {
+      errors.trackingStartDate = 'ongoingCyclePlannedHarvestElapsed';
+    }
+    if (trackingWeight === null || trackingWeight <= 0) {
+      errors.trackingStartAverageWeight = 'ongoingCycleCurrentWeightRequired';
+    }
+    const measured = parseStrictNumber(form.trackingStartBiomass ?? '');
+    if (measured !== null && fingerlingsCount && trackingWeight) {
+      const calculated = fingerlingsCount * trackingWeight / 1000;
+      if (
+        measured <= 0 ||
+        Math.abs(measured - calculated) / calculated > 0.1
+      ) {
+        errors.trackingStartBiomass = 'ongoingCycleBiomassInconsistent';
+      }
+    }
+  }
 
   if (!hasProductionUnits) {
     errors.productionUnits = 'createFarmAtLeastOneUnitError';
@@ -391,13 +454,9 @@ export const validateFarmSetupForm = (
     }
   }
 
-  if (form.startDate.trim() && !isValidISODate(form.startDate.trim())) {
-    errors.startDate = 'createFarmInvalidDateError';
-  }
-
   if (!form.cycleDuration.trim()) {
     errors.cycleDuration = 'required';
-  } else if (getValidCycleDuration(form.cycleDuration) === undefined) {
+  } else if (cycleDuration === undefined) {
     errors.cycleDuration = 'createFarmCycleDurationRangeError';
   }
 

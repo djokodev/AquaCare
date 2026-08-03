@@ -96,7 +96,13 @@ export type RootStackParamList = {
         productionUnitName?: string;
       }
     | undefined;
-  NewCycle: undefined;
+  NewCycle:
+    | {
+        offlineLaunch?: import("@/types/aquaculture").CycleLaunchRequest;
+        offlineLaunchContext?: import("@/services/offlineService").OfflineCycleLaunch["localContext"];
+        editingOfflineLaunchId?: string;
+      }
+    | undefined;
   CycleHistory: undefined;
   Notifications:
     | {
@@ -170,8 +176,17 @@ export type RootStackParamList = {
   // Map Screen
   FarmMap: undefined;
   // Farm creation flow
-  CreateFarm: undefined;
-  CycleSimulation: { formData: FarmSetupFormState };
+  CreateFarm:
+    | {
+        offlineLaunch?: import("@/types/aquaculture").CycleLaunchRequest;
+        offlineLaunchContext?: import("@/services/offlineService").OfflineCycleLaunch["localContext"];
+        editingOfflineLaunchId?: string;
+      }
+    | undefined;
+  CycleSimulation: {
+    formData: FarmSetupFormState;
+    editingOfflineLaunchId?: string;
+  };
   // Post-harvest consolidation
   PostHarvestConsolidation: { harvestedCycleId: string };
   // Feed phase ordering
@@ -455,13 +470,17 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="CycleSimulation"
         component={CycleSimulationScreen}
-        options={{
+        options={({ route }) => ({
           headerShown: true,
           headerStyle: { backgroundColor: colors.brand.primary },
           headerTintColor: colors.text.inverse,
           headerTitleStyle: { fontWeight: 'bold' },
-          title: t('simulationNavTitle'),
-        }}
+          title: t(
+            route.params.formData.onboardingMode === 'ongoing'
+              ? 'cycleVerificationNavTitle'
+              : 'simulationNavTitle'
+          ),
+        })}
       />
       <RootStack.Screen
         name="PostHarvestConsolidation"

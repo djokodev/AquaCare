@@ -10,7 +10,7 @@ Responsabilités :
 - Création notifications rappels alimentation
 - Désactivation plans après récolte
 """
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
@@ -83,7 +83,7 @@ class FeedingPlanService(BaseService):
             )
 
         # Calcul semaine actuelle
-        days_elapsed = (date.today() - cycle.start_date).days
+        days_elapsed = (timezone.localdate() - cycle.analysis_start_date).days
         current_week = max(1, days_elapsed // 7 + 1)
 
         plans = []
@@ -345,7 +345,9 @@ class FeedingPlanService(BaseService):
                 _("Impossible de générer des plans pour un cycle non actif")
             )
 
-        days_elapsed = (date.today() - allocation.cycle.start_date).days
+        days_elapsed = (
+            timezone.localdate() - allocation.cycle.analysis_start_date
+        ).days
         current_week = max(1, days_elapsed // 7 + 1)
 
         plans = []
@@ -395,7 +397,9 @@ class FeedingPlanService(BaseService):
         Utilisé quand l'utilisateur régénère uniquement le plan de la semaine en cours
         pour éviter d'afficher ou d'alimenter des semaines futures héritées.
         """
-        days_elapsed = (date.today() - allocation.cycle.start_date).days
+        days_elapsed = (
+            timezone.localdate() - allocation.cycle.analysis_start_date
+        ).days
         current_week = max(1, days_elapsed // 7 + 1)
 
         future_plans = list(
@@ -582,7 +586,7 @@ class FeedingPlanService(BaseService):
             FeedingPlan.objects.select_related('cycle_unit_allocation__production_unit').filter(
                 cycle=cycle,
                 is_active=True,
-                start_date__gt=date.today(),
+                start_date__gt=timezone.localdate(),
             )
         )
 
@@ -591,7 +595,7 @@ class FeedingPlanService(BaseService):
         FeedingPlan.objects.filter(
             cycle=cycle,
             is_active=True,
-            start_date__gt=date.today()
+            start_date__gt=timezone.localdate()
         ).update(is_active=False)
 
         # Supprimer notifications futures associées (rappels alimentation)
@@ -678,11 +682,11 @@ class FeedingPlanService(BaseService):
         for day_offset in range(7):
             notification_date = plan.start_date + timedelta(days=day_offset)
 
-            if notification_date < date.today():
+            if notification_date < timezone.localdate():
                 continue
 
             daily_feeding_times = feeding_times
-            if notification_date == date.today():
+            if notification_date == timezone.localdate():
                 current_time = now.time()
                 daily_feeding_times = [
                     ft for ft in feeding_times

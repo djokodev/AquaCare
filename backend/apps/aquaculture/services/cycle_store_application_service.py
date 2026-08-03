@@ -7,8 +7,13 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
-from django.utils.translation import gettext_lazy as _
 
+from ..domain.exceptions import (
+    FeedReferenceConflict,
+    FeedReferenceInvalid,
+    FeedReferenceNotFound,
+    FeedReferenceSpeciesMismatch,
+)
 from ..models import CycleFeedStockEntry, ProductionCycle
 from .cycle_store_service import CycleStorePayload, CycleStoreService
 from .feed_reference_service import FeedReferenceService
@@ -26,6 +31,21 @@ class DeclareManualStockCommand:
     external_feed: dict[str, Any] | None = None
     label: str = ''
     feed_size_mm: Decimal | None = None
+    note: str = ''
+    client_uuid: Any = None
+    created_offline: bool = False
+
+
+@dataclass(frozen=True)
+class DeclareOpeningStockCommand:
+    """Opening balance captured exactly at the cycle tracking baseline."""
+
+    quantity_kg: Decimal
+    cost_status: str
+    total_cost_fcfa: Decimal | None
+    feed_reference_id: Any = None
+    feed_reference_client_uuid: Any = None
+    external_feed: dict[str, Any] | None = None
     note: str = ''
     client_uuid: Any = None
     created_offline: bool = False
@@ -66,30 +86,33 @@ class CycleStoreApplicationService:
             and feed_reference_by_client_uuid is not None
             and feed_reference_by_id.id != feed_reference_by_client_uuid.id
         ):
-            raise ValueError(_('L’identifiant et le client_uuid désignent deux aliments différents.'))
+            raise FeedReferenceConflict()
 
         feed_reference = feed_reference_by_id or feed_reference_by_client_uuid
         if feed_reference is not None:
             pass
         elif command.external_feed or (command.label and command.feed_size_mm is not None):
-            feed_reference = FeedReferenceService.create(
-                user=user,
-                farm_profile=cycle.farm_profile,
-                data={
-                    **(command.external_feed or {
-                        'name': command.label,
-                        'species': cycle.species,
-                        'pellet_size_mm': command.feed_size_mm,
-                    }),
-                    'source': 'external',
-                },
-            )
+            try:
+                feed_reference = FeedReferenceService.create(
+                    user=user,
+                    farm_profile=cycle.farm_profile,
+                    data={
+                        **(command.external_feed or {
+                            'name': command.label,
+                            'species': cycle.species,
+                            'pellet_size_mm': command.feed_size_mm,
+                        }),
+                        'source': 'external',
+                    },
+                )
+            except ValueError as exc:
+                raise FeedReferenceInvalid() from exc
         else:
-            raise ValueError(_('Une référence aliment est requise.'))
+            raise FeedReferenceNotFound()
         if feed_reference.farm_profile_id != cycle.farm_profile_id:
-            raise PermissionError(_('Cet aliment appartient à une autre ferme.'))
+            raise FeedReferenceNotFound()
         if feed_reference.species != cycle.species:
-            raise ValueError(_('Cet aliment ne correspond pas à l’espèce du cycle.'))
+            raise FeedReferenceSpeciesMismatch()
         return CycleStoreService.declare_manual_stock(
             user=user,
             cycle=cycle,
@@ -97,6 +120,87 @@ class CycleStoreApplicationService:
             quantity_kg=command.quantity_kg,
             total_cost_fcfa=command.total_cost_fcfa,
             entry_date=command.entry_date,
+            note=command.note,
+            client_uuid=command.client_uuid,
+            created_offline=command.created_offline,
+        )
+
+    @staticmethod
+    def _resolve_feed_reference(
+        *,
+        user,
+        cycle: ProductionCycle,
+        feed_reference_id=None,
+        feed_reference_client_uuid=None,
+        external_feed: dict[str, Any] | None = None,
+    ):
+        feed_reference_by_id = None
+        feed_reference_by_client_uuid = None
+        if feed_reference_id:
+            feed_reference_by_id = FeedReferenceService.get_owned(
+                user=user,
+                reference_id=feed_reference_id,
+            )
+        if feed_reference_client_uuid:
+            feed_reference_by_client_uuid = FeedReferenceService.get_owned_by_client_uuid(
+                user=user,
+                farm_profile=cycle.farm_profile,
+                client_uuid=feed_reference_client_uuid,
+            )
+        if (
+            feed_reference_by_id is not None
+            and feed_reference_by_client_uuid is not None
+            and feed_reference_by_id.id != feed_reference_by_client_uuid.id
+        ):
+            raise FeedReferenceConflict()
+        feed_reference = feed_reference_by_id or feed_reference_by_client_uuid
+        if feed_reference is None and external_feed:
+            requested_species = external_feed.get('species')
+            if requested_species not in (None, cycle.species):
+                raise FeedReferenceSpeciesMismatch()
+            try:
+                feed_reference = FeedReferenceService.create(
+                    user=user,
+                    farm_profile=cycle.farm_profile,
+                    data={
+                        **external_feed,
+                        'species': cycle.species,
+                        'source': 'external',
+                    },
+                )
+            except ValueError as exc:
+                raise FeedReferenceInvalid() from exc
+        if feed_reference is None:
+            raise FeedReferenceNotFound()
+        if feed_reference.farm_profile_id != cycle.farm_profile_id:
+            raise FeedReferenceNotFound()
+        if feed_reference.species != cycle.species:
+            raise FeedReferenceSpeciesMismatch()
+        return feed_reference
+
+    @classmethod
+    @transaction.atomic
+    def declare_opening_stock(
+        cls,
+        *,
+        user,
+        cycle: ProductionCycle,
+        command: DeclareOpeningStockCommand,
+    ) -> CycleFeedStockEntry:
+        feed_reference = cls._resolve_feed_reference(
+            user=user,
+            cycle=cycle,
+            feed_reference_id=command.feed_reference_id,
+            feed_reference_client_uuid=command.feed_reference_client_uuid,
+            external_feed=command.external_feed,
+        )
+        return CycleStoreService.declare_opening_stock(
+            user=user,
+            cycle=cycle,
+            feed_reference=feed_reference,
+            quantity_kg=command.quantity_kg,
+            cost_status=command.cost_status,
+            total_cost_fcfa=command.total_cost_fcfa,
             note=command.note,
             client_uuid=command.client_uuid,
             created_offline=command.created_offline,

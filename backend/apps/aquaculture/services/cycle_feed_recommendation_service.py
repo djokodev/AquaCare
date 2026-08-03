@@ -332,19 +332,30 @@ class CycleFeedRecommendationService:
 
     @classmethod
     def _initial_simulation(cls, cycle: ProductionCycle) -> dict[str, Any]:
+        start_count = cycle.analysis_start_count
+        start_weight = cycle.analysis_start_average_weight
+        simulation_duration_days = cycle.planned_cycle_duration_days or 180
         if (
-            not cycle.initial_count
-            or not cycle.initial_average_weight
+            cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING
+            and cycle.planned_harvest_date
+        ):
+            simulation_duration_days = (
+                cycle.planned_harvest_date - cycle.tracking_start_date
+            ).days + 1
+        if (
+            not start_count
+            or not start_weight
             or not cycle.target_harvest_weight_g
-            or cycle.initial_average_weight >= cycle.target_harvest_weight_g
+            or start_weight >= cycle.target_harvest_weight_g
+            or simulation_duration_days <= 0
         ):
             return {}
         simulation = CycleSimulationService.simulate_cycle(
             species=cycle.species,
-            initial_fish_count=cycle.initial_count,
-            initial_weight_g=float(cycle.initial_average_weight),
+            initial_fish_count=start_count,
+            initial_weight_g=float(start_weight),
             target_weight_g=float(cycle.target_harvest_weight_g),
-            cycle_duration_days=cycle.planned_cycle_duration_days or 180,
+            cycle_duration_days=simulation_duration_days,
             survival_rate=float(cycle.expected_survival_rate_pct or 95) / 100,
             selling_price_per_kg_fcfa=float(cycle.planned_selling_price_per_kg_fcfa or 2800),
             fingerlings_cost_fcfa=float(cycle.fingerlings_cost_fcfa or 0),
@@ -374,22 +385,59 @@ class CycleFeedRecommendationService:
             return existing
         simulation = cls._initial_simulation(cycle)
         if not simulation:
-            return None
+            target_reached = (
+                cycle.target_harvest_weight_g is not None
+                and cycle.analysis_start_average_weight
+                >= cycle.target_harvest_weight_g
+            )
+            if not target_reached:
+                return None
+            simulation = {
+                'parameters': {
+                    'initial_fish_count': cycle.analysis_start_count,
+                    'initial_weight_g': str(cycle.analysis_start_average_weight),
+                    'target_weight_g': str(cycle.target_harvest_weight_g),
+                    'cycle_duration_days': 0,
+                    'survival_rate': '1',
+                    'target_weight_reached': True,
+                },
+                'feeding_phases': [],
+                'summary': {'total_feed_kg': ZERO_DECIMAL},
+            }
         phases = [
             cls._normalize_phase(raw_phase, sequence)
             for sequence, raw_phase in enumerate(simulation['feeding_phases'], start=1)
         ]
         parameters = cls._json_safe(simulation['parameters'])
         parameters['snapshot_source'] = source
+        parameters['onboarding_mode'] = cycle.onboarding_mode
+        parameters['plan_scope'] = (
+            'remaining_cycle'
+            if cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING
+            else 'full_cycle'
+        )
+        parameters['pre_tracking_history'] = (
+            'not_tracked'
+            if cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING
+            else 'full_cycle'
+        )
+        parameters['tracking_start_date'] = cycle.tracking_start_date.isoformat()
+        parameters['tracking_start_count'] = cycle.tracking_start_count
+        parameters['tracking_start_average_weight'] = str(
+            cycle.tracking_start_average_weight
+        )
+        parameters['tracking_start_biomass'] = str(cycle.tracking_start_biomass)
+        if cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING:
+            parameters['snapshot_source'] = 'ongoing_cycle_onboarding'
         try:
             with transaction.atomic():
                 initial_sequence = (
                     cls._current_phase_index(
                         phases,
-                        cls._decimal(cycle.initial_average_weight),
+                        cls._decimal(cycle.analysis_start_average_weight),
                     )
                     + 1
-                    if phases and cycle.initial_average_weight
+                    if phases and cycle.analysis_start_average_weight
                     else 0
                 )
                 return CycleFeedPlan.objects.create(
@@ -431,7 +479,10 @@ class CycleFeedRecommendationService:
                 'current_biomass',
             )
         if cycle.start_date and phases:
-            age_days = max((timezone.localdate() - cycle.start_date).days + 1, 1)
+            age_days = max(
+                (timezone.localdate() - cycle.analysis_start_date).days + 1,
+                1,
+            )
             for phase in phases:
                 start_day, end_day = phase['planned_days_range']
                 if start_day <= age_days <= end_day:
@@ -554,7 +605,7 @@ class CycleFeedRecommendationService:
                 if ledger.balance_at_date < quantity:
                     unclassified += quantity
                     continue
-            day = max((log.log_date - cycle.start_date).days + 1, 1)
+            day = max((log.log_date - cycle.analysis_start_date).days + 1, 1)
             candidates = [
                 index
                 for index, phase in enumerate(phases)
@@ -791,6 +842,16 @@ class CycleFeedRecommendationService:
         )
         stock_by_size: dict[Decimal, Decimal] = {}
         warnings: list[str] = []
+        if target_reached:
+            warnings.append('target_weight_reached')
+        if (
+            cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING
+            and cycle.tracking_start_date < timezone.localdate()
+            and not cycle.logs.filter(
+                log_date__gt=cycle.tracking_start_date,
+            ).exists()
+        ):
+            warnings.append('current_state_stale_since_tracking_start')
         for item in stock_items:
             available = cls._decimal(item['quantity_available_kg'])
             if available < ZERO_DECIMAL:
@@ -940,9 +1001,17 @@ class CycleFeedRecommendationService:
         if not target_reached and total_remaining.quantize(QUANTIZE_KG) != simulated_total:
             warnings.append('feed_phase_need_reconciliation_error')
         warnings = list(dict.fromkeys(warnings))
+        non_blocking_warnings = {
+            'target_weight_reached',
+            'current_state_stale_since_tracking_start',
+        }
+        has_incomplete_warning = any(
+            warning not in non_blocking_warnings
+            for warning in warnings
+        )
         return {
             'cycle_id': str(cycle.id),
-            'status': 'incomplete' if warnings else 'available',
+            'status': 'incomplete' if has_incomplete_warning else 'available',
             'source': f'current_cycle_reforecast:{weight_source}',
             'calculated_at': timezone.now(),
             'summary': {

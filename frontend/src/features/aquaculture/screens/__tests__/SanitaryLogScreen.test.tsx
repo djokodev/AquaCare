@@ -90,6 +90,7 @@ describe('features/aquaculture/screens/SanitaryLogScreen', () => {
     (useDispatch as unknown as jest.Mock).mockReturnValue(mockDispatch);
     mockOffline.hasAnyPendingSync.mockResolvedValue(false);
     mockOffline.syncAllOfflineData.mockResolvedValue({
+      attempted: 0,
       success: 0,
       failed: 0,
       details: {

@@ -156,6 +156,23 @@ def _unit_chart_payload(
     }
 
 
+def _create_fcr_allocation(farm_profile, cycle, name):
+    unit = ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name=name,
+        unit_type="tank",
+        volume_m3="10.00",
+    )
+    return CycleUnitAllocation.objects.create(
+        cycle=cycle,
+        production_unit=unit,
+        initial_fish_count=1000,
+        current_fish_count=1000,
+        initial_biomass_kg="10.00",
+        current_biomass_kg="20.00",
+    )
+
+
 @pytest.mark.django_db
 class TestReportServiceEmailFormatting:
     def test_completed_period_bounds_use_only_finished_periods(self):
@@ -348,6 +365,192 @@ class TestReportServiceEmailFormatting:
 
 @pytest.mark.django_db
 class TestReportServicePayloadAndPdfTemplate:
+    def test_allocation_without_feed_observation_has_no_fcr(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+        )
+        _create_fcr_allocation(farm_profile, cycle, "Bassin sans saisie")
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            cycle_id=str(cycle.id),
+        )
+        metrics = payload["cycles"][0]["cumulative_metrics"]
+
+        assert metrics["fcr"] is None
+        assert metrics["fcr_data_complete"] is False
+        assert metrics["fcr_unavailable_reason"] == "no_feed_observation"
+
+    def test_null_feed_entry_is_incomplete_but_explicit_zero_is_observed(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+        )
+        null_allocation = _create_fcr_allocation(
+            farm_profile, cycle, "Bassin aliment nul"
+        )
+        zero_allocation = _create_fcr_allocation(
+            farm_profile, cycle, "Bassin aliment zéro"
+        )
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=null_allocation,
+            log_date=date(2026, 7, 19),
+            average_weight="20.00",
+            feed_quantity=None,
+        )
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=zero_allocation,
+            log_date=date(2026, 7, 19),
+            average_weight="20.00",
+            feed_quantity="0.00",
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            cycle_id=str(cycle.id),
+        )
+        by_name = {
+            section["unit"]["production_unit_name"]: section["cumulative_metrics"]
+            for section in payload["cycles"]
+        }
+
+        assert (
+            by_name["Bassin aliment nul"]["fcr_unavailable_reason"]
+            == "incomplete_feed_data"
+        )
+        assert by_name["Bassin aliment nul"]["fcr_data_complete"] is False
+        assert (
+            by_name["Bassin aliment zéro"]["fcr_unavailable_reason"] is None
+        )
+        assert by_name["Bassin aliment zéro"]["fcr_data_complete"] is True
+
+    def test_aggregate_fcr_uses_totals_and_requires_every_allocation(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+        )
+        complete = _create_fcr_allocation(
+            farm_profile, cycle, "Bassin complet"
+        )
+        _create_fcr_allocation(farm_profile, cycle, "Bassin incomplet")
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=complete,
+            log_date=date(2026, 7, 19),
+            average_weight="20.00",
+            feed_quantity="10.00",
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            cycle_id=str(cycle.id),
+        )
+
+        assert payload["cycle_dashboard"]["fcr"] is None
+        assert payload["cycle_dashboard"]["fcr_data_complete"] is False
+        assert (
+            payload["cycle_dashboard"]["fcr_unavailable_reason"]
+            == "no_feed_observation"
+        )
+
+    def test_aggregate_fcr_is_calculated_from_complete_allocation_totals(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            start_date=date(2026, 7, 1),
+        )
+        first = _create_fcr_allocation(farm_profile, cycle, "Bassin A")
+        second = _create_fcr_allocation(farm_profile, cycle, "Bassin B")
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=first,
+            log_date=date(2026, 7, 19),
+            average_weight="20.00",
+            feed_quantity="10.00",
+        )
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=second,
+            log_date=date(2026, 7, 19),
+            average_weight="20.00",
+            feed_quantity="30.00",
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            cycle_id=str(cycle.id),
+        )
+
+        assert payload["cycle_dashboard"]["fcr"] == 2.0
+        assert payload["cycle_dashboard"]["fcr_data_complete"] is True
+        assert payload["cycle_dashboard"]["fcr_unavailable_reason"] is None
+
+    def test_ongoing_fcr_ignores_feed_before_analysis_start_date(self):
+        farm_profile = FarmProfileFactory()
+        cycle = ProductionCycleFactory(
+            farm_profile=farm_profile,
+            status="active",
+            onboarding_mode="ongoing",
+            start_date=date(2026, 7, 1),
+            initial_count=1000,
+            tracking_start_date=date(2026, 7, 10),
+            tracking_start_count=1000,
+            tracking_start_average_weight="10.00",
+            tracking_start_biomass="10.00",
+        )
+        allocation = _create_fcr_allocation(
+            farm_profile, cycle, "Bassin ongoing"
+        )
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date(2026, 7, 5),
+            average_weight="12.00",
+            feed_quantity="90.00",
+        )
+        CycleLog.objects.create(
+            cycle=cycle,
+            cycle_unit_allocation=allocation,
+            log_date=date(2026, 7, 19),
+            average_weight="20.00",
+            feed_quantity="10.00",
+        )
+
+        payload = ReportService._build_payload(
+            farm_profile=farm_profile,
+            report_type="daily",
+            period_start=date(2026, 7, 19),
+            period_end=date(2026, 7, 19),
+            cycle_id=str(cycle.id),
+        )
+        metrics = payload["cycles"][0]["cumulative_metrics"]
+
+        assert metrics["total_feed"] == 10.0
+        assert metrics["fcr"] == 1.0
+        assert metrics["fcr_scope"] == "since_tracking_start"
+
     def test_report_payload_exposes_configured_duration_source(self):
         farm_profile = FarmProfileFactory()
         ProductionCycleFactory(

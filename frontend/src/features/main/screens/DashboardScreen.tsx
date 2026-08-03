@@ -25,7 +25,10 @@ import {
   fetchOrderStatistics,
   fetchOrders,
 } from "@/features/commerce/store/commerceSlice";
-import { offlineService } from "@/services/offlineService";
+import {
+  offlineService,
+  type OfflineCycleLaunch,
+} from "@/services/offlineService";
 import HarvestModal from "@/components/modals/HarvestModal";
 import PartialHarvestModal from "@/components/modals/PartialHarvestModal";
 import PartialHarvestHistoryModal from "@/components/modals/PartialHarvestHistoryModal";
@@ -57,6 +60,7 @@ import {
 import { colors, spacing } from "@/theme";
 import { useDashboardSyncStatus } from "@/hooks/useDashboardSyncStatus";
 import { dashboardSyncService } from "@/services/dashboardSyncService";
+import { getRejectedCycleLaunchDisplay } from "@/features/aquaculture/utils/aquacultureErrorPresenter";
 
 interface DashboardActionCardProps {
   label: string;
@@ -126,6 +130,20 @@ export default function DashboardScreen({ navigation }: any) {
   const [cycleDashboardError, setCycleDashboardError] = useState<string | null>(null);
   const cycleDashboardRequestRef = useRef(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingCycleLaunches, setPendingCycleLaunches] = useState<
+    OfflineCycleLaunch[]
+  >([]);
+
+  const loadPendingCycleLaunches = useCallback(async () => {
+    if (typeof offlineService.getOfflineCycleLaunches !== "function") {
+      setPendingCycleLaunches([]);
+      return;
+    }
+    const launches = await offlineService.getOfflineCycleLaunches();
+    setPendingCycleLaunches(
+      launches.filter((launch) => launch.sync_status !== "synced"),
+    );
+  }, []);
 
   const { dashboardData, cycles, loading, error, currentCycle } = useSelector(
     (state: RootState) => state.aquaculture,
@@ -139,13 +157,22 @@ export default function DashboardScreen({ navigation }: any) {
 
   useEffect(() => {
     const initializeDashboard = async () => {
-      tryGlobalOfflineSync();
-      dispatch(fetchDashboardData(undefined));
-      dispatch(fetchProductionCycles());
+      const syncOutcome = await tryGlobalOfflineSync();
+      await Promise.all([
+        ...(syncOutcome.serverDataRefreshed
+          ? []
+          : [
+              dispatch(fetchDashboardData(undefined)),
+              dispatch(fetchProductionCycles()),
+            ]),
+        ...(syncOutcome.localDataRefreshed
+          ? []
+          : [loadPendingCycleLaunches()]),
+      ]);
     };
 
     initializeDashboard();
-  }, [dispatch]);
+  }, [dispatch, loadPendingCycleLaunches]);
 
   useEffect(() => {
     dispatch(fetchNotifications({ cycleId: currentCycle?.id }));
@@ -163,19 +190,63 @@ export default function DashboardScreen({ navigation }: any) {
     }, [currentCycle?.id, dispatch]),
   );
 
-  const tryGlobalOfflineSync = async () => {
+  const tryGlobalOfflineSync = async (): Promise<{
+    localDataRefreshed: boolean;
+    serverDataRefreshed: boolean;
+  }> => {
     try {
       const hasPending = await offlineService.hasAnyPendingSync();
       if (hasPending) {
+        const launchesBeforeSync = await offlineService.getOfflineCycleLaunches();
         const result = await offlineService.syncAllOfflineData();
 
         if (result.success > 0) {
-          dispatch(fetchDashboardData(undefined));
-          dispatch(fetchProductionCycles());
+          await refreshAfterCycleLaunchSync(launchesBeforeSync);
+          return {
+            localDataRefreshed: true,
+            serverDataRefreshed: true,
+          };
+        }
+        if (result.attempted > 0) {
+          await loadPendingCycleLaunches();
+          return {
+            localDataRefreshed: true,
+            serverDataRefreshed: false,
+          };
         }
       }
     } catch (err) {
       // Sync error handled silently
+    }
+    return {
+      localDataRefreshed: false,
+      serverDataRefreshed: false,
+    };
+  };
+
+  const refreshAfterCycleLaunchSync = async (
+    launchesBeforeSync: OfflineCycleLaunch[],
+  ) => {
+    const unsyncedIds = new Set(
+      launchesBeforeSync
+        .filter((launch) => launch.sync_status !== "synced")
+        .map((launch) => launch.id),
+    );
+    const launchesAfterSync = await offlineService.getOfflineCycleLaunches();
+    const newlySynced = launchesAfterSync.find(
+      (launch) =>
+        unsyncedIds.has(launch.id) &&
+        launch.sync_status === "synced" &&
+        launch.response?.productionCycle,
+    );
+    await Promise.all([
+      loadFarmProfile(),
+      dispatch(fetchDashboardData(undefined)).unwrap(),
+      dispatch(fetchProductionCycles()).unwrap(),
+      loadPendingCycleLaunches(),
+    ]);
+    if (newlySynced?.response?.productionCycle) {
+      dispatch(setCurrentCycle(newlySynced.response.productionCycle));
     }
   };
 
@@ -270,6 +341,7 @@ export default function DashboardScreen({ navigation }: any) {
       dispatch(fetchDashboardData(undefined)),
       loadCurrentCycleDashboard("refresh"),
       dispatch(fetchProductionCycles()),
+      loadPendingCycleLaunches(),
       dispatch(fetchNotifications({ cycleId: currentCycle?.id })),
       currentCycle?.id
         ? dispatch(fetchOrders({ productionCycleId: currentCycle.id }))
@@ -277,9 +349,11 @@ export default function DashboardScreen({ navigation }: any) {
     ]).finally(() => {
       setRefreshing(false);
     });
-  }, [currentCycle?.id, dispatch, loadCurrentCycleDashboard, loadFarmProfile]);
+  }, [currentCycle?.id, dispatch, loadCurrentCycleDashboard, loadFarmProfile, loadPendingCycleLaunches]);
 
   const cycleSummary = currentCycleDashboard?.summary;
+  const hasPartialCycleHistory =
+    cycleSummary?.history_scope === "since_tracking_start";
   const cycleDashboardInitialLoading = Boolean(
     primaryActiveCycleId && !cycleSummary && !cycleDashboardError,
   );
@@ -516,6 +590,32 @@ export default function DashboardScreen({ navigation }: any) {
                     unit={t("dashboardDirectProductionCostUnit")}
                     unavailableLabel={t("dashboardDataUnavailable")}
                   />
+                  {hasPartialCycleHistory ? (
+                    <>
+                      <DashboardMetricCard
+                        label={t("cycleRealAge")}
+                        value={formatDashboardNumber(
+                          cycleSummary.days_active,
+                          locale,
+                          { maximumFractionDigits: 0 },
+                        )}
+                        unit={t("days")}
+                        tone="slate"
+                        unavailableLabel={t("dashboardDataUnavailable")}
+                      />
+                      <DashboardMetricCard
+                        label={t("daysTrackedByAquaCare")}
+                        value={formatDashboardNumber(
+                          cycleSummary.days_tracked,
+                          locale,
+                          { maximumFractionDigits: 0 },
+                        )}
+                        unit={t("days")}
+                        tone="info"
+                        unavailableLabel={t("dashboardDataUnavailable")}
+                      />
+                    </>
+                  ) : null}
                   <DashboardMetricCard
                     label={t("currentFish")}
                     value={formatDashboardNumber(
@@ -543,6 +643,111 @@ export default function DashboardScreen({ navigation }: any) {
             )}
           </DashboardSection>
         </View>
+
+        {pendingCycleLaunches.length > 0 ? (
+          <View style={styles.dashboardSectionContainer}>
+            <DashboardSection
+              title={t("pendingCycleLaunches")}
+              lastSyncedAt={lastSyncedAt}
+            >
+              <InlineAlert
+                tone="info"
+                message={t("pendingCycleOperationsBlocked")}
+              />
+              {pendingCycleLaunches.map((launch) => {
+                const rejectedDisplay =
+                  launch.sync_status === "rejected"
+                    ? getRejectedCycleLaunchDisplay({
+                        code: launch.last_error_code,
+                        message: launch.last_error_message,
+                        httpStatus: launch.last_http_status,
+                        t,
+                      })
+                    : null;
+                return (
+                  <Card key={launch.id} variant="outlined">
+                    <AppText variant="bodyStrong">
+                      {launch.payload.cycle.cycle_name ?? t("newCycleTitle")}
+                    </AppText>
+                    {rejectedDisplay ? (
+                      <>
+                        <AppText color="muted">{rejectedDisplay.status}</AppText>
+                        <AppText>
+                          {t("cycleLaunchRejectedCause")}: {rejectedDisplay.cause}
+                        </AppText>
+                        <AppText color="muted">{rejectedDisplay.action}</AppText>
+                      </>
+                    ) : (
+                      <AppText color="muted">
+                        {t(
+                          launch.attempted
+                            ? "cycleLaunchLockedAfterAttempt"
+                            : "cycleLaunchEditableBeforeAttempt",
+                        )}
+                      </AppText>
+                    )}
+                    <View style={{ flexDirection: "row", gap: spacing[2], marginTop: spacing[2] }}>
+                    {!launch.attempted ? (
+                      <Button
+                        label={t("edit")}
+                        variant="outline"
+                        size="small"
+                        fullWidth={false}
+                        onPress={() => {
+                          if (launch.payload.launch_kind === "initial_setup") {
+                            navigation.navigate("CreateFarm", {
+                              offlineLaunch: launch.payload,
+                              offlineLaunchContext: launch.localContext,
+                              editingOfflineLaunchId: launch.id,
+                            });
+                          } else {
+                            navigation.navigate("NewCycle", {
+                              offlineLaunch: launch.payload,
+                              offlineLaunchContext: launch.localContext,
+                              editingOfflineLaunchId: launch.id,
+                            });
+                          }
+                        }}
+                      />
+                    ) : null}
+                    {launch.sync_status !== "rejected" ? (
+                      <Button
+                        label={t("retry")}
+                        variant="outline"
+                        size="small"
+                        fullWidth={false}
+                        onPress={async () => {
+                          const launchesBeforeSync =
+                            await offlineService.getOfflineCycleLaunches();
+                          const result = await offlineService.syncOfflineCycleLaunches();
+                          if (result.success > 0) {
+                            await refreshAfterCycleLaunchSync(launchesBeforeSync);
+                          } else {
+                            await loadPendingCycleLaunches();
+                          }
+                        }}
+                      />
+                    ) : null}
+                    {!launch.attempted && launch.sync_status === "pending" ? (
+                      <Button
+                        label={t("delete")}
+                        variant="danger"
+                        size="small"
+                        fullWidth={false}
+                        onPress={() => {
+                          void offlineService.deletePendingCycleLaunch(launch.id).then(
+                            loadPendingCycleLaunches,
+                          );
+                        }}
+                      />
+                    ) : null}
+                    </View>
+                  </Card>
+                );
+              })}
+            </DashboardSection>
+          </View>
+        ) : null}
 
         {sessionCycle ? (
           <View className="px-5 pb-1">

@@ -28,6 +28,7 @@ from ..domain.exceptions import (
     BusinessRuleViolation,
     CycleLogCycleImmutableError,
     CycleLogIdempotencyConflict,
+    EventBeforeTrackingStartError,
     InsufficientFishCountError,
     InvalidDateRangeError,
     OfflineSyncConflictError,
@@ -617,10 +618,13 @@ class CycleLogService(BaseService):
             new_mortality = update_data['mortality_count']
             # Vérifier cohérence avec autres logs du cycle
             # (Le signal recalculera ensuite)
-            if new_mortality > log.cycle.initial_count:
+            if new_mortality > log.cycle.analysis_start_count:
                 raise InsufficientFishCountError(
                     _("Mortalité (%(mortality)d) ne peut dépasser l'effectif initial (%(initial)d)")
-                    % {'mortality': new_mortality, 'initial': log.cycle.initial_count}
+                    % {
+                        'mortality': new_mortality,
+                        'initial': log.cycle.analysis_start_count,
+                    }
                 )
 
         # Mise à jour des champs
@@ -729,10 +733,17 @@ class CycleLogService(BaseService):
             if isinstance(log_date, str):
                 log_date = date.fromisoformat(log_date)
 
-            if log_date < cycle.start_date:
+            if log_date < cycle.analysis_start_date:
+                if cycle.onboarding_mode == ProductionCycle.ONBOARDING_MODE_ONGOING:
+                    raise EventBeforeTrackingStartError(
+                        tracking_start_date=cycle.analysis_start_date,
+                    )
                 raise InvalidDateRangeError(
                     _("Date du log (%(log_date)s) ne peut être avant le début du cycle (%(start)s)")
-                    % {'log_date': log_date, 'start': cycle.start_date}
+                    % {
+                        'log_date': log_date,
+                        'start': cycle.analysis_start_date,
+                    }
                 )
 
             if cycle.end_date and log_date > cycle.end_date:

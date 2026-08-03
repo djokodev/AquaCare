@@ -3,10 +3,11 @@ Service métier pour la construction des données du dashboard aquaculture.
 """
 import logging
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any
 
 from django.core.cache import cache
+from django.utils import timezone
 from notifications.models import Notification
 
 from ..domain.calculators import AquacultureCalculator
@@ -56,7 +57,7 @@ class DashboardService:
             return cached
 
         cycle_scope = None
-        thirty_days_ago = date.today() - timedelta(days=30)
+        thirty_days_ago = timezone.localdate() - timedelta(days=30)
 
         active_cycles_query = ProductionCycle.objects.filter(
             farm_profile__user=user,
@@ -132,7 +133,7 @@ class DashboardService:
 
     @staticmethod
     def _get_recent_logs(user, cycle_scope):
-        recent_date = date.today() - timedelta(days=7)
+        recent_date = timezone.localdate() - timedelta(days=7)
         filters = {'cycle__farm_profile__user': user, 'log_date__gte': recent_date}
         if cycle_scope:
             filters['cycle_id'] = cycle_scope.id
@@ -143,8 +144,8 @@ class DashboardService:
         filters = {
             'cycle__farm_profile__user': user,
             'is_active': True,
-            'start_date__lte': date.today(),
-            'end_date__gte': date.today(),
+            'start_date__lte': timezone.localdate(),
+            'end_date__gte': timezone.localdate(),
         }
         if cycle_scope:
             filters['cycle_id'] = cycle_scope.id
@@ -234,7 +235,11 @@ class DashboardService:
                         'date': log.log_date.isoformat(),
                         'daily': log.mortality_count,
                         'cumulative': cumulative_mortality,
-                        'percentage': (cumulative_mortality / context.cycle.initial_count * 100),
+                        'percentage': (
+                            cumulative_mortality
+                            / context.cycle.analysis_start_count
+                            * 100
+                        ),
                     })
                 chart_data.append({
                     'cycle_name': context.cycle.cycle_name,

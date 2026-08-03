@@ -6,16 +6,29 @@ import {
   CalibrationRequest,
   CreateCalibrationTankForm,
   CreateCycleForm,
+  CycleLaunchRequest,
+  CycleLaunchResponse,
   CycleStoreManualStockPayload,
   DailyLogForm,
   FarmFeedReferenceCreatePayload,
+  FarmFeedReference,
   FinalHarvestOperation,
   HarvestData,
   SanitaryLogForm,
   SyncPayload,
+  ProductionUnit,
 } from '@/types/aquaculture';
 import logger from '@/utils/logger';
 import { getBusinessIsoDate } from '@/utils/businessDate';
+import { parseApiError, type ApiErrorLike } from '@/utils/errorParser';
+
+export type CycleLaunchSyncStatus =
+  | 'pending'
+  | 'syncing'
+  | 'uncertain'
+  | 'rejected'
+  | 'synced'
+  | 'failed';
 
 export interface OfflineCycleLog {
   id: string;
@@ -56,6 +69,23 @@ interface OfflineNewCycle {
   synced: boolean;
 }
 
+export interface OfflineCycleLaunch {
+  id: string;
+  payload: CycleLaunchRequest;
+  fingerprint: string;
+  timestamp: number;
+  sync_status: CycleLaunchSyncStatus;
+  attempted: boolean;
+  response?: CycleLaunchResponse;
+  last_error_code?: string;
+  last_error_message?: string;
+  last_http_status?: number;
+  localContext?: {
+    productionUnits?: ProductionUnit[];
+    feedReferences?: FarmFeedReference[];
+  };
+}
+
 interface OfflineSanitaryLog {
   id: string;
   cycleId: string;
@@ -91,6 +121,18 @@ export interface OfflineFinalHarvest {
 interface SyncCounter {
   success: number;
   failed: number;
+  skippedOffline?: number;
+  uncertain?: number;
+  rejected?: number;
+  skippedRejected?: number;
+}
+
+interface CycleLaunchSyncCounter extends SyncCounter {
+  attempted: number;
+  skippedOffline: number;
+  uncertain: number;
+  rejected: number;
+  skippedRejected: number;
 }
 
 const resolveReferenceIdentity = (
@@ -161,6 +203,7 @@ const hasPendingStockDependency = (
 };
 
 interface OfflineSyncDetails {
+  cycleLaunches?: CycleLaunchSyncCounter;
   feedReferences?: SyncCounter;
   stockDeclarations?: SyncCounter;
   cycleLogs: SyncCounter;
@@ -172,6 +215,7 @@ interface OfflineSyncDetails {
 }
 
 interface OfflineSyncResult extends SyncCounter {
+  attempted: number;
   details: OfflineSyncDetails;
 }
 
@@ -180,11 +224,120 @@ const STORAGE_KEYS = {
   OFFLINE_STOCK_DECLARATIONS: 'aquacare_offline_stock_declarations',
   OFFLINE_CYCLE_LOGS: 'aquacare_offline_cycle_logs',
   OFFLINE_NEW_CYCLES: 'aquacare_offline_new_cycles',
+  OFFLINE_CYCLE_LAUNCHES: 'aquacare_offline_cycle_launches_v1',
   OFFLINE_SANITARY_LOGS: 'aquacare_offline_sanitary_logs',
   OFFLINE_CALIBRATION_TANKS: 'aquacare_offline_calibration_tanks',
   OFFLINE_CALIBRATION_OPERATIONS: 'aquacare_offline_calibration_operations',
   OFFLINE_FINAL_HARVESTS: 'aquacare_offline_final_harvests',
   LAST_SYNC: 'aquacare_last_sync',
+};
+
+export interface CycleLaunchSyncErrorClassification {
+  status: 'uncertain' | 'rejected' | 'synced';
+  response?: CycleLaunchResponse;
+  errorCode?: string;
+  errorMessage?: string;
+  httpStatus?: number;
+}
+
+const extractCycleLaunchResponse = (
+  value: unknown,
+): CycleLaunchResponse | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.productionCycle && candidate.launchUuid) {
+    return candidate as unknown as CycleLaunchResponse;
+  }
+  if (candidate.production_cycle && candidate.launch_uuid) {
+    return {
+      launchUuid: String(candidate.launch_uuid),
+      idempotentReplay: Boolean(candidate.idempotent_replay),
+      farmProfile: candidate.farm_profile,
+      productionCycle: candidate.production_cycle,
+      productionUnits: candidate.production_units ?? [],
+      cycleUnitAllocations: candidate.cycle_unit_allocations ?? [],
+      productionUnitIdByLocalId:
+        candidate.production_unit_id_by_local_id ?? {},
+      openingFeedReferences: candidate.opening_feed_references ?? [],
+      openingStockEntries: candidate.opening_stock_entries ?? [],
+      openingStockEntryIdByLocalId:
+        candidate.opening_stock_entry_id_by_local_id ?? {},
+    } as CycleLaunchResponse;
+  }
+  for (const key of ['response', 'result', 'launch']) {
+    const nested = candidate[key];
+    if (nested && typeof nested === 'object') {
+      const extracted = extractCycleLaunchResponse(nested);
+      if (extracted) return extracted;
+    }
+  }
+  return undefined;
+};
+
+export const classifyCycleLaunchSyncError = (
+  error: unknown,
+): CycleLaunchSyncErrorClassification => {
+  const candidate = error as ApiErrorLike;
+  if (!candidate?.response) {
+    const parsed = parseApiError(error);
+    return {
+      status: 'uncertain',
+      errorCode: parsed.code,
+      errorMessage: parsed.message,
+    };
+  }
+
+  const parsed = parseApiError(error);
+  const httpStatus = candidate.response.status;
+  if (httpStatus === 409) {
+    const response = extractCycleLaunchResponse(candidate.response.data);
+    if (response) {
+      return { status: 'synced', response, httpStatus };
+    }
+  }
+
+  if (httpStatus === 400 || httpStatus === 404 || httpStatus === 409) {
+    return {
+      status: 'rejected',
+      errorCode: parsed.code,
+      errorMessage: parsed.message,
+      httpStatus,
+    };
+  }
+
+  return {
+    status: 'uncertain',
+    errorCode: parsed.code,
+    errorMessage: parsed.message,
+    httpStatus,
+  };
+};
+
+const canonicalizeLaunchValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeLaunchValue);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, canonicalizeLaunchValue(nested)]),
+    );
+  }
+  return value;
+};
+
+const cycleLaunchFingerprint = (payload: CycleLaunchRequest): string => {
+  const canonicalPayload: CycleLaunchRequest = {
+    ...payload,
+    production_units: [...payload.production_units].sort((a, b) =>
+      a.local_id.localeCompare(b.local_id)),
+    allocations: [...payload.allocations].sort((a, b) =>
+      a.production_unit_local_id.localeCompare(b.production_unit_local_id)),
+    initial_feed_stocks: [...(payload.initial_feed_stocks ?? [])].sort((a, b) =>
+      a.local_id.localeCompare(b.local_id)),
+  };
+  return JSON.stringify(canonicalizeLaunchValue(canonicalPayload));
 };
 
 const feedReferenceFingerprint = (payload: FarmFeedReferenceCreatePayload): string => JSON.stringify({
@@ -813,6 +966,201 @@ class OfflineService {
     return this.readList<OfflineNewCycle>(STORAGE_KEYS.OFFLINE_NEW_CYCLES, 'Erreur lecture cycles offline');
   }
 
+  async saveCycleLaunchOffline(
+    payload: CycleLaunchRequest,
+    options: {
+      attempted?: boolean;
+      localContext?: OfflineCycleLaunch['localContext'];
+    } = {},
+  ): Promise<string> {
+    const launches = await this.getOfflineCycleLaunches();
+    const fingerprint = cycleLaunchFingerprint(payload);
+    const existing = launches.find(
+      (launch) => launch.payload.launch_uuid === payload.launch_uuid,
+    );
+    if (existing) {
+      if (existing.fingerprint !== fingerprint) {
+        throw new Error('cycle_launch_idempotency_conflict');
+      }
+      const attempted = existing.attempted || options.attempted === true;
+      await this.persist(
+        STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+        launches.map((launch) =>
+          launch.id === existing.id
+            ? {
+                ...launch,
+                attempted,
+                sync_status: attempted ? 'uncertain' : launch.sync_status,
+                localContext: options.localContext ?? launch.localContext,
+              }
+            : launch),
+      );
+      return existing.id;
+    }
+    const id = payload.launch_uuid;
+    await this.persist(STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES, [
+      ...launches,
+      {
+        id,
+        payload,
+        fingerprint,
+        timestamp: Date.now(),
+        sync_status: options.attempted ? 'uncertain' : 'pending',
+        attempted: options.attempted === true,
+        localContext: options.localContext,
+      },
+    ]);
+    return id;
+  }
+
+  async getOfflineCycleLaunches(): Promise<OfflineCycleLaunch[]> {
+    return this.readList<OfflineCycleLaunch>(
+      STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+      'Erreur lecture lancements de cycle offline',
+    );
+  }
+
+  async updatePendingCycleLaunch(
+    id: string,
+    payload: CycleLaunchRequest,
+    options: { localContext?: OfflineCycleLaunch['localContext'] } = {},
+  ): Promise<void> {
+    const launches = await this.getOfflineCycleLaunches();
+    const existing = launches.find((launch) => launch.id === id);
+    if (!existing) throw new Error('cycle_launch_not_found');
+    if (existing.attempted || existing.sync_status !== 'pending') {
+      throw new Error('cycle_launch_locked_after_attempt');
+    }
+    if (payload.launch_uuid !== existing.payload.launch_uuid) {
+      throw new Error('cycle_launch_uuid_immutable');
+    }
+    await this.persist(
+      STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+      launches.map((launch) =>
+        launch.id === id
+          ? {
+              ...launch,
+              payload,
+              fingerprint: cycleLaunchFingerprint(payload),
+              timestamp: Date.now(),
+              localContext: options.localContext ?? launch.localContext,
+            }
+          : launch),
+    );
+  }
+
+  async deletePendingCycleLaunch(id: string): Promise<void> {
+    const launches = await this.getOfflineCycleLaunches();
+    const existing = launches.find((launch) => launch.id === id);
+    if (!existing) throw new Error('cycle_launch_not_found');
+    if (existing.attempted || existing.sync_status !== 'pending') {
+      throw new Error('cycle_launch_locked_after_attempt');
+    }
+    await this.persist(
+      STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+      launches.filter((launch) => launch.id !== id),
+    );
+  }
+
+  async syncOfflineCycleLaunches(
+    options: { onlineVerified?: boolean } = {},
+  ): Promise<CycleLaunchSyncCounter> {
+    const storedLaunches = await this.getOfflineCycleLaunches();
+    const rejected = storedLaunches.filter(
+      (launch) => launch.sync_status === 'rejected',
+    ).length;
+    const launches = storedLaunches.filter(
+      (launch) =>
+        launch.sync_status !== 'synced' && launch.sync_status !== 'rejected',
+    );
+    if (launches.length === 0) {
+      return {
+        attempted: 0,
+        success: 0,
+        failed: 0,
+        skippedOffline: 0,
+        uncertain: 0,
+        rejected: 0,
+        skippedRejected: rejected,
+      };
+    }
+    if (!options.onlineVerified && !(await this.isOnline())) {
+      return {
+        attempted: 0,
+        success: 0,
+        failed: 0,
+        skippedOffline: launches.length,
+        uncertain: 0,
+        rejected: 0,
+        skippedRejected: rejected,
+      };
+    }
+    let success = 0;
+    let failed = 0;
+    let attempted = 0;
+    let uncertain = 0;
+    let rejectedCount = 0;
+    for (const launch of launches) {
+      const current = await this.getOfflineCycleLaunches();
+      await this.persist(
+        STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+        current.map((item) =>
+          item.id === launch.id
+            ? { ...item, attempted: true, sync_status: 'syncing' }
+            : item),
+      );
+      try {
+        attempted += 1;
+        const response = await aquacultureService.launchProductionCycle(
+          launch.payload,
+        );
+        const afterResponse = await this.getOfflineCycleLaunches();
+        await this.persist(
+          STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+          afterResponse.map((item) =>
+            item.id === launch.id
+              ? { ...item, sync_status: 'synced', response }
+              : item),
+        );
+        success += 1;
+      } catch (error) {
+        const classification = classifyCycleLaunchSyncError(error);
+        const afterError = await this.getOfflineCycleLaunches();
+        await this.persist(
+          STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES,
+          afterError.map((item) =>
+            item.id === launch.id
+              ? {
+                  ...item,
+                  sync_status: classification.status,
+                  response: classification.response ?? item.response,
+                  last_error_code: classification.errorCode,
+                  last_error_message: classification.errorMessage,
+                  last_http_status: classification.httpStatus,
+                }
+              : item),
+        );
+        logger.error(`Erreur sync lancement ${launch.id}:`, error);
+        if (classification.status === 'synced') {
+          success += 1;
+        } else {
+          failed += 1;
+          if (classification.status === 'rejected') rejectedCount += 1;
+          else uncertain += 1;
+        }
+      }
+    }
+    return {
+      attempted,
+      success,
+      failed,
+      skippedOffline: 0,
+      uncertain,
+      rejected: rejectedCount,
+      skippedRejected: rejected,
+    };
+  }
+
   async saveSanitaryLogOffline(cycleId: string, sanitaryData: SanitaryLogForm): Promise<string> {
     try {
       const logId = this.generateOfflineId();
@@ -860,6 +1208,14 @@ class OfflineService {
   }
 
   private async performSyncAllOfflineData(): Promise<OfflineSyncResult> {
+    const cycleLaunches = await this.getOfflineCycleLaunches();
+    const rejectedCycleLaunches = cycleLaunches.filter(
+      (launch) => launch.sync_status === 'rejected',
+    );
+    const pendingCycleLaunches = cycleLaunches.filter(
+      (launch) =>
+        launch.sync_status !== 'synced' && launch.sync_status !== 'rejected',
+    );
     const pendingFeedReferences = (await this.getOfflineFeedReferences()).filter((item) => !item.synced);
     const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).filter((item) => !item.synced);
     const pendingCycleLogs = await this.getPendingSyncLogs();
@@ -870,6 +1226,7 @@ class OfflineService {
     const pendingFinalHarvests = await this.getPendingFinalHarvests();
 
     if (
+      pendingCycleLaunches.length === 0 &&
       pendingFeedReferences.length === 0 && pendingStockDeclarations.length === 0 &&
       pendingCycleLogs.length === 0 &&
       pendingNewCycles.length === 0 &&
@@ -877,9 +1234,19 @@ class OfflineService {
       pendingCalibrationOperations.length === 0 && pendingFinalHarvests.length === 0
     ) {
       return {
+        attempted: 0,
         success: 0,
         failed: 0,
         details: {
+          cycleLaunches: {
+            attempted: 0,
+            success: 0,
+            failed: 0,
+            skippedOffline: 0,
+            uncertain: 0,
+            rejected: 0,
+            skippedRejected: rejectedCycleLaunches.length,
+          },
           cycleLogs: { success: 0, failed: 0 },
           feedReferences: { success: 0, failed: 0 },
           stockDeclarations: { success: 0, failed: 0 },
@@ -892,7 +1259,38 @@ class OfflineService {
       };
     }
 
-    if (pendingFeedReferences.length === 0 && pendingStockDeclarations.length === 0) {
+    if (!(await this.isOnline())) {
+      return {
+        attempted: 0,
+        success: 0,
+        failed: 0,
+        details: {
+          cycleLaunches: {
+            attempted: 0,
+            success: 0,
+            failed: 0,
+            skippedOffline: pendingCycleLaunches.length,
+            uncertain: 0,
+            rejected: 0,
+            skippedRejected: rejectedCycleLaunches.length,
+          },
+          cycleLogs: { success: 0, failed: 0 },
+          feedReferences: { success: 0, failed: 0 },
+          stockDeclarations: { success: 0, failed: 0 },
+          newCycles: { success: 0, failed: 0 },
+          sanitaryLogs: { success: 0, failed: 0 },
+          calibrationTanks: { success: 0, failed: 0 },
+          calibrationOperations: { success: 0, failed: 0 },
+          finalHarvests: { success: 0, failed: 0 },
+        },
+      };
+    }
+
+    if (
+      pendingCycleLaunches.length === 0 &&
+      pendingFeedReferences.length === 0 &&
+      pendingStockDeclarations.length === 0
+    ) {
       const bulkResult = await this.tryBulkSync(
         pendingCycleLogs,
         pendingNewCycles,
@@ -904,9 +1302,19 @@ class OfflineService {
     }
 
     const results: OfflineSyncResult = {
+      attempted: 0,
       success: 0,
       failed: 0,
       details: {
+        cycleLaunches: {
+          attempted: 0,
+          success: 0,
+          failed: 0,
+          skippedOffline: 0,
+          uncertain: 0,
+          rejected: 0,
+          skippedRejected: 0,
+        },
         cycleLogs: { success: 0, failed: 0 },
         feedReferences: { success: 0, failed: 0 },
         stockDeclarations: { success: 0, failed: 0 },
@@ -918,6 +1326,10 @@ class OfflineService {
       },
     };
 
+    results.details.cycleLaunches = await this.syncOfflineCycleLaunches({
+      onlineVerified: true,
+    });
+    results.attempted = results.details.cycleLaunches.attempted;
     results.details.newCycles = await this.syncOfflineNewCycles();
     results.details.feedReferences = await this.syncOfflineFeedReferences();
     results.details.stockDeclarations = await this.syncOfflineStockDeclarations();
@@ -929,6 +1341,7 @@ class OfflineService {
     results.details.finalHarvests = businessOperations.finalHarvests;
 
     results.success =
+      (results.details.cycleLaunches?.success ?? 0) +
       (results.details.feedReferences?.success ?? 0) +
       (results.details.stockDeclarations?.success ?? 0) +
       results.details.cycleLogs.success +
@@ -938,6 +1351,7 @@ class OfflineService {
       (results.details.calibrationOperations?.success ?? 0) +
       (results.details.finalHarvests?.success ?? 0);
     results.failed =
+      (results.details.cycleLaunches?.failed ?? 0) +
       (results.details.feedReferences?.failed ?? 0) +
       (results.details.stockDeclarations?.failed ?? 0) +
       results.details.cycleLogs.failed +
@@ -1053,6 +1467,7 @@ class OfflineService {
           (item) => acceptedFinalHarvestUuids.has(item.harvestData.client_uuid),
         ).length;
         return {
+          attempted: 0,
           success: cycleSuccess + cycleLogSuccess + sanitaryLogSuccess + tankSuccess +
             calibrationSuccess + finalHarvestSuccess,
           failed: cycleFailures + cycleLogFailures + sanitaryLogFailures + tankFailures +
@@ -1107,6 +1522,7 @@ class OfflineService {
         calibrationTanksSuccess + calibrationOperationsSuccess + finalHarvestsSuccess;
 
       return {
+        attempted: 0,
         success,
         failed: 0,
         details: {
@@ -1368,6 +1784,10 @@ class OfflineService {
   }
 
   async hasAnyPendingSync(): Promise<boolean> {
+    const pendingCycleLaunches = (await this.getOfflineCycleLaunches()).some(
+      (launch) =>
+        launch.sync_status !== 'synced' && launch.sync_status !== 'rejected',
+    );
     const pendingFeedReferences = (await this.getOfflineFeedReferences()).some((item) => !item.synced);
     const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).some((item) => !item.synced);
     const pendingCycleLogs = await this.hasPendingSync();
@@ -1377,11 +1797,15 @@ class OfflineService {
     const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).some((item) => !item.synced);
     const pendingFinalHarvests = (await this.getOfflineFinalHarvests()).some((item) => !item.synced);
 
-    return pendingFeedReferences || pendingStockDeclarations || pendingCycleLogs || pendingNewCycles || pendingSanitaryLogs || pendingCalibrationTanks ||
+    return pendingCycleLaunches || pendingFeedReferences || pendingStockDeclarations || pendingCycleLogs || pendingNewCycles || pendingSanitaryLogs || pendingCalibrationTanks ||
       pendingCalibrationOperations || pendingFinalHarvests;
   }
 
   async getTotalPendingCount(): Promise<number> {
+    const pendingCycleLaunches = (await this.getOfflineCycleLaunches()).filter(
+      (launch) =>
+        launch.sync_status !== 'synced' && launch.sync_status !== 'rejected',
+    ).length;
     const pendingFeedReferences = (await this.getOfflineFeedReferences()).filter((item) => !item.synced).length;
     const pendingStockDeclarations = (await this.getOfflineStockDeclarations()).filter((item) => !item.synced).length;
     const pendingCycleLogs = await this.getPendingCount();
@@ -1391,7 +1815,7 @@ class OfflineService {
     const pendingCalibrationOperations = (await this.getOfflineCalibrationOperations()).filter((item) => !item.synced).length;
     const pendingFinalHarvests = (await this.getOfflineFinalHarvests()).filter((item) => !item.synced).length;
 
-    return pendingFeedReferences + pendingStockDeclarations + pendingCycleLogs + pendingNewCycles + pendingSanitaryLogs + pendingCalibrationTanks +
+    return pendingCycleLaunches + pendingFeedReferences + pendingStockDeclarations + pendingCycleLogs + pendingNewCycles + pendingSanitaryLogs + pendingCalibrationTanks +
       pendingCalibrationOperations + pendingFinalHarvests;
   }
 
@@ -1400,6 +1824,7 @@ class OfflineService {
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_STOCK_DECLARATIONS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CYCLE_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_NEW_CYCLES);
+    await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CYCLE_LAUNCHES);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_SANITARY_LOGS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CALIBRATION_TANKS);
     await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CALIBRATION_OPERATIONS);

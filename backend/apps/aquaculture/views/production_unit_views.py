@@ -41,6 +41,7 @@ from ..services import (
 from ..services.calibration_service import CalibrationService
 from ..services.integrity_error_service import translate_production_unit_integrity_error
 from ..services.production_unit_service import ProductionUnitLifecycleService
+from .production_unit_error_contract import ProductionUnitErrorContractMixin
 
 
 def _translate_production_unit_validation_error(exc):
@@ -55,7 +56,10 @@ def _translate_production_unit_validation_error(exc):
     return exc.message_dict or exc.messages
 
 
-class ProductionUnitViewSet(viewsets.ModelViewSet):
+class ProductionUnitViewSet(
+    ProductionUnitErrorContractMixin,
+    viewsets.ModelViewSet,
+):
     """CRUD des unités de production d'une ferme."""
 
     serializer_class = ProductionUnitSerializer

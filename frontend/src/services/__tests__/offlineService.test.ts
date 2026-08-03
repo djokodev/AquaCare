@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { offlineService } from '../offlineService';
+import {
+  classifyCycleLaunchSyncError,
+  offlineService,
+} from '../offlineService';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { getBusinessIsoDate } from '@/utils/businessDate';
 
@@ -16,6 +19,7 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
     synchronize: jest.fn(),
     createFarmFeedReference: jest.fn(),
     declareCycleStoreManualStock: jest.fn(),
+    launchProductionCycle: jest.fn(),
   },
 }));
 
@@ -35,10 +39,203 @@ describe('services/offlineService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await AsyncStorage.clear();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true } as any);
   });
 
   afterEach(() => {
     global.fetch = realFetch;
+  });
+
+  const cycleLaunchPayload = {
+    launch_uuid: '11111111-1111-4111-8111-111111111111',
+    launch_kind: 'additional_cycle',
+    cycle: {
+      onboarding_mode: 'ongoing',
+      species: 'clarias',
+      start_date: '2026-06-01',
+      initial_count: 2000,
+      initial_average_weight: null,
+      planned_cycle_duration_days: 150,
+      expected_survival_rate_pct: 95,
+      fingerlings_cost_fcfa: 0,
+      other_operational_costs_fcfa: 0,
+      created_offline: true,
+    },
+    tracking_baseline: {
+      tracking_start_date: '2026-07-20',
+      fish_count: 1850,
+      average_weight_g: '75.00',
+      biomass_kg: null,
+    },
+    production_units: [],
+    allocations: [],
+    initial_feed_stocks: [],
+  } as any;
+
+  it('persists and synchronizes the complete transactional launch unchanged', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    mockAquaculture.launchProductionCycle.mockResolvedValue({
+      launchUuid: cycleLaunchPayload.launch_uuid,
+      productionCycle: { id: 'cycle-server-1' },
+    } as any);
+
+    const result = await offlineService.syncOfflineCycleLaunches();
+    const [saved] = await offlineService.getOfflineCycleLaunches();
+
+    expect(result).toEqual({
+      attempted: 1,
+      success: 1,
+      failed: 0,
+      skippedOffline: 0,
+      uncertain: 0,
+      rejected: 0,
+      skippedRejected: 0,
+    });
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      cycleLaunchPayload,
+    );
+    expect(saved.attempted).toBe(true);
+    expect(saved.sync_status).toBe('synced');
+    expect(saved.response?.productionCycle.id).toBe('cycle-server-1');
+  });
+
+  it('locks content after an uncertain attempt and retries the exact payload', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, {
+      attempted: true,
+    });
+    await expect(offlineService.updatePendingCycleLaunch(
+      cycleLaunchPayload.launch_uuid,
+      {
+        ...cycleLaunchPayload,
+        cycle: { ...cycleLaunchPayload.cycle, initial_count: 1999 },
+      },
+    )).rejects.toThrow('cycle_launch_locked_after_attempt');
+
+    mockAquaculture.launchProductionCycle.mockResolvedValue({} as any);
+    await offlineService.syncOfflineCycleLaunches();
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      cycleLaunchPayload,
+    );
+  });
+
+  it('allows editing before an attempt and deleting a pending launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    const edited = {
+      ...cycleLaunchPayload,
+      cycle: { ...cycleLaunchPayload.cycle, cycle_name: 'Cycle modifié' },
+    };
+    await offlineService.updatePendingCycleLaunch(
+      cycleLaunchPayload.launch_uuid,
+      edited,
+    );
+    expect((await offlineService.getOfflineCycleLaunches())[0].payload).toEqual(
+      edited,
+    );
+
+    await offlineService.deletePendingCycleLaunch(
+      cycleLaunchPayload.launch_uuid,
+    );
+    expect(await offlineService.getOfflineCycleLaunches()).toEqual([]);
+  });
+
+  it('keeps an unattempted launch editable when synchronization is offline', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+
+    const result = await offlineService.syncOfflineCycleLaunches();
+    const [saved] = await offlineService.getOfflineCycleLaunches();
+
+    expect(result).toEqual({
+      attempted: 0,
+      success: 0,
+      failed: 0,
+      skippedOffline: 1,
+      uncertain: 0,
+      rejected: 0,
+      skippedRejected: 0,
+    });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+    expect(saved.attempted).toBe(false);
+    expect(saved.sync_status).toBe('pending');
+  });
+
+  it('locks the exact payload after an online request fails', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    mockAquaculture.launchProductionCycle.mockRejectedValueOnce(
+      new Error('network lost after send'),
+    );
+
+    const result = await offlineService.syncOfflineCycleLaunches();
+    const [saved] = await offlineService.getOfflineCycleLaunches();
+
+    expect(result).toEqual({
+      attempted: 1,
+      success: 0,
+      failed: 1,
+      skippedOffline: 0,
+      uncertain: 1,
+      rejected: 0,
+      skippedRejected: 0,
+    });
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      cycleLaunchPayload,
+    );
+    expect(saved.attempted).toBe(true);
+    expect(saved.sync_status).toBe('uncertain');
+  });
+
+  it('keeps dashboard-wide silent sync read-only while connectivity is known offline', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+
+    const result = await offlineService.syncAllOfflineData();
+    const [saved] = await offlineService.getOfflineCycleLaunches();
+
+    expect(result).toMatchObject({
+      attempted: 0,
+      success: 0,
+      failed: 0,
+      details: {
+        cycleLaunches: {
+          attempted: 0,
+          success: 0,
+          failed: 0,
+          skippedOffline: 1,
+        },
+      },
+    });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+    expect(saved).toMatchObject({
+      attempted: false,
+      sync_status: 'pending',
+    });
+  });
+
+  it('stores local context outside the server payload fingerprint', async () => {
+    const localContext = {
+      productionUnits: [{ id: 'unit-1', name: 'Bassin local' }],
+    } as any;
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, {
+      localContext,
+    });
+    const before = (await offlineService.getOfflineCycleLaunches())[0];
+
+    await offlineService.updatePendingCycleLaunch(
+      before.id,
+      cycleLaunchPayload,
+      {
+        localContext: {
+          productionUnits: [{ id: 'unit-1', name: 'Bassin renommé' }],
+        } as any,
+      },
+    );
+    const after = (await offlineService.getOfflineCycleLaunches())[0];
+
+    expect(after.fingerprint).toBe(before.fingerprint);
+    expect(after.payload).toEqual(cycleLaunchPayload);
+    expect(after.localContext?.productionUnits?.[0].name).toBe(
+      'Bassin renommé',
+    );
   });
 
   it('sauvegarde et relit un cycle log offline avec date par defaut', async () => {
@@ -1010,5 +1207,175 @@ describe('services/offlineService', () => {
 
     global.fetch = jest.fn().mockRejectedValueOnce(new Error('offline'));
     await expect(offlineService.isOnline()).resolves.toBe(false);
+  });
+
+  it('saveCycleLaunchOffline with default options stores pending non-attempted launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    const launches = await offlineService.getOfflineCycleLaunches();
+    expect(launches).toHaveLength(1);
+    expect(launches[0].sync_status).toBe('pending');
+    expect(launches[0].attempted).toBe(false);
+  });
+
+  it('saveCycleLaunchOffline with attempted:true stores uncertain attempted launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, { attempted: true });
+    const launches = await offlineService.getOfflineCycleLaunches();
+    expect(launches).toHaveLength(1);
+    expect(launches[0].sync_status).toBe('uncertain');
+    expect(launches[0].attempted).toBe(true);
+  });
+
+  it('keeps legacy failed launches readable and retryable unchanged', async () => {
+    await AsyncStorage.setItem(
+      'aquacare_offline_cycle_launches_v1',
+      JSON.stringify([{
+        id: cycleLaunchPayload.launch_uuid,
+        payload: cycleLaunchPayload,
+        fingerprint: JSON.stringify(cycleLaunchPayload),
+        timestamp: Date.now(),
+        sync_status: 'failed',
+        attempted: true,
+      }]),
+    );
+    mockAquaculture.launchProductionCycle.mockResolvedValue({
+      launchUuid: cycleLaunchPayload.launch_uuid,
+      productionCycle: { id: 'cycle-server-legacy' },
+    } as any);
+
+    const [legacy] = await offlineService.getOfflineCycleLaunches();
+    expect(legacy.sync_status).toBe('failed');
+    await offlineService.syncOfflineCycleLaunches({ onlineVerified: true });
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      cycleLaunchPayload,
+    );
+    expect((await offlineService.getOfflineCycleLaunches())[0].sync_status).toBe(
+      'synced',
+    );
+  });
+
+  it('updatePendingCycleLaunch preserves same launch_uuid', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    const updatedPayload = {
+      ...cycleLaunchPayload,
+      cycle: {
+        ...cycleLaunchPayload.cycle,
+        cycle_name: 'Updated Name',
+      },
+    };
+    await offlineService.updatePendingCycleLaunch(
+      cycleLaunchPayload.launch_uuid,
+      updatedPayload,
+    );
+    const launches = await offlineService.getOfflineCycleLaunches();
+    expect(launches).toHaveLength(1);
+    expect(launches[0].payload.launch_uuid).toBe(cycleLaunchPayload.launch_uuid);
+    expect(launches[0].payload.cycle.cycle_name).toBe('Updated Name');
+  });
+
+  it('updatePendingCycleLaunch rejects after attempted launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, { attempted: true });
+    await expect(
+      offlineService.updatePendingCycleLaunch(
+        cycleLaunchPayload.launch_uuid,
+        cycleLaunchPayload,
+      ),
+    ).rejects.toThrow('cycle_launch_locked_after_attempt');
+  });
+
+  it('refuses deleting an attempted launch and reports an unknown id', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload, {
+      attempted: true,
+    });
+    await expect(
+      offlineService.deletePendingCycleLaunch(cycleLaunchPayload.launch_uuid),
+    ).rejects.toThrow('cycle_launch_locked_after_attempt');
+    await expect(
+      offlineService.deletePendingCycleLaunch('missing-launch'),
+    ).rejects.toThrow('cycle_launch_not_found');
+  });
+
+  it.each([
+    [400, 'validation_error'],
+    [404, 'not_found'],
+    [409, 'cycle_launch_idempotency_conflict'],
+  ])('classifies HTTP %s as a rejected launch', (status, code) => {
+    expect(classifyCycleLaunchSyncError({
+      response: { status, data: { code, detail: 'known rejection' } },
+    })).toMatchObject({
+      status: 'rejected',
+      errorCode: code,
+      httpStatus: status,
+    });
+  });
+
+  it('classifies no-response failures as uncertain', () => {
+    expect(classifyCycleLaunchSyncError({
+      code: 'ECONNABORTED',
+      message: 'timeout',
+    })).toMatchObject({
+      status: 'uncertain',
+      errorCode: 'ECONNABORTED',
+    });
+  });
+
+  it('reconciles a 409 carrying the existing launch response', () => {
+    const response = {
+      launchUuid: cycleLaunchPayload.launch_uuid,
+      productionCycle: { id: 'cycle-server-1' },
+    } as any;
+    expect(classifyCycleLaunchSyncError({
+      response: { status: 409, data: { response } },
+    })).toEqual({
+      status: 'synced',
+      response,
+      httpStatus: 409,
+    });
+  });
+
+  it('reconciles a raw API 409 response before service normalization', () => {
+    expect(classifyCycleLaunchSyncError({
+      response: {
+        status: 409,
+        data: {
+          result: {
+            launch_uuid: cycleLaunchPayload.launch_uuid,
+            idempotent_replay: true,
+            production_cycle: { id: 'cycle-server-1' },
+          },
+        },
+      },
+    })).toMatchObject({
+      status: 'synced',
+      response: {
+        launchUuid: cycleLaunchPayload.launch_uuid,
+        idempotentReplay: true,
+        productionCycle: { id: 'cycle-server-1' },
+      },
+    });
+  });
+
+  it('does not silently retry a rejected launch', async () => {
+    await offlineService.saveCycleLaunchOffline(cycleLaunchPayload);
+    mockAquaculture.launchProductionCycle.mockRejectedValueOnce({
+      response: {
+        status: 400,
+        data: { code: 'invalid_launch', detail: 'invalid launch' },
+      },
+    });
+    const rejected = await offlineService.syncOfflineCycleLaunches();
+    expect(rejected).toMatchObject({ rejected: 1, uncertain: 0 });
+
+    jest.clearAllMocks();
+    const replay = await offlineService.syncOfflineCycleLaunches({
+      onlineVerified: true,
+    });
+    expect(replay).toMatchObject({ skippedRejected: 1 });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+
+    const globalReplay = await offlineService.syncAllOfflineData();
+    expect(globalReplay.details.cycleLaunches).toMatchObject({
+      skippedRejected: 1,
+    });
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
   });
 });

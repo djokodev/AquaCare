@@ -1,5 +1,9 @@
 import { aquacultureService } from "../aquacultureService";
-import { launchFirstCycle } from "../firstCycleLaunchService";
+import {
+  buildFirstCycleLaunchRequest,
+  buildFirstCycleLaunchRequestFromForm,
+  launchFirstCycle,
+} from "../firstCycleLaunchService";
 
 jest.mock("../aquacultureService", () => ({
   aquacultureService: {
@@ -128,6 +132,42 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
     expect(
       mockAquaculture.launchProductionCycle.mock.calls[1][0].launch_uuid,
     ).toBe(formData.launchRequestId);
+  });
+
+  it("lance un setup initial ongoing depuis la baseline sans poids historique inventé", async () => {
+    const ongoingForm = {
+      ...formData,
+      onboardingMode: "ongoing",
+      historicalInitialCount: "2200",
+      historicalInitialWeight: "",
+      trackingStartDate: "2026-06-20",
+      trackingStartAverageWeight: "75.00",
+      trackingStartBiomass: "",
+      fingerlingsCount: "2100",
+    };
+
+    await launchFirstCycle({
+      formData: ongoingForm,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+
+    expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launch_kind: "initial_setup",
+        cycle: expect.objectContaining({
+          onboarding_mode: "ongoing",
+          initial_count: 2200,
+          initial_average_weight: null,
+        }),
+        tracking_baseline: {
+          tracking_start_date: "2026-06-20",
+          fish_count: 2100,
+          average_weight_g: "75.00",
+          biomass_kg: null,
+        },
+      }),
+    );
   });
 
   it("transmet le lancement de trois bacs de 200 m³ totalisant 180 000 alevins", async () => {
@@ -312,5 +352,153 @@ describe("features/aquaculture/services/firstCycleLaunchService", () => {
       }),
     ).rejects.toThrow("conflict");
     expect(mockAquaculture.launchProductionCycle).toHaveBeenCalledTimes(1);
+  });
+
+  it("utilise le tracking_start_date du formulaire pour un cycle ongoing, pas la simulation", () => {
+    const ongoingForm = {
+      ...formData,
+      onboardingMode: "ongoing" as const,
+      startDate: "2026-06-01",
+      trackingStartDate: "2026-06-15",
+      historicalInitialCount: "2000",
+      historicalInitialWeight: "250",
+      fingerlingsCount: "200",
+      productionUnitAllocations: [
+        { production_unit_local_id: "unit-1", fish_count: "200" },
+      ],
+      trackingStartAverageWeight: "300",
+    };
+    const request = buildFirstCycleLaunchRequest({
+      formData: ongoingForm,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+    expect(request.cycle.start_date).toBe("2026-06-01");
+    expect(request.cycle.initial_count).toBe(2000);
+    expect(request.tracking_baseline?.tracking_start_date).toBe("2026-06-15");
+    expect(request.tracking_baseline?.fish_count).toBe(200);
+  });
+
+  it("ne transmet pas les valeurs de simulation dans le payload ongoing", () => {
+    const ongoingForm = {
+      ...formData,
+      onboardingMode: "ongoing" as const,
+      startDate: "2026-07-01",
+      trackingStartDate: "2026-07-10",
+      historicalInitialCount: "500",
+      historicalInitialWeight: "100",
+      trackingStartAverageWeight: "150",
+    };
+    const request = buildFirstCycleLaunchRequest({
+      formData: ongoingForm,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+    expect(request.cycle.start_date).toBe("2026-07-01");
+    expect(request.cycle.initial_count).toBe(500);
+
+    simulationResult.cycles_breakdown[0].start_date_estimate = "2099-01-01";
+    simulationResult.cycles_breakdown[0].initial_fish_count = 99999;
+    const requestAfterSimChange = buildFirstCycleLaunchRequest({
+      formData: ongoingForm,
+      simulationResult,
+      defaultPondIdentifier: "Bassin principal",
+    });
+    expect(requestAfterSimChange.cycle.start_date).toBe("2026-07-01");
+    expect(requestAfterSimChange.cycle.initial_count).toBe(500);
+  });
+
+  it("construit un lancement ongoing sans résultat ni breakdown de simulation", () => {
+    const request = buildFirstCycleLaunchRequestFromForm({
+      formData: {
+        ...formData,
+        onboardingMode: "ongoing",
+        startDate: "2026-06-01",
+        historicalInitialCount: "2200",
+        historicalInitialWeight: "",
+        trackingStartDate: "2026-07-20",
+        trackingStartAverageWeight: "75",
+        fingerlingsCount: "2100",
+      },
+    });
+
+    expect(request).toMatchObject({
+      launch_uuid: formData.launchRequestId,
+      cycle: {
+        onboarding_mode: "ongoing",
+        start_date: "2026-06-01",
+        initial_count: 2200,
+        initial_average_weight: null,
+      },
+      tracking_baseline: {
+        tracking_start_date: "2026-07-20",
+        fish_count: 2100,
+        average_weight_g: "75",
+      },
+    });
+  });
+
+  it.each([
+    ["startDate", "", "ongoingCycleHistoricalStartRequired"],
+    ["trackingStartDate", "", "ongoingCycleTrackingDateRequired"],
+  ])(
+    "refuse un lancement ongoing quand %s est vide",
+    (field, value, translationKey) => {
+      expect(() =>
+        buildFirstCycleLaunchRequestFromForm({
+          formData: {
+            ...formData,
+            onboardingMode: "ongoing",
+            historicalInitialCount: "2200",
+            trackingStartDate: "2026-07-20",
+            trackingStartAverageWeight: "75",
+            [field]: value,
+          },
+        }),
+      ).toThrow(expect.objectContaining({ translationKey }));
+    },
+  );
+
+  it.each(["2026-10-28", "2026-10-29"])(
+    "refuse une baseline %s égale ou postérieure à la récolte",
+    (trackingStartDate) => {
+      expect(() =>
+        buildFirstCycleLaunchRequestFromForm({
+          formData: {
+            ...formData,
+            onboardingMode: "ongoing",
+            startDate: "2026-06-01",
+            cycleDuration: "150",
+            historicalInitialCount: "2200",
+            trackingStartDate,
+            trackingStartAverageWeight: "75",
+          },
+        }),
+      ).toThrow(expect.objectContaining({
+        translationKey: "ongoingCyclePlannedHarvestElapsed",
+      }));
+      expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuse de construire un lancement dont la récolte est déjà passée", () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-29T12:00:00Z"));
+    expect(() =>
+      buildFirstCycleLaunchRequestFromForm({
+        formData: {
+          ...formData,
+          onboardingMode: "ongoing",
+          startDate: "2026-01-01",
+          cycleDuration: "150",
+          historicalInitialCount: "2200",
+          trackingStartDate: "2026-05-29",
+          trackingStartAverageWeight: "75",
+        },
+      }),
+    ).toThrow(expect.objectContaining({
+      translationKey: "ongoingCyclePlannedHarvestElapsed",
+    }));
+    expect(mockAquaculture.launchProductionCycle).not.toHaveBeenCalled();
+    jest.useRealTimers();
   });
 });

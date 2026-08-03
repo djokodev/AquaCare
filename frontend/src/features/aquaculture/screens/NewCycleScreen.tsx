@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from "react";
-import { Alert, View } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { Alert, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StackNavigationProp } from "@react-navigation/stack";
+import { RouteProp } from "@react-navigation/native";
 import { useDispatch } from "react-redux";
-import { getBusinessIsoDate } from "@/utils/businessDate";
+import {
+  getBusinessIsoDate,
+  getOngoingCycleSchedule,
+  inclusiveDaysBetween,
+} from "@/utils/businessDate";
 
 import { useAuth } from "@/hooks/useAuth";
 import { AppDispatch } from "@/store/store";
@@ -47,40 +52,84 @@ import {
   buildSimulatorPrefill,
 } from "@/features/aquaculture/utils/newCycleForm";
 import { runSilentOfflineSync } from "@/features/aquaculture/services/aquacultureWorkflowService";
+import { offlineService } from "@/services/offlineService";
 import {
   getProductionUnitCapacity,
   getProductionUnitDensityUnit,
   getProductionUnitDisplayDimension,
 } from "@/features/aquaculture/utils/productionUnits";
 import { createClientUuid } from "@/utils/clientUuid";
-import type { CycleLaunchCalibrationUnitInput, ProductionUnit } from "@/types/aquaculture";
+import { hydrateNewCycleFormFromLaunch } from "@/features/aquaculture/utils/launchHydration";
+import { cycleLaunchReferenceCache } from "@/features/aquaculture/services/cycleLaunchReferenceCache";
+import {
+  buildPendingLaunchLocalContext,
+  isFeedReferenceSelectable,
+  resolveOpeningStockFeedReference,
+  validateOpeningStockFeedReferences,
+} from "@/features/aquaculture/services/cycleLaunchLocalContext";
+import type {
+  OpeningStockReferenceValidationReason,
+} from "@/features/aquaculture/services/cycleLaunchLocalContext";
+import { TRANSACTIONAL_LAUNCH_ERROR_KEYS } from "@/features/aquaculture/utils/aquacultureErrorPresenter";
+import type {
+  CycleLaunchCalibrationUnitInput,
+  CycleLaunchOpeningStockInput,
+  FarmFeedReference,
+  ProductionUnit,
+} from "@/types/aquaculture";
+import {
+  getOfflineCatalogPelletSizes,
+  normalizePelletSizeOptions,
+} from "@/features/aquaculture/utils/pelletSizeOptions";
 
 const SPECIES_OPTIONS = [
   { value: "clarias", labelKey: "clarias", durationDays: 120 },
   { value: "tilapia", labelKey: "tilapia", durationDays: 180 },
 ] as const;
 
-const TRANSACTIONAL_LAUNCH_ERROR_KEYS: Record<string, string> = {
-  cycle_launch_unit_already_allocated: "cycleLaunchUnitAlreadyAllocated",
-  cycle_launch_unit_capacity_exceeded: "cycleLaunchUnitCapacityExceeded",
-  cycle_launch_unit_capacity_unavailable: "cycleLaunchUnitCapacityUnavailable",
+const OPENING_STOCK_REFERENCE_ERROR_KEYS: Record<
+  OpeningStockReferenceValidationReason,
+  string
+> = {
+  reference_not_found: "cycleLaunchFeedReferenceNotFound",
+  species_mismatch: "cycleLaunchFeedReferenceSpeciesMismatch",
+  farm_mismatch: "cycleLaunchFeedReferenceFarmMismatch",
+  invalid_identity: "openingStockInvalid",
 };
+
+class FarmContextChangedError extends Error {
+  constructor() {
+    super("Farm context changed during cycle launch");
+    this.name = "FarmContextChangedError";
+  }
+}
 
 type NewCycleScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
   "NewCycle"
 >;
+type NewCycleScreenRouteProp = RouteProp<RootStackParamList, "NewCycle">;
 
 interface NewCycleScreenProps {
   navigation: NewCycleScreenNavigationProp;
+  route?: NewCycleScreenRouteProp;
 }
 
-export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
+export default function NewCycleScreen({ navigation, route }: NewCycleScreenProps) {
   const { t } = useTranslation();
   const { farmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
+  const activeFarmIdRef = useRef<string | null>(farmProfile?.id ?? null);
+  activeFarmIdRef.current = farmProfile?.id ?? null;
 
-  const [formData, setFormData] = useState<NewCycleData>({
+  const offlineLaunch = route?.params?.offlineLaunch;
+  const offlineLaunchContext = route?.params?.offlineLaunchContext;
+  const editingOfflineLaunchId = route?.params?.editingOfflineLaunchId;
+  const [formData, setFormData] = useState<NewCycleData>(() =>
+    offlineLaunch
+      ? hydrateNewCycleFormFromLaunch(offlineLaunch)
+      : ({
+    onboarding_mode: "new",
     cycle_name: "",
     species: "",
     pond_identifier: "",
@@ -96,19 +145,67 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     planned_selling_price_per_kg_fcfa: "",
     fingerlings_cost_fcfa: "0",
     other_operational_costs_fcfa: "0",
-  });
+    tracking_start_date: getBusinessIsoDate(),
+    tracking_start_count: "",
+    tracking_start_average_weight: "",
+    tracking_start_biomass: "",
+    initial_feed_stocks: [],
+        } satisfies NewCycleData)
+  );
   const [saving, setSaving] = useState(false);
-  const [availableUnits, setAvailableUnits] = useState<ProductionUnit[]>([]);
-  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [availableUnits, setAvailableUnits] = useState<ProductionUnit[]>(
+    () => offlineLaunchContext?.productionUnits ?? [],
+  );
+  const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>(() =>
+    (offlineLaunch?.production_units ?? [])
+      .map((unit) => unit.production_unit_id)
+      .filter((id): id is string => Boolean(id)),
+  );
   const [allocationsByUnitId, setAllocationsByUnitId] = useState<
     Record<string, string>
-  >({});
+  >(() => {
+    if (!offlineLaunch) return {};
+    const unitIdByLocalId = new Map(
+      offlineLaunch.production_units
+        .filter((unit) => unit.production_unit_id)
+        .map((unit) => [unit.local_id, unit.production_unit_id as string]),
+    );
+    return Object.fromEntries(
+      offlineLaunch.allocations.flatMap((allocation) => {
+        const unitId = unitIdByLocalId.get(allocation.production_unit_local_id);
+        return unitId ? [[unitId, String(allocation.fish_count)]] : [];
+      }),
+    );
+  });
   const [loadingUnits, setLoadingUnits] = useState(true);
+  const [loadedFarmProfileId, setLoadedFarmProfileId] = useState<string | null>(
+    null,
+  );
   const [unitsLoadError, setUnitsLoadError] = useState(false);
-  const [launchRequestId] = useState(() => createClientUuid());
-  const [calibrationUnits, setCalibrationUnits] = useState<CycleLaunchCalibrationUnitInput[]>([]);
+  const [offlineReferencesEmpty, setOfflineReferencesEmpty] = useState(false);
+  const [unavailablePendingUnitIds, setUnavailablePendingUnitIds] = useState<
+    string[]
+  >([]);
+  const [launchRequestId] = useState(
+    () => offlineLaunch?.launch_uuid ?? createClientUuid(),
+  );
+  const [calibrationUnits, setCalibrationUnits] = useState<CycleLaunchCalibrationUnitInput[]>(
+    () => offlineLaunch?.calibration_units ?? [],
+  );
   const [calibrationName, setCalibrationName] = useState("");
   const [calibrationVolume, setCalibrationVolume] = useState("");
+  const [feedReferences, setFeedReferences] = useState<FarmFeedReference[]>([]);
+  const [
+    sessionFeedReferenceSnapshots,
+    setSessionFeedReferenceSnapshots,
+  ] = useState<FarmFeedReference[]>([]);
+  const [stockReferenceMode, setStockReferenceMode] = useState<"existing" | "external">("external");
+  const [stockReferenceId, setStockReferenceId] = useState("");
+  const [stockName, setStockName] = useState("");
+  const [stockPelletSize, setStockPelletSize] = useState("");
+  const [stockQuantity, setStockQuantity] = useState("");
+  const [stockCost, setStockCost] = useState("");
+  const [stockNote, setStockNote] = useState("");
 
   const handleGoBack = () => {
     if (navigation.canGoBack?.()) {
@@ -124,6 +221,15 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
 
   const getSelectedSpecies = () =>
     SPECIES_OPTIONS.find((option) => option.value === formData.species);
+
+  const stockPelletSizeOptions = formData.species
+    ? normalizePelletSizeOptions([
+        ...getOfflineCatalogPelletSizes(formData.species),
+        ...feedReferences
+          .filter((reference) => reference.species === formData.species)
+          .map((reference) => reference.pellet_size_mm),
+      ])
+    : [];
 
   const estimateInitialBiomass = () => {
     const count = parseFormNumber(formData.initial_count);
@@ -141,6 +247,19 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
 
   const applyEconomicDefaults = (species: "clarias" | "tilapia") => {
     const defaults = ECONOMIC_DEFAULTS[species];
+    setStockReferenceId((currentId) =>
+      feedReferences.some(
+        (reference) =>
+          reference.id === currentId
+          && isFeedReferenceSelectable({
+            reference,
+            species,
+            farmProfileId: farmProfile?.id,
+          }),
+      )
+        ? currentId
+        : "",
+    );
     setFormData((prev) => ({
       ...prev,
       species,
@@ -175,31 +294,216 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
   }, [formData.species, formData.pond_identifier]);
 
   useEffect(() => {
+    setStockReferenceId("");
+  }, [farmProfile?.id]);
+
+  useEffect(() => {
+    setStockReferenceId((currentId) =>
+      feedReferences.some(
+        (reference) =>
+          reference.id === currentId
+          && isFeedReferenceSelectable({
+            reference,
+            species: formData.species,
+            farmProfileId: farmProfile?.id,
+          }),
+      )
+        ? currentId
+        : "",
+    );
+  }, [farmProfile?.id, feedReferences, formData.species]);
+
+  useEffect(() => {
+    let active = true;
+    const isCurrentBootstrap = (): boolean => active;
+    let dashboardRequest: { abort?: () => void } | undefined;
+
     const bootstrap = async () => {
-      await runSilentOfflineSync();
-      dispatch(fetchDashboardData({ lightweight: true }));
-      try {
-        setLoadingUnits(true);
-        setAvailableUnits(
-          await aquacultureService.getProductionUnits({ status: "active", purpose: "production" }),
+      const farmProfileId = farmProfile?.id;
+      const historicalPendingUnits = (
+        offlineLaunchContext?.productionUnits ?? []
+      ).filter((unit) => selectedUnitIds.includes(unit.id));
+      setLoadedFarmProfileId(null);
+      setLoadingUnits(true);
+      setStockReferenceId("");
+      setFeedReferences([]);
+      setAvailableUnits(
+        editingOfflineLaunchId ? historicalPendingUnits : [],
+      );
+      setUnavailablePendingUnitIds(
+        editingOfflineLaunchId
+          ? historicalPendingUnits.map((unit) => unit.id)
+          : [],
+      );
+      setUnitsLoadError(false);
+      setOfflineReferencesEmpty(false);
+      if (!editingOfflineLaunchId) {
+        setSelectedUnitIds([]);
+        setAllocationsByUnitId({});
+      }
+      if (!editingOfflineLaunchId) {
+        await runSilentOfflineSync();
+        if (!isCurrentBootstrap()) return;
+      }
+      dashboardRequest = dispatch(fetchDashboardData({
+        lightweight: true,
+        farmProfileId,
+      }));
+      const cached = farmProfileId
+        ? await cycleLaunchReferenceCache.load(farmProfileId)
+        : null;
+      if (!isCurrentBootstrap()) return;
+      const pendingUnitSnapshots = (
+        offlineLaunchContext?.productionUnits ?? []
+      ).filter((unit) => selectedUnitIds.includes(unit.id));
+      const pendingFeedSnapshots = (
+        offlineLaunchContext?.feedReferences ?? []
+      ).filter(
+        (reference) =>
+          !farmProfileId || reference.farm_profile === farmProfileId,
+      );
+      if (cached) {
+        setAvailableUnits([
+          ...cached.productionUnits,
+          ...pendingUnitSnapshots.filter(
+            (unit) =>
+              !cached.productionUnits.some((cachedUnit) => cachedUnit.id === unit.id),
+          ),
+        ]);
+        setFeedReferences(cached.feedReferences);
+      } else {
+        setAvailableUnits(pendingUnitSnapshots);
+        setFeedReferences([]);
+      }
+      const online = await offlineService.isOnline();
+      if (!isCurrentBootstrap()) return;
+      if (!online) {
+        const hasOfflineUnits =
+          (cached?.productionUnits.length ?? 0) > 0
+          || (offlineLaunchContext?.productionUnits?.length ?? 0) > 0;
+        setUnitsLoadError(false);
+        setOfflineReferencesEmpty(
+          !hasOfflineUnits && (cached?.feedReferences.length ?? 0) === 0,
         );
+        setUnavailablePendingUnitIds(
+          pendingUnitSnapshots
+            .filter((unit) => unit.farm_profile !== farmProfileId)
+            .map((unit) => unit.id),
+        );
+        setLoadedFarmProfileId(farmProfileId ?? null);
+        setLoadingUnits(false);
+        return;
+      }
+      setOfflineReferencesEmpty(false);
+      try {
+        const serverUnits = await aquacultureService.getProductionUnits({
+          status: "active",
+          purpose: "production",
+        });
+        if (!isCurrentBootstrap()) return;
+        const pendingSnapshots = editingOfflineLaunchId
+          ? pendingUnitSnapshots.filter(
+              (snapshot) =>
+                !serverUnits.some((unit) => unit.id === snapshot.id),
+            )
+          : [];
+        setAvailableUnits([...serverUnits, ...pendingSnapshots]);
+        setUnavailablePendingUnitIds(
+          pendingSnapshots.map((snapshot) => snapshot.id),
+        );
+        if (farmProfileId && isCurrentBootstrap()) {
+          await cycleLaunchReferenceCache.cacheProductionUnits(
+            farmProfileId,
+            serverUnits,
+          );
+          if (!isCurrentBootstrap()) return;
+        }
         setUnitsLoadError(false);
       } catch {
-        setUnitsLoadError(true);
-      } finally {
-        setLoadingUnits(false);
+        if (!isCurrentBootstrap()) return;
+        setUnitsLoadError(
+          (cached?.productionUnits.length ?? 0) === 0
+          && (offlineLaunchContext?.productionUnits?.length ?? 0) === 0,
+        );
       }
+      if (farmProfileId) {
+        try {
+          const serverReferences =
+            await aquacultureService.getFarmFeedReferences(farmProfileId);
+          if (!isCurrentBootstrap()) return;
+          setFeedReferences(serverReferences);
+          setStockReferenceId((currentId) =>
+            serverReferences.some(
+              (reference) => reference.id === currentId,
+            )
+              ? currentId
+              : "",
+          );
+          await cycleLaunchReferenceCache.cacheFeedReferences(
+            farmProfileId,
+            serverReferences,
+          );
+          if (!isCurrentBootstrap()) return;
+        } catch {
+          if (!isCurrentBootstrap()) return;
+          // Cached references remain available when their refresh fails.
+        }
+      }
+      if (!isCurrentBootstrap()) return;
+      setLoadedFarmProfileId(farmProfileId ?? null);
+      setLoadingUnits(false);
     };
     void bootstrap();
-  }, [dispatch]);
+    return () => {
+      active = false;
+      dashboardRequest?.abort?.();
+    };
+  }, [
+    dispatch,
+    editingOfflineLaunchId,
+    farmProfile?.id,
+    offlineLaunchContext?.productionUnits?.length,
+  ]);
 
   const selectedUnits = availableUnits.filter((unit) =>
     selectedUnitIds.includes(unit.id),
   );
+  const allPendingFeedReferenceSnapshots =
+    offlineLaunchContext?.feedReferences ?? [];
+  const pendingFeedReferenceSnapshots =
+    allPendingFeedReferenceSnapshots.filter(
+      (reference) =>
+        !farmProfile?.id || reference.farm_profile === farmProfile.id,
+    );
+  const displayFeedReferenceSnapshots = [
+    ...allPendingFeedReferenceSnapshots,
+    ...sessionFeedReferenceSnapshots,
+  ];
+  const validationFeedReferenceSnapshots = [
+    ...allPendingFeedReferenceSnapshots,
+    ...sessionFeedReferenceSnapshots,
+  ];
+  const historicalPendingStockLocalIds = new Set(
+    (offlineLaunch?.initial_feed_stocks ?? []).map((stock) => stock.local_id),
+  );
+  const hasUnavailablePendingFeedReference =
+    formData.initial_feed_stocks.some(
+      (stock) =>
+        resolveOpeningStockFeedReference({
+          stock,
+          currentFeedReferences: feedReferences,
+          pendingSnapshots: displayFeedReferenceSnapshots,
+        }).unavailable,
+    );
   const validationErrorKey = validateAdditionalCycleLaunch({
     formData,
     selectedUnits,
+    selectedUnitIds,
     allocationsByUnitId,
+    farmProfileId: farmProfile?.id,
+    loadedFarmProfileId,
+    loadingUnits,
+    unavailableUnitIds: unavailablePendingUnitIds,
     calibrationUnits,
   });
   const isFormValid = validationErrorKey === null;
@@ -222,36 +526,143 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     const currentValidationError = validateAdditionalCycleLaunch({
       formData,
       selectedUnits,
+      selectedUnitIds,
       allocationsByUnitId,
+      farmProfileId: farmProfile?.id,
+      loadedFarmProfileId,
+      loadingUnits,
+      unavailableUnitIds: unavailablePendingUnitIds,
       calibrationUnits,
     });
     if (currentValidationError) {
       Alert.alert(t("error"), t(currentValidationError));
       return;
     }
+    const stockReferenceValidation = validateOpeningStockFeedReferences({
+      stocks: formData.initial_feed_stocks,
+      species: formData.species,
+      farmProfileId: farmProfile?.id,
+      currentFeedReferences: feedReferences,
+      pendingSnapshots: validationFeedReferenceSnapshots,
+      historicalPendingStockLocalIds,
+    });
+    if (!stockReferenceValidation.valid) {
+      Alert.alert(
+        t("error"),
+        t(OPENING_STOCK_REFERENCE_ERROR_KEYS[stockReferenceValidation.reason]),
+      );
+      return;
+    }
+    if (!farmProfile?.id) {
+      Alert.alert(t("error"), t("cycleLaunchFarmContextChanged"));
+      return;
+    }
+    const submissionFarmId = farmProfile.id;
+    const ensureSubmissionFarmIsCurrent = (): void => {
+      if (activeFarmIdRef.current !== submissionFarmId) {
+        throw new FarmContextChangedError();
+      }
+    };
 
     setSaving(true);
+    const payload = buildAdditionalCycleLaunchRequest({
+      formData,
+      selectedUnits,
+      selectedUnitIds,
+      allocationsByUnitId,
+      farmProfileId: submissionFarmId,
+      loadedFarmProfileId,
+      loadingUnits,
+      unavailableUnitIds: unavailablePendingUnitIds,
+      launchUuid: launchRequestId,
+      calibrationUnits,
+    });
+    const localContext = buildPendingLaunchLocalContext({
+      selectedUnits,
+      currentFeedReferences: feedReferences,
+      previousFeedReferenceSnapshots: pendingFeedReferenceSnapshots,
+      initialFeedStocks: payload.initial_feed_stocks ?? [],
+      farmProfileId: farmProfile?.id,
+    });
     try {
-      const launchResult = await aquacultureService.launchProductionCycle(
-        buildAdditionalCycleLaunchRequest({
-          formData,
-          selectedUnits,
-          allocationsByUnitId,
-          launchUuid: launchRequestId,
-          calibrationUnits,
-        }),
-      );
-      dispatch(fetchDashboardData({ lightweight: true }));
+      if (editingOfflineLaunchId) {
+        ensureSubmissionFarmIsCurrent();
+        await offlineService.updatePendingCycleLaunch(
+          editingOfflineLaunchId,
+          {
+            ...payload,
+            cycle: { ...payload.cycle, created_offline: true },
+          },
+          {
+            localContext,
+          },
+        );
+        ensureSubmissionFarmIsCurrent();
+        Alert.alert(t("saved"), t("cycleLaunchPendingSync"));
+        handleGoBack();
+        return;
+      }
+      const online = await offlineService.isOnline();
+      ensureSubmissionFarmIsCurrent();
+      if (!online) {
+        await offlineService.saveCycleLaunchOffline({
+          ...payload,
+          cycle: { ...payload.cycle, created_offline: true },
+        }, {
+          localContext,
+        });
+        ensureSubmissionFarmIsCurrent();
+        Alert.alert(t("saved"), t("cycleLaunchPendingSync"));
+        handleGoBack();
+        return;
+      }
+      ensureSubmissionFarmIsCurrent();
+      const launchResult = await aquacultureService.launchProductionCycle(payload);
+      ensureSubmissionFarmIsCurrent();
+      dispatch(fetchDashboardData({
+        lightweight: true,
+        farmProfileId: submissionFarmId,
+      }));
 
       const backendSellingPrice =
         launchResult.productionCycle.planned_selling_price_per_kg_fcfa;
-      const prefill = buildSimulatorPrefill({
-        ...buildCyclePayload(formData),
-        planned_selling_price_per_kg_fcfa:
-          backendSellingPrice === undefined
-            ? undefined
-            : Number(backendSellingPrice),
-      });
+      const prefill = formData.onboarding_mode === "ongoing"
+        ? {
+            species: launchResult.productionCycle.species === "clarias"
+              ? ("catfish" as const)
+              : ("tilapia" as const),
+            initial_fish_count:
+              launchResult.productionCycle.tracking_start_count
+              ?? launchResult.productionCycle.current_count,
+            initial_weight_g: Number(
+              launchResult.productionCycle.tracking_start_average_weight,
+            ),
+            target_weight_g: Number(
+              launchResult.productionCycle.target_harvest_weight_g ?? 0,
+            ),
+            cycle_duration_days: inclusiveDaysBetween(
+              launchResult.productionCycle.tracking_start_date
+                ?? launchResult.productionCycle.start_date,
+              launchResult.productionCycle.planned_harvest_date ?? "",
+            ),
+            survival_rate: Number(
+              launchResult.productionCycle.expected_survival_rate_pct ?? 95,
+            ) / 100,
+            selling_price_per_kg_fcfa: Number(backendSellingPrice ?? 0),
+            fingerlings_cost_fcfa: Number(
+              launchResult.productionCycle.fingerlings_cost_fcfa ?? 0,
+            ),
+            other_costs_fcfa: Number(
+              launchResult.productionCycle.other_operational_costs_fcfa ?? 0,
+            ),
+          }
+        : buildSimulatorPrefill({
+            ...buildCyclePayload(formData),
+            planned_selling_price_per_kg_fcfa:
+              backendSellingPrice === undefined
+                ? undefined
+                : Number(backendSellingPrice),
+          });
       Alert.alert(t("success"), t("cycleCreatedSuccess"), [
         {
           text: t("ok"),
@@ -263,12 +674,24 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
         },
       ]);
     } catch (error: unknown) {
+      if (error instanceof FarmContextChangedError) {
+        Alert.alert(t("error"), t("cycleLaunchFarmContextChanged"));
+        return;
+      }
       if (error instanceof AdditionalCycleLaunchError) {
         Alert.alert(t("error"), t(error.translationKey));
         return;
       }
       if (isNetworkError(error)) {
-        Alert.alert(t("error"), t("cycleLaunchNetworkRetry"));
+        if (activeFarmIdRef.current !== submissionFarmId) {
+          Alert.alert(t("error"), t("cycleLaunchFarmContextChanged"));
+          return;
+        }
+        await offlineService.saveCycleLaunchOffline(payload, {
+          attempted: true,
+          localContext,
+        });
+        Alert.alert(t("saved"), t("cycleLaunchPendingAfterAttempt"));
         return;
       }
       const parsedError = parseApiError(error);
@@ -284,6 +707,78 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const addOpeningStock = () => {
+    const selectedFeedReference =
+      stockReferenceMode === "existing"
+        ? feedReferences.find(
+            (reference) =>
+              reference.id === stockReferenceId
+              && isFeedReferenceSelectable({
+                reference,
+                species: formData.species,
+                farmProfileId: farmProfile?.id,
+              }),
+          ) ?? null
+        : null;
+    if (stockReferenceMode === "existing" && !selectedFeedReference) {
+      Alert.alert(t("error"), t("cycleLaunchFeedReferenceNotFound"));
+      return;
+    }
+    const normalizedStockCost = stockCost.trim().replace(",", ".");
+    const hasKnownStockCost = normalizedStockCost.length > 0;
+    const localId = createClientUuid();
+    const common = {
+      local_id: localId,
+      quantity_kg: stockQuantity.replace(",", "."),
+      cost_status: hasKnownStockCost ? "known" : "unknown",
+      total_cost_fcfa: hasKnownStockCost ? normalizedStockCost : null,
+      note: stockNote.trim(),
+    } satisfies Omit<
+      CycleLaunchOpeningStockInput,
+      "feed_reference_id" | "external_feed"
+    >;
+    const stock: CycleLaunchOpeningStockInput =
+      selectedFeedReference
+        ? {
+            ...common,
+            feed_reference_id: selectedFeedReference.id,
+          }
+        : {
+            ...common,
+            external_feed: {
+              client_uuid: createClientUuid(),
+              name: stockName.trim(),
+              pellet_size_mm: stockPelletSize.replace(",", "."),
+              brand: "",
+            },
+          };
+    if (
+      !(Number(stock.quantity_kg) > 0) ||
+      (hasKnownStockCost && !(Number(stock.total_cost_fcfa) >= 0)) ||
+      (
+        stockReferenceMode === "external"
+        && (!stockName.trim() || !(Number(stockPelletSize) > 0))
+      )
+    ) {
+      Alert.alert(t("error"), t("openingStockInvalid"));
+      return;
+    }
+    setFormData((current) => ({
+      ...current,
+      initial_feed_stocks: [...current.initial_feed_stocks, stock],
+    }));
+    if (selectedFeedReference) {
+      setSessionFeedReferenceSnapshots((current) =>
+        current.some((reference) => reference.id === selectedFeedReference.id)
+          ? current
+          : [...current, selectedFeedReference],
+      );
+    }
+    setStockQuantity("");
+    setStockCost("");
+    setStockNote("");
   };
 
   const numberSuffix = (label: string) => (
@@ -318,6 +813,19 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
         <View style={{ gap: spacing[5] }}>
           <Card variant="outlined"><AppText variant="cardTitle">{farmProfile?.farm_name || t("farmNotDefined")}</AppText></Card>
           <View style={{ gap: spacing[3] }}>
+            <AppText variant="sectionTitle">{t("cycleOnboardingMode")}</AppText>
+            <SegmentedControl
+              value={formData.onboarding_mode}
+              options={[
+                { value: "new", label: t("newCycleMode") },
+                { value: "ongoing", label: t("ongoingCycleMode") },
+              ]}
+              onChange={(onboarding_mode) =>
+                setFormData((current) => ({ ...current, onboarding_mode }))
+              }
+            />
+          </View>
+          <View style={{ gap: spacing[3] }}>
             <AppText variant="sectionTitle">{t("speciesSelection")}</AppText>
             <SegmentedControl
               value={formData.species as "clarias" | "tilapia"}
@@ -344,7 +852,14 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             <AppText color="muted">{t("newCycleSelectUnitsDescription")}</AppText>
             {loadingUnits ? <LoadingState compact message={t("productionUnitsLoading")} /> : null}
             {unitsLoadError ? <ErrorState compact message={t("productionUnitsLoadError")} /> : null}
-            {!loadingUnits && !unitsLoadError && availableUnits.length === 0 ? <EmptyState compact message={t("newCycleNoExistingUnits")} /> : null}
+            {offlineReferencesEmpty ? <EmptyState compact message={t("cycleLaunchOfflineReferencesEmpty")} /> : null}
+            {unavailablePendingUnitIds.length > 0 ? (
+              <InlineAlert
+                tone="warning"
+                message={t("cycleLaunchPendingUnitUnavailable")}
+              />
+            ) : null}
+            {!loadingUnits && !unitsLoadError && !offlineReferencesEmpty && availableUnits.length === 0 ? <EmptyState compact message={t("newCycleNoExistingUnits")} /> : null}
             {!loadingUnits && !unitsLoadError ? availableUnits.map((unit) => {
               const selected = selectedUnitIds.includes(unit.id);
               const unitTypeKey = unit.unit_type === "pond" ? "productionUnitTypePond" : unit.unit_type === "cage" ? "productionUnitTypeCage" : "productionUnitTypeTank";
@@ -357,10 +872,22 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               const density = dimensionValue && numericAllocation > 0 ? (numericAllocation / dimensionValue).toFixed(2) : null;
               return (
                 <View key={unit.id} style={{ gap: spacing[2] }}>
-                  <SelectableCard testID={`newCycleUnit-${unit.id}`} selected={selected} onPress={() => toggleUnit(unit)} accessibilityLabel={unit.name} primaryBorder>
+                  <SelectableCard
+                    testID={`newCycleUnit-${unit.id}`}
+                    selected={selected}
+                    disabled={unavailablePendingUnitIds.includes(unit.id)}
+                    onPress={() => toggleUnit(unit)}
+                    accessibilityLabel={unit.name}
+                    primaryBorder
+                  >
                     <AppText variant="cardTitle">{unit.name}</AppText>
                     <AppText color="muted">{t(unitTypeKey)}{dimension ? ` · ${dimension}` : ""}</AppText>
                     <AppText variant="helper" color="muted">{t("createFarmUnitCapacityLabel", { count: capacity ?? 0 })}</AppText>
+                    {unavailablePendingUnitIds.includes(unit.id) ? (
+                      <AppText variant="helper" color="error">
+                        {t("cycleLaunchReferenceUnavailable")}
+                      </AppText>
+                    ) : null}
                   </SelectableCard>
                   {selected ? <Card variant="outlined">
                     <TextField testID={`newCycleAllocation-${unit.id}`} label={t("createFarmProductionUnitAssignedFishLabel")} value={allocation} onChangeText={(value) => setAllocationsByUnitId((current) => ({ ...current, [unit.id]: value }))} placeholder={t("createFarmProductionUnitAssignedFishPlaceholder")} keyboardType="numeric" />
@@ -370,13 +897,217 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
               );
             }) : null}
           </View>
-          <View style={{ gap: spacing[3] }}>
-            <AppText variant="sectionTitle">{t("initialStocking")}</AppText>
+          <View style={styles.ongoingSection}>
+            <AppText variant="sectionTitle">
+              {t(formData.onboarding_mode === "ongoing" ? "declaredHistory" : "initialStocking")}
+            </AppText>
             <TextField testID="newCycleInitialCount" label={t("initialCount")} required value={formData.initial_count} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_count: value }))} placeholder={t("exampleValuePlaceholder", { value: 1000 })} keyboardType="numeric" />
-            <TextField testID="newCycleInitialWeight" label={t("initialWeight")} required value={formData.initial_average_weight} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_average_weight: value }))} placeholder={t("exampleValuePlaceholder", { value: 10 })} keyboardType="numeric" suffix={numberSuffix("g")} />
-            <TextField label={t("startDate")} required value={formData.start_date} onChangeText={(value) => setFormData((prev) => ({ ...prev, start_date: value }))} placeholder={t("dateFormatPlaceholder")} />
+            <TextField testID="newCycleInitialWeight" label={t(formData.onboarding_mode === "ongoing" ? "historicalInitialWeightOptional" : "initialWeight")} required={formData.onboarding_mode === "new"} value={formData.initial_average_weight} onChangeText={(value) => setFormData((prev) => ({ ...prev, initial_average_weight: value }))} placeholder={t("exampleValuePlaceholder", { value: 10 })} keyboardType="numeric" suffix={numberSuffix("g")} />
+            <TextField testID="newCycleStartDate" label={t("startDate")} required value={formData.start_date} onChangeText={(value) => setFormData((prev) => ({ ...prev, start_date: value }))} placeholder={t("dateFormatPlaceholder")} />
             <TextField testID="newCycleName" label={t("cycleName")} value={formData.cycle_name} onChangeText={(value) => setFormData((prev) => ({ ...prev, cycle_name: value }))} placeholder={t("cycleNamePlaceholder")} />
           </View>
+          {formData.onboarding_mode === "ongoing" ? (
+            <View style={styles.ongoingSection}>
+              <AppText variant="sectionTitle">{t("trackingStartSituation")}</AppText>
+              <TextField
+                testID="newCycleTrackingDate"
+                label={t("trackingStartDate")}
+                required
+                value={formData.tracking_start_date}
+                onChangeText={(value) => setFormData((current) => ({ ...current, tracking_start_date: value }))}
+                placeholder={t("dateFormatPlaceholder")}
+              />
+              <TextField
+                testID="newCycleTrackingCount"
+                label={t("fishPresentAtTrackingStart")}
+                required
+                value={formData.tracking_start_count}
+                onChangeText={(value) => setFormData((current) => ({ ...current, tracking_start_count: value }))}
+                keyboardType="numeric"
+              />
+              <TextField
+                testID="newCycleTrackingWeight"
+                label={t("observedAverageWeight")}
+                required
+                value={formData.tracking_start_average_weight}
+                onChangeText={(value) => setFormData((current) => ({ ...current, tracking_start_average_weight: value }))}
+                keyboardType="decimal-pad"
+                suffix={numberSuffix("g")}
+              />
+              <TextField
+                testID="newCycleTrackingBiomass"
+                label={t("measuredBiomassOptional")}
+                value={formData.tracking_start_biomass}
+                onChangeText={(value) => setFormData((current) => ({ ...current, tracking_start_biomass: value }))}
+                keyboardType="decimal-pad"
+                suffix={numberSuffix("kg")}
+              />
+              {formData.tracking_start_count && formData.tracking_start_average_weight ? (
+                <AppText color="muted">
+                  {t("calculatedBiomass")}:{" "}
+                  {(
+                    Number(formData.tracking_start_count)
+                    * Number(formData.tracking_start_average_weight)
+                    / 1000
+                  ).toFixed(2)} kg
+                </AppText>
+              ) : null}
+            </View>
+          ) : null}
+          {formData.onboarding_mode === "ongoing" ? (
+            <View style={styles.ongoingSection}>
+              <AppText variant="sectionTitle">{t("openingFeedStock")}</AppText>
+              <AppText color="muted">{t("openingFeedStockDescription")}</AppText>
+              {hasUnavailablePendingFeedReference ? (
+                <InlineAlert
+                  tone="warning"
+                  message={t("cycleLaunchPendingFeedReferenceUnavailable")}
+                />
+              ) : null}
+              <SegmentedControl
+                value={stockReferenceMode}
+                options={[
+                  { value: "existing", label: t("existingFeedReference") },
+                  { value: "external", label: t("externalFeed") },
+                ]}
+                onChange={setStockReferenceMode}
+              />
+              {stockReferenceMode === "existing" ? (
+                <View style={{ gap: spacing[2] }}>
+                  {feedReferences
+                    .filter(
+                      (reference) =>
+                        isFeedReferenceSelectable({
+                          reference,
+                          species: formData.species,
+                          farmProfileId: farmProfile?.id,
+                        }),
+                    )
+                    .map((reference) => (
+                      <SelectableCard
+                        key={reference.id}
+                        testID={`newCycleFeedReference-${reference.id}`}
+                        selected={stockReferenceId === reference.id}
+                        onPress={() => setStockReferenceId(reference.id)}
+                        accessibilityLabel={reference.name}
+                      >
+                        <AppText variant="bodyStrong">{reference.name}</AppText>
+                        <AppText color="muted">{reference.pellet_size_mm} mm</AppText>
+                      </SelectableCard>
+                    ))}
+                </View>
+              ) : (
+                <>
+                  <TextField
+                    testID="newCycleStockName"
+                    label={t("feedName")}
+                    value={stockName}
+                    onChangeText={setStockName}
+                  />
+                  <View style={styles.pelletSizeField}>
+                    <AppText variant="label">{t("pelletSize")}</AppText>
+                    {stockPelletSizeOptions.length > 0 ? (
+                      <View style={styles.pelletSizeOptions}>
+                        {stockPelletSizeOptions.map((size) => (
+                          <Button
+                            key={size}
+                            testID={`newCyclePelletSize-${size}`}
+                            label={t("storePelletSizeChip", { size })}
+                            size="small"
+                            fullWidth={false}
+                            variant={
+                              Number(stockPelletSize) === Number(size)
+                                ? "primary"
+                                : "outline"
+                            }
+                            onPress={() => setStockPelletSize(size)}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <AppText variant="helper" color="muted">
+                        {t("selectSpeciesForPelletSize")}
+                      </AppText>
+                    )}
+                  </View>
+                </>
+              )}
+              <TextField
+                testID="newCycleStockQuantity"
+                label={t("quantityKg")}
+                value={stockQuantity}
+                onChangeText={setStockQuantity}
+                keyboardType="decimal-pad"
+              />
+              <TextField
+                testID="newCycleStockCost"
+                label={t("totalCostFcfa")}
+                hint={t("stockCostHint")}
+                value={stockCost}
+                onChangeText={setStockCost}
+                keyboardType="decimal-pad"
+                suffix={numberSuffix("FCFA")}
+              />
+              <TextField label={t("notes")} value={stockNote} onChangeText={setStockNote} />
+              <Button testID="newCycleAddOpeningStock" label={t("addOpeningStock")} variant="outline" onPress={addOpeningStock} />
+              {formData.initial_feed_stocks.map((stock) => {
+                const resolvedFeedReference =
+                  resolveOpeningStockFeedReference({
+                    stock,
+                    currentFeedReferences: feedReferences,
+                    pendingSnapshots: displayFeedReferenceSnapshots,
+                  });
+                const stockReferenceValidation =
+                  validateOpeningStockFeedReferences({
+                    stocks: [stock],
+                    species: formData.species,
+                    farmProfileId: farmProfile?.id,
+                    currentFeedReferences: feedReferences,
+                    pendingSnapshots: validationFeedReferenceSnapshots,
+                    historicalPendingStockLocalIds,
+                  });
+                return (
+                <Card key={stock.local_id} variant="outlined">
+                  <AppText variant="bodyStrong">
+                    {stock.external_feed?.name
+                      ?? resolvedFeedReference.reference?.name
+                      ?? t("feed")}
+                  </AppText>
+                  {stock.external_feed?.pellet_size_mm
+                  || resolvedFeedReference.reference?.pellet_size_mm ? (
+                    <AppText color="muted">
+                      {stock.external_feed?.pellet_size_mm
+                        ?? resolvedFeedReference.reference?.pellet_size_mm} mm
+                    </AppText>
+                  ) : null}
+                  {resolvedFeedReference.unavailable ? (
+                    <AppText variant="helper" color="error">
+                      {t("cycleLaunchReferenceUnavailable")}
+                    </AppText>
+                  ) : null}
+                  {!stockReferenceValidation.valid ? (
+                    <AppText variant="helper" color="error">
+                      {t(
+                        OPENING_STOCK_REFERENCE_ERROR_KEYS[
+                          stockReferenceValidation.reason
+                        ],
+                      )}
+                    </AppText>
+                  ) : null}
+                  <AppText>{stock.quantity_kg} kg · {t(stock.cost_status === "known" ? "knownCost" : "unknownCost")}</AppText>
+                  <Button
+                    label={t("remove")}
+                    variant="outline"
+                    onPress={() => setFormData((current) => ({
+                      ...current,
+                      initial_feed_stocks: current.initial_feed_stocks.filter((item) => item.local_id !== stock.local_id),
+                    }))}
+                  />
+                </Card>
+                );
+              })}
+            </View>
+          ) : null}
           <View style={{ gap: spacing[3] }}>
             <AppText variant="sectionTitle">{t("economicProjectionTitle")}</AppText>
             <TextField testID="newCycleTargetWeight" label={t("targetWeight")} required value={formData.target_harvest_weight_g} onChangeText={(value) => setFormData((prev) => ({ ...prev, target_harvest_weight_g: value }))} placeholder={t("exampleValuePlaceholder", { value: formData.species === "clarias" ? 400 : 300 })} keyboardType="numeric" suffix={numberSuffix("g")} />
@@ -386,20 +1117,53 @@ export default function NewCycleScreen({ navigation }: NewCycleScreenProps) {
             <TextField label={t("fingerlingsCostFcfa")} value={formData.fingerlings_cost_fcfa} onChangeText={(value) => setFormData((prev) => ({ ...prev, fingerlings_cost_fcfa: value }))} placeholder={t("zeroValuePlaceholder")} keyboardType="numeric" suffix={numberSuffix("FCFA")} />
             <TextField label={t("otherOperationalCosts")} value={formData.other_operational_costs_fcfa} onChangeText={(value) => setFormData((prev) => ({ ...prev, other_operational_costs_fcfa: value }))} placeholder={t("zeroValuePlaceholder")} keyboardType="numeric" suffix={numberSuffix("FCFA")} />
           </View>
-          {formData.initial_count && formData.initial_average_weight ? (() => {
+          {formData.initial_count && (
+            formData.initial_average_weight
+            || formData.onboarding_mode === "ongoing"
+          ) ? (() => {
             const density = estimateDensityValue();
             const expectedDuration = formData.planned_cycle_duration_days || getSelectedSpecies()?.durationDays;
+            const ongoingSchedule =
+              formData.onboarding_mode === "ongoing"
+                ? getOngoingCycleSchedule(
+                    formData.start_date,
+                    formData.tracking_start_date,
+                    Number(expectedDuration),
+                  )
+                : null;
             return <Card variant="outlined" style={{ gap: spacing[2] }}>
               <AppText variant="sectionTitle">{t("autoCalculations")}</AppText>
               <AppText color="muted">{t("initialBiomass")}: <AppText color="link">{estimateInitialBiomass()} kg</AppText></AppText>
               {formData.pond_surface_m2 || formData.pond_volume_m3 ? <AppText color="muted">{t("initialDensity")}: <AppText color="link">{density.value} {density.unit}</AppText></AppText> : null}
               {expectedDuration ? <AppText color="muted">{t("expectedDuration")}: <AppText color="link">{expectedDuration} {t("days")}</AppText></AppText> : null}
+              {ongoingSchedule ? (
+                <>
+                  <AppText testID="ongoingTotalDuration" color="muted">{t("ongoingTotalDuration", { count: ongoingSchedule.totalDurationDays })}</AppText>
+                  <AppText testID="ongoingPlannedHarvestDate" color="muted">{t("ongoingPlannedHarvestDate", { date: ongoingSchedule.plannedHarvestDate })}</AppText>
+                  <AppText testID="ongoingRemainingDuration" color="muted">{t("ongoingRemainingDuration", { count: ongoingSchedule.remainingDurationDays })}</AppText>
+                </>
+              ) : null}
             </Card>;
           })() : null}
           {!isFormValid ? <InlineAlert tone="info" message={validationErrorKey ? t(validationErrorKey) : undefined} /> : null}
-          <Button testID="newCycleSubmit" label={t("createCycle")} onPress={handleSave} disabled={!isFormValid} loading={saving} iconLeft="checkmark" />
+          <Button testID="newCycleSubmit" label={t(formData.onboarding_mode === "ongoing" ? "startTracking" : "createCycle")} onPress={handleSave} disabled={!isFormValid || loadingUnits || saving || !farmProfile?.id || loadedFarmProfileId !== farmProfile.id} loading={saving} iconLeft="checkmark" />
         </View>
       </Screen>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  ongoingSection: {
+    gap: spacing[3],
+    paddingTop: spacing[4],
+  },
+  pelletSizeField: {
+    gap: spacing[2],
+  },
+  pelletSizeOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+  },
+});

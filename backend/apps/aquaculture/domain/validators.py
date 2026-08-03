@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from ..constants import (
@@ -347,13 +348,13 @@ def validate_cycle_log_date(log_date: date, cycle_start: date, cycle_end: date =
         )
     
     # Don't allow future dates
-    if log_date > date.today():
+    if log_date > timezone.localdate():
         raise ValidationError(
             _("La date du log ne peut être dans le futur")
         )
     
     # Don't allow very old dates (more than 2 years ago)
-    two_years_ago = date.today() - timedelta(days=730)
+    two_years_ago = timezone.localdate() - timedelta(days=730)
     if log_date < two_years_ago:
         raise ValidationError(
             _("Date du log trop ancienne (plus de 2 ans)")

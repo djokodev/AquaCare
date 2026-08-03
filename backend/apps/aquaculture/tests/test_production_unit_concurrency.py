@@ -14,6 +14,28 @@ from django.db import IntegrityError, connection
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != 'postgresql', reason='Requires PostgreSQL constraints')
+def test_production_unit_duplicate_name_is_owned_by_database(farm_profile):
+    ProductionUnit.objects.create(
+        farm_profile=farm_profile,
+        name='Bac atomique',
+        unit_type='tank',
+        volume_m3='5.00',
+    )
+
+    with pytest.raises(IntegrityError) as exc_info:
+        ProductionUnit.objects.create(
+            farm_profile=farm_profile,
+            name='BAC ATOMIQUE',
+            unit_type='tank',
+            volume_m3='5.00',
+        )
+
+    mapped = translate_production_unit_integrity_error(exc_info.value)
+    assert mapped['code'] == 'duplicate_production_unit_name'
+
+
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.skipif(connection.vendor != 'postgresql', reason='Requires PostgreSQL concurrency')
 @pytest.mark.parametrize(
     ('first_purpose', 'second_purpose'),

@@ -506,7 +506,11 @@ class ProductionUnit(models.Model):
 
     def save(self, *args, **kwargs):
         self.unit_type = normalize_production_unit_type(self.unit_type) or self.unit_type
-        self.full_clean()
+        # Keep field and domain validation here, but leave uniqueness and
+        # database constraints to PostgreSQL. Preflight uniqueness queries are
+        # inherently racy and can otherwise raise ValidationError or
+        # IntegrityError for the same concurrent write depending on timing.
+        self.full_clean(validate_unique=False, validate_constraints=False)
         return super().save(*args, **kwargs)
 
 
@@ -829,6 +833,20 @@ class CycleFeedStockEntry(models.Model):
         (SOURCE_MANUAL, _('Manuel')),
         (SOURCE_ORDER, _('Commande')),
     ]
+    ENTRY_KIND_OPENING_BALANCE = 'opening_balance'
+    ENTRY_KIND_MANUAL_SUPPLY = 'manual_supply'
+    ENTRY_KIND_ORDER_RECEIPT = 'order_receipt'
+    ENTRY_KIND_CHOICES = [
+        (ENTRY_KIND_OPENING_BALANCE, _("Solde d'ouverture")),
+        (ENTRY_KIND_MANUAL_SUPPLY, _('Approvisionnement manuel')),
+        (ENTRY_KIND_ORDER_RECEIPT, _('Réception de commande')),
+    ]
+    COST_STATUS_KNOWN = 'known'
+    COST_STATUS_UNKNOWN = 'unknown'
+    COST_STATUS_CHOICES = [
+        (COST_STATUS_KNOWN, _('Coût connu')),
+        (COST_STATUS_UNKNOWN, _('Coût inconnu')),
+    ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     client_uuid = models.UUIDField(
@@ -857,6 +875,13 @@ class CycleFeedStockEntry(models.Model):
         choices=SOURCE_CHOICES,
         verbose_name=_("Source"),
     )
+    entry_kind = models.CharField(
+        max_length=24,
+        choices=ENTRY_KIND_CHOICES,
+        default=ENTRY_KIND_MANUAL_SUPPLY,
+        db_default=ENTRY_KIND_MANUAL_SUPPLY,
+        verbose_name=_("Type d'entrée"),
+    )
     label = models.CharField(
         max_length=200,
         verbose_name=_("Nom de l'aliment"),
@@ -880,8 +905,18 @@ class CycleFeedStockEntry(models.Model):
         max_digits=12,
         decimal_places=2,
         default=Decimal('0'),
+        db_default=Decimal('0'),
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal('0'))],
         verbose_name=_("Montant total (FCFA)"),
+    )
+    cost_status = models.CharField(
+        max_length=12,
+        choices=COST_STATUS_CHOICES,
+        default=COST_STATUS_KNOWN,
+        db_default=COST_STATUS_KNOWN,
+        verbose_name=_('Statut du coût'),
     )
     entry_date = models.DateField(
         verbose_name=_("Date d'entrée"),
@@ -939,6 +974,22 @@ class CycleFeedStockEntry(models.Model):
             models.Index(fields=['cycle', 'source'], name='aq_feed_stock_cycle_source_idx'),
             models.Index(fields=['client_uuid']),
             models.Index(fields=['created_offline', 'synced_at'], name='aq_feed_stock_sync_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        cost_status='known',
+                        total_cost_fcfa__isnull=False,
+                        total_cost_fcfa__gte=Decimal('0'),
+                    )
+                    | Q(
+                        cost_status='unknown',
+                        total_cost_fcfa__isnull=True,
+                    )
+                ),
+                name='aq_feed_stock_cost_status_ck',
+            ),
         ]
 
     def __str__(self):
@@ -1029,6 +1080,26 @@ class ProductionCycle(models.Model):
             models.Index(fields=['species', 'status']),
             models.Index(fields=['created_offline', 'synced_at'], name='aquaculture_created_7d7f63_idx'),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    ~Q(onboarding_mode='ongoing')
+                    | Q(
+                        tracking_start_date__isnull=False,
+                        tracking_start_date__gte=models.F('start_date'),
+                        tracking_start_count__isnull=False,
+                        tracking_start_count__gt=0,
+                        tracking_start_count__lte=models.F('initial_count'),
+                        tracking_start_average_weight__isnull=False,
+                        tracking_start_average_weight__gt=Decimal('0'),
+                        tracking_start_biomass__isnull=False,
+                        tracking_start_biomass__gt=Decimal('0'),
+                        tracking_start_biomass_source__isnull=False,
+                    )
+                ),
+                name='aq_ongoing_cycle_baseline_ck',
+            ),
+        ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     CYCLE_KIND_STANDARD = 'standard'
@@ -1037,11 +1108,32 @@ class ProductionCycle(models.Model):
         (CYCLE_KIND_STANDARD, _('Standard')),
         (CYCLE_KIND_CALIBRATION, _('Calibration')),
     ]
+    ONBOARDING_MODE_NEW = 'new'
+    ONBOARDING_MODE_ONGOING = 'ongoing'
+    HISTORY_SCOPE_FULL_CYCLE = 'full_cycle'
+    HISTORY_SCOPE_SINCE_TRACKING_START = 'since_tracking_start'
+    ONBOARDING_MODE_CHOICES = [
+        (ONBOARDING_MODE_NEW, _('Nouveau cycle')),
+        (ONBOARDING_MODE_ONGOING, _('Cycle déjà en cours')),
+    ]
+    BIOMASS_SOURCE_CALCULATED = 'calculated'
+    BIOMASS_SOURCE_DECLARED = 'declared'
+    BIOMASS_SOURCE_CHOICES = [
+        (BIOMASS_SOURCE_CALCULATED, _('Calculée')),
+        (BIOMASS_SOURCE_DECLARED, _('Déclarée')),
+    ]
     cycle_kind = models.CharField(
         max_length=20,
         choices=CYCLE_KIND_CHOICES,
         default=CYCLE_KIND_STANDARD,
         db_default=CYCLE_KIND_STANDARD,
+    )
+    onboarding_mode = models.CharField(
+        max_length=16,
+        choices=ONBOARDING_MODE_CHOICES,
+        default=ONBOARDING_MODE_NEW,
+        db_default=ONBOARDING_MODE_NEW,
+        verbose_name=_("Mode d'entrée dans le suivi"),
     )
     client_uuid = models.UUIDField(
         unique=True,
@@ -1114,17 +1206,55 @@ class ProductionCycle(models.Model):
     )
 
     initial_average_weight = models.DecimalField(
-        max_digits=6, 
+        max_digits=6,
         decimal_places=2,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(Decimal('0.1'))],
         verbose_name=_("Poids moyen initial (g)"),
         help_text=_("8-15g typiquement pour alevins")
     )
     initial_biomass = models.DecimalField(
-        max_digits=10, 
+        max_digits=10,
         decimal_places=2,
+        null=True,
+        blank=True,
         verbose_name=_("Biomasse initiale (kg)"),
         help_text=_("Calculé automatiquement")
+    )
+    tracking_start_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_("Date de démarrage du suivi AquaCare"),
+    )
+    tracking_start_count = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(MAX_INITIAL_FISH_COUNT)],
+        verbose_name=_("Effectif au démarrage du suivi"),
+    )
+    tracking_start_average_weight = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.1'))],
+        verbose_name=_("Poids moyen au démarrage du suivi (g)"),
+    )
+    tracking_start_biomass = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name=_("Biomasse au démarrage du suivi (kg)"),
+    )
+    tracking_start_biomass_source = models.CharField(
+        max_length=16,
+        choices=BIOMASS_SOURCE_CHOICES,
+        default=BIOMASS_SOURCE_CALCULATED,
+        db_default=BIOMASS_SOURCE_CALCULATED,
+        verbose_name=_("Source de la biomasse au démarrage du suivi"),
     )
 
     # Economic planning data (pre-production projection)
@@ -1285,8 +1415,52 @@ class ProductionCycle(models.Model):
         if not self.start_date:
             return 0
 
-        end_date = self.end_date or date.today()
+        end_date = self.end_date or timezone.localdate()
         return (end_date - self.start_date).days
+
+    @property
+    def analysis_start_date(self):
+        if self.onboarding_mode == self.ONBOARDING_MODE_ONGOING:
+            return self.tracking_start_date
+        return self.start_date
+
+    @property
+    def analysis_start_count(self):
+        if self.onboarding_mode == self.ONBOARDING_MODE_ONGOING:
+            return self.tracking_start_count
+        return self.initial_count
+
+    @property
+    def analysis_start_average_weight(self):
+        if self.onboarding_mode == self.ONBOARDING_MODE_ONGOING:
+            return self.tracking_start_average_weight
+        return self.initial_average_weight
+
+    @property
+    def analysis_start_biomass(self):
+        if self.onboarding_mode == self.ONBOARDING_MODE_ONGOING:
+            return self.tracking_start_biomass
+        return self.initial_biomass
+
+    def days_tracked(self):
+        if not self.tracking_start_date:
+            return 0
+        end_date = self.end_date or timezone.localdate()
+        return max((end_date - self.tracking_start_date).days, 0)
+
+    @property
+    def historical_count_gap(self):
+        return max(self.initial_count - self.tracking_start_count, 0)
+
+    @property
+    def has_partial_history(self):
+        return self.onboarding_mode == self.ONBOARDING_MODE_ONGOING
+
+    @property
+    def history_scope(self):
+        if self.has_partial_history:
+            return self.HISTORY_SCOPE_SINCE_TRACKING_START
+        return self.HISTORY_SCOPE_FULL_CYCLE
 
     def current_density_kg_m3(self):
         """

@@ -489,6 +489,12 @@ export default function StoreScreen() {
           {store ? (
             <>
               <DashboardSection title={t('storeStatusTitle')} lastSyncedAt={lastSyncedAt}>
+                {store.summary.cost_history_complete === false ? (
+                  <InlineAlert
+                    tone="info"
+                    message={`${t('partialFinancialHistory')}\n${t('knownAndProjectedCostPartial')}`}
+                  />
+                ) : null}
                 {store.calculation_status === 'available' && Number(store.summary.feed_to_secure_kg) <= 0 && Number(store.summary.unclassified_stock_kg) <= 0 ? (
                   <InlineAlert tone="success" message={`${t('storeNeedCoveredTitle')}\n${t('storeNeedCoveredDescription')}`} />
                 ) : store.calculation_status === 'unavailable' ? (
@@ -517,11 +523,24 @@ export default function StoreScreen() {
                     unavailableLabel={t('dashboardDataUnavailable')}
                   />
                   <DashboardMetricCard
-                    label={t('storeRecordedFeedExpenses')}
-                    value={formatDashboardCurrency(store.summary.feed_expenses_fcfa, locale)}
+                    label={t('knownFeedExpenses')}
+                    value={formatDashboardCurrency(store.summary.known_feed_expenses_fcfa ?? store.summary.feed_expenses_fcfa, locale)}
                     unit={t('dashboardDirectProductionCostUnit')}
                     tone="attention"
                     layout="fullWidthCompact"
+                    unavailableLabel={t('dashboardDataUnavailable')}
+                  />
+                  <DashboardMetricCard
+                    label={t('trackedFeedExpenses')}
+                    value={formatDashboardCurrency(store.summary.tracked_feed_expenses_fcfa, locale)}
+                    unit={t('dashboardDirectProductionCostUnit')}
+                    tone="attention"
+                    unavailableLabel={t('dashboardDataUnavailable')}
+                  />
+                  <DashboardMetricCard
+                    label={t('unknownCostEntries')}
+                    value={formatDashboardNumber(store.summary.unknown_cost_entries_count, locale, { maximumFractionDigits: 0 })}
+                    tone="slate"
                     unavailableLabel={t('dashboardDataUnavailable')}
                   />
                 </View>

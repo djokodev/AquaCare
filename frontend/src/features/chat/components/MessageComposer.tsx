@@ -272,11 +272,12 @@ export function MessageComposer({
 
         {/* Send button */}
         <IconButton
+          testID="messageComposerSendButton"
           onPress={handleSend}
           icon="send"
           accessibilityLabel={t('chatSendMessage')}
-          tone="inverse"
-          style={[styles.sendButton, canSend ? styles.sendButtonActive : styles.sendButtonDisabled]}
+          tone={canSend ? 'default' : 'muted'}
+          style={styles.sendButton}
           disabled={!canSend}
           accessibilityState={{ busy: sending }}
         />
@@ -346,12 +347,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  sendButtonActive: {
-    backgroundColor: colors.brand.primary,
-  },
-  sendButtonDisabled: {
-    backgroundColor: colors.surface.disabled,
   },
   characterCountContainer: {
     alignItems: 'flex-end',

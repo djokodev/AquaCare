@@ -1,4 +1,8 @@
-import { CreateCycleForm } from '@/types/aquaculture';
+import {
+  CreateCycleForm,
+  CycleLaunchOpeningStockInput,
+  CycleOnboardingMode,
+} from '@/types/aquaculture';
 import {
   STOCKING_DENSITY_POND_PER_M2,
   STOCKING_DENSITY_TANK_PER_M3,
@@ -7,6 +11,7 @@ import {
 export type CycleSpecies = 'clarias' | 'tilapia';
 
 export interface NewCycleData {
+  onboarding_mode: CycleOnboardingMode;
   cycle_name: string;
   species: CycleSpecies | '';
   pond_identifier: string;
@@ -22,6 +27,11 @@ export interface NewCycleData {
   planned_selling_price_per_kg_fcfa: string;
   fingerlings_cost_fcfa: string;
   other_operational_costs_fcfa: string;
+  tracking_start_date: string;
+  tracking_start_count: string;
+  tracking_start_average_weight: string;
+  tracking_start_biomass: string;
+  initial_feed_stocks: CycleLaunchOpeningStockInput[];
 }
 
 export const ECONOMIC_DEFAULTS = {
