@@ -107,7 +107,9 @@ class FarmSupervisionService:
         ):
             active_cycles = farm.production_cycles.filter(status="active").count()
             items.append({"label": _("Cycles actifs"), "status": active_cycles, "url": ""})
-            completed = farm.production_cycles.exclude(status="active").order_by("-end_date")[:3]
+            completed = farm.production_cycles.filter(status="harvested").order_by(
+                "-end_date", "-created_at"
+            )[:3]
             items.append(
                 {
                     "label": _("Cycles recemment termines"),
@@ -120,9 +122,11 @@ class FarmSupervisionService:
             AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
             "aquaculture.view_cyclelog",
         ):
-            last_log = farm.production_cycles.order_by("-logs__created_at").values_list(
-                "logs__log_date", flat=True
-            ).first()
+            from aquaculture.models import CycleLog
+
+            last_log = CycleLog.objects.filter(cycle__farm_profile=farm).order_by(
+                "-created_at"
+            ).values_list("log_date", flat=True).first()
             items.append({"label": _("Derniere saisie quotidienne"), "status": last_log or unknown, "url": ""})
         if has_capability_and_permission(
             user,

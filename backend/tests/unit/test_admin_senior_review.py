@@ -30,6 +30,7 @@ from commerce.models import Order, OrderItem, Product
 from commerce.services.order_service import OrderService
 from common.admin_policies import RBACConstants
 from common.admin_site import AquaCareAdminSite
+from django.apps import apps
 from django.contrib import admin
 from django.contrib.admin.models import LogEntry
 from django.contrib.auth.models import Group, Permission
@@ -424,6 +425,209 @@ def test_conversation_admin_query_growth_is_bounded():
     with CaptureQueriesContext(connection) as large_capture:
         assert client.get(url).status_code == 200
     assert len(large_capture) <= len(small_capture) + 1
+
+
+@pytest.mark.django_db
+def test_support_dashboard_handles_missing_farm_and_name_without_pii_or_n_plus_one():
+    support = _staff_for_role(RBACConstants.GROUP_SUPPORT)
+    named_farm = FarmProfileFactory()
+    named = named_farm.user
+    type(named).objects.filter(pk=named.pk).update(
+        first_name="Alice", last_name="Support", business_name=""
+    )
+    named.refresh_from_db()
+    business = UserFactory()
+    type(business).objects.filter(pk=business.pk).update(business_name="Ferme Business")
+    business.refresh_from_db()
+    nameless = UserFactory()
+    type(nameless).objects.filter(pk=nameless.pk).update(
+        first_name="", last_name="", business_name=""
+    )
+    nameless.refresh_from_db()
+    nameless_phone = nameless.phone_number
+    nameless_email = nameless.email
+    MessageService.send_user_message(named, "Contenu secret nomme")
+    MessageService.send_user_message(business, "Contenu secret entreprise")
+    MessageService.send_user_message(nameless, "Contenu secret anonyme")
+    client = _client_for(support)
+    url = reverse("admin:index")
+
+    with CaptureQueriesContext(connection) as small_capture:
+        response = client.get(url)
+    html = response.content.decode()
+    assert response.status_code == 200
+    assert "Alice Support" in html
+    assert "Ferme Business" in html
+    assert named_farm.farm_name in html
+    assert "Utilisateur sans nom" in html
+    assert "Aucune ferme associée" in html
+    assert nameless_phone not in html
+    assert nameless_email not in html
+    assert "Contenu secret" not in html
+
+    for index in range(12):
+        owner = UserFactory(first_name=f"Support{index}", last_name="Test")
+        MessageService.send_user_message(owner, f"Secret {index}")
+    with CaptureQueriesContext(connection) as large_capture:
+        large_response = client.get(url)
+    assert len(large_response.context["dashboard_support_conversations"]) == 10
+    assert len(large_capture) <= len(small_capture) + 1
+
+
+@pytest.mark.django_db
+def test_support_attention_requires_unread_messages():
+    support = _staff_for_role(RBACConstants.GROUP_SUPPORT)
+    message = MessageService.send_user_message(UserFactory(), "Lu explicitement")
+    message.conversation.unread_count_admin = 0
+    message.conversation.save(update_fields=["unread_count_admin"])
+
+    html = _client_for(support).get(reverse("admin:index")).content.decode()
+    assert "Conversations Support nécessitant une attention" not in html
+
+
+@pytest.mark.django_db
+def test_farm_overview_only_uses_harvested_cycles_and_direct_latest_log():
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    farm = FarmProfileFactory()
+    active = ProductionCycleFactory(farm_profile=farm, status="active", cycle_name="Cycle actif")
+    ProductionCycleFactory(farm_profile=farm, status="planned", cycle_name="Cycle planifie")
+    ProductionCycleFactory(farm_profile=farm, status="cancelled", cycle_name="Cycle annule")
+    ProductionCycleFactory(
+        farm_profile=farm,
+        status="harvested",
+        cycle_name="Cycle recolte",
+        end_date=date.today(),
+    )
+    CycleLog.objects.create(cycle=active, log_date=date.today())
+
+    response = _client_for(manager).get(
+        reverse("admin:accounts_farmprofile_supervision", args=[farm.pk])
+    )
+    overview = response.context["sections"][0]
+    statuses = {str(item["label"]): str(item["status"]) for item in overview["items"]}
+    assert "Cycle recolte" in statuses["Cycles récemment terminés"]
+    assert "Cycle planifie" not in statuses["Cycles récemment terminés"]
+    assert "Cycle annule" not in statuses["Cycles récemment terminés"]
+    assert str(date.today()) in statuses["Dernière saisie quotidienne"]
+
+    empty_farm = FarmProfileFactory()
+    empty_response = _client_for(manager).get(
+        reverse("admin:accounts_farmprofile_supervision", args=[empty_farm.pk])
+    )
+    empty_overview = empty_response.context["sections"][0]
+    empty_statuses = {str(item["label"]): str(item["status"]) for item in empty_overview["items"]}
+    assert empty_statuses["Dernière saisie quotidienne"] == "Inconnue"
+
+
+@pytest.mark.django_db
+def test_all_registered_technical_admins_ignore_individual_django_permissions():
+    staff = UserFactory(is_staff=True)
+    technical_labels = {
+        "auth.group",
+        "auth.permission",
+        "token_blacklist.outstandingtoken",
+        "token_blacklist.blacklistedtoken",
+        "notifications.notificationpreference",
+        "notifications.pushtoken",
+        "farm_gps.geolocatedfarm",
+    }
+    technical_labels.update(
+        f"{model._meta.app_label}.{model._meta.model_name}"
+        for model in admin.site._registry
+        if model._meta.app_label == "django_celery_beat"
+    )
+    permissions = Permission.objects.filter(
+        content_type__app_label__in={label.split(".")[0] for label in technical_labels},
+        codename__regex=r"^(view|add|change|delete)_",
+    )
+    staff.user_permissions.add(*permissions)
+    staff = type(staff).objects.get(pk=staff.pk)
+    client = _client_for(staff)
+    super_client = _client_for(_staff_for_role(superuser=True))
+
+    for label in technical_labels:
+        app_label, model_name = label.split(".")
+        model = apps.get_model(app_label, model_name)
+        url = reverse(f"admin:{app_label}_{model._meta.model_name}_changelist")
+        assert client.get(url).status_code == 403, label
+        assert super_client.get(url).status_code == 200, label
+        model_admin = admin.site._registry[model]
+        request = RequestFactory().get(url)
+        request.user = staff
+        assert model_admin.has_module_permission(request) is False
+        assert model_admin.has_view_permission(request) is False
+        assert model_admin.has_add_permission(request) is False
+        assert model_admin.has_change_permission(request) is False
+        assert model_admin.has_delete_permission(request) is False
+        assert model_admin.get_actions(request) == {}
+
+
+@pytest.mark.django_db
+def test_reports_page_links_dispatch_logs_and_marks_only_its_own_state():
+    from common.models import AdminViewState
+
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    report = _report(FarmProfileFactory())
+    ReportDispatchLog.objects.create(
+        report=report, channel="email", recipient="masked", status="success"
+    )
+    client = _client_for(manager)
+    reports_url = reverse("admin:aquaculture_productionreport_changelist")
+    dispatch_url = reverse("admin:aquaculture_reportdispatchlog_changelist")
+
+    badge_before = client.get(reverse("admin:admin_badge_counts")).json()
+    assert badge_before["reports"] >= 1
+    reports_response = client.get(reports_url)
+    assert reports_response.status_code == 200
+    reports_html = reports_response.content.decode()
+    assert "Journaux d" in reports_html and "envoi" in reports_html
+    assert dispatch_url in reports_html
+    assert not AdminViewState.objects.filter(
+        user=manager, section=AdminViewState.SECTION_DISPATCH_LOGS
+    ).exists()
+    assert client.get(dispatch_url).status_code == 200
+    assert AdminViewState.objects.filter(
+        user=manager, section=AdminViewState.SECTION_DISPATCH_LOGS
+    ).exists()
+
+    support = _staff_for_role(RBACConstants.GROUP_SUPPORT)
+    support_response = _client_for(support).get(reports_url)
+    assert support_response.status_code == 403
+    assert dispatch_url not in support_response.content.decode()
+
+
+@pytest.mark.django_db
+def test_commerce_and_support_workspace_links_are_exact_and_role_scoped():
+    allowed = FarmProfileFactory(farm_name="Ferme autorisee")
+    denied = FarmProfileFactory(farm_name="Ferme interdite")
+    allowed_order = _order(allowed)
+    _order(denied)
+    conversation = MessageService.send_user_message(allowed.user, "Contexte prive").conversation
+
+    commerce = _staff_for_role(RBACConstants.GROUP_COMMERCE)
+    commerce_client = _client_for(commerce)
+    workspace = commerce_client.get(
+        reverse("admin:accounts_farmprofile_supervision", args=[allowed.pk])
+    )
+    orders_url = next(section["url"] for section in workspace.context["sections"] if section["key"] == "orders")
+    orders_response = commerce_client.get(orders_url)
+    assert orders_response.status_code == 200
+    assert list(orders_response.context["cl"].queryset) == [allowed_order]
+    assert commerce_client.get(
+        reverse("admin:accounts_farmprofile_supervision", args=[FarmProfileFactory().pk])
+    ).status_code in {403, 404}
+
+    support = _staff_for_role(RBACConstants.GROUP_SUPPORT)
+    support_workspace = _client_for(support).get(
+        reverse("admin:accounts_farmprofile_supervision", args=[allowed.pk])
+    )
+    support_url = next(
+        section["url"] for section in support_workspace.context["sections"] if section["key"] == "support"
+    )
+    assert f"conversation={conversation.pk}" in support_url
+    support_response = _client_for(support).get(support_url)
+    assert support_response.status_code == 200
+    assert support_response.context["selected_conversation"].pk == conversation.pk
 
 
 @pytest.mark.django_db

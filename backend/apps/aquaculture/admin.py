@@ -1312,7 +1312,7 @@ class CycleMetricsAdmin(AquacultureSecuredAdmin):
 @admin.register(ProductionReport)
 class ProductionReportAdmin(AquacultureSecuredAdmin):
     """Administration des rapports de production."""
-    change_list_template = "admin/change_list_responsive.html"
+    change_list_template = "admin/aquaculture/productionreport/change_list.html"
 
     list_display = [
         'id_short',
@@ -1817,6 +1817,18 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
             raise PermissionDenied(_("Accès refusé."))
         from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
+        can_view_dispatch_logs = has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.view_reportdispatchlog",
+        )
+        extra_context = {
+            **(extra_context or {}),
+            "can_view_dispatch_logs": can_view_dispatch_logs,
+            "dispatch_log_count": ReportDispatchLog.objects.count()
+            if can_view_dispatch_logs
+            else None,
+        }
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_PRODUCTION_REPORTS)
         clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)

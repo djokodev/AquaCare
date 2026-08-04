@@ -269,21 +269,27 @@ class AdminConsoleService:
         conversations = Conversation.objects.select_related("user__farm_profile").order_by(
             "-last_message_at"
         )[: cls.PREVIEW_LIMIT]
-        recent_items = [
-            cls._activity(
-                f"conversation-{conversation.pk}",
-                _("%(user)s — %(farm)s")
-                % {
-                    "user": conversation.user.display_name,
-                    "farm": conversation.user.farm_profile.farm_name,
-                },
-                conversation.last_message_at,
-                f'{reverse("admin:chat_support_inbox")}?conversation={conversation.pk}',
+        recent_items = []
+        for conversation in conversations:
+            user = conversation.user
+            safe_user_name = user.business_name or " ".join(
+                part for part in (user.first_name, user.last_name) if part
             )
-            for conversation in conversations
-        ]
+            if not safe_user_name:
+                safe_user_name = _("Utilisateur sans nom")
+            farm = getattr(user, "farm_profile", None)
+            safe_farm_name = farm.farm_name if farm else _("Aucune ferme associee")
+            recent_items.append(
+                cls._activity(
+                    f"conversation-{conversation.pk}",
+                    _("%(user)s — %(farm)s")
+                    % {"user": safe_user_name, "farm": safe_farm_name},
+                    conversation.last_message_at,
+                    f'{reverse("admin:chat_support_inbox")}?conversation={conversation.pk}',
+                )
+            )
         attention = []
-        if recent_items:
+        if unread > 0 and recent_items:
             attention.append(
                 cls._activity(
                     "support-unread-summary",

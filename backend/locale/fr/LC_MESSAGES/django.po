@@ -1215,3 +1215,9 @@ msgstr "Conversations Support nécessitant une attention"
 
 msgid "%(user)s — %(farm)s"
 msgstr "%(user)s — %(farm)s"
+
+msgid "Utilisateur sans nom"
+msgstr "Utilisateur sans nom"
+
+msgid "Aucune ferme associee"
+msgstr "Aucune ferme associée"
