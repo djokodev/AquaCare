@@ -1664,3 +1664,39 @@ msgstr "Business shortcuts"
 
 msgid "Aucun outil technique enregistre."
 msgstr "No technical tools registered."
+
+msgid "Unites actives"
+msgstr "Active units"
+
+msgid "Cycles recemment termines"
+msgstr "Recently completed cycles"
+
+msgid "Derniere saisie quotidienne"
+msgstr "Latest daily entry"
+
+msgid "Incidents sanitaires non resolus"
+msgstr "Unresolved health incidents"
+
+msgid "Rapports recents"
+msgstr "Recent reports"
+
+msgid "Commandes en cours"
+msgstr "Current orders"
+
+msgid "Dernieres commandes"
+msgstr "Latest orders"
+
+msgid "Conversation disponible"
+msgstr "Conversation available"
+
+msgid "Non disponible"
+msgstr "Unavailable"
+
+msgid "Derniere activite Support"
+msgstr "Latest Support activity"
+
+msgid "Conversations Support necessitant une attention"
+msgstr "Support conversations requiring attention"
+
+msgid "%(user)s — %(farm)s"
+msgstr "%(user)s — %(farm)s"

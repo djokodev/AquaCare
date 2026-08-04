@@ -266,16 +266,32 @@ class AdminConsoleService:
         from chat.models import Conversation
 
         unread = Conversation.objects.aggregate(total=Sum("unread_count_admin"))["total"] or 0
-        conversations = Conversation.objects.order_by("-last_message_at")[: cls.PREVIEW_LIMIT]
+        conversations = Conversation.objects.select_related("user__farm_profile").order_by(
+            "-last_message_at"
+        )[: cls.PREVIEW_LIMIT]
         recent_items = [
             cls._activity(
                 f"conversation-{conversation.pk}",
-                _("Conversation récente"),
+                _("%(user)s — %(farm)s")
+                % {
+                    "user": conversation.user.display_name,
+                    "farm": conversation.user.farm_profile.farm_name,
+                },
                 conversation.last_message_at,
                 f'{reverse("admin:chat_support_inbox")}?conversation={conversation.pk}',
             )
             for conversation in conversations
         ]
+        attention = []
+        if recent_items:
+            attention.append(
+                cls._activity(
+                    "support-unread-summary",
+                    _("Conversations Support necessitant une attention"),
+                    recent_items[0]["occurred_at"],
+                    reverse("admin:chat_support_inbox"),
+                )
+            )
         return {
             "cards": [
                 cls._card(
@@ -286,7 +302,7 @@ class AdminConsoleService:
                     "fas fa-inbox",
                 )
             ],
-            "activities": recent_items,
+            "activities": attention,
             "conversations": recent_items,
             "shortcuts": [
                 cls._shortcut("support_inbox", _("Ouvrir la boite de reception"), "admin:chat_support_inbox")

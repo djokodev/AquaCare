@@ -91,7 +91,9 @@ def badge_counts_view(request):
         last_seen = AdminViewState.get_last_seen(request.user, AdminViewState.SECTION_DISPATCH_LOGS)
         dispatch_logs = ReportDispatchLog.objects.filter(created_at__gt=last_seen).count()
 
-    total = chat + cycle_logs + sanitary_logs + orders + production_reports + dispatch_logs
+    activity_alerts = cycle_logs + sanitary_logs
+    reports = production_reports + dispatch_logs
+    total = chat + activity_alerts + orders + reports
     data = {
         'chat': chat,
         'cycle_logs': cycle_logs,
@@ -99,6 +101,8 @@ def badge_counts_view(request):
         'orders': orders,
         'production_reports': production_reports,
         'dispatch_logs': dispatch_logs,
+        'activity_alerts': activity_alerts,
+        'reports': reports,
         'total': total,
     }
     cache.set(cache_key, data, 30)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import re
 from datetime import date
 from decimal import Decimal
@@ -81,6 +83,25 @@ def _report(farm):
         report_type="daily",
         period_start=date.today(),
         period_end=date.today(),
+    )
+
+
+def _feeding_plan(cycle, *, week=1):
+    return FeedingPlan.objects.create(
+        cycle=cycle,
+        week_number=week,
+        estimated_fish_count=100,
+        average_weight=Decimal("10.00"),
+        biomass=Decimal("1.00"),
+        daily_feed_amount=Decimal("0.10"),
+        feeding_rate=Decimal("1.00"),
+        meals_per_day=2,
+        feed_per_meal=Decimal("0.05"),
+        recommended_feed_type="Test",
+        feed_size_mm=Decimal("1.0"),
+        protein_percentage=30,
+        start_date=date.today(),
+        end_date=date.today(),
     )
 
 
@@ -244,6 +265,165 @@ def test_farm_workspace_has_complete_role_scoped_sections(role, expected_keys):
     assert "GPS disponible" in html
     if role == RBACConstants.GROUP_MANAGERS:
         assert "Support" not in [section["key"] for section in response.context["sections"]]
+
+
+@pytest.mark.django_db
+def test_manager_workspace_section_links_follow_filters_and_do_not_leak_other_farm():
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    farm = FarmProfileFactory(farm_name="Ferme cible")
+    other = FarmProfileFactory(farm_name="Ferme hors cible")
+    target_unit = _production_unit(farm, name="Unite cible")
+    _production_unit(other, name="Unite hors cible")
+    cycle = ProductionCycleFactory(farm_profile=farm, cycle_name="Cycle cible")
+    ProductionCycleFactory(farm_profile=other, cycle_name="Cycle hors cible")
+    _feeding_plan(cycle)
+    client = _client_for(manager)
+    workspace = client.get(reverse("admin:accounts_farmprofile_supervision", args=[farm.pk]))
+
+    for section in workspace.context["sections"]:
+        if section["key"] == "overview":
+            continue
+        response = client.get(section["url"])
+        assert response.status_code == 200, section["key"]
+        queryset = response.context["cl"].queryset
+        if section["key"] == "units":
+            assert list(queryset) == [target_unit]
+        elif section["key"] in {"cycles", "activity", "sanitary", "feeding"}:
+            if section["key"] in {"activity", "sanitary", "feeding"}:
+                assert all(obj.cycle.farm_profile_id == farm.pk for obj in queryset)
+            else:
+                assert all(obj.farm_profile_id == farm.pk for obj in queryset)
+        elif section["key"] in {"reports", "orders"}:
+            assert all(obj.farm_profile_id == farm.pk for obj in queryset)
+
+    feeding_url = next(section["url"] for section in workspace.context["sections"] if section["key"] == "feeding")
+    assert client.get(feeding_url.replace(str(farm.pk), "invalid")).status_code in {200, 302}
+
+
+@pytest.mark.django_db
+def test_aggregated_badges_cover_sanitary_and_dispatch_without_cycle_log():
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    incident = _incident(ProductionCycleFactory())
+    report = _report(FarmProfileFactory())
+    ReportDispatchLog.objects.create(
+        report=report,
+        channel="email",
+        recipient="masked",
+        status="success",
+    )
+    response = _client_for(manager).get(reverse("admin:admin_badge_counts"))
+    data = response.json()
+
+    assert incident.pk is not None
+    assert data["cycle_logs"] == 0
+    assert data["sanitary_logs"] >= 1
+    assert data["activity_alerts"] == data["sanitary_logs"]
+    assert data["dispatch_logs"] >= 1
+    assert data["reports"] == data["production_reports"] + data["dispatch_logs"]
+    navigation = response.wsgi_request.user
+    from common.admin_navigation import navigation_for_user
+    badges = {item.key: item.badge_key for item in navigation_for_user(navigation)}
+    assert badges["activity"] == "activity_alerts"
+    assert badges["reports"] == "reports"
+
+
+@pytest.mark.django_db
+def test_zero_values_are_not_replaced_or_rendered_unknown_in_admin():
+    cycle = ProductionCycleFactory(
+        final_count=0,
+        current_count=42,
+        final_average_weight=Decimal("0"),
+        current_average_weight=Decimal("12"),
+        final_biomass=Decimal("0"),
+        current_biomass=Decimal("9"),
+        survival_rate=Decimal("0"),
+        fcr=Decimal("0"),
+    )
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    admin_instance = admin.site._registry[ProductionCycle]
+    request = RequestFactory().post("/admin/")
+    request.user = manager
+    response = admin_instance.export_cycles_csv(request, ProductionCycle.objects.filter(pk=cycle.pk))
+    row = list(csv.reader(io.StringIO(response.content.decode())))[-1]
+
+    assert row[8] == "0"
+    assert row[9] == "0.0"
+    assert row[11] == "0.00"
+    assert row[13] == "0.00"
+    assert row[14] == "0.00"
+    assert admin_instance.current_biomass_display(cycle) == "9.0 kg"
+    cycle.current_biomass = Decimal("0")
+    assert admin_instance.current_biomass_display(cycle) == "0.0 kg"
+    assert "0.0" in str(admin_instance.survival_rate_display(cycle))
+    assert "0.00" in str(admin_instance.fcr_display(cycle))
+
+
+@pytest.mark.django_db
+def test_manager_direct_posts_without_custom_permissions_are_forbidden_without_audit():
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    incident = _incident(ProductionCycleFactory())
+    report = _report(FarmProfileFactory())
+    group = manager.groups.get(name=RBACConstants.GROUP_MANAGERS)
+    group.permissions.remove(
+        Permission.objects.get(content_type__app_label="aquaculture", codename="resolve_sanitarylog"),
+        Permission.objects.get(content_type__app_label="aquaculture", codename="regenerate_productionreport"),
+    )
+    manager = type(manager).objects.get(pk=manager.pk)
+    client = _client_for(manager)
+    before_audits = LogEntry.objects.filter(user=manager).count()
+
+    sanitary_response = client.post(
+        reverse("admin:aquaculture_sanitarylog_changelist"),
+        {"action": "resolve_selected_issues", "_selected_action": str(incident.pk)},
+    )
+    report_response = client.post(
+        reverse("admin:aquaculture_productionreport_changelist"),
+        {"action": "regenerate_report_action", "_selected_action": str(report.pk)},
+    )
+    incident.refresh_from_db()
+    assert sanitary_response.status_code == 403
+    assert report_response.status_code == 403
+    assert incident.resolved is False
+    assert LogEntry.objects.filter(user=manager).count() == before_audits
+
+
+@pytest.mark.django_db
+def test_jazzmin_top_menu_does_not_duplicate_accounts_model_navigation():
+    from aquacare_api.settings.jazzmin import JAZZMIN_SETTINGS
+
+    assert {"app": "accounts"} not in JAZZMIN_SETTINGS["topmenu_links"]
+
+
+@pytest.mark.django_db
+def test_feeding_plan_workspace_query_growth_is_bounded():
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    farm = FarmProfileFactory()
+    cycle = ProductionCycleFactory(farm_profile=farm)
+    _feeding_plan(cycle)
+    client = _client_for(manager)
+    url = reverse("admin:accounts_farmprofile_supervision", args=[farm.pk])
+    with CaptureQueriesContext(connection) as small_capture:
+        assert client.get(url).status_code == 200
+    for week in range(2, 12):
+        _feeding_plan(cycle, week=week)
+    with CaptureQueriesContext(connection) as large_capture:
+        assert client.get(url).status_code == 200
+    assert len(large_capture) <= len(small_capture) + 1
+
+
+@pytest.mark.django_db
+def test_conversation_admin_query_growth_is_bounded():
+    support = _staff_for_role(RBACConstants.GROUP_SUPPORT)
+    MessageService.send_user_message(UserFactory(), "Une conversation")
+    client = _client_for(support)
+    url = reverse("admin:chat_conversation_changelist")
+    with CaptureQueriesContext(connection) as small_capture:
+        assert client.get(url).status_code == 200
+    for index in range(20):
+        MessageService.send_user_message(UserFactory(), f"Conversation {index}")
+    with CaptureQueriesContext(connection) as large_capture:
+        assert client.get(url).status_code == 200
+    assert len(large_capture) <= len(small_capture) + 1
 
 
 @pytest.mark.django_db

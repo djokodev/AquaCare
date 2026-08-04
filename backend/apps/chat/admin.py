@@ -113,7 +113,7 @@ class ConversationAdmin(ChatSecuredAdmin):
     def get_queryset(self, request):
         """Annotate queryset with message count to avoid N+1."""
         qs = super().get_queryset(request)
-        return qs.annotate(_message_count=Count('messages'))
+        return qs.select_related("user").annotate(_message_count=Count('messages'))
 
     def user_display(self, obj):
         """Display user name or phone (masked for non-support)."""
@@ -122,7 +122,9 @@ class ConversationAdmin(ChatSecuredAdmin):
 
     def message_count(self, obj):
         """Display total message count using annotated value."""
-        return getattr(obj, '_message_count', obj.messages.count())
+        if hasattr(obj, '_message_count'):
+            return obj._message_count
+        return obj.messages.count()
     message_count.short_description = _("Messages")
     message_count.admin_order_field = '_message_count'
 

@@ -394,7 +394,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
 
     def current_biomass_display(self, obj):
         """Display current biomass with formatting."""
-        if obj.current_biomass:
+        if obj.current_biomass is not None:
             return f"{obj.current_biomass:.1f} kg"
         return "-"
     current_biomass_display.short_description = _('Biomasse')
@@ -402,7 +402,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
 
     def survival_rate_display(self, obj):
         """Display survival rate with color coding."""
-        if obj.survival_rate:
+        if obj.survival_rate is not None:
             if obj.survival_rate >= 85:
                 color = '#28A745'
             elif obj.survival_rate >= 70:
@@ -420,7 +420,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
 
     def fcr_display(self, obj):
         """Display FCR with color coding."""
-        if obj.fcr:
+        if obj.fcr is not None:
             if obj.fcr <= 1.5:
                 color = '#28A745'
             elif obj.fcr <= 2.0:
@@ -438,13 +438,13 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
 
     def performance_indicator(self, obj):
         """Overall performance indicator."""
-        if obj.status != 'active' or not obj.survival_rate:
+        if obj.status != 'active' or obj.survival_rate is None:
             return "-"
 
         score = 0
         if obj.survival_rate >= 80:
             score += 1
-        if obj.fcr and obj.fcr <= 2.0:
+        if obj.fcr is not None and obj.fcr <= 2.0:
             score += 1
         if obj.days_active() <= 150:
             score += 1
@@ -494,13 +494,17 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
                 cycle.end_date or '-',
                 duration,
                 cycle.initial_count,
-                cycle.final_count or cycle.current_count,
+                cycle.final_count if cycle.final_count is not None else cycle.current_count,
                 f"{cycle.survival_rate:.1f}" if cycle.survival_rate is not None else '-',
                 cycle.initial_average_weight,
-                cycle.final_average_weight or cycle.current_average_weight,
+                cycle.final_average_weight
+                if cycle.final_average_weight is not None
+                else cycle.current_average_weight,
                 cycle.total_feed_consumed,
                 f"{cycle.fcr:.2f}" if cycle.fcr is not None else '-',
-                cycle.final_biomass or cycle.current_biomass
+                cycle.final_biomass
+                if cycle.final_biomass is not None
+                else cycle.current_biomass,
             ])
 
         # Audit
@@ -713,7 +717,7 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
     production_unit_display.short_description = _('Unité')
 
     def survival_rate_display(self, obj):
-        return obj.survival_rate_pct or '-'
+        return obj.survival_rate_pct if obj.survival_rate_pct is not None else '-'
     survival_rate_display.short_description = _('Survie')
 
 
@@ -967,6 +971,14 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
 
     @admin.action(description=_("Marquer les incidents selectionnes comme resolus"))
     def resolve_selected_issues(self, request, queryset):
+        if not (
+            request.user.is_superuser
+            or (
+                has_capability(request.user, AdminCapability.RESOLVE_SANITARY_ISSUES)
+                and request.user.has_perm("aquaculture.resolve_sanitarylog")
+            )
+        ):
+            raise PermissionDenied(_("Accès refusé."))
         resolved_count = 0
         for sanitary_log in queryset.select_related("cycle__farm_profile__user"):
             try:
@@ -1105,6 +1117,18 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
     id_short.short_description = _('ID')
 
     def changelist_view(self, request, extra_context=None):
+        if (
+            request.method == "POST"
+            and request.POST.get("action") == "resolve_selected_issues"
+            and not (
+                request.user.is_superuser
+                or (
+                    has_capability(request.user, AdminCapability.RESOLVE_SANITARY_ISSUES)
+                    and request.user.has_perm("aquaculture.resolve_sanitarylog")
+                )
+            )
+        ):
+            raise PermissionDenied(_("Accès refusé."))
         from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_SANITARY_LOGS)
@@ -1120,7 +1144,7 @@ class FeedingPlanAdmin(AquacultureSecuredAdmin):
         'biomass', 'daily_feed_amount', 'feeding_rate', 'is_active'
     ]
     list_filter = [
-        'is_active', 'week_number', 'protein_percentage', 'start_date'
+        'cycle__farm_profile', 'is_active', 'week_number', 'protein_percentage', 'start_date'
     ]
     search_fields = ['cycle__cycle_name', 'recommended_feed_type']
     readonly_fields = ['id', 'created_at']
@@ -1595,21 +1619,23 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
                 days = escape(str(cycle.get('days_active', '?')))
 
                 fcr = metrics.get('fcr')
-                fcr_color = '#059669' if fcr and float(fcr) <= 1.5 else (
-                    '#f59e0b' if fcr and float(fcr) <= 2.0 else '#dc2626'
+                fcr_color = '#059669' if fcr is not None and float(fcr) <= 1.5 else (
+                    '#f59e0b' if fcr is not None and float(fcr) <= 2.0 else '#dc2626'
                 )
-                fcr_str = escape(f'{float(fcr):.2f}' if fcr else '—')
+                fcr_str = escape(f'{float(fcr):.2f}' if fcr is not None else '—')
 
                 survival = metrics.get('survival_rate')
-                surv_color = '#059669' if survival and float(survival) >= 85 else (
-                    '#f59e0b' if survival and float(survival) >= 70 else '#dc2626'
+                surv_color = '#059669' if survival is not None and float(survival) >= 85 else (
+                    '#f59e0b' if survival is not None and float(survival) >= 70 else '#dc2626'
                 )
-                surv_str = escape(f'{float(survival):.1f}%' if survival else '—')
+                surv_str = escape(
+                    f'{float(survival):.1f}%' if survival is not None else '—'
+                )
 
                 biomass = escape(
                     str(
                         f'{float(metrics["current_biomass"]):.1f} kg'
-                        if metrics.get('current_biomass')
+                        if metrics.get('current_biomass') is not None
                         else '—'
                     )
                 )
@@ -1777,6 +1803,18 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
             messages.success(request, _('{} rapport(s) validé(s).').format(count))
 
     def changelist_view(self, request, extra_context=None):
+        action = request.POST.get("action") if request.method == "POST" else None
+        if action == "download_report_pdf_action" and not self.has_report_download_permission(request):
+            raise PermissionDenied(_("Accès refusé."))
+        if action == "regenerate_report_action" and not (
+            request.user.is_superuser
+            or has_capability_and_permission(
+                request.user,
+                AdminCapability.VIEW_REPORTS,
+                "aquaculture.regenerate_productionreport",
+            )
+        ):
+            raise PermissionDenied(_("Accès refusé."))
         from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_PRODUCTION_REPORTS)

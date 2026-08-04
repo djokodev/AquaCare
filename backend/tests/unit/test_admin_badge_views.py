@@ -177,6 +177,8 @@ class TestBadgeCountsView:
         assert 'cycle_logs' in data
         assert 'sanitary_logs' in data
         assert 'orders' in data
+        assert 'activity_alerts' in data
+        assert 'reports' in data
         assert 'total' in data
         assert isinstance(data['total'], int)
 
@@ -185,7 +187,7 @@ class TestBadgeCountsView:
         response = admin_client.get('/admin/api/badge-counts/')
         data = json.loads(response.content)
 
-        expected_total = sum(value for key, value in data.items() if key != 'total')
+        expected_total = data['chat'] + data['activity_alerts'] + data['orders'] + data['reports']
         assert data['total'] == expected_total
 
     def test_support_user_sees_only_chat(self, support_user):

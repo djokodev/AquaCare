@@ -92,18 +92,70 @@ class FarmSupervisionService:
     def _overview_section(cls, user, farm) -> dict:
         """Résumé limité aux données que le rôle peut réellement consulter."""
         items: list[dict] = []
+        unknown = _("Inconnue")
+        if has_capability_and_permission(
+            user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+            "aquaculture.view_productionunit",
+        ):
+            active_units = farm.production_units.filter(status="active").count()
+            items.append({"label": _("Unites actives"), "status": active_units, "url": ""})
         if has_capability_and_permission(
             user,
             AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
             "aquaculture.view_productioncycle",
         ):
             active_cycles = farm.production_cycles.filter(status="active").count()
+            items.append({"label": _("Cycles actifs"), "status": active_cycles, "url": ""})
+            completed = farm.production_cycles.exclude(status="active").order_by("-end_date")[:3]
             items.append(
-                {"label": _("Cycles actifs"), "status": active_cycles, "url": ""}
+                {
+                    "label": _("Cycles recemment termines"),
+                    "status": ", ".join(str(cycle) for cycle in completed) or unknown,
+                    "url": "",
+                }
+            )
+        if has_capability_and_permission(
+            user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+            "aquaculture.view_cyclelog",
+        ):
+            last_log = farm.production_cycles.order_by("-logs__created_at").values_list(
+                "logs__log_date", flat=True
+            ).first()
+            items.append({"label": _("Derniere saisie quotidienne"), "status": last_log or unknown, "url": ""})
+        if has_capability_and_permission(
+            user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+            "aquaculture.view_sanitarylog",
+        ):
+            incidents = farm.production_cycles.filter(sanitary_logs__resolved=False).count()
+            items.append({"label": _("Incidents sanitaires non resolus"), "status": incidents, "url": ""})
+        if has_capability_and_permission(
+            user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.view_productionreport",
+        ):
+            reports = farm.production_reports.filter(is_deleted=False).order_by("-created_at")[:3]
+            items.append(
+                {
+                    "label": _("Rapports recents"),
+                    "status": ", ".join(str(report) for report in reports) or unknown,
+                    "url": "",
+                }
             )
         if has_capability_and_permission(user, AdminCapability.VIEW_COMMERCE, "commerce.view_order"):
+            current_orders = farm.orders.exclude(status="received")
             items.append(
-                {"label": _("Commandes"), "status": farm.orders.count(), "url": ""}
+                {"label": _("Commandes en cours"), "status": current_orders.count(), "url": ""}
+            )
+            latest_orders = farm.orders.order_by("-created_at")[:3]
+            items.append(
+                {
+                    "label": _("Dernieres commandes"),
+                    "status": ", ".join(order.order_number for order in latest_orders) or unknown,
+                    "url": "",
+                }
             )
         if has_capability_and_permission(
             user,
@@ -113,8 +165,22 @@ class FarmSupervisionService:
             conversation = getattr(farm.user, "support_conversation", None)
             items.append(
                 {
+                    "label": _("Conversation disponible"),
+                    "status": _("Oui") if conversation else _("Non disponible"),
+                    "url": reverse("admin:chat_support_inbox"),
+                }
+            )
+            items.append(
+                {
                     "label": _("Messages non lus"),
                     "status": conversation.unread_count_admin if conversation else 0,
+                    "url": reverse("admin:chat_support_inbox"),
+                }
+            )
+            items.append(
+                {
+                    "label": _("Derniere activite Support"),
+                    "status": conversation.last_message_at if conversation else unknown,
                     "url": reverse("admin:chat_support_inbox"),
                 }
             )
@@ -123,7 +189,7 @@ class FarmSupervisionService:
             "label": _("Vue d'ensemble"),
             "count": None,
             "url": "#farm-overview",
-            "items": items[: cls.PREVIEW_LIMIT],
+            "items": items,
         }
 
     @classmethod
@@ -173,7 +239,13 @@ class FarmSupervisionService:
             (
                 "feeding",
                 _("Alimentation"),
-                FeedingPlan.objects.filter(cycle__farm_profile=farm).order_by("-created_at"),
+                FeedingPlan.objects.filter(cycle__farm_profile=farm)
+                .select_related(
+                    "cycle",
+                    "cycle_unit_allocation",
+                    "cycle_unit_allocation__production_unit",
+                )
+                .order_by("-created_at"),
                 "admin:aquaculture_feedingplan_changelist",
                 "admin:aquaculture_feedingplan_change",
                 "aquaculture.view_feedingplan",

@@ -1179,3 +1179,39 @@ msgstr "Raccourcis métier"
 
 msgid "Aucun outil technique enregistre."
 msgstr "Aucun outil technique enregistré."
+
+msgid "Unites actives"
+msgstr "Unités actives"
+
+msgid "Cycles recemment termines"
+msgstr "Cycles récemment terminés"
+
+msgid "Derniere saisie quotidienne"
+msgstr "Dernière saisie quotidienne"
+
+msgid "Incidents sanitaires non resolus"
+msgstr "Incidents sanitaires non résolus"
+
+msgid "Rapports recents"
+msgstr "Rapports récents"
+
+msgid "Commandes en cours"
+msgstr "Commandes en cours"
+
+msgid "Dernieres commandes"
+msgstr "Dernières commandes"
+
+msgid "Conversation disponible"
+msgstr "Conversation disponible"
+
+msgid "Non disponible"
+msgstr "Non disponible"
+
+msgid "Derniere activite Support"
+msgstr "Dernière activité Support"
+
+msgid "Conversations Support necessitant une attention"
+msgstr "Conversations Support nécessitant une attention"
+
+msgid "%(user)s — %(farm)s"
+msgstr "%(user)s — %(farm)s"

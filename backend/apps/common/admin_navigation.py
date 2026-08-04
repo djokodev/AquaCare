@@ -71,7 +71,7 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
                     _("Activites et alertes"),
                     "fas fa-bell",
                     "admin:index",
-                    "cycle_logs",
+                    "activity_alerts",
                     "#activities-alerts",
                 )
             )
@@ -84,7 +84,7 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
                     _("Rapports"),
                     "fas fa-chart-line",
                     "admin:aquaculture_productionreport_changelist",
-                    "production_reports",
+                    "reports",
                 )
             )
 

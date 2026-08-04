@@ -32,7 +32,6 @@ JAZZMIN_SETTINGS = {
     "topmenu_links": [
         {"name": _("Accueil"), "url": "admin:index", "permissions": ["auth.view_user"]},
         {"name": _("Messagerie Support"), "url": "admin:chat_support_inbox", "permissions": ["chat.view_conversation"]},
-        {"app": "accounts"},
     ],
 
     # Side menu configuration

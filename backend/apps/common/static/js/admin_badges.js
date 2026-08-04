@@ -8,7 +8,7 @@
   // Ne pas exécuter sur la page de login
   if (document.body && document.body.classList.contains('login')) return;
 
-  const SECTIONS = ['chat', 'cycle_logs', 'sanitary_logs', 'orders', 'production_reports', 'dispatch_logs'];
+  const SECTIONS = ['chat', 'cycle_logs', 'sanitary_logs', 'orders', 'production_reports', 'dispatch_logs', 'activity_alerts', 'reports'];
   const sidebar = document.getElementById('jazzy-sidebar');
   const badgeUrl = sidebar && sidebar.dataset.badgeUrl;
   if (!badgeUrl) return;
