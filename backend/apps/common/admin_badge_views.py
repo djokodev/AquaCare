@@ -2,12 +2,10 @@
 Vue et enregistrement d'URL pour les badges de notification de l'admin.
 """
 
-from django.contrib import admin
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.db.models import Sum
 from django.http import JsonResponse
-from django.urls import path
 
 from .admin_capabilities import (
     AdminCapability,
@@ -105,23 +103,3 @@ def badge_counts_view(request):
     }
     cache.set(cache_key, data, 30)
     return JsonResponse(data)
-
-
-def register_badge_urls():
-    """
-    Injecte l'URL /admin/api/badge-counts/ dans le site d'administration.
-    Appelé depuis CommonConfig.ready() après le chargement complet des apps.
-    """
-    original_get_urls = admin.site.get_urls
-
-    def _get_urls():
-        custom_urls = [
-            path(
-                'api/badge-counts/',
-                admin.site.admin_view(badge_counts_view),
-                name='admin_badge_counts',
-            ),
-        ]
-        return custom_urls + original_get_urls()
-
-    admin.site.get_urls = _get_urls

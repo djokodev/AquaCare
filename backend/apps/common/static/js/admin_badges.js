@@ -1,6 +1,6 @@
 /**
  * Badges de notification temps réel pour la sidebar AquaCare Admin.
- * Poll /admin/api/badge-counts/ toutes les 60 secondes.
+ * Interroge l'URL nommee rendue par AquaCareAdminSite toutes les 60 secondes.
  */
 (function () {
   'use strict';
@@ -9,6 +9,9 @@
   if (document.body && document.body.classList.contains('login')) return;
 
   const SECTIONS = ['chat', 'cycle_logs', 'sanitary_logs', 'orders', 'production_reports', 'dispatch_logs'];
+  const sidebar = document.getElementById('jazzy-sidebar');
+  const badgeUrl = sidebar && sidebar.dataset.badgeUrl;
+  if (!badgeUrl) return;
 
   function injectBadge(key, count) {
     document.querySelectorAll('[data-badge-key="' + key + '"]').forEach(function (link) {
@@ -24,7 +27,7 @@
   }
 
   function fetchCounts() {
-    fetch('/admin/api/badge-counts/', { credentials: 'same-origin' })
+    fetch(badgeUrl, { credentials: 'same-origin' })
       .then(function (response) {
         // admin_view() redirige vers login si non authentifié → reçoit HTML
         var contentType = response.headers.get('content-type') || '';

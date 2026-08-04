@@ -111,7 +111,7 @@ class AdminSanitaryApplicationService:
         if not has_capability_and_permission(
             actor,
             AdminCapability.RESOLVE_SANITARY_ISSUES,
-            "aquaculture.change_sanitarylog",
+            "aquaculture.resolve_sanitarylog",
         ):
             raise PermissionDenied(_("Resolution sanitaire Admin non autorisee."))
         if sanitary_log.cycle.farm_profile.user_id != farm_owner.pk:

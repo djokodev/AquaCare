@@ -19,7 +19,6 @@ from common.admin_capabilities import (
 )
 from common.admin_mixins import (
     CommerceOperatorMixin,
-    RBACConstants,
     SecuredModelAdmin,
 )
 from django.contrib import admin, messages
@@ -343,7 +342,7 @@ class OrderAdmin(CommerceSecuredAdmin):
         return request.user.is_superuser or has_capability_and_permission(
             request.user,
             AdminCapability.MANAGE_COMMERCE,
-            "commerce.view_order",
+            "commerce.download_order_document",
         )
 
     @staticmethod
@@ -414,7 +413,7 @@ class OrderAdmin(CommerceSecuredAdmin):
 
         if request.user.is_superuser:
             search_fields.append('user__phone_number')
-        elif request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists():
+        elif has_capability(request.user, AdminCapability.MANAGE_COMMERCE):
             search_fields.append('user__phone_number')
 
         return search_fields
@@ -424,15 +423,9 @@ class OrderAdmin(CommerceSecuredAdmin):
         actions = super().get_actions(request)
         actions.pop('delete_selected', None)
 
-        if not request.user.is_superuser:
-            # Seuls commerce operators peuvent generer PDF
-            is_commerce = request.user.groups.filter(
-                name=RBACConstants.GROUP_COMMERCE
-            ).exists()
-
-            if not is_commerce:
-                actions.pop('generate_pdf_fr_action', None)
-                actions.pop('generate_pdf_en_action', None)
+        if not self.has_order_document_permission(request):
+            actions.pop('generate_pdf_fr_action', None)
+            actions.pop('generate_pdf_en_action', None)
 
         return actions
 
@@ -496,7 +489,7 @@ class OrderAdmin(CommerceSecuredAdmin):
             or has_capability_and_permission(
                 request.user,
                 AdminCapability.MANAGE_COMMERCE,
-                "commerce.change_order",
+                "commerce.fulfil_order",
             )
         )
 
@@ -1084,8 +1077,8 @@ class OrderItemAdmin(CommerceSecuredAdmin):
     def order_number(self, obj):
         """Lien vers commande."""
         return format_html(
-            '<a href="/admin/commerce/order/{}/change/">{}</a>',
-            obj.order.id,
+            '<a href="{}">{}</a>',
+            reverse('admin:commerce_order_change', args=[obj.order.id]),
             obj.order.order_number
         )
     order_number.short_description = _('Commande')

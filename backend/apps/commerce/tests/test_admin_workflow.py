@@ -225,7 +225,7 @@ def test_workflow_action_remains_available_to_commerce_but_not_manager(workflow_
 
 
 @pytest.mark.django_db
-def test_workflow_requires_commerce_capability_and_change_permission():
+def test_workflow_requires_commerce_capability_and_explicit_permission():
     commerce = User.objects.create_user(
         phone_number="+237699100008",
         password="testpass123",
@@ -240,7 +240,7 @@ def test_workflow_requires_commerce_capability_and_change_permission():
     commerce_group.permissions.remove(
         Permission.objects.get(
             content_type__app_label="commerce",
-            codename="change_order",
+            codename="fulfil_order",
         )
     )
     commerce = User.objects.get(pk=commerce.pk)

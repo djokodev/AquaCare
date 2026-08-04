@@ -87,14 +87,14 @@ def test_support_mutation_requires_csrf():
 
 
 @pytest.mark.django_db
-def test_mark_read_requires_conversation_change_permission():
+def test_mark_read_requires_explicit_permission():
     support = _support_user()
     conversation, message = _unread_conversation()
     support_group = Group.objects.get(name=RBACConstants.GROUP_SUPPORT)
     support_group.permissions.remove(
         Permission.objects.get(
             content_type__app_label="chat",
-            codename="change_conversation",
+            codename="mark_conversation_read",
         )
     )
     support = type(support).objects.get(pk=support.pk)

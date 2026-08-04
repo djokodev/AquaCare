@@ -67,6 +67,27 @@
     overflow-wrap: anywhere;
 }
 
+body.app-accounts.model-farmprofile.change-list .aquacare-responsive-table,
+body.app-accounts.model-user.change-list .aquacare-responsive-table,
+body.app-aquaculture.model-productioncycle.change-list .aquacare-responsive-table,
+body.app-aquaculture.model-cyclelog.change-list .aquacare-responsive-table,
+body.app-aquaculture.model-sanitarylog.change-list .aquacare-responsive-table,
+body.app-aquaculture.model-productionreport.change-list .aquacare-responsive-table,
+.farm-supervision,
+.inbox-layout {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+body.app-accounts.model-farmprofile.change-list .aquacare-responsive-table #result_list,
+body.app-accounts.model-user.change-list .aquacare-responsive-table #result_list,
+body.app-aquaculture.model-productioncycle.change-list .aquacare-responsive-table #result_list,
+body.app-aquaculture.model-cyclelog.change-list .aquacare-responsive-table #result_list,
+body.app-aquaculture.model-sanitarylog.change-list .aquacare-responsive-table #result_list,
+body.app-aquaculture.model-productionreport.change-list .aquacare-responsive-table #result_list {
+    min-width: 720px;
+}
+
 @media (max-width: 767.98px) {
     #jazzy-sidebar .form-inline {
         display: block;
@@ -959,4 +980,19 @@ input[name="_continue"] {
 .small-box .inner h3,
 .small-box .inner p {
     color: var(--text-dark) !important;
+}
+
+/* Console metier: les cards neutres ont un en-tete clair dans Jazzmin. */
+.aquacare-console {
+    width: 100%;
+}
+
+.aquacare-console .card-header .card-title,
+.farm-supervision .card-header .card-title,
+.aquacare-console a.btn.btn-outline-success {
+    color: var(--text-dark) !important;
+}
+
+.aquacare-console > .clearfix {
+    clear: both;
 }

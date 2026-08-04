@@ -86,19 +86,19 @@ ROLE_DJANGO_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "aquaculture.view_cyclelog",
         "aquaculture.view_feedingplan",
         "aquaculture.view_sanitarylog",
-        "aquaculture.change_sanitarylog",
+        "aquaculture.resolve_sanitarylog",
         "aquaculture.view_calibrationoperation",
         "aquaculture.view_finalharvestoperation",
         "aquaculture.view_nutritionalguide",
         "aquaculture.view_cyclemetrics",
         "aquaculture.view_productionreport",
-        "aquaculture.change_productionreport",
+        "aquaculture.export_productioncycle",
+        "aquaculture.download_productionreport",
+        "aquaculture.regenerate_productionreport",
         "aquaculture.view_reportdispatchlog",
         "commerce.view_order",
         "commerce.view_orderitem",
         "notifications.view_notification",
-        "notifications.view_notificationpreference",
-        "notifications.view_pushtoken",
     ),
     RBACConstants.GROUP_COMMERCE: (
         "accounts.view_farmprofile",
@@ -107,26 +107,72 @@ ROLE_DJANGO_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "commerce.add_product",
         "commerce.change_product",
         "commerce.view_order",
-        "commerce.change_order",
+        "commerce.fulfil_order",
+        "commerce.download_order_document",
         "commerce.view_orderitem",
     ),
     RBACConstants.GROUP_SUPPORT: (
         "accounts.view_user",
         "accounts.view_farmprofile",
         "chat.view_conversation",
-        "chat.change_conversation",
+        "chat.mark_conversation_read",
+        "chat.reply_conversation",
         "chat.view_message",
-        "chat.add_message",
         "notifications.view_notification",
-        "notifications.view_notificationpreference",
-        "notifications.view_pushtoken",
+    ),
+}
+
+
+# Permissions d'actions Admin sans mutation générique du snapshot. Elles sont
+# créées par ``setup_rbac`` sur le ContentType existant, donc sans migration de
+# modèle et sans modifier les contrats API/mobile.
+CUSTOM_ADMIN_PERMISSIONS: dict[str, tuple[str, str, str]] = {
+    "aquaculture.resolve_sanitarylog": (
+        "aquaculture",
+        "sanitarylog",
+        "Can resolve sanitary incidents from the Admin workflow",
+    ),
+    "aquaculture.export_productioncycle": (
+        "aquaculture",
+        "productioncycle",
+        "Can export production cycles from the Admin workflow",
+    ),
+    "aquaculture.download_productionreport": (
+        "aquaculture",
+        "productionreport",
+        "Can download an existing production report PDF",
+    ),
+    "aquaculture.regenerate_productionreport": (
+        "aquaculture",
+        "productionreport",
+        "Can regenerate production reports from the Admin workflow",
+    ),
+    "commerce.fulfil_order": (
+        "commerce",
+        "order",
+        "Can fulfil orders through the controlled Admin workflow",
+    ),
+    "commerce.download_order_document": (
+        "commerce",
+        "order",
+        "Can generate and download order documents",
+    ),
+    "chat.mark_conversation_read": (
+        "chat",
+        "conversation",
+        "Can explicitly mark Support conversations as read",
+    ),
+    "chat.reply_conversation": (
+        "chat",
+        "conversation",
+        "Can reply through the Support inbox",
     ),
 }
 
 ALL_CAPABILITIES = frozenset(AdminCapability)
 
 
-def _role_names(user) -> frozenset[str]:
+def role_names_for_user(user) -> frozenset[str]:
     if not getattr(user, "is_authenticated", False):
         return frozenset()
     cached = getattr(user, "_aquacare_admin_role_names", None)
@@ -143,7 +189,7 @@ def capabilities_for_user(user) -> frozenset[AdminCapability]:
     if getattr(user, "is_superuser", False):
         return ALL_CAPABILITIES
 
-    role_names = _role_names(user)
+    role_names = role_names_for_user(user)
     return frozenset(
         capability
         for role_name, role_capabilities in ROLE_CAPABILITIES.items()

@@ -14,12 +14,6 @@ class RBACConstants:
 
     LEGACY_GROUP_ALIASES: dict[str, tuple[str, ...]] = {}
 
-    ROLE_APPS = {
-        GROUP_MANAGERS: ["accounts", "aquaculture", "notifications"],
-        GROUP_COMMERCE: ["commerce", "aquaculture"],
-        GROUP_SUPPORT: ["chat", "notifications"],
-    }
-
     SENSITIVE_FIELDS = [
         "phone_number",
         "password",
@@ -34,19 +28,9 @@ class RBACConstants:
         return (group_name, *cls.LEGACY_GROUP_ALIASES.get(group_name, ()))
 
 
-def _user_has_group(request: HttpRequest, group_name: str) -> bool:
-    return request.user.groups.filter(
-        name__in=RBACConstants.group_names_for(group_name),
-    ).exists()
-
-
 class RoleAwareAdminMixin:
-    """Helpers compacts pour exprimer les checks de role admin."""
+    """Helper commun sans décision d'autorisation fondée sur un groupe."""
 
     @staticmethod
     def _is_superuser(request: HttpRequest) -> bool:
         return request.user.is_superuser
-
-    @staticmethod
-    def _has_role(request: HttpRequest, group_name: str) -> bool:
-        return _user_has_group(request, group_name)

@@ -10,7 +10,11 @@ from django.test import RequestFactory
 
 def _request(*, superuser=False, group_exists=False):
     role_names = ["aquacare_commerce"] if group_exists else []
-    allowed_permissions = {"commerce.view_order"} if group_exists else set()
+    allowed_permissions = (
+        {"commerce.view_order", "commerce.download_order_document"}
+        if group_exists
+        else set()
+    )
     request = RequestFactory().get("/admin/commerce/order/")
     request.user = SimpleNamespace(
         is_authenticated=True,

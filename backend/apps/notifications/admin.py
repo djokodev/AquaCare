@@ -10,12 +10,10 @@ Roles:
 """
 
 from common.admin_capabilities import AdminCapability, has_capability
-from common.admin_mixins import (
-    RBACConstants,
-    SecuredModelAdmin,
-)
+from common.admin_mixins import SecuredModelAdmin
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
+from django.core.exceptions import PermissionDenied
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
@@ -55,17 +53,31 @@ class NotificationsSecuredAdmin(SecuredModelAdmin):
         search_fields = list(getattr(self, 'search_fields', []))
 
         if not request.user.is_superuser:
-            is_support = request.user.groups.filter(
-                name=RBACConstants.GROUP_SUPPORT
-            ).exists()
-
-            if not is_support:
-                search_fields = [
-                    f for f in search_fields
-                    if 'phone_number' not in f
-                ]
+            search_fields = [field for field in search_fields if 'phone_number' not in field]
 
         return search_fields
+
+
+class SuperuserTechnicalAdmin(SecuredModelAdmin):
+    """Modèles techniques et secrets, invisibles hors superadministration."""
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def get_actions(self, request):
+        return super().get_actions(request) if request.user.is_superuser else {}
 
 
 @admin.register(Notification)
@@ -165,15 +177,8 @@ class NotificationAdmin(NotificationsSecuredAdmin):
         actions = super().get_actions(request)
 
         if not request.user.is_superuser:
-            is_support = request.user.groups.filter(
-                name=RBACConstants.GROUP_SUPPORT
-            ).exists()
-
-            if not is_support:
-                # Managers/Commerce ne peuvent pas modifier
-                for action in ['mark_as_read', 'mark_as_sent']:
-                    if action in actions:
-                        del actions[action]
+            actions.pop('mark_as_read', None)
+            actions.pop('mark_as_sent', None)
 
         return actions
 
@@ -217,9 +222,7 @@ class NotificationAdmin(NotificationsSecuredAdmin):
     def mark_as_read(self, request, queryset):
         """Action admin: Marquer comme lu. Support only."""
         if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_SUPPORT).exists():
-                messages.error(request, _("Vous n'avez pas la permission de modifier les notifications."))
-                return
+            raise PermissionDenied(_("Vous n'avez pas la permission de modifier les notifications."))
 
         count = 0
         for notification in queryset:
@@ -233,9 +236,7 @@ class NotificationAdmin(NotificationsSecuredAdmin):
     def mark_as_sent(self, request, queryset):
         """Action admin: Marquer comme envoye. Support only."""
         if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_SUPPORT).exists():
-                messages.error(request, _("Vous n'avez pas la permission de modifier les notifications."))
-                return
+            raise PermissionDenied(_("Vous n'avez pas la permission de modifier les notifications."))
 
         count = 0
         for notification in queryset:
@@ -247,7 +248,7 @@ class NotificationAdmin(NotificationsSecuredAdmin):
 
 
 @admin.register(NotificationPreference)
-class NotificationPreferenceAdmin(NotificationsSecuredAdmin):
+class NotificationPreferenceAdmin(SuperuserTechnicalAdmin):
     """Administration securisee des preferences de notifications."""
 
     list_display = [
@@ -346,7 +347,7 @@ class NotificationPreferenceAdmin(NotificationsSecuredAdmin):
 
 
 @admin.register(PushToken)
-class PushTokenAdmin(NotificationsSecuredAdmin):
+class PushTokenAdmin(SuperuserTechnicalAdmin):
     """
     Administration securisee des tokens push.
     PII sensibles (expo_push_token, device_id) caches pour non-support.
@@ -414,14 +415,8 @@ class PushTokenAdmin(NotificationsSecuredAdmin):
         actions = super().get_actions(request)
 
         if not request.user.is_superuser:
-            is_support = request.user.groups.filter(
-                name=RBACConstants.GROUP_SUPPORT
-            ).exists()
-
-            if not is_support:
-                for action in ['activate_tokens', 'deactivate_tokens']:
-                    if action in actions:
-                        del actions[action]
+            actions.pop('activate_tokens', None)
+            actions.pop('deactivate_tokens', None)
 
         return actions
 
@@ -430,23 +425,7 @@ class PushTokenAdmin(NotificationsSecuredAdmin):
         fieldsets = list(super().get_fieldsets(request, obj))
 
         if not request.user.is_superuser:
-            is_support = request.user.groups.filter(
-                name=RBACConstants.GROUP_SUPPORT
-            ).exists()
-
-            if not is_support:
-                # Masquer expo_push_token et device_id pour non-support
-                fieldsets = (
-                    (_('Token'), {
-                        'fields': ('user',)
-                    }),
-                    (_('Device Info'), {
-                        'fields': ('device_name', 'platform',)
-                    }),
-                    (_('Etat'), {
-                        'fields': ('is_active', 'last_used_at',)
-                    }),
-                )
+            return ()
 
         return fieldsets
 
@@ -459,9 +438,7 @@ class PushTokenAdmin(NotificationsSecuredAdmin):
     def activate_tokens(self, request, queryset):
         """Action admin: Activer les tokens. Support only."""
         if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_SUPPORT).exists():
-                messages.error(request, _("Vous n'avez pas la permission de modifier les tokens."))
-                return
+            raise PermissionDenied(_("Vous n'avez pas la permission de modifier les tokens."))
 
         count = queryset.update(is_active=True)
 
@@ -474,9 +451,7 @@ class PushTokenAdmin(NotificationsSecuredAdmin):
     def deactivate_tokens(self, request, queryset):
         """Action admin: Desactiver les tokens. Support only."""
         if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_SUPPORT).exists():
-                messages.error(request, _("Vous n'avez pas la permission de modifier les tokens."))
-                return
+            raise PermissionDenied(_("Vous n'avez pas la permission de modifier les tokens."))
 
         count = queryset.update(is_active=False)
 

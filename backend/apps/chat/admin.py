@@ -13,7 +13,6 @@ import logging
 from common.admin_badge_views import clear_badge_cache
 from common.admin_capabilities import AdminCapability, has_capability_and_permission
 from common.admin_mixins import (
-    RBACConstants,
     SecuredModelAdmin,
     SupportOperatorMixin,
 )
@@ -24,7 +23,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import path, reverse
+from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
@@ -55,16 +54,12 @@ class ChatSecuredAdmin(SupportOperatorMixin, SecuredModelAdmin):
         """Retire phone_number de la recherche pour non-support."""
         search_fields = list(getattr(self, 'search_fields', []))
 
-        if not request.user.is_superuser:
-            is_support = request.user.groups.filter(
-                name=RBACConstants.GROUP_SUPPORT
-            ).exists()
-
-            if not is_support:
-                search_fields = [
-                    f for f in search_fields
-                    if 'phone_number' not in f
-                ]
+        if not has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_SUPPORT,
+            "chat.view_conversation",
+        ):
+            search_fields = [field for field in search_fields if 'phone_number' not in field]
 
         return search_fields
 
@@ -97,34 +92,23 @@ class ConversationAdmin(ChatSecuredAdmin):
 
     readonly_fields = [
         'id',
+        'user',
+        'unread_count_user',
+        'unread_count_admin',
+        'is_active',
         'created_at',
         'updated_at',
         'last_message_at',
     ]
 
     def has_add_permission(self, request):
-        """Support et superusers peuvent creer des conversations."""
-        if request.user.is_superuser:
-            return True
-        return has_capability_and_permission(
-            request.user,
-            AdminCapability.MANAGE_SUPPORT,
-            "chat.add_conversation",
-        )
+        return False
 
     def has_change_permission(self, request, obj=None):
-        """Support et superusers peuvent modifier des conversations."""
-        if request.user.is_superuser:
-            return True
-        return has_capability_and_permission(
-            request.user,
-            AdminCapability.MANAGE_SUPPORT,
-            "chat.change_conversation",
-        )
+        return False
 
     def has_delete_permission(self, request, obj=None):
-        """Seul superuser peut supprimer des conversations."""
-        return request.user.is_superuser
+        return False
 
     def get_queryset(self, request):
         """Annotate queryset with message count to avoid N+1."""
@@ -283,7 +267,7 @@ class MessageAdmin(ChatSecuredAdmin):
 # Custom Support Inbox (support and superusers only)
 # ============================================================================
 
-def support_inbox_view(request):
+def support_inbox_view(request, *, admin_site=None):
     """
     Lightweight inbox for support conversations.
     - Lists conversations ordered by unread_count_admin then last_message_at.
@@ -328,7 +312,7 @@ def support_inbox_view(request):
             if not request.user.is_superuser and not has_capability_and_permission(
                 request.user,
                 AdminCapability.MANAGE_SUPPORT,
-                "chat.change_conversation",
+                "chat.mark_conversation_read",
             ):
                 raise PermissionDenied(
                     _("Vous n'avez pas la permission d'agir sur cette conversation.")
@@ -342,7 +326,7 @@ def support_inbox_view(request):
         if not request.user.is_superuser and not has_capability_and_permission(
             request.user,
             AdminCapability.MANAGE_SUPPORT,
-            "chat.add_message",
+            "chat.reply_conversation",
         ):
             raise PermissionDenied(_("Vous n'avez pas la permission de repondre."))
 
@@ -363,11 +347,12 @@ def support_inbox_view(request):
             dj_messages.error(request, _("Erreur interne lors de l'envoi de la réponse."))
         return redirect(f"{reverse('admin:chat_support_inbox')}?conversation={conv.id}")
 
+    current_admin_site = admin_site or admin.site
     return render(
         request,
         "chat/support_inbox.html",
         {
-            **admin.site.each_context(request),
+            **current_admin_site.each_context(request),
             "title": _("Boite Support"),
             "conversations": conversations_page,
             "conversations_page": conversations_page,
@@ -376,27 +361,3 @@ def support_inbox_view(request):
             "messages": messages_qs,
         },
     )
-
-
-def get_admin_urls(original_get_urls):
-    """
-    Expose custom inbox under /admin/chat/inbox/.
-
-    NOTE: original_get_urls doit être la FONCTION (pas son résultat) pour éviter
-    de geler la liste d'URLs à l'import et d'exclure les apps enregistrées après.
-    """
-    def _get_urls():
-        custom_urls = [
-            path(
-                "chat/inbox/",
-                admin.site.admin_view(support_inbox_view),
-                name="chat_support_inbox",
-            ),
-        ]
-        return custom_urls + original_get_urls()
-
-    return _get_urls
-
-
-# Passer la référence de la fonction (pas son résultat) pour un appel paresseux
-admin.site.get_urls = get_admin_urls(admin.site.get_urls)

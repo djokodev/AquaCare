@@ -9,6 +9,7 @@ from django.template.response import TemplateResponse
 from django.urls import path
 from django.utils.translation import gettext_lazy as _
 
+from .admin_badge_views import badge_counts_view
 from .admin_capabilities import AdminCapability, has_capability
 from .admin_navigation import navigation_for_user
 from .services.admin_console_service import AdminConsoleService
@@ -24,9 +25,24 @@ class AquaCareAdminSite(AdminSite):
     def get_urls(self):
         return [
             path(
+                "api/badge-counts/",
+                self.admin_view(badge_counts_view),
+                name="admin_badge_counts",
+            ),
+            path(
+                "chat/inbox/",
+                self.admin_view(self.support_inbox_view),
+                name="chat_support_inbox",
+            ),
+            path(
                 "search/",
                 self.admin_view(self.global_search_view),
                 name="aquacare_global_search",
+            ),
+            path(
+                "system-tools/",
+                self.admin_view(self.system_tools_view),
+                name="aquacare_system_tools",
             ),
         ] + super().get_urls()
 
@@ -40,7 +56,7 @@ class AquaCareAdminSite(AdminSite):
 
     def index(self, request, extra_context=None):
         context = {
-            "dashboard_cards": AdminConsoleService.dashboard_cards(request.user),
+            **AdminConsoleService.dashboard_context(request.user),
             "has_business_console": has_capability(
                 request.user, AdminCapability.ACCESS_CONSOLE
             ),
@@ -60,6 +76,42 @@ class AquaCareAdminSite(AdminSite):
             "min_query_length": 2,
         }
         return TemplateResponse(request, "admin/search_results.html", context)
+
+    def support_inbox_view(self, request):
+        from chat.admin import support_inbox_view
+
+        return support_inbox_view(request, admin_site=self)
+
+    def system_tools_view(self, request):
+        if not request.user.is_superuser:
+            raise PermissionDenied
+        technical_apps = {"django_celery_beat", "token_blacklist"}
+        technical_models = {
+            ("auth", "group"),
+            ("auth", "permission"),
+            ("farm_gps", "geolocatedfarm"),
+            ("notifications", "notificationpreference"),
+            ("notifications", "pushtoken"),
+        }
+        tools = [
+            {
+                "label": model._meta.verbose_name_plural,
+                "app_label": model._meta.app_label,
+                "url": f"admin:{model._meta.app_label}_{model._meta.model_name}_changelist",
+            }
+            for model in self._registry
+            if (
+                model._meta.app_label in technical_apps
+                or (model._meta.app_label, model._meta.model_name) in technical_models
+            )
+        ]
+        tools.sort(key=lambda item: (item["app_label"], str(item["label"])))
+        context = {
+            **self.each_context(request),
+            "title": _("Outils systeme"),
+            "tools": tools,
+        }
+        return TemplateResponse(request, "admin/system_tools.html", context)
 
 
 class AquaCareAdminConfig(AdminConfig):

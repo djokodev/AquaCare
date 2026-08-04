@@ -18,8 +18,8 @@ from commerce.models import Product
 from common.admin_mixins import (
     AuditLogMixin,
     PIIMaskingMixin,
-    RBACConstants,
 )
+from common.admin_policies import RBACConstants
 from django.contrib.admin.models import LogEntry
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
@@ -148,12 +148,9 @@ class TestRBACConstants:
         assert RBACConstants.GROUP_COMMERCE == 'aquacare_commerce'
         assert RBACConstants.GROUP_SUPPORT == 'aquacare_support'
 
-    def test_role_apps_mapping(self):
-        """Verifie le mapping role -> apps."""
-        assert 'accounts' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_MANAGERS]
-        assert 'aquaculture' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_MANAGERS]
-        assert 'commerce' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_COMMERCE]
-        assert 'chat' in RBACConstants.ROLE_APPS[RBACConstants.GROUP_SUPPORT]
+    def test_role_apps_is_not_an_authority_source(self):
+        """Les autorisations reposent sur les capacités et permissions Django."""
+        assert not hasattr(RBACConstants, 'ROLE_APPS')
 
     def test_sensitive_fields_defined(self):
         """Verifie que les champs sensibles sont definis."""

@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 from accounts.admin import FarmProfileAdmin, UserAdmin
 from accounts.models import FarmProfile
-from common.admin_mixins import RBACConstants
+from common.admin_policies import RBACConstants
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -324,8 +324,9 @@ class TestFarmProfileAdmin:
     def test_list_display_fields(self):
         """Test champs affichés dans la liste."""
         expected_fields = (
-            'farm_name', 'user_display_name', 'certification_status',
-            'total_ponds', 'annual_production_kg', 'gps_status', 'created_at'
+            'farm_workspace_link', 'user_display_name', 'farm_location',
+            'certification_status', 'active_unit_count', 'active_cycle_count',
+            'unresolved_incident_count', 'last_operational_activity',
         )
         assert self.admin.list_display == expected_fields
     

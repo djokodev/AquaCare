@@ -12,9 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from common.admin_capabilities import ROLE_DJANGO_PERMISSIONS
-from common.admin_mixins import RBACConstants
+from common.admin_capabilities import CUSTOM_ADMIN_PERMISSIONS, ROLE_DJANGO_PERMISSIONS
+from common.admin_policies import RBACConstants
 from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -47,6 +48,7 @@ class Command(BaseCommand):
                     self._delete_groups()
 
                 self._create_groups()
+                self._create_custom_permissions()
                 self._assign_permissions()
 
                 if self.dry_run:
@@ -126,6 +128,25 @@ class Command(BaseCommand):
                 self.groups[group_name],
                 permissions,
                 labels[group_name],
+            )
+
+    def _create_custom_permissions(self) -> None:
+        """Crée les permissions d'action sur les ContentTypes existants."""
+        for permission_name, (app_label, model, name) in CUSTOM_ADMIN_PERMISSIONS.items():
+            _app_label, codename = permission_name.split('.', 1)
+            try:
+                content_type = ContentType.objects.get(app_label=app_label, model=model)
+            except ContentType.DoesNotExist:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f'  ContentType non trouve pour permission action: {permission_name}'
+                    )
+                )
+                continue
+            Permission.objects.update_or_create(
+                content_type=content_type,
+                codename=codename,
+                defaults={"name": name},
             )
 
     def _get_permissions_for_app(self, app_label: str, codenames: list[str]) -> list[Permission]:

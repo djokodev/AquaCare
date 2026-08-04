@@ -23,10 +23,43 @@
         <div class="col-12"><p>{% translate "Aucune donnee accessible avec vos permissions actuelles." %}</p></div>
         {% endfor %}
     </div>
-    <div id="activities-alerts" class="card mt-3">
+    <div class="clearfix" aria-hidden="true"></div>
+    {% if dashboard_attention %}
+    <section class="card mt-3">
+        <div class="card-header"><h2 class="card-title">{% translate "Fermes nécessitant une attention" %}</h2></div>
+        <div class="card-body p-0">
+            <ul class="list-group list-group-flush">
+                {% for item in dashboard_attention %}
+                <li class="list-group-item"><a href="{{ item.url }}">{{ item.label }}</a><span class="float-right text-muted">{{ item.detail }}</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </section>
+    {% endif %}
+    <section id="activities-alerts" class="card mt-3">
         <div class="card-header"><h2 class="card-title">{% translate "Activites et alertes" %}</h2></div>
-        <div class="card-body"><p>{% translate "Utilisez les compteurs ci-dessus pour ouvrir les listes de supervision filtrees." %}</p></div>
-    </div>
+        <div class="card-body p-0">
+            <ul class="list-group list-group-flush">
+                {% for activity in dashboard_activities %}
+                <li class="list-group-item"><a href="{{ activity.url }}">{{ activity.label }}</a><time class="float-right text-muted">{{ activity.occurred_at }}</time></li>
+                {% empty %}<li class="list-group-item text-muted">{% translate "Aucune activité autorisée récente." %}</li>{% endfor %}
+            </ul>
+        </div>
+    </section>
+    {% if dashboard_support_conversations %}
+    <section class="card mt-3">
+        <div class="card-header"><h2 class="card-title">{% translate "Conversations récentes" %}</h2></div>
+        <div class="card-body p-0"><ul class="list-group list-group-flush">
+            {% for conversation in dashboard_support_conversations %}<li class="list-group-item"><a href="{{ conversation.url }}">{{ conversation.label }}</a><time class="float-right text-muted">{{ conversation.occurred_at }}</time></li>{% endfor %}
+        </ul></div>
+    </section>
+    {% endif %}
+    {% if dashboard_shortcuts %}
+    <nav class="card mt-3" aria-label="{% translate 'Raccourcis métier' %}">
+        <div class="card-header"><h2 class="card-title">{% translate "Raccourcis métier" %}</h2></div>
+        <div class="card-body">{% for shortcut in dashboard_shortcuts %}<a class="btn btn-outline-success mr-2" href="{{ shortcut.url }}">{{ shortcut.label }}</a>{% endfor %}</div>
+    </nav>
+    {% endif %}
     {% else %}
     <div class="callout callout-info">
         <h2>{% translate "Console vide" %}</h2>

@@ -13,13 +13,13 @@ from typing import Final
 
 from common.admin_capabilities import (
     AdminCapability,
+    has_capability,
     has_capability_and_permission,
 )
 from common.admin_mixins import (
     AuditLogMixin,
     ManagerMixin,
     PIIMaskingMixin,
-    RBACConstants,
     SecuredModelAdmin,
 )
 from django.contrib import admin, messages
@@ -27,6 +27,8 @@ from django.contrib.admin.models import CHANGE
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.db.models import Count, DateTimeField, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
@@ -51,9 +53,7 @@ class AccountsAdminRoleMixin:
         return request.user.is_superuser
 
     def _is_manager(self, request) -> bool:
-        return request.user.groups.filter(
-            name__in=RBACConstants.group_names_for(RBACConstants.GROUP_MANAGERS),
-        ).exists()
+        return has_capability(request.user, AdminCapability.MANAGE_ACCOUNTS)
 
     def _can_manage_accounts(self, request) -> bool:
         return self._is_superuser(request) or has_capability_and_permission(
@@ -90,9 +90,11 @@ class FarmProfileInline(admin.StackedInline):
         """Seuls managers et superusers peuvent modifier."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_ACCOUNTS,
+            "accounts.change_farmprofile",
+        )
 
     def has_delete_permission(self, request, obj=None):
         """Seul superuser peut supprimer."""
@@ -116,6 +118,7 @@ class UserAdmin(
     - Actions critiques loguees via LogEntry
     - PII masques pour non-managers
     """
+    change_list_template = "admin/change_list_responsive.html"
 
     list_display = (
         'phone_number', 'display_name', 'account_type', 'activity_type',
@@ -490,10 +493,12 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
     """
     Administration securisee des profils de ferme.
     """
+    change_list_template = "admin/change_list_responsive.html"
 
     list_display = (
-        'farm_name', 'user_display_name', 'certification_status',
-        'total_ponds', 'annual_production_kg', 'gps_status', 'created_at'
+        'farm_workspace_link', 'user_display_name', 'farm_location',
+        'certification_status', 'active_unit_count', 'active_cycle_count',
+        'unresolved_incident_count', 'last_operational_activity',
     )
     list_filter = (
         'certification_status', 'created_at', 'user__region',
@@ -565,13 +570,74 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
         return ("farm_workspace_link", "user_display_name", "certification_status", "created_at")
 
     def get_list_display_links(self, request, list_display):
-        if not (request.user.is_superuser or self._is_manager(request)):
-            return None
-        return super().get_list_display_links(request, list_display)
+        # Le lien fonctionnel principal est rendu par ``farm_workspace_link``.
+        # Aucun lien implicite ne doit renvoyer vers le formulaire générique.
+        return None
 
     def get_queryset(self, request):
-        """Charge le proprietaire en eager loading pour la liste admin."""
-        return super().get_queryset(request).select_related('user')
+        """Liste bornée fondée sur les relations opérationnelles réelles."""
+        from aquaculture.models import (
+            CycleLog,
+            ProductionCycle,
+            ProductionReport,
+            ProductionUnit,
+            SanitaryLog,
+        )
+        from commerce.models import Order
+
+        def latest(queryset, field="created_at"):
+            return Subquery(
+                queryset.order_by(f"-{field}").values(field)[:1],
+                output_field=DateTimeField(),
+            )
+
+        report_activity = (
+            ProductionReport.objects.filter(farm_profile=OuterRef("pk"), is_deleted=False)
+            .annotate(activity_at=Coalesce("generated_at", "created_at"))
+            .order_by("-activity_at")
+        )
+        return (
+            super().get_queryset(request)
+            .filter(is_deleted=False)
+            .select_related('user')
+            .annotate(
+                _active_unit_count=Count(
+                    "production_units",
+                    filter=~Q(production_units__status="archived"),
+                    distinct=True,
+                ),
+                _active_cycle_count=Count(
+                    "production_cycles",
+                    filter=Q(production_cycles__status="active"),
+                    distinct=True,
+                ),
+                _unresolved_incident_count=Count(
+                    "production_cycles__sanitary_logs",
+                    filter=Q(production_cycles__sanitary_logs__resolved=False),
+                    distinct=True,
+                ),
+                _last_unit_activity=latest(
+                    ProductionUnit.objects.filter(farm_profile=OuterRef("pk"))
+                ),
+                _last_cycle_activity=latest(
+                    ProductionCycle.objects.filter(farm_profile=OuterRef("pk"))
+                ),
+                _last_cycle_log_activity=latest(
+                    CycleLog.objects.filter(cycle__farm_profile=OuterRef("pk"))
+                ),
+                _last_sanitary_activity=latest(
+                    SanitaryLog.objects.filter(cycle__farm_profile=OuterRef("pk"))
+                ),
+                _last_report_activity=Subquery(
+                    report_activity.values("activity_at")[:1],
+                    output_field=DateTimeField(),
+                ),
+                _last_order_activity=latest(
+                    Order.objects.filter(farm_profile=OuterRef("pk")),
+                    field="updated_at",
+                ),
+            )
+        )
 
     def get_search_fields(self, request):
         """Ajoute phone_number pour managers uniquement."""
@@ -596,6 +662,44 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
         )
     farm_workspace_link.short_description = _('Ferme')
     farm_workspace_link.admin_order_field = 'farm_name'
+
+    def farm_location(self, obj):
+        region = obj.user.get_region_display() or _("Inconnue")
+        city = obj.user.city or _("Ville inconnue")
+        return _("%(region)s, %(city)s") % {"region": region, "city": city}
+    farm_location.short_description = _("Region et ville")
+    farm_location.admin_order_field = "user__region"
+
+    def active_unit_count(self, obj):
+        return obj._active_unit_count
+    active_unit_count.short_description = _("Unites non archivees")
+    active_unit_count.admin_order_field = "_active_unit_count"
+
+    def active_cycle_count(self, obj):
+        return obj._active_cycle_count
+    active_cycle_count.short_description = _("Cycles actifs")
+    active_cycle_count.admin_order_field = "_active_cycle_count"
+
+    def unresolved_incident_count(self, obj):
+        return obj._unresolved_incident_count
+    unresolved_incident_count.short_description = _("Incidents non resolus")
+    unresolved_incident_count.admin_order_field = "_unresolved_incident_count"
+
+    def last_operational_activity(self, obj):
+        values = [
+            getattr(obj, field, None)
+            for field in (
+                "_last_unit_activity",
+                "_last_cycle_activity",
+                "_last_cycle_log_activity",
+                "_last_sanitary_activity",
+                "_last_report_activity",
+                "_last_order_activity",
+            )
+        ]
+        known_values = [value for value in values if value is not None]
+        return max(known_values) if known_values else _("Inconnue")
+    last_operational_activity.short_description = _("Derniere activite")
 
     def gps_status(self, obj):
         """Affiche si la ferme est géolocalisée."""

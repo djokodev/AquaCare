@@ -1020,3 +1020,162 @@ msgid "%(count)s non lu"
 msgid_plural "%(count)s non lus"
 msgstr[0] "%(count)s non lu"
 msgstr[1] "%(count)s non lus"
+
+# Corrections de la revue senior de la console Admin
+msgid "Inconnue"
+msgstr "Inconnue"
+
+msgid "Ville inconnue"
+msgstr "Ville inconnue"
+
+#, python-format
+msgid "%(region)s, %(city)s"
+msgstr "%(region)s, %(city)s"
+
+msgid "Region et ville"
+msgstr "Région et ville"
+
+msgid "Unites non archivees"
+msgstr "Unités non archivées"
+
+msgid "Cycles actifs"
+msgstr "Cycles actifs"
+
+msgid "Incidents non resolus"
+msgstr "Incidents non résolus"
+
+msgid "Derniere activite"
+msgstr "Dernière activité"
+
+msgid "Messages non lus"
+msgstr "Messages non lus"
+
+msgid "Vue d'ensemble"
+msgstr "Vue d'ensemble"
+
+msgid "Activite"
+msgstr "Activité"
+
+msgid "Resolu"
+msgstr "Résolu"
+
+msgid "Non resolu"
+msgstr "Non résolu"
+
+msgid "Actif"
+msgstr "Actif"
+
+msgid "Termine"
+msgstr "Terminé"
+
+msgid "Inconnu"
+msgstr "Inconnu"
+
+msgid "La cloture generique des cycles est interdite."
+msgstr "La clôture générique des cycles est interdite."
+
+msgid "PDF non genere. Utilisez l'action de regeneration."
+msgstr "PDF non généré. Utilisez l'action de régénération."
+
+msgid "PDF non genere"
+msgstr "PDF non généré"
+
+msgid "Le rapport selectionne ne possede pas encore de PDF."
+msgstr "Le rapport sélectionné ne possède pas encore de PDF."
+
+msgid "Fermes"
+msgstr "Fermes"
+
+msgid "Tableau de bord commerce"
+msgstr "Tableau de bord Commerce"
+
+msgid "Boite de reception"
+msgstr "Boîte de réception"
+
+msgid "Fermes actives suivies"
+msgstr "Fermes actives suivies"
+
+msgid "Unités actives"
+msgstr "Unités actives"
+
+msgid "Incidents sanitaires non résolus"
+msgstr "Incidents sanitaires non résolus"
+
+msgid "Rapports récents"
+msgstr "Rapports récents"
+
+#, python-format
+msgid "%(count)s incident(s) non résolu(s)"
+msgstr "%(count)s incident(s) non résolu(s)"
+
+#, python-format
+msgid "Journal de cycle — %(farm)s"
+msgstr "Journal de cycle — %(farm)s"
+
+#, python-format
+msgid "Evenement sanitaire — %(farm)s"
+msgstr "Événement sanitaire — %(farm)s"
+
+msgid "Commandes confirmées"
+msgstr "Commandes confirmées"
+
+msgid "Commandes livrées"
+msgstr "Commandes livrées"
+
+msgid "Commandes prêtes au retrait"
+msgstr "Commandes prêtes au retrait"
+
+msgid "Commandes reçues"
+msgstr "Commandes reçues"
+
+msgid "Commandes nécessitant une action"
+msgstr "Commandes nécessitant une action"
+
+msgid "Produits disponibles"
+msgstr "Produits disponibles"
+
+msgid "Produits indisponibles"
+msgstr "Produits indisponibles"
+
+#, python-format
+msgid "Commande %(number)s — %(status)s"
+msgstr "Commande %(number)s — %(status)s"
+
+msgid "Ouvrir les commandes"
+msgstr "Ouvrir les commandes"
+
+msgid "Gerer les produits"
+msgstr "Gérer les produits"
+
+msgid "Conversation récente"
+msgstr "Conversation récente"
+
+msgid "Ouvrir la boite de reception"
+msgstr "Ouvrir la boîte de réception"
+
+msgid "GPS"
+msgstr "GPS"
+
+msgid "GPS disponible"
+msgstr "GPS disponible"
+
+msgid "GPS non disponible"
+msgstr "GPS non disponible"
+
+msgid "Aucun element recent."
+msgstr "Aucun élément récent."
+
+msgid "Fermes nécessitant une attention"
+msgstr "Fermes nécessitant une attention"
+
+msgid "Aucune activité autorisée récente."
+msgstr "Aucune activité autorisée récente."
+
+msgid "Conversations récentes"
+msgstr "Conversations récentes"
+
+msgid "Raccourcis métier"
+msgstr "Raccourcis métier"
+
+msgid "Aucun outil technique enregistre."
+msgstr "Aucun outil technique enregistré."
