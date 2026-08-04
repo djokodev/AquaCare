@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div data-admin-i18n-native class="farm-supervision">
+    <div class="card">
+        <div class="card-body">
+            <h2>{{ farm.farm_name }}</h2>
+            <p class="text-muted">{{ farm.user.display_name }}</p>
+        </div>
+    </div>
+
+    <div class="row">
+        {% for section in sections %}
+        <div class="col-lg-3 col-md-4 col-sm-6 col-12">
+            <a href="{{ section.url }}" class="info-box aquacare-dashboard-card">
+                <span class="info-box-content"><span class="info-box-text">{{ section.label }}</span><span class="info-box-number">{{ section.count }}</span></span>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <section class="card mt-3">
+        <div class="card-header"><h2 class="card-title">{% translate "Derniere activite autorisee" %}</h2></div>
+        <div class="card-body p-0">
+            <ul class="list-group list-group-flush">
+                {% for activity in activities %}
+                <li class="list-group-item">
+                    <a href="{{ activity.url }}"><strong>{{ activity.label }}</strong></a>
+                    <time class="d-block text-muted" datetime="{{ activity.occurred_at|date:'c' }}">{{ activity.occurred_at }}</time>
+                    {% if activity.business_date %}<span>{% translate "Date metier" %}: {{ activity.business_date }}</span>{% endif %}
+                </li>
+                {% empty %}<li class="list-group-item">{% translate "Aucune activite visible pour ce role." %}</li>{% endfor %}
+            </ul>
+        </div>
+    </section>
+</div>
+{% endblock %}

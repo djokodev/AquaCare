@@ -26,7 +26,6 @@
     }
 
     var currentLang = getCurrentLanguage();
-    console.log('[AquaCare Admin] Current language:', currentLang);
 
     // =========================================================================
     // TRANSLATION DICTIONARIES
@@ -284,14 +283,18 @@
 
     // Select appropriate dictionary based on language
     var translations = (currentLang === 'en') ? frenchToEnglish : englishToFrench;
-    console.log('[AquaCare Admin] Using translations:', currentLang === 'en' ? 'FR->EN' : 'EN->FR');
 
     // =========================================================================
     // TRANSLATION FUNCTIONS
     // =========================================================================
 
+    function usesNativeI18n(element) {
+        var owner = element && element.nodeType === Node.TEXT_NODE ? element.parentElement : element;
+        return Boolean(owner && owner.closest && owner.closest('[data-admin-i18n-native]'));
+    }
+
     function replaceText(element) {
-        if (!element) return;
+        if (!element || usesNativeI18n(element)) return;
 
         if (element.nodeType === Node.TEXT_NODE) {
             var text = element.textContent.trim();
@@ -311,6 +314,7 @@
 
     function translateAttributes() {
         document.querySelectorAll('[title]').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var title = el.getAttribute('title');
             if (title && translations[title]) {
                 el.setAttribute('title', translations[title]);
@@ -318,6 +322,7 @@
         });
 
         document.querySelectorAll('[placeholder]').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var placeholder = el.getAttribute('placeholder');
             if (placeholder && translations[placeholder]) {
                 el.setAttribute('placeholder', translations[placeholder]);
@@ -325,6 +330,7 @@
         });
 
         document.querySelectorAll('input[type="submit"]').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var value = el.value;
             if (value && translations[value]) {
                 el.value = translations[value];
@@ -344,6 +350,7 @@
 
         // Breadcrumb
         document.querySelectorAll('.breadcrumb-item').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var link = el.querySelector('a');
             if (link) {
                 var text = link.textContent.trim();
@@ -360,6 +367,7 @@
 
         // Card titles
         document.querySelectorAll('.card-title').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var text = el.textContent.trim();
             if (translations[text]) {
                 el.textContent = translations[text];
@@ -368,6 +376,7 @@
 
         // Sidebar navigation
         document.querySelectorAll('.nav-sidebar .nav-link p').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var text = el.textContent.trim();
             if (translations[text]) {
                 el.textContent = translations[text];
@@ -376,6 +385,7 @@
 
         // Object tools buttons
         document.querySelectorAll('.object-tools a').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var text = el.textContent.trim();
             if (translations[text]) {
                 el.textContent = translations[text];
@@ -384,6 +394,7 @@
 
         // User dropdown menu
         document.querySelectorAll('.dropdown-menu .dropdown-item').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var text = el.textContent.trim();
             if (translations[text]) {
                 el.textContent = translations[text];
@@ -392,16 +403,19 @@
 
         // Timeline/Recent actions
         document.querySelectorAll('.timeline-header, .timeline-body').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             replaceText(el);
         });
 
         // Info boxes
         document.querySelectorAll('.info-box-text, .info-box-number, .small-box .inner').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             replaceText(el);
         });
 
         // Dashboard card links
         document.querySelectorAll('.model-link, .addlink, .changelink, .viewlink').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var text = el.textContent.trim();
             if (translations[text]) {
                 el.textContent = translations[text];
@@ -410,6 +424,7 @@
 
         // Section headers (card-header titles)
         document.querySelectorAll('.card-header').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var text = el.textContent.trim();
             if (translations[text]) {
                 el.textContent = translations[text];
@@ -418,6 +433,7 @@
 
         // Nav headers in sidebar
         document.querySelectorAll('.nav-header').forEach(function(el) {
+            if (usesNativeI18n(el)) return;
             var text = el.textContent.trim();
             if (translations[text]) {
                 el.textContent = translations[text];

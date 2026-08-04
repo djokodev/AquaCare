@@ -12,6 +12,11 @@ import io
 import logging
 import zipfile
 
+from common.admin_capabilities import (
+    AdminCapability,
+    has_capability,
+    has_capability_and_permission,
+)
 from common.admin_mixins import (
     CommerceOperatorMixin,
     RBACConstants,
@@ -50,17 +55,30 @@ class CommerceSecuredAdmin(CommerceOperatorMixin, SecuredModelAdmin):
         if request.user.is_superuser:
             return True
 
-        user_groups = set(request.user.groups.values_list('name', flat=True))
+        return (
+            has_capability(request.user, AdminCapability.VIEW_COMMERCE)
+            and request.user.has_perm(
+                f"{self.model._meta.app_label}.view_{self.model._meta.model_name}"
+            )
+        )
 
-        # Commerce operators: acces complet
-        if RBACConstants.GROUP_COMMERCE in user_groups:
+    def has_add_permission(self, request):
+        if request.user.is_superuser:
             return True
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_COMMERCE,
+            f"{self.model._meta.app_label}.add_{self.model._meta.model_name}",
+        )
 
-        # Managers: lecture seule
-        if RBACConstants.GROUP_MANAGERS in user_groups:
+    def has_change_permission(self, request, obj=None):
+        if request.user.is_superuser:
             return True
-
-        return False
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_COMMERCE,
+            f"{self.model._meta.app_label}.change_{self.model._meta.model_name}",
+        )
 
 
 class OrderItemInline(admin.TabularInline):
@@ -121,17 +139,21 @@ class ProductAdmin(CommerceSecuredAdmin):
         """Commerce et superusers peuvent ajouter des produits."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_COMMERCE
-        ).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_COMMERCE,
+            "commerce.add_product",
+        )
 
     def has_change_permission(self, request, obj=None):
         """Commerce et superusers peuvent modifier des produits."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_COMMERCE
-        ).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_COMMERCE,
+            "commerce.change_product",
+        )
 
     def has_delete_permission(self, request, obj=None):
         """Seul superuser peut supprimer des produits."""
@@ -289,10 +311,10 @@ class OrderAdmin(CommerceSecuredAdmin):
         """Commerce et managers peuvent voir les commandes en lecture seule."""
         if request.user.is_superuser:
             return True
-        user_groups = set(request.user.groups.values_list('name', flat=True))
-        return (
-            RBACConstants.GROUP_COMMERCE in user_groups
-            or RBACConstants.GROUP_MANAGERS in user_groups
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_COMMERCE,
+            "commerce.view_order",
         )
 
     def get_urls(self):
@@ -318,7 +340,11 @@ class OrderAdmin(CommerceSecuredAdmin):
         return custom + urls
 
     def has_order_document_permission(self, request, obj=None):
-        return request.user.is_superuser or request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists()
+        return request.user.is_superuser or has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_COMMERCE,
+            "commerce.view_order",
+        )
 
     @staticmethod
     def _document_language(request):
@@ -467,7 +493,11 @@ class OrderAdmin(CommerceSecuredAdmin):
     def has_workflow_permission(self, request) -> bool:
         return bool(
             request.user.is_superuser
-            or request.user.groups.filter(name=RBACConstants.GROUP_COMMERCE).exists()
+            or has_capability_and_permission(
+                request.user,
+                AdminCapability.MANAGE_COMMERCE,
+                "commerce.change_order",
+            )
         )
 
     def fulfil_order_view(self, request, object_id):
@@ -1023,10 +1053,10 @@ class OrderAdmin(CommerceSecuredAdmin):
         return self._generate_pdf_zip(request, queryset, 'en')
 
     def changelist_view(self, request, extra_context=None):
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_ORDERS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)
 
 

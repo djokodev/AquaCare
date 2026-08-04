@@ -1,7 +1,7 @@
 {% extends "admin/base_site.html" %}
 {% load static i18n %}
 
-{% block title %}Inbox Support - {{ site_header }}{% endblock %}
+{% block title %}{% translate "Boite Support" %} - {{ site_header }}{% endblock %}
 
 {% block extrahead %}
 {{ block.super }}
@@ -264,26 +264,37 @@
     display: block;
     opacity: 0.5;
   }
+
+  @media (max-width: 991.98px) {
+    .inbox-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .inbox-sidebar,
+    .messages-container {
+      max-height: 50vh;
+    }
+  }
 </style>
 {% endblock %}
 
 {% block breadcrumbs %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="{% url 'admin:index' %}">Accueil</a></li>
-    <li class="breadcrumb-item"><a href="{% url 'admin:app_list' app_label='chat' %}">Support Client</a></li>
-    <li class="breadcrumb-item active">Inbox Support</li>
+    <li class="breadcrumb-item"><a href="{% url 'admin:index' %}">{% translate "Accueil" %}</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'admin:app_list' app_label='chat' %}">{% translate "Support Client" %}</a></li>
+    <li class="breadcrumb-item active">{% translate "Boite Support" %}</li>
   </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
-<div class="inbox-layout">
+<div class="inbox-layout" data-admin-i18n-native>
   <!-- Sidebar: Liste des conversations -->
   <div class="inbox-sidebar">
     <div class="inbox-header">
-      <span class="inbox-title"><i class="fas fa-inbox"></i> Inbox</span>
-      <span class="inbox-chip">{{ conversations|length }} conversations</span>
+      <span class="inbox-title"><i class="fas fa-inbox"></i> {% translate "Boite Support" %}</span>
+      <span class="inbox-chip">{% blocktrans count count=conversation_count %}{{ count }} conversation{% plural %}{{ count }} conversations{% endblocktrans %}</span>
     </div>
 
     <div class="conv-list">
@@ -292,31 +303,31 @@
            href="?conversation={{ conv.id }}">
           <div class="conv-title">
             <i class="fas fa-user"></i>
-            {{ conv.user.get_full_name|default:conv.user.phone_number }}
+            {{ conv.user.display_name|default:conv.user.id }}
           </div>
           <div class="conv-meta">
             <span><i class="fas fa-clock"></i> {{ conv.last_message_at|date:"d/m H:i" }}</span>
             {% if conv.unread_count_admin > 0 %}
-              <span class="badge-unread">{{ conv.unread_count_admin }} non lu{{ conv.unread_count_admin|pluralize }}</span>
+              <span class="badge-unread">{% blocktrans count count=conv.unread_count_admin %}{{ count }} non lu{% plural %}{{ count }} non lus{% endblocktrans %}</span>
             {% endif %}
           </div>
-          {% if conv.last_message %}
+          {% if conv.last_message_content_ann %}
             <div class="conv-preview">
-              {% if conv.last_message.sender_type == "user" %}
+              {% if conv.last_message_sender_type_ann == "user" %}
                 <i class="fas fa-user"></i>
-              {% elif conv.last_message.sender_type == "admin" %}
+              {% elif conv.last_message_sender_type_ann == "admin" %}
                 <i class="fas fa-headset"></i>
               {% else %}
                 <i class="fas fa-info-circle"></i>
               {% endif %}
-              {{ conv.last_message.content|truncatechars:60 }}
+              {{ conv.last_message_content_ann|truncatechars:60 }}
             </div>
           {% endif %}
         </a>
       {% empty %}
         <div class="empty-state">
           <i class="fas fa-comments"></i>
-          Aucune conversation.
+          {% translate "Aucune conversation." %}
         </div>
       {% endfor %}
     </div>
@@ -328,7 +339,7 @@
       <div class="inbox-main-header">
         <h2>
           <i class="fas fa-user-circle"></i>
-          {{ selected_conversation.user.get_full_name|default:selected_conversation.user.phone_number }}
+          {{ selected_conversation.user.display_name|default:selected_conversation.user.id }}
         </h2>
         <span class="inbox-chip">
           <i class="fas fa-clock"></i> {{ selected_conversation.last_message_at|date:"d/m/Y H:i" }}
@@ -340,11 +351,11 @@
           <div class="msg-bubble {% if msg.sender_type in 'admin system' %}admin{% else %}user{% endif %}">
             <div class="msg-sender">
               {% if msg.sender_type == 'user' %}
-                <i class="fas fa-user"></i> Utilisateur
+                <i class="fas fa-user"></i> {% translate "Utilisateur" %}
               {% elif msg.sender_type == 'admin' %}
-                <i class="fas fa-headset"></i> Support
+                <i class="fas fa-headset"></i> {% translate "Support" %}
               {% else %}
-                <i class="fas fa-robot"></i> Systeme
+                <i class="fas fa-robot"></i> {% translate "Systeme" %}
               {% endif %}
             </div>
             <div class="msg-content">{{ msg.content|linebreaksbr }}</div>
@@ -357,7 +368,7 @@
             {% elif msg.media_type == 'video' and msg.media_file %}
               <div class="msg-media">
                 <a href="{{ msg.media_file.url }}" target="_blank" class="btn-send">
-                  <i class="fas fa-play"></i> Voir la video
+                  <i class="fas fa-play"></i> {% translate "Voir la video" %}
                 </a>
               </div>
             {% endif %}
@@ -371,7 +382,7 @@
         {% empty %}
           <div class="empty-state">
             <i class="fas fa-comment-slash"></i>
-            Aucun message dans cette conversation.
+            {% translate "Aucun message dans cette conversation." %}
           </div>
         {% endfor %}
       </div>
@@ -379,25 +390,41 @@
       <form method="post" class="reply-form">
         {% csrf_token %}
         <input type="hidden" name="conversation_id" value="{{ selected_conversation.id }}">
+        <input type="hidden" name="action" value="reply">
         <label for="reply_content">
-          <i class="fas fa-reply"></i> Repondre en tant que Support
+          <i class="fas fa-reply"></i> {% translate "Repondre en tant que Support" %}
         </label>
-        <textarea id="reply_content" name="reply_content" placeholder="Ecrivez votre reponse..."></textarea>
+        <textarea id="reply_content" name="reply_content" placeholder="{% translate 'Ecrivez votre reponse...' %}"></textarea>
         <div class="reply-actions">
           <button class="btn-send" type="submit">
-            <i class="fas fa-paper-plane"></i> Envoyer
+            <i class="fas fa-paper-plane"></i> {% translate "Envoyer" %}
           </button>
           <span style="font-size:11px;color:#64748b;">
-            <i class="fas fa-info-circle"></i> Envoye en tant qu'Administration
+            <i class="fas fa-info-circle"></i> {% translate "Envoye en tant qu'Administration" %}
           </span>
         </div>
       </form>
+      {% if selected_conversation.unread_count_admin %}
+      <form method="post" class="mt-2">
+        {% csrf_token %}
+        <input type="hidden" name="conversation_id" value="{{ selected_conversation.id }}">
+        <input type="hidden" name="action" value="mark_read">
+        <button class="btn btn-outline-success" type="submit">{% translate "Marquer explicitement comme lu" %}</button>
+      </form>
+      {% endif %}
     {% else %}
       <div class="empty-state">
         <i class="fas fa-hand-pointer"></i>
-        Selectionnez une conversation pour voir les messages.
+        {% translate "Selectionnez une conversation pour voir les messages." %}
       </div>
     {% endif %}
   </div>
 </div>
+{% if conversations_page.paginator.num_pages > 1 %}
+<nav class="mt-3" aria-label="{% translate 'Pagination des conversations' %}">
+  {% if conversations_page.has_previous %}<a class="btn btn-outline-secondary" href="?page={{ conversations_page.previous_page_number }}">{% translate "Precedent" %}</a>{% endif %}
+  <span class="mx-2">{% blocktrans with current=conversations_page.number total=conversations_page.paginator.num_pages %}Page {{ current }} sur {{ total }}{% endblocktrans %}</span>
+  {% if conversations_page.has_next %}<a class="btn btn-outline-secondary" href="?page={{ conversations_page.next_page_number }}">{% translate "Suivant" %}</a>{% endif %}
+</nav>
+{% endif %}
 {% endblock %}

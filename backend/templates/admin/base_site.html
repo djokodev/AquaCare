@@ -1,7 +1,15 @@
 {% extends "admin/base.html" %}
-{% load static %}
+{% load i18n jazzmin static %}
 
 {% block extrahead %}
 {{ block.super }}
 <script defer src="{% static 'js/admin_badges.js' %}"></script>
+{% endblock %}
+
+{# Jazzmin 3.0.1: ce bloc remplace integralement son menu. Ne pas appeler
+   block.super, sinon les deux sidebars portant #jazzy-sidebar seraient rendues. #}
+{% block sidebar %}
+{% if jazzmin_settings.show_sidebar %}
+    {% include "admin/includes/console_sidebar.html" %}
+{% endif %}
 {% endblock %}

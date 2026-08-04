@@ -11,6 +11,10 @@ Roles:
 from collections.abc import Iterable
 from typing import Final
 
+from common.admin_capabilities import (
+    AdminCapability,
+    has_capability_and_permission,
+)
 from common.admin_mixins import (
     AuditLogMixin,
     ManagerMixin,
@@ -24,13 +28,14 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.http import JsonResponse
-from django.shortcuts import render
-from django.urls import path
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
 from .admin_serializers import FarmMapSerializer
 from .models import FarmProfile, User
+from .services.farm_supervision_service import FarmSupervisionService
 
 
 class AccountsAdminRoleMixin:
@@ -51,7 +56,11 @@ class AccountsAdminRoleMixin:
         ).exists()
 
     def _can_manage_accounts(self, request) -> bool:
-        return self._is_superuser(request) or self._is_manager(request)
+        return self._is_superuser(request) or has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_ACCOUNTS,
+            "accounts.change_user",
+        )
 
     def _can_view_phone_number(self, request) -> bool:
         return self._can_manage_accounts(request)
@@ -183,6 +192,28 @@ class UserAdmin(
     # Champs proteges pour non-superusers
     protected_fields = ['is_staff', 'is_superuser', 'groups', 'user_permissions']
 
+    def has_module_permission(self, request):
+        return request.user.is_superuser or has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_USERS,
+            "accounts.view_user",
+        )
+
+    def has_view_permission(self, request, obj=None):
+        if request.user.is_superuser:
+            return True
+        if self._is_manager(request):
+            return has_capability_and_permission(
+                request.user,
+                AdminCapability.VIEW_USERS,
+                "accounts.view_user",
+            )
+        return obj is None and has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_USERS,
+            "accounts.view_user",
+        )
+
     def _append_unique_field(self, fields: list[str], field_name: str) -> list[str]:
         if field_name not in fields:
             fields.append(field_name)
@@ -227,24 +258,37 @@ class UserAdmin(
 
     def get_search_fields(self, request):
         """
-        Retire phone_number de la recherche pour non-managers (PII).
+        Retire telephone et e-mail de la recherche Support (PII).
         """
         search_fields = list(super().get_search_fields(request))
 
         if self._can_view_phone_number(request):
             self._append_unique_field(search_fields, 'phone_number')
+        else:
+            search_fields = [field for field in search_fields if field != 'email']
 
         return search_fields
 
     def get_list_display(self, request):
-        """Masque phone_number pour non-managers."""
+        """Expose uniquement l'identite fonctionnelle minimale au Support."""
+        if not self._can_view_phone_number(request):
+            return (
+                'support_context_link',
+                'account_type',
+                'activity_type',
+                'region',
+                'is_verified',
+                'farm_certification_status',
+                'date_joined',
+            )
+
         list_display = list(super().get_list_display(request))
-
-        if not self._can_view_phone_number(request) and 'phone_number' in list_display:
-            idx = list_display.index('phone_number')
-            list_display[idx] = 'phone_masked'
-
         return list_display
+
+    def get_list_display_links(self, request, list_display):
+        if not self._can_manage_accounts(request):
+            return None
+        return super().get_list_display_links(request, list_display)
 
     def get_readonly_fields(self, request, obj=None):
         """
@@ -285,7 +329,11 @@ class UserAdmin(
         if obj and obj.is_staff:
             return False
 
-        return self._is_manager(request)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_ACCOUNTS,
+            "accounts.change_user",
+        )
 
     def has_delete_permission(self, request, obj=None):
         """
@@ -374,6 +422,19 @@ class UserAdmin(
         return '-'
     farm_certification_status.short_description = _('Certification')
     farm_certification_status.admin_order_field = 'farm_profile__certification_status'
+
+    def support_context_link(self, obj):
+        """Lien minimal vers l'espace ferme, jamais vers la fiche PII."""
+        farm = obj.farm_profile if hasattr(obj, 'farm_profile') else None
+        if farm is None:
+            return obj.display_name
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:accounts_farmprofile_supervision', args=[farm.pk]),
+            obj.display_name,
+        )
+    support_context_link.short_description = _('Utilisateur')
+    support_context_link.admin_order_field = 'first_name'
 
     # --- Actions securisees ---
 
@@ -465,6 +526,49 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
 
     readonly_fields = ('id', 'created_at', 'updated_at')
 
+    def has_module_permission(self, request):
+        return request.user.is_superuser or has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_FARM_DIRECTORY,
+            "accounts.view_farmprofile",
+        )
+
+    def has_view_permission(self, request, obj=None):
+        if request.user.is_superuser:
+            return True
+        if not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_FARM_DIRECTORY,
+            "accounts.view_farmprofile",
+        ):
+            return False
+        if obj is not None and not self._is_manager(request):
+            return False
+        return True
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser or (
+            self._is_manager(request) and request.user.has_perm("accounts.add_farmprofile")
+        )
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser or (
+            self._is_manager(request) and request.user.has_perm("accounts.change_farmprofile")
+        )
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def get_list_display(self, request):
+        if request.user.is_superuser or self._is_manager(request):
+            return super().get_list_display(request)
+        return ("farm_workspace_link", "user_display_name", "certification_status", "created_at")
+
+    def get_list_display_links(self, request, list_display):
+        if not (request.user.is_superuser or self._is_manager(request)):
+            return None
+        return super().get_list_display_links(request, list_display)
+
     def get_queryset(self, request):
         """Charge le proprietaire en eager loading pour la liste admin."""
         return super().get_queryset(request).select_related('user')
@@ -483,6 +587,15 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
         return obj.user.display_name
     user_display_name.short_description = _('Proprietaire')
     user_display_name.admin_order_field = 'user__first_name'
+
+    def farm_workspace_link(self, obj):
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:accounts_farmprofile_supervision', args=[obj.pk]),
+            obj.farm_name,
+        )
+    farm_workspace_link.short_description = _('Ferme')
+    farm_workspace_link.admin_order_field = 'farm_name'
 
     def gps_status(self, obj):
         """Affiche si la ferme est géolocalisée."""
@@ -504,12 +617,24 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
                 self.admin_site.admin_view(self.farm_map_data_view),
                 name='accounts_farmprofile_map_data',
             ),
+            path(
+                '<uuid:object_id>/supervision/',
+                self.admin_site.admin_view(self.farm_supervision_view),
+                name='accounts_farmprofile_supervision',
+            ),
         ]
         return custom_urls + urls
 
     def farm_map_view(self, request):
         """Page carte Leaflet des fermes géolocalisées."""
-        if not self.has_view_permission(request):
+        if not (
+            request.user.is_superuser
+            or has_capability_and_permission(
+                request.user,
+                AdminCapability.MANAGE_ACCOUNTS,
+                "accounts.view_farmprofile",
+            )
+        ):
             raise PermissionDenied
 
         context = {
@@ -521,7 +646,14 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
 
     def farm_map_data_view(self, request):
         """Payload paginé pour la carte des fermes dans l'admin Django."""
-        if not self.has_view_permission(request):
+        if not (
+            request.user.is_superuser
+            or has_capability_and_permission(
+                request.user,
+                AdminCapability.MANAGE_ACCOUNTS,
+                "accounts.view_farmprofile",
+            )
+        ):
             raise PermissionDenied
 
         queryset = (
@@ -553,7 +685,41 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
             'results': serializer.data,
         })
 
+    def farm_supervision_view(self, request, object_id):
+        """Espace ferme dont les blocs sont bornes au role effectif."""
+        if request.user.is_superuser or has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_FARM_DIRECTORY,
+            "accounts.view_farmprofile",
+        ):
+            queryset = FarmProfile.objects.select_related("user").filter(is_deleted=False)
+        elif has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_FARM_CONTEXT,
+            "accounts.view_farmprofile",
+        ):
+            queryset = (
+                FarmProfile.objects.select_related("user")
+                .filter(is_deleted=False, orders__isnull=False)
+                .distinct()
+            )
+        else:
+            raise PermissionDenied
+
+        farm = get_object_or_404(queryset, pk=object_id)
+        supervision = FarmSupervisionService.build(user=request.user, farm=farm)
+        context = {
+            **self.admin_site.each_context(request),
+            "title": _("Supervision de %(farm)s") % {"farm": farm.farm_name},
+            "farm": farm,
+            "sections": supervision["sections"],
+            "activities": supervision["activities"],
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/accounts/farmprofile/supervision.html", context)
+
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
-        extra_context['farm_map_url'] = '../map/'
+        if request.user.is_superuser or self._is_manager(request):
+            extra_context['farm_map_url'] = '../map/'
         return super().changelist_view(request, extra_context=extra_context)

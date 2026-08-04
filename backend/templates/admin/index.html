@@ -1,0 +1,37 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block content_title %}{% translate "Console de supervision" %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div data-admin-i18n-native class="aquacare-console">
+    {% if has_business_console %}
+    <div class="row">
+        {% for card in dashboard_cards %}
+        <div class="col-xl-3 col-md-6 col-12">
+            <a href="{{ card.url }}" class="info-box aquacare-dashboard-card">
+                <span class="info-box-icon bg-success"><i class="{{ card.icon }}" aria-hidden="true"></i></span>
+                <span class="info-box-content">
+                    <span class="info-box-text">{{ card.label }}</span>
+                    <span class="info-box-number">{{ card.value }}</span>
+                </span>
+            </a>
+        </div>
+        {% empty %}
+        <div class="col-12"><p>{% translate "Aucune donnee accessible avec vos permissions actuelles." %}</p></div>
+        {% endfor %}
+    </div>
+    <div id="activities-alerts" class="card mt-3">
+        <div class="card-header"><h2 class="card-title">{% translate "Activites et alertes" %}</h2></div>
+        <div class="card-body"><p>{% translate "Utilisez les compteurs ci-dessus pour ouvrir les listes de supervision filtrees." %}</p></div>
+    </div>
+    {% else %}
+    <div class="callout callout-info">
+        <h2>{% translate "Console vide" %}</h2>
+        <p>{% translate "Aucun role metier AquaCare ne vous a ete attribue. Contactez un superadministrateur." %}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

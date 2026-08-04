@@ -50,6 +50,33 @@
     --shadow-focus: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
+/* Console Lot 1, la structure AdminLTE reste intacte pour PushMenu et mobile. */
+.aquacare-dashboard-card {
+    color: inherit;
+    min-height: 96px;
+    text-decoration: none;
+}
+
+.aquacare-dashboard-card:hover {
+    color: inherit;
+    text-decoration: none;
+    box-shadow: var(--shadow-focus);
+}
+
+.aquacare-search-results .list-group-item {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+    #jazzy-sidebar .form-inline {
+        display: block;
+    }
+
+    .aquacare-dashboard-card {
+        min-height: 82px;
+    }
+}
+
 /* =============================================================================
    2. BASE - Reset et typographie
    ============================================================================= */

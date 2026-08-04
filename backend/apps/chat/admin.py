@@ -10,6 +10,8 @@ Roles:
 """
 import logging
 
+from common.admin_badge_views import clear_badge_cache
+from common.admin_capabilities import AdminCapability, has_capability_and_permission
 from common.admin_mixins import (
     RBACConstants,
     SecuredModelAdmin,
@@ -19,6 +21,7 @@ from django.contrib import admin
 from django.contrib import messages as dj_messages
 from django.contrib.admin.models import ADDITION, CHANGE
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
@@ -42,17 +45,11 @@ class ChatSecuredAdmin(SupportOperatorMixin, SecuredModelAdmin):
         if request.user.is_superuser:
             return True
 
-        user_groups = set(request.user.groups.values_list('name', flat=True))
-
-        # Support operators: acces complet
-        if RBACConstants.GROUP_SUPPORT in user_groups:
-            return True
-
-        # Managers: lecture seule
-        if RBACConstants.GROUP_MANAGERS in user_groups:
-            return True
-
-        return False
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_SUPPORT,
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}",
+        )
 
     def get_search_fields(self, request):
         """Retire phone_number de la recherche pour non-support."""
@@ -109,17 +106,21 @@ class ConversationAdmin(ChatSecuredAdmin):
         """Support et superusers peuvent creer des conversations."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_SUPPORT,
+            "chat.add_conversation",
+        )
 
     def has_change_permission(self, request, obj=None):
         """Support et superusers peuvent modifier des conversations."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_SUPPORT,
+            "chat.change_conversation",
+        )
 
     def has_delete_permission(self, request, obj=None):
         """Seul superuser peut supprimer des conversations."""
@@ -142,8 +143,8 @@ class ConversationAdmin(ChatSecuredAdmin):
     message_count.admin_order_field = '_message_count'
 
     def changelist_view(self, request, extra_context=None):
-        from django.core.cache import cache
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        from common.admin_badge_views import clear_badge_cache
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)
 
 
@@ -186,24 +187,15 @@ class MessageAdmin(ChatSecuredAdmin):
     ]
 
     def has_add_permission(self, request):
-        """Support et superusers peuvent creer des messages."""
-        if request.user.is_superuser:
-            return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        """Les reponses passent exclusivement par MessageService dans l'inbox."""
+        return False
 
     def has_change_permission(self, request, obj=None):
-        """Support et superusers peuvent modifier des messages."""
-        if request.user.is_superuser:
-            return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        """Un message envoye est un fait historique immuable."""
+        return False
 
     def has_delete_permission(self, request, obj=None):
-        """Seul superuser peut supprimer des messages."""
-        return request.user.is_superuser
+        return False
 
     def get_fields(self, request, obj=None):
         """
@@ -301,41 +293,64 @@ def support_inbox_view(request):
     RBAC: Only superusers and support operators can access.
     """
     # Permission check
-    if not request.user.is_superuser:
-        if not request.user.groups.filter(name=RBACConstants.GROUP_SUPPORT).exists():
-            raise PermissionDenied(_("Vous n'avez pas acces a la boite de support."))
+    if not request.user.is_superuser and not has_capability_and_permission(
+        request.user,
+        AdminCapability.MANAGE_SUPPORT,
+        "chat.view_conversation",
+    ):
+        raise PermissionDenied(_("Vous n'avez pas acces a la boite de support."))
 
-    conversations = Conversation.objects.select_related('user').order_by(
+    conversations_qs = Conversation.objects.with_api_annotations().order_by(
         '-unread_count_admin', '-last_message_at'
     )
+    paginator = Paginator(conversations_qs, 50)
+    conversations_page = paginator.get_page(request.GET.get("page") or 1)
 
     selected_id = request.GET.get('conversation')
     selected_conversation = None
     messages_qs = []
 
     if selected_id:
-        selected_conversation = get_object_or_404(Conversation, id=selected_id)
-        # Mark admin unread as read when opening
-        MessageService.mark_messages_as_read(selected_conversation, reader_is_admin=True)
+        selected_conversation = get_object_or_404(
+            Conversation.objects.select_related("user"),
+            id=selected_id,
+        )
         messages_qs = list(
-            selected_conversation.messages.all().order_by('-created_at')[:50]
+            selected_conversation.messages.for_feed().order_by('-created_at')[:50]
         )
         messages_qs.reverse()  # Chrono order
 
     if request.method == 'POST':
-        # Verifier permission pour repondre
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_SUPPORT).exists():
-                dj_messages.error(request, _("Vous n'avez pas la permission de repondre."))
-                return redirect(request.get_full_path())
-
         conversation_id = request.POST.get('conversation_id')
+        action = request.POST.get("action") or "reply"
+        conv = get_object_or_404(Conversation.objects.select_related("user"), id=conversation_id)
+        if action == "mark_read":
+            if not request.user.is_superuser and not has_capability_and_permission(
+                request.user,
+                AdminCapability.MANAGE_SUPPORT,
+                "chat.change_conversation",
+            ):
+                raise PermissionDenied(
+                    _("Vous n'avez pas la permission d'agir sur cette conversation.")
+                )
+            MessageService.mark_messages_as_read(conv, reader_is_admin=True)
+            clear_badge_cache(request.user)
+            dj_messages.success(request, _("Messages marques comme lus."))
+            return redirect(f"{reverse('admin:chat_support_inbox')}?conversation={conv.id}")
+        if action != "reply":
+            raise PermissionDenied(_("Action Support non autorisee."))
+        if not request.user.is_superuser and not has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_SUPPORT,
+            "chat.add_message",
+        ):
+            raise PermissionDenied(_("Vous n'avez pas la permission de repondre."))
+
         content = (request.POST.get('reply_content') or '').strip()
         if not conversation_id or not content:
             dj_messages.error(request, _("Le contenu du message est requis."))
             return redirect(request.get_full_path())
 
-        conv = get_object_or_404(Conversation, id=conversation_id)
         try:
             MessageService.send_admin_message(conv, request.user, content=content)
             dj_messages.success(request, _("Reponse envoyee."))
@@ -352,7 +367,11 @@ def support_inbox_view(request):
         request,
         "chat/support_inbox.html",
         {
-            "conversations": conversations,
+            **admin.site.each_context(request),
+            "title": _("Boite Support"),
+            "conversations": conversations_page,
+            "conversations_page": conversations_page,
+            "conversation_count": paginator.count,
             "selected_conversation": selected_conversation,
             "messages": messages_qs,
         },

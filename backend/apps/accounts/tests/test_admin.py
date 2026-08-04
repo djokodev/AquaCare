@@ -12,6 +12,7 @@ from common.admin_mixins import RBACConstants
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.management import call_command
 from django.test import RequestFactory
 
 User = get_user_model()
@@ -56,8 +57,11 @@ class TestUserAdmin:
             last_name='User',
             password='test123',
             age_group='26_35',
+            is_staff=True,
         )
         manager_user.groups.add(manager_group)
+        call_command('setup_rbac', verbosity=0)
+        manager_user = User.objects.get(pk=manager_user.pk)
 
         request = self.factory.get('/admin/accounts/user/')
         request.user = manager_user
@@ -74,8 +78,8 @@ class TestUserAdmin:
         )
         assert self.admin.list_filter == expected_filters
 
-    def test_get_list_display_masks_phone_for_non_manager(self):
-        """Les non-managers ne voient pas le numero brut dans la liste."""
+    def test_get_list_display_removes_phone_for_non_manager(self):
+        """Les non-managers ne voient aucune forme du numero dans la liste."""
         regular_user = User.objects.create_user(
             phone_number='+237699111112',
             first_name='Regular',
@@ -88,7 +92,7 @@ class TestUserAdmin:
 
         list_display = self.admin.get_list_display(request)
 
-        assert 'phone_masked' in list_display
+        assert 'phone_masked' not in list_display
         assert 'phone_number' not in list_display
     
     def test_farm_certification_status_display_certified(self):

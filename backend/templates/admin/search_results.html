@@ -1,0 +1,42 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div data-admin-i18n-native class="aquacare-search-results">
+    <form method="get" class="mb-4" role="search">
+        <div class="input-group">
+            <input type="search" name="q" value="{{ query }}" minlength="{{ min_query_length }}" class="form-control" placeholder="{% translate 'Rechercher une ferme ou un utilisateur' %}" aria-label="{% translate 'Recherche globale' %}">
+            <div class="input-group-append"><button class="btn btn-success" type="submit">{% translate "Rechercher" %}</button></div>
+        </div>
+    </form>
+
+    {% if query|length < min_query_length %}
+        <p>{% blocktrans with count=min_query_length %}Saisissez au moins {{ count }} caracteres.{% endblocktrans %}</p>
+    {% else %}
+        {% if search_results.users %}
+        <section class="card">
+            <div class="card-header"><h2 class="card-title">{% translate "Utilisateurs" %}</h2></div>
+            <div class="list-group list-group-flush">
+                {% for result in search_results.users %}
+                <a class="list-group-item list-group-item-action" href="{{ result.url }}">
+                    <strong>{{ result.label }}</strong>{% if result.context %}<span class="d-block text-muted">{{ result.context }}</span>{% endif %}
+                    {% if result.phone %}<span class="mr-2">{{ result.phone }}</span>{% endif %}{% if result.email %}<span>{{ result.email }}</span>{% endif %}
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+        {% if search_results.farms %}
+        <section class="card">
+            <div class="card-header"><h2 class="card-title">{% translate "Fermes" %}</h2></div>
+            <div class="list-group list-group-flush">
+                {% for result in search_results.farms %}
+                <a class="list-group-item list-group-item-action" href="{{ result.url }}"><strong>{{ result.label }}</strong><span class="d-block text-muted">{{ result.context }}</span></a>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+        {% if not search_results.users and not search_results.farms %}<p>{% translate "Aucun resultat autorise." %}</p>{% endif %}
+    {% endif %}
+</div>
+{% endblock %}

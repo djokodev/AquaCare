@@ -840,3 +840,183 @@ msgstr "Confirmer la réception"
 
 msgid "Confirmer le retrait"
 msgstr "Confirmer le retrait"
+
+# Console Admin lot 1
+msgid "Administration AquaCare"
+msgstr "Administration AquaCare"
+
+msgid "Console de supervision"
+msgstr "Console de supervision"
+
+msgid "Recherche globale"
+msgstr "Recherche globale"
+
+msgid "Activites et alertes"
+msgstr "Activités et alertes"
+
+msgid "Boite Support"
+msgstr "Boîte Support"
+
+msgid "Outils systeme"
+msgstr "Outils système"
+
+msgid "Utilisateurs actifs"
+msgstr "Utilisateurs actifs"
+
+msgid "Incidents sanitaires actifs"
+msgstr "Incidents sanitaires actifs"
+
+msgid "Messages Support non lus"
+msgstr "Messages Support non lus"
+
+msgid "Rechercher une ferme ou un utilisateur"
+msgstr "Rechercher une ferme ou un utilisateur"
+
+msgid "Navigation de la console"
+msgstr "Navigation de la console"
+
+msgid "Aucun acces metier attribue"
+msgstr "Aucun accès métier attribué"
+
+msgid "Aucune donnee accessible avec vos permissions actuelles."
+msgstr "Aucune donnée accessible avec vos permissions actuelles."
+
+msgid "Utilisez les compteurs ci-dessus pour ouvrir les listes de supervision filtrees."
+msgstr "Utilisez les compteurs ci-dessus pour ouvrir les listes de supervision filtrées."
+
+msgid "Console vide"
+msgstr "Console vide"
+
+msgid "Aucun role metier AquaCare ne vous a ete attribue. Contactez un superadministrateur."
+msgstr "Aucun rôle métier AquaCare ne vous a été attribué. Contactez un superadministrateur."
+
+#, python-format
+msgid "Saisissez au moins %(count)s caracteres."
+msgstr "Saisissez au moins %(count)s caractères."
+
+msgid "Aucun resultat autorise."
+msgstr "Aucun résultat autorisé."
+
+msgid "Unites"
+msgstr "Unités"
+
+msgid "Journaux"
+msgstr "Journaux"
+
+msgid "Sanitaire"
+msgstr "Sanitaire"
+
+msgid "Unite creee"
+msgstr "Unité créée"
+
+msgid "Cycle cree ou lance"
+msgstr "Cycle créé ou lancé"
+
+msgid "Journal de cycle"
+msgstr "Journal de cycle"
+
+msgid "Evenement sanitaire"
+msgstr "Événement sanitaire"
+
+msgid "Operation de calibrage"
+msgstr "Opération de calibrage"
+
+msgid "Recolte finale"
+msgstr "Récolte finale"
+
+msgid "Rapport de production"
+msgstr "Rapport de production"
+
+msgid "Message Support"
+msgstr "Message Support"
+
+msgid "Resolution sanitaire Admin non autorisee."
+msgstr "Résolution sanitaire Admin non autorisée."
+
+msgid "Le proprietaire ne correspond pas a cet incident."
+msgstr "Le propriétaire ne correspond pas à cet incident."
+
+msgid "Incident sanitaire resolu via la console Admin"
+msgstr "Incident sanitaire résolu via la console Admin"
+
+msgid "Marquer les incidents selectionnes comme resolus"
+msgstr "Marquer les incidents sélectionnés comme résolus"
+
+#, python-format
+msgid "%(count)d incident(s) sanitaire(s) resolu(s)."
+msgstr "%(count)d incident(s) sanitaire(s) résolu(s)."
+
+#, python-format
+msgid "Supervision de %(farm)s"
+msgstr "Supervision de %(farm)s"
+
+msgid "Derniere activite autorisee"
+msgstr "Dernière activité autorisée"
+
+msgid "Date metier"
+msgstr "Date métier"
+
+msgid "Aucune activite visible pour ce role."
+msgstr "Aucune activité visible pour ce rôle."
+
+msgid "Vous n'avez pas la permission d'agir sur cette conversation."
+msgstr "Vous n'avez pas la permission d'agir sur cette conversation."
+
+msgid "Messages marques comme lus."
+msgstr "Messages marqués comme lus."
+
+msgid "Action Support non autorisee."
+msgstr "Action Support non autorisée."
+
+msgid "Aucune conversation."
+msgstr "Aucune conversation."
+
+msgid "Aucun message dans cette conversation."
+msgstr "Aucun message dans cette conversation."
+
+msgid "Repondre en tant que Support"
+msgstr "Répondre en tant que Support"
+
+msgid "Ecrivez votre reponse..."
+msgstr "Écrivez votre réponse..."
+
+msgid "Envoye en tant qu'Administration"
+msgstr "Envoyé en tant qu'Administration"
+
+msgid "Marquer explicitement comme lu"
+msgstr "Marquer explicitement comme lu"
+
+msgid "Selectionnez une conversation pour voir les messages."
+msgstr "Sélectionnez une conversation pour voir les messages."
+
+msgid "Pagination des conversations"
+msgstr "Pagination des conversations"
+
+msgid "Precedent"
+msgstr "Précédent"
+
+#, python-format
+msgid "Page %(current)s sur %(total)s"
+msgstr "Page %(current)s sur %(total)s"
+
+msgid "Systeme"
+msgstr "Système"
+
+msgid "Voir la video"
+msgstr "Voir la vidéo"
+
+#, python-format
+msgid "Logo %(name)s"
+msgstr "Logo %(name)s"
+
+#, python-format
+msgid "%(count)s conversation"
+msgid_plural "%(count)s conversations"
+msgstr[0] "%(count)s conversation"
+msgstr[1] "%(count)s conversations"
+
+#, python-format
+msgid "%(count)s non lu"
+msgid_plural "%(count)s non lus"
+msgstr[0] "%(count)s non lu"
+msgstr[1] "%(count)s non lus"

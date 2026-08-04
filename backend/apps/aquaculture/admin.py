@@ -14,13 +14,18 @@ import logging
 import zipfile
 from datetime import date
 
+from common.admin_capabilities import (
+    AdminCapability,
+    has_capability,
+    has_capability_and_permission,
+)
 from common.admin_mixins import (
     RBACConstants,
     SecuredModelAdmin,
 )
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
 from django.db.models import Avg, Count, Sum
 from django.http import HttpResponse, HttpResponseRedirect
@@ -28,7 +33,7 @@ from django.urls import reverse
 from django.utils.html import escape, format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 
-from .domain.exceptions import BusinessRuleViolation
+from .domain.exceptions import BusinessRuleViolation, InvalidSanitaryDataException
 from .models import (
     CalibrationOperation,
     CycleLog,
@@ -48,6 +53,10 @@ from .services.administrative_log_deletion_service import (
 )
 from .services.integrity_error_service import translate_production_unit_integrity_error
 from .services.production_unit_service import ProductionUnitLifecycleService
+from .services.sanitary_application_service import (
+    AdminSanitaryApplicationService,
+    ResolveSanitaryIssueCommand,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,33 +72,34 @@ class AquacultureSecuredAdmin(SecuredModelAdmin):
         if request.user.is_superuser:
             return True
 
-        user_groups = set(request.user.groups.values_list('name', flat=True))
-
-        # Managers: acces complet
-        if RBACConstants.GROUP_MANAGERS in user_groups:
-            return True
-
-        # Commerce: acces lecture pour contexte produits
-        if RBACConstants.GROUP_COMMERCE in user_groups:
-            return True
-
-        return False
+        return has_capability(
+            request.user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+        ) and request.user.has_perm(
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}"
+        )
 
     def has_add_permission(self, request):
         """Seuls superusers et managers peuvent ajouter."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists()
+        return has_capability(
+            request.user,
+            AdminCapability.MANAGE_AQUACULTURE_CONFIGURATION,
+        ) and request.user.has_perm(
+            f"{self.model._meta.app_label}.add_{self.model._meta.model_name}"
+        )
 
     def has_change_permission(self, request, obj=None):
         """Seuls superusers et managers peuvent modifier."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists()
+        return has_capability(
+            request.user,
+            AdminCapability.MANAGE_AQUACULTURE_CONFIGURATION,
+        ) and request.user.has_perm(
+            f"{self.model._meta.app_label}.change_{self.model._meta.model_name}"
+        )
 
     def has_delete_permission(self, request, obj=None):
         """Seul superuser peut supprimer."""
@@ -298,7 +308,13 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         })
     )
 
-    actions = ['export_cycles_csv', 'generate_performance_report', 'mark_as_completed']
+    actions = ['export_cycles_csv']
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     def get_queryset(self, request):
         """Optimize queries with select_related."""
@@ -310,16 +326,12 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         """Retire les actions selon le role."""
         actions = super().get_actions(request)
 
-        if not request.user.is_superuser:
-            is_manager = request.user.groups.filter(
-                name=RBACConstants.GROUP_MANAGERS
-            ).exists()
-
-            if not is_manager:
-                # Commerce n'a pas acces aux actions
-                for action in ['export_cycles_csv', 'generate_performance_report', 'mark_as_completed']:
-                    if action in actions:
-                        del actions[action]
+        if not request.user.is_superuser and not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+            "aquaculture.view_productioncycle",
+        ):
+            actions.pop('export_cycles_csv', None)
 
         return actions
 
@@ -438,10 +450,13 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     @admin.action(description=_("Exporter selection en CSV"))
     def export_cycles_csv(self, request, queryset):
         """Export selected cycles to CSV. Managers only."""
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission d'exporter."))
-                return
+        if not request.user.is_superuser and not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+            "aquaculture.view_productioncycle",
+        ):
+            messages.error(request, _("Vous n'avez pas la permission d'exporter."))
+            return
 
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="cycles_production.csv"'
@@ -665,6 +680,12 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
         }),
     )
 
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
             'cycle',
@@ -733,6 +754,12 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
         'id', 'client_uuid', 'synced_at', 'created_at', 'log_time'
     ]
     date_hierarchy = 'log_date'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
@@ -869,10 +896,10 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
     id_short.short_description = _('ID')
 
     def changelist_view(self, request, extra_context=None):
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_CYCLE_LOGS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)
 
 
@@ -910,6 +937,46 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
     ]
     readonly_fields = ['id', 'created_at', 'farmer_contact']
     date_hierarchy = 'event_date'
+    actions = ['resolve_selected_issues']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not (
+            request.user.is_superuser
+            or (
+                has_capability(request.user, AdminCapability.RESOLVE_SANITARY_ISSUES)
+                and request.user.has_perm("aquaculture.change_sanitarylog")
+            )
+        ):
+            actions.pop("resolve_selected_issues", None)
+        return actions
+
+    @admin.action(description=_("Marquer les incidents selectionnes comme resolus"))
+    def resolve_selected_issues(self, request, queryset):
+        resolved_count = 0
+        for sanitary_log in queryset.select_related("cycle__farm_profile__user"):
+            try:
+                AdminSanitaryApplicationService.resolve_issue(
+                    farm_owner=sanitary_log.cycle.farm_profile.user,
+                    actor=request.user,
+                    sanitary_log=sanitary_log,
+                    command=ResolveSanitaryIssueCommand(),
+                )
+            except (InvalidSanitaryDataException, PermissionDenied) as exc:
+                messages.error(request, str(exc))
+            else:
+                resolved_count += 1
+        if resolved_count:
+            messages.success(
+                request,
+                _("%(count)d incident(s) sanitaire(s) resolu(s).") % {"count": resolved_count},
+            )
 
     def get_queryset(self, request):
         """Optimize queries with select_related for farmer contact info."""
@@ -1030,10 +1097,10 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
     id_short.short_description = _('ID')
 
     def changelist_view(self, request, extra_context=None):
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_SANITARY_LOGS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)
 
 
@@ -1049,6 +1116,12 @@ class FeedingPlanAdmin(AquacultureSecuredAdmin):
     ]
     search_fields = ['cycle__cycle_name', 'recommended_feed_type']
     readonly_fields = ['id', 'created_at']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     fieldsets = (
         (_('Informations de base'), {
@@ -1125,6 +1198,23 @@ class NutritionalGuideAdmin(AquacultureSecuredAdmin):
             'classes': ('collapse',)
         })
     )
+
+    def has_module_permission(self, request):
+        if request.user.is_superuser:
+            return True
+        return (
+            has_capability(request.user, AdminCapability.VIEW_AQUACULTURE_SUPERVISION)
+            or has_capability(request.user, AdminCapability.MANAGE_COMMERCE)
+        ) and request.user.has_perm("aquaculture.view_nutritionalguide")
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     def species_display(self, obj):
         """Display species with icon."""
@@ -1246,7 +1336,30 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         """Managers et superusers peuvent voir les rapports (lecture seule)."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.view_productionreport",
+        )
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if request.user.is_superuser:
+            return actions
+        actions.pop('validate_report_action', None)
+        if not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.view_productionreport",
+        ):
+            actions.pop('download_report_pdf_action', None)
+        if not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.change_productionreport",
+        ):
+            actions.pop('regenerate_report_action', None)
+        return actions
 
     def has_add_permission(self, request):
         return request.user.is_superuser
@@ -1588,9 +1701,11 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
     @admin.action(description=_("Régénérer rapport(s) — nouveau PDF"))
     def regenerate_report_action(self, request, queryset):
         """Régénère les rapports sélectionnés (données fraîches + nouveau PDF)."""
-        if not request.user.is_superuser and not request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists():
+        if not request.user.is_superuser and not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.change_productionreport",
+        ):
             messages.error(request, _("Accès refusé."))
             return
         from ..services.report_service import ReportService
@@ -1642,10 +1757,10 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
             messages.success(request, _('{} rapport(s) validé(s).').format(count))
 
     def changelist_view(self, request, extra_context=None):
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_PRODUCTION_REPORTS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)
 
 
@@ -1670,7 +1785,11 @@ class ReportDispatchLogAdmin(AquacultureSecuredAdmin):
         """Managers peuvent consulter les logs d'envoi en lecture seule."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.view_reportdispatchlog",
+        )
 
     def has_add_permission(self, request):
         return request.user.is_superuser
@@ -1679,8 +1798,8 @@ class ReportDispatchLogAdmin(AquacultureSecuredAdmin):
         return request.user.is_superuser
 
     def changelist_view(self, request, extra_context=None):
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_DISPATCH_LOGS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)

@@ -6,8 +6,9 @@ from commerce.admin import OrderAdmin, OrderItemAdmin
 from commerce.models import Order, OrderItem, Product
 from commerce.services.order_service import OrderService
 from django.contrib import admin
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
+from django.core.management import call_command
 from django.http import HttpResponse
 from django.middleware.csrf import CsrfViewMiddleware, _get_new_csrf_string
 from django.template.loader import render_to_string
@@ -127,6 +128,10 @@ def test_admin_workflow_action_visibility_follows_rbac(superuser):
     commerce.groups.add(commerce_group)
     manager.groups.add(manager_group)
     support.groups.add(support_group)
+    call_command("setup_rbac", verbosity=0)
+    commerce.refresh_from_db()
+    manager.refresh_from_db()
+    support.refresh_from_db()
     order_admin = OrderAdmin(Order, admin.site)
     factory = RequestFactory()
     commerce_request = factory.get("/admin/commerce/order/")
@@ -198,6 +203,9 @@ def test_workflow_action_remains_available_to_commerce_but_not_manager(workflow_
     manager_group, _ = Group.objects.get_or_create(name="aquacare_managers")
     commerce.groups.add(commerce_group)
     manager.groups.add(manager_group)
+    call_command("setup_rbac", verbosity=0)
+    commerce.refresh_from_db()
+    manager.refresh_from_db()
     url = reverse("admin:commerce_order_fulfil", args=[workflow_order.pk])
 
     order_admin = OrderAdmin(Order, admin.site)
@@ -214,6 +222,32 @@ def test_workflow_action_remains_available_to_commerce_but_not_manager(workflow_
     manager_request.user = manager
     with pytest.raises(PermissionDenied):
         order_admin.fulfil_order_view(manager_request, str(workflow_order.pk))
+
+
+@pytest.mark.django_db
+def test_workflow_requires_commerce_capability_and_change_permission():
+    commerce = User.objects.create_user(
+        phone_number="+237699100008",
+        password="testpass123",
+        first_name="Commerce",
+        last_name="Restricted",
+        age_group="26_35",
+        is_staff=True,
+    )
+    commerce_group, _ = Group.objects.get_or_create(name="aquacare_commerce")
+    commerce.groups.add(commerce_group)
+    call_command("setup_rbac", verbosity=0)
+    commerce_group.permissions.remove(
+        Permission.objects.get(
+            content_type__app_label="commerce",
+            codename="change_order",
+        )
+    )
+    commerce = User.objects.get(pk=commerce.pk)
+    request = RequestFactory().get("/admin/commerce/order/")
+    request.user = commerce
+
+    assert OrderAdmin(Order, admin.site).has_workflow_permission(request) is False
 
 
 def test_order_and_order_item_admin_are_immutable():

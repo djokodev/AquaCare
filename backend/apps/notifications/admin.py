@@ -9,6 +9,7 @@ Roles:
 - COMMERCE: Lecture seule (contexte commandes)
 """
 
+from common.admin_capabilities import AdminCapability, has_capability
 from common.admin_mixins import (
     RBACConstants,
     SecuredModelAdmin,
@@ -32,37 +33,18 @@ class NotificationsSecuredAdmin(SecuredModelAdmin):
         if request.user.is_superuser:
             return True
 
-        user_groups = set(request.user.groups.values_list('name', flat=True))
-
-        # Support: acces complet
-        if RBACConstants.GROUP_SUPPORT in user_groups:
-            return True
-
-        # Managers: lecture seule
-        if RBACConstants.GROUP_MANAGERS in user_groups:
-            return True
-
-        # Commerce: lecture seule (pour contexte commandes)
-        if RBACConstants.GROUP_COMMERCE in user_groups:
-            return True
-
-        return False
+        return has_capability(
+            request.user,
+            AdminCapability.VIEW_NOTIFICATIONS,
+        ) and request.user.has_perm(
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}"
+        )
 
     def has_add_permission(self, request):
-        """Support et superusers peuvent creer des notifications."""
-        if request.user.is_superuser:
-            return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        return request.user.is_superuser
 
     def has_change_permission(self, request, obj=None):
-        """Support et superusers peuvent modifier des notifications."""
-        if request.user.is_superuser:
-            return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_SUPPORT
-        ).exists()
+        return request.user.is_superuser
 
     def has_delete_permission(self, request, obj=None):
         """Seul superuser peut supprimer des notifications."""

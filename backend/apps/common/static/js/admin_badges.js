@@ -8,32 +8,17 @@
   // Ne pas exécuter sur la page de login
   if (document.body && document.body.classList.contains('login')) return;
 
-  const SECTIONS = [
-    { key: 'chat',               urlPath: '/admin/chat/conversation/' },
-    { key: 'cycle_logs',         urlPath: '/admin/aquaculture/cyclelog/' },
-    { key: 'sanitary_logs',      urlPath: '/admin/aquaculture/sanitarylog/' },
-    { key: 'orders',             urlPath: '/admin/commerce/order/' },
-    { key: 'production_reports', urlPath: '/admin/aquaculture/productionreport/' },
-    { key: 'dispatch_logs',      urlPath: '/admin/aquaculture/reportdispatchlog/' },
-  ];
+  const SECTIONS = ['chat', 'cycle_logs', 'sanitary_logs', 'orders', 'production_reports', 'dispatch_logs'];
 
-  function injectBadge(urlPath, count) {
-    var links = document.querySelectorAll('.nav-sidebar .nav-link');
-    links.forEach(function (link) {
-      if (!link.href || link.href.indexOf(urlPath) === -1) return;
-
-      var badge = link.querySelector('.aquacare-badge');
+  function injectBadge(key, count) {
+    document.querySelectorAll('[data-badge-key="' + key + '"]').forEach(function (link) {
+      var badge = link.querySelector('.admin-nav-badge');
       if (count > 0) {
-        if (!badge) {
-          badge = document.createElement('span');
-          badge.className = 'aquacare-badge badge badge-danger';
-          badge.style.cssText = 'margin-left:4px;font-size:10px;vertical-align:middle;min-width:18px;text-align:center;';
-          var p = link.querySelector('p');
-          if (p) p.after(badge);
-        }
+        badge.hidden = false;
         badge.textContent = count > 99 ? '99+' : String(count);
-      } else if (badge) {
-        badge.remove();
+      } else {
+        badge.hidden = true;
+        badge.textContent = '';
       }
     });
   }
@@ -48,8 +33,8 @@
       })
       .then(function (data) {
         if (!data) return;
-        SECTIONS.forEach(function (section) {
-          injectBadge(section.urlPath, data[section.key] || 0);
+        SECTIONS.forEach(function (key) {
+          injectBadge(key, data[key] || 0);
         });
       })
       .catch(function () {
@@ -57,22 +42,8 @@
       });
   }
 
-  function setupClickClear() {
-    SECTIONS.forEach(function (section) {
-      document.querySelectorAll('.nav-sidebar .nav-link').forEach(function (link) {
-        if (link.href && link.href.indexOf(section.urlPath) !== -1) {
-          link.addEventListener('click', function () {
-            var badge = link.querySelector('.aquacare-badge');
-            if (badge) badge.remove();
-          });
-        }
-      });
-    });
-  }
-
   document.addEventListener('DOMContentLoaded', function () {
     fetchCounts();
-    setupClickClear();
     setInterval(fetchCounts, 60000);
   });
 })();

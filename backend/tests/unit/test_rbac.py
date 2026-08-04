@@ -76,6 +76,9 @@ def manager_user(user_factory):
     )
     group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_MANAGERS)
     user.groups.add(group)
+    from django.core.management import call_command
+    call_command('setup_rbac', verbosity=0)
+    user = User.objects.get(pk=user.pk)
     return user
 
 
@@ -89,6 +92,9 @@ def commerce_user(user_factory):
     )
     group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_COMMERCE)
     user.groups.add(group)
+    from django.core.management import call_command
+    call_command('setup_rbac', verbosity=0)
+    user = User.objects.get(pk=user.pk)
     return user
 
 
@@ -102,6 +108,9 @@ def support_user(user_factory):
     )
     group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_SUPPORT)
     user.groups.add(group)
+    from django.core.management import call_command
+    call_command('setup_rbac', verbosity=0)
+    user = User.objects.get(pk=user.pk)
     return user
 
 
@@ -256,12 +265,19 @@ class TestSecuredModelAdmin:
         # Commerce ne devrait pas avoir acces direct a accounts
         assert admin.has_module_permission(request) is False
 
-    def test_support_no_module_permission_accounts(self, mock_request, support_user):
-        """Le support n'a pas acces au module accounts."""
+    def test_support_has_minimal_user_directory_but_no_object_view(
+        self,
+        mock_request,
+        support_user,
+        regular_user,
+    ):
+        """Le Support dispose de l'annuaire, sans fiche utilisateur directe."""
         admin = UserAdmin(User, AdminSite())
         request = mock_request(support_user)
 
-        assert admin.has_module_permission(request) is False
+        assert admin.has_module_permission(request) is True
+        assert admin.has_view_permission(request) is True
+        assert admin.has_view_permission(request, regular_user) is False
 
 
 # =============================================================================
@@ -565,15 +581,26 @@ class TestModulePermissionsByRole:
 
         assert admin.has_module_permission(request) is True
 
-    def test_commerce_has_aquaculture_view_permission(self, mock_request, commerce_user):
-        """Le commerce a acces en lecture au module aquaculture."""
+    def test_commerce_does_not_receive_generic_cycle_directory(self, mock_request, commerce_user):
+        """Le contexte Commerce ne donne pas l'annuaire aquacole generique."""
         from aquaculture.admin import ProductionCycleAdmin
         from aquaculture.models import ProductionCycle
 
         admin = ProductionCycleAdmin(ProductionCycle, AdminSite())
         request = mock_request(commerce_user)
 
+        assert admin.has_module_permission(request) is False
+
+    def test_commerce_can_read_nutritional_guides_only(self, mock_request, commerce_user):
+        from aquaculture.admin import NutritionalGuideAdmin
+        from aquaculture.models import NutritionalGuide
+
+        admin = NutritionalGuideAdmin(NutritionalGuide, AdminSite())
+        request = mock_request(commerce_user)
+
         assert admin.has_module_permission(request) is True
+        assert admin.has_add_permission(request) is False
+        assert admin.has_change_permission(request) is False
 
     def test_support_has_chat_module_permission(self, mock_request, support_user):
         """Le support a acces au module chat."""
@@ -743,6 +770,9 @@ class TestMultiRole:
         manager_group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_MANAGERS)
         commerce_group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_COMMERCE)
         user.groups.add(manager_group, commerce_group)
+        from django.core.management import call_command
+        call_command('setup_rbac', verbosity=0)
+        user = User.objects.get(pk=user.pk)
 
         request = mock_request(user)
 
