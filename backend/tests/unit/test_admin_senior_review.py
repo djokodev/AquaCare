@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import re
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
@@ -31,6 +31,7 @@ from commerce.models import Order, OrderItem, Product
 from commerce.services.order_service import OrderService
 from common.admin_policies import RBACConstants
 from common.admin_site import AquaCareAdminSite
+from common.models import AdminViewState
 from django.apps import apps
 from django.contrib import admin
 from django.contrib.admin.models import LogEntry
@@ -59,6 +60,40 @@ def _client_for(user):
     client = Client()
     client.force_login(user)
     return client
+
+
+def _without_role_permissions(user, *permission_names: str):
+    """Retire des permissions du role puis retourne un user sans caches RBAC."""
+    permissions = []
+    for permission_name in permission_names:
+        app_label, codename = permission_name.split(".", maxsplit=1)
+        permissions.append(
+            Permission.objects.get(
+                content_type__app_label=app_label,
+                codename=codename,
+            )
+        )
+    for group in user.groups.all():
+        group.permissions.remove(*permissions)
+    return type(user).objects.get(pk=user.pk)
+
+
+def _manager_with_activity_permissions(*codenames: str):
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    activity_permissions = Permission.objects.filter(
+        content_type__app_label="aquaculture",
+        codename__in=("view_cyclelog", "view_sanitarylog"),
+    )
+    group = manager.groups.get(name=RBACConstants.GROUP_MANAGERS)
+    group.permissions.remove(*activity_permissions)
+    if codenames:
+        group.permissions.add(
+            *Permission.objects.filter(
+                content_type__app_label="aquaculture",
+                codename__in=codenames,
+            )
+        )
+    return type(manager).objects.get(pk=manager.pk)
 
 
 def _production_unit(farm, *, name="Unité réelle"):
@@ -180,6 +215,105 @@ def test_dashboard_is_complete_for_manager_commerce_and_support():
     assert "Aucune activité autorisée récente." not in support_html
     assert "Besoin d'aide sur mon cycle" not in support_html
     assert farm.user.phone_number not in support_html
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("permission_name", "model_label", "card_key", "label", "url_name"),
+    [
+        (
+            "accounts.view_farmprofile",
+            "accounts.FarmProfile",
+            "active_farms",
+            "Fermes actives suivies",
+            "admin:accounts_farmprofile_changelist",
+        ),
+        (
+            "aquaculture.view_productionunit",
+            "aquaculture.ProductionUnit",
+            "active_units",
+            "Unités actives",
+            "admin:aquaculture_productionunit_changelist",
+        ),
+        (
+            "aquaculture.view_productioncycle",
+            "aquaculture.ProductionCycle",
+            "active_cycles",
+            "Cycles actifs",
+            "admin:aquaculture_productioncycle_changelist",
+        ),
+        (
+            "aquaculture.view_sanitarylog",
+            "aquaculture.SanitaryLog",
+            "unresolved_sanitary",
+            "Incidents sanitaires non résolus",
+            "admin:aquaculture_sanitarylog_changelist",
+        ),
+        (
+            "aquaculture.view_productionreport",
+            "aquaculture.ProductionReport",
+            "recent_reports",
+            "Rapports récents",
+            "admin:aquaculture_productionreport_changelist",
+        ),
+    ],
+)
+def test_manager_dashboard_blocks_require_their_own_django_permission(
+    permission_name,
+    model_label,
+    card_key,
+    label,
+    url_name,
+):
+    manager = _without_role_permissions(
+        _staff_for_role(RBACConstants.GROUP_MANAGERS),
+        permission_name,
+    )
+    model = apps.get_model(model_label)
+
+    with CaptureQueriesContext(connection) as captured:
+        response = _client_for(manager).get(reverse("admin:index"))
+
+    html = response.content.decode()
+    cards = response.context["dashboard_cards"]
+    assert response.status_code == 200
+    assert card_key not in {card["key"] for card in cards}
+    assert label not in html
+    assert reverse(url_name) not in {card["url"] for card in cards}
+    assert not any(
+        f'FROM "{model._meta.db_table}"' in query["sql"]
+        for query in captured.captured_queries
+    )
+
+
+@pytest.mark.django_db
+def test_commerce_dashboard_keeps_orders_but_hides_products_without_permission():
+    commerce = _without_role_permissions(
+        _staff_for_role(RBACConstants.GROUP_COMMERCE),
+        "commerce.view_product",
+    )
+
+    with CaptureQueriesContext(connection) as captured:
+        response = _client_for(commerce).get(reverse("admin:index"))
+
+    html = response.content.decode()
+    card_keys = {card["key"] for card in response.context["dashboard_cards"]}
+    shortcut_keys = {
+        shortcut["key"] for shortcut in response.context["dashboard_shortcuts"]
+    }
+    assert response.status_code == 200
+    assert "orders_confirmed" in card_keys
+    assert "orders" in shortcut_keys
+    assert "Commandes confirmées" in html
+    assert "products_available" not in card_keys
+    assert "products_unavailable" not in card_keys
+    assert "products" not in shortcut_keys
+    assert "Produits disponibles" not in html
+    assert "Produits indisponibles" not in html
+    assert not any(
+        f'FROM "{Product._meta.db_table}"' in query["sql"]
+        for query in captured.captured_queries
+    )
 
 
 @pytest.mark.django_db
@@ -967,16 +1101,149 @@ def test_navigation_is_exact_ordered_and_deduplicated_by_role(roles, expected):
 
 
 @pytest.mark.django_db
-def test_activity_center_is_a_real_role_protected_admin_screen():
-    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
-    commerce = _staff_for_role(RBACConstants.GROUP_COMMERCE)
+@pytest.mark.parametrize(
+    ("permissions", "status", "menu_visible", "cycle_visible", "sanitary_visible"),
+    [
+        (("view_cyclelog", "view_sanitarylog"), 200, True, True, True),
+        (("view_cyclelog",), 200, True, True, False),
+        (("view_sanitarylog",), 200, True, False, True),
+        ((), 403, False, False, False),
+    ],
+)
+def test_activity_center_navigation_and_blocks_follow_partial_permissions(
+    permissions,
+    status,
+    menu_visible,
+    cycle_visible,
+    sanitary_visible,
+):
+    manager = _manager_with_activity_permissions(*permissions)
+    client = _client_for(manager)
     url = reverse("admin:aquacare_activity_center")
 
-    manager_response = _client_for(manager).get(url)
+    navigation_response = client.get(reverse("admin:index"))
+    response = client.get(url)
 
-    assert manager_response.status_code == 200
-    assert 'data-activity-center="true"' in manager_response.content.decode()
-    assert _client_for(commerce).get(url).status_code == 403
+    assert ("activity" in _nav_keys(navigation_response)) is menu_visible
+    assert response.status_code == status
+    if status == 200:
+        html = response.content.decode()
+        assert 'data-activity-center="true"' in html
+        assert ("Journaux de cycle" in html) is cycle_visible
+        assert ("Incidents sanitaires" in html) is sanitary_visible
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("codename", ["view_cyclelog", "view_sanitarylog"])
+def test_activity_center_denies_staff_without_operational_role(codename):
+    staff = _staff_for_role()
+    staff.user_permissions.add(
+        Permission.objects.get(
+            content_type__app_label="aquaculture",
+            codename=codename,
+        )
+    )
+    staff = type(staff).objects.get(pk=staff.pk)
+
+    assert _client_for(staff).get(
+        reverse("admin:aquacare_activity_center")
+    ).status_code == 403
+
+
+@pytest.mark.django_db
+def test_activity_center_denies_commerce_role():
+    commerce = _staff_for_role(RBACConstants.GROUP_COMMERCE)
+
+    assert _client_for(commerce).get(
+        reverse("admin:aquacare_activity_center")
+    ).status_code == 403
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("codename", "seen_section", "unseen_section"),
+    [
+        (
+            "view_cyclelog",
+            AdminViewState.SECTION_CYCLE_LOGS,
+            AdminViewState.SECTION_SANITARY_LOGS,
+        ),
+        (
+            "view_sanitarylog",
+            AdminViewState.SECTION_SANITARY_LOGS,
+            AdminViewState.SECTION_CYCLE_LOGS,
+        ),
+    ],
+)
+def test_activity_center_marks_only_the_authorized_private_view_state(
+    codename,
+    seen_section,
+    unseen_section,
+):
+    manager = _manager_with_activity_permissions(codename)
+
+    response = _client_for(manager).get(reverse("admin:aquacare_activity_center"))
+
+    assert response.status_code == 200
+    assert AdminViewState.objects.filter(user=manager, section=seen_section).exists()
+    assert not AdminViewState.objects.filter(
+        user=manager,
+        section=unseen_section,
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_activity_center_does_not_mark_support_messages_as_read():
+    manager = _manager_with_activity_permissions(
+        "view_cyclelog",
+        "view_sanitarylog",
+    )
+    message = MessageService.send_user_message(UserFactory(), "Message support non lu")
+    conversation = message.conversation
+    conversation.refresh_from_db()
+    message.refresh_from_db()
+    unread_before = conversation.unread_count_admin
+    is_read_before = message.is_read
+
+    response = _client_for(manager).get(reverse("admin:aquacare_activity_center"))
+
+    conversation.refresh_from_db()
+    message.refresh_from_db()
+    assert response.status_code == 200
+    assert conversation.unread_count_admin == unread_before
+    assert message.is_read is is_read_before
+
+
+@pytest.mark.django_db
+def test_activity_center_query_growth_is_bounded_and_preview_is_limited():
+    manager = _manager_with_activity_permissions(
+        "view_cyclelog",
+        "view_sanitarylog",
+    )
+    cycle = ProductionCycleFactory()
+    CycleLog.objects.create(cycle=cycle, log_date=date.today())
+    _incident(cycle)
+    client = _client_for(manager)
+    url = reverse("admin:aquacare_activity_center")
+    assert client.get(url).status_code == 200
+
+    with CaptureQueriesContext(connection) as small_capture:
+        assert client.get(url).status_code == 200
+
+    for index in range(1, 26):
+        CycleLog.objects.create(
+            cycle=cycle,
+            log_date=date.today() - timedelta(days=index),
+        )
+        _incident(cycle)
+
+    with CaptureQueriesContext(connection) as large_capture:
+        response = client.get(url)
+
+    assert response.status_code == 200
+    assert len(response.context["activity_center_activities"]) == 10
+    assert len(response.context["activity_center_attention"]) <= 10
+    assert len(large_capture) <= len(small_capture) + 2
 
 
 @pytest.mark.django_db
@@ -1044,7 +1311,26 @@ def test_english_console_navigation_and_search_are_fully_translated():
     assert 'aria-label="Rechercher"' not in html
 
 
-def test_admin_dark_theme_and_tables_have_global_readability_guards():
+@pytest.mark.django_db
+def test_production_report_pdf_actions_are_translated_in_french_and_english():
+    report = _report(FarmProfileFactory())
+    report.pdf_file = "reports/test-report.pdf"
+    model_admin = admin.site._registry[ProductionReport]
+
+    with translation.override("en"):
+        english_html = str(model_admin.pdf_download_link(report))
+    with translation.override("fr"):
+        french_html = str(model_admin.pdf_download_link(report))
+
+    assert "View" in english_html
+    assert "Download" in english_html
+    assert "Visualiser" not in english_html
+    assert "Télécharger" not in english_html
+    assert "Visualiser" in french_html
+    assert "Télécharger" in french_html
+
+
+def test_admin_theme_and_tables_have_structural_readability_guards():
     css = (
         Path(__file__).parents[2]
         / "apps"
@@ -1054,7 +1340,20 @@ def test_admin_dark_theme_and_tables_have_global_readability_guards():
         / "admin_custom.css"
     ).read_text(encoding="utf-8")
 
-    assert ".jazzmin-login-page .login-box-msg" in css
+    assert re.search(
+        r"\.jazzmin-login-page \.login-box-msg,\s*"
+        r"\.jazzmin-login-page \.text-center\s*\{\s*"
+        r"color: var\(--text-dark\) !important;",
+        css,
+    )
+    assert re.search(
+        r"@media \(prefers-color-scheme: dark\).*?"
+        r"\.jazzmin-login-page \.login-box-msg,\s*"
+        r"\.jazzmin-login-page \.text-center\s*\{\s*"
+        r"color: var\(--text-primary\) !important;",
+        css,
+        re.DOTALL,
+    )
     assert ".aquacare-console .card-header .card-title" in css
     assert "color: var(--text-primary) !important;" in css
     assert ".aquacare-dashboard-card .info-box-icon" in css
@@ -1064,6 +1363,11 @@ def test_admin_dark_theme_and_tables_have_global_readability_guards():
     assert "white-space: nowrap;" in css
     assert ".field-pdf_download_link .aquacare-pdf-action" in css
     assert ".aquacare-role-badge" in css
+    assert re.search(
+        r"\.aquacare-role-badge--manager\s*\{\s*"
+        r"background: var\(--aqua-primary-hover\);",
+        css,
+    )
 
 
 @pytest.mark.django_db
@@ -1080,3 +1384,30 @@ def test_user_role_column_names_operational_roles_with_accessible_badges():
     assert "Manager aquacole" in html
     assert "Support" in html
     assert "Superadministrateur" in html
+
+
+@pytest.mark.django_db
+def test_user_role_column_query_growth_is_bounded():
+    owner = _staff_for_role(superuser=True)
+    manager_group, _ = Group.objects.get_or_create(
+        name=RBACConstants.GROUP_MANAGERS
+    )
+    support_group, _ = Group.objects.get_or_create(name=RBACConstants.GROUP_SUPPORT)
+    first = UserFactory(is_staff=True)
+    first.groups.add(manager_group, support_group)
+    client = _client_for(owner)
+    url = reverse("admin:accounts_user_changelist")
+
+    with CaptureQueriesContext(connection) as small_capture:
+        assert client.get(url).status_code == 200
+
+    users = UserFactory.create_batch(35, is_staff=True)
+    for index, user in enumerate(users):
+        user.groups.add(manager_group)
+        if index % 2 == 0:
+            user.groups.add(support_group)
+
+    with CaptureQueriesContext(connection) as large_capture:
+        assert client.get(url).status_code == 200
+
+    assert len(large_capture) <= len(small_capture) + 2

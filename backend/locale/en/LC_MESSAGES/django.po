@@ -1736,3 +1736,9 @@ msgstr "Staff Without a Role"
 
 msgid "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page."
 msgstr "Select a conversation, review its history, then reply without leaving the page."
+
+msgid "Visualiser"
+msgstr "View"
+
+msgid "Télécharger"
+msgstr "Download"

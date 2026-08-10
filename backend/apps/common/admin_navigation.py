@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 
 from .admin_capabilities import (
     AdminCapability,
+    can_view_aquaculture_activity_center,
     has_capability_and_permission,
     role_names_for_user,
 )
@@ -62,9 +63,7 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
             append(_item("farms", _("Fermes"), "fas fa-warehouse", "admin:accounts_farmprofile_changelist"))
         if has_capability_and_permission(user, AdminCapability.VIEW_USERS, "accounts.view_user"):
             append(_item("users", _("Utilisateurs"), "fas fa-users", "admin:accounts_user_changelist"))
-        if has_capability_and_permission(
-            user, AdminCapability.VIEW_AQUACULTURE_SUPERVISION, "aquaculture.view_cyclelog"
-        ):
+        if can_view_aquaculture_activity_center(user):
             append(
                 _item(
                     "activity",

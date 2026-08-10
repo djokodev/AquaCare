@@ -1251,3 +1251,9 @@ msgstr "Staff sans rôle"
 
 msgid "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page."
 msgstr "Sélectionnez une conversation, consultez son historique puis répondez sans quitter la page."
+
+msgid "Visualiser"
+msgstr "Visualiser"
+
+msgid "Télécharger"
+msgstr "Télécharger"

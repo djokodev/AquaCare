@@ -211,6 +211,17 @@ def has_capability_and_permission(
     return has_capability(user, capability) and user.has_perm(permission)
 
 
+def can_view_aquaculture_activity_center(user) -> bool:
+    """Autorise le centre si au moins un de ses deux flux est consultable."""
+    return has_capability(
+        user,
+        AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+    ) and (
+        user.has_perm("aquaculture.view_cyclelog")
+        or user.has_perm("aquaculture.view_sanitarylog")
+    )
+
+
 def capability_fingerprint(user) -> str:
     """Cle stable pour isoler les caches selon l'ensemble effectif de capacites."""
     return ".".join(sorted(capability.value for capability in capabilities_for_user(user))) or "none"

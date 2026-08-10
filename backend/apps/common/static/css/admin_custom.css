@@ -536,7 +536,7 @@ body.app-aquaculture.model-productionreport.change-list
 }
 
 .aquacare-role-badge--manager {
-    background: var(--aqua-primary);
+    background: var(--aqua-primary-hover);
 }
 
 .aquacare-role-badge--commerce {
@@ -1068,10 +1068,17 @@ input[name="_continue"] {
     white-space: normal;
 }
 
-/* Pages de connexion/deconnexion rendues sur fond sombre par Jazzmin. */
+/* Login Jazzmin: theme default clair, puis darkly via la media query du package. */
 .jazzmin-login-page .login-box-msg,
 .jazzmin-login-page .text-center {
-    color: var(--text-primary) !important;
+    color: var(--text-dark) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    .jazzmin-login-page .login-box-msg,
+    .jazzmin-login-page .text-center {
+        color: var(--text-primary) !important;
+    }
 }
 
 /* Toutes les listes Admin gardent une ligne par objet et scrollent horizontalement. */

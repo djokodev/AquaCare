@@ -10,7 +10,11 @@ from django.urls import path
 from django.utils.translation import gettext_lazy as _
 
 from .admin_badge_views import badge_counts_view
-from .admin_capabilities import AdminCapability, has_capability
+from .admin_capabilities import (
+    AdminCapability,
+    can_view_aquaculture_activity_center,
+    has_capability,
+)
 from .admin_navigation import navigation_for_user
 from .services.admin_console_service import AdminConsoleService
 from .services.admin_search_service import AdminSearchService
@@ -88,14 +92,10 @@ class AquaCareAdminSite(AdminSite):
         return support_inbox_view(request, admin_site=self)
 
     def activity_center_view(self, request):
-        can_view_cycle_logs = has_capability(
-            request.user, AdminCapability.VIEW_AQUACULTURE_SUPERVISION
-        ) and request.user.has_perm("aquaculture.view_cyclelog")
-        can_view_sanitary_logs = has_capability(
-            request.user, AdminCapability.VIEW_AQUACULTURE_SUPERVISION
-        ) and request.user.has_perm("aquaculture.view_sanitarylog")
-        if not (can_view_cycle_logs or can_view_sanitary_logs):
+        if not can_view_aquaculture_activity_center(request.user):
             raise PermissionDenied
+        can_view_cycle_logs = request.user.has_perm("aquaculture.view_cyclelog")
+        can_view_sanitary_logs = request.user.has_perm("aquaculture.view_sanitarylog")
 
         from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
