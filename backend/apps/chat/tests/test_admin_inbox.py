@@ -144,3 +144,22 @@ def test_support_inbox_query_growth_is_constant():
         assert client.get(url).status_code == 200
 
     assert len(large_capture) <= len(small_capture) + 2
+
+
+@pytest.mark.django_db
+def test_support_inbox_uses_compact_readable_master_detail_structure():
+    support = _support_user()
+    conversation, _message = _unread_conversation()
+    client = Client()
+    client.force_login(support)
+
+    response = client.get(
+        reverse("admin:chat_support_inbox"),
+        {"conversation": conversation.pk},
+    )
+    html = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'class="support-inbox-intro"' in html
+    assert 'class="conversation-summary"' in html
+    assert 'class="reply-note"' in html

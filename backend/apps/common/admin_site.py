@@ -40,6 +40,11 @@ class AquaCareAdminSite(AdminSite):
                 name="aquacare_global_search",
             ),
             path(
+                "activity-center/",
+                self.admin_view(self.activity_center_view),
+                name="aquacare_activity_center",
+            ),
+            path(
                 "system-tools/",
                 self.admin_view(self.system_tools_view),
                 name="aquacare_system_tools",
@@ -81,6 +86,34 @@ class AquaCareAdminSite(AdminSite):
         from chat.admin import support_inbox_view
 
         return support_inbox_view(request, admin_site=self)
+
+    def activity_center_view(self, request):
+        can_view_cycle_logs = has_capability(
+            request.user, AdminCapability.VIEW_AQUACULTURE_SUPERVISION
+        ) and request.user.has_perm("aquaculture.view_cyclelog")
+        can_view_sanitary_logs = has_capability(
+            request.user, AdminCapability.VIEW_AQUACULTURE_SUPERVISION
+        ) and request.user.has_perm("aquaculture.view_sanitarylog")
+        if not (can_view_cycle_logs or can_view_sanitary_logs):
+            raise PermissionDenied
+
+        from common.admin_badge_views import clear_badge_cache
+        from common.models import AdminViewState
+
+        if can_view_cycle_logs:
+            AdminViewState.mark_seen(request.user, AdminViewState.SECTION_CYCLE_LOGS)
+        if can_view_sanitary_logs:
+            AdminViewState.mark_seen(request.user, AdminViewState.SECTION_SANITARY_LOGS)
+        clear_badge_cache(request.user)
+
+        context = {
+            **self.each_context(request),
+            **AdminConsoleService.aquaculture_activity_context(request.user),
+            "title": _("Activites et alertes"),
+            "can_view_cycle_logs": can_view_cycle_logs,
+            "can_view_sanitary_logs": can_view_sanitary_logs,
+        }
+        return TemplateResponse(request, "admin/activity_center.html", context)
 
     def system_tools_view(self, request):
         if not request.user.is_superuser:

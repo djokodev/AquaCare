@@ -1539,9 +1539,10 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         )
         if obj.pdf_file:
             return format_html(
-                '<a href="{}" target="_blank" style="{}background:#3b82f6;color:white;">👁 Visualiser</a>'
+                '<a class="aquacare-pdf-action" href="{}" target="_blank" '
+                'style="{}background:#3b82f6;color:white;">👁 Visualiser</a>'
                 '&nbsp;'
-                '<a href="{}" style="{}background:#059669;color:white;">📄 Télécharger</a>',
+                '<a class="aquacare-pdf-action" href="{}" style="{}background:#059669;color:white;">📄 Télécharger</a>',
                 view_url, btn_base, download_url, btn_base,
             )
         return _("PDF non genere")

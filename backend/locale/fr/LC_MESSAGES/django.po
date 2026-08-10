@@ -1221,3 +1221,33 @@ msgstr "Utilisateur sans nom"
 
 msgid "Aucune ferme associee"
 msgstr "Aucune ferme associée"
+
+msgid "Rapports"
+msgstr "Rapports"
+
+msgid "Rechercher"
+msgstr "Rechercher"
+
+msgid "Consultez les journaux et incidents accessibles avec votre role."
+msgstr "Consultez les journaux et incidents accessibles avec votre rôle."
+
+msgid "Journaux de cycle"
+msgstr "Journaux de cycle"
+
+msgid "Incidents sanitaires"
+msgstr "Incidents sanitaires"
+
+msgid "Activites recentes"
+msgstr "Activités récentes"
+
+msgid "Superadministrateur"
+msgstr "Superadministrateur"
+
+msgid "Manager aquacole"
+msgstr "Manager aquacole"
+
+msgid "Staff sans role"
+msgstr "Staff sans rôle"
+
+msgid "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page."
+msgstr "Sélectionnez une conversation, consultez son historique puis répondez sans quitter la page."

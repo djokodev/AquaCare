@@ -1706,3 +1706,33 @@ msgstr "Unnamed user"
 
 msgid "Aucune ferme associee"
 msgstr "No associated farm"
+
+msgid "Rapports"
+msgstr "Reports"
+
+msgid "Rechercher"
+msgstr "Search"
+
+msgid "Consultez les journaux et incidents accessibles avec votre role."
+msgstr "View the logs and incidents available to your role."
+
+msgid "Journaux de cycle"
+msgstr "Cycle Logs"
+
+msgid "Incidents sanitaires"
+msgstr "Health Incidents"
+
+msgid "Activites recentes"
+msgstr "Recent Activity"
+
+msgid "Superadministrateur"
+msgstr "Super Administrator"
+
+msgid "Manager aquacole"
+msgstr "Aquaculture Manager"
+
+msgid "Staff sans role"
+msgstr "Staff Without a Role"
+
+msgid "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page."
+msgstr "Select a conversation, review its history, then reply without leaving the page."

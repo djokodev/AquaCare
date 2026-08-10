@@ -65,6 +65,20 @@ class AdminConsoleService:
         """Compatibilité avec les appels existants du lot 1."""
         return cls.dashboard_context(user)["dashboard_cards"]
 
+    @classmethod
+    def aquaculture_activity_context(cls, user) -> dict:
+        """Retourne uniquement les activités aquacoles autorisées pour l'écran dédié."""
+        manager_context = cls._manager_context(user, include_cards=False)
+        activities = sorted(
+            manager_context["activities"],
+            key=lambda item: item["occurred_at"],
+            reverse=True,
+        )
+        return {
+            "activity_center_activities": activities[: cls.PREVIEW_LIMIT],
+            "activity_center_attention": manager_context["attention"][: cls.PREVIEW_LIMIT],
+        }
+
     @staticmethod
     def _deduplicate(items: list[dict]) -> list[dict]:
         seen: set[str] = set()
@@ -76,7 +90,7 @@ class AdminConsoleService:
         return result
 
     @classmethod
-    def _manager_context(cls, user) -> dict:
+    def _manager_context(cls, user, *, include_cards=True) -> dict:
         from accounts.models import FarmProfile
         from aquaculture.models import (
             CycleLog,
@@ -136,29 +150,31 @@ class AdminConsoleService:
                 "admin:aquaculture_productionreport_changelist",
                 "fas fa-chart-line",
             ),
-        ]
+        ] if include_cards else []
 
-        attention_farms = (
-            active_farms.annotate(
-                incident_count=Count(
-                    "production_cycles__sanitary_logs",
-                    filter=Q(production_cycles__sanitary_logs__resolved=False),
-                    distinct=True,
+        attention = []
+        if user.has_perm("aquaculture.view_sanitarylog"):
+            attention_farms = (
+                active_farms.annotate(
+                    incident_count=Count(
+                        "production_cycles__sanitary_logs",
+                        filter=Q(production_cycles__sanitary_logs__resolved=False),
+                        distinct=True,
+                    )
                 )
+                .filter(incident_count__gt=0)
+                .order_by("-incident_count", "farm_name")[: cls.PREVIEW_LIMIT]
             )
-            .filter(incident_count__gt=0)
-            .order_by("-incident_count", "farm_name")[: cls.PREVIEW_LIMIT]
-        )
-        attention = [
-            {
-                "key": f"farm-{farm.pk}",
-                "label": farm.farm_name,
-                "detail": _("%(count)s incident(s) non résolu(s)")
-                % {"count": farm.incident_count},
-                "url": reverse("admin:accounts_farmprofile_supervision", args=[farm.pk]),
-            }
-            for farm in attention_farms
-        ]
+            attention = [
+                {
+                    "key": f"farm-{farm.pk}",
+                    "label": farm.farm_name,
+                    "detail": _("%(count)s incident(s) non résolu(s)")
+                    % {"count": farm.incident_count},
+                    "url": reverse("admin:accounts_farmprofile_supervision", args=[farm.pk]),
+                }
+                for farm in attention_farms
+            ]
 
         activities: list[dict] = []
         if user.has_perm("aquaculture.view_cyclelog"):

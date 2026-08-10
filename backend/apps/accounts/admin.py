@@ -22,6 +22,7 @@ from common.admin_mixins import (
     PIIMaskingMixin,
     SecuredModelAdmin,
 )
+from common.admin_policies import RBACConstants
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
@@ -32,7 +33,7 @@ from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 
 from .admin_serializers import FarmMapSerializer
@@ -312,7 +313,7 @@ class UserAdmin(
         - Managers ne voient pas les superusers
         - Non-managers voient tous les users non-admin
         """
-        qs = super().get_queryset(request).select_related('farm_profile')
+        qs = super().get_queryset(request).select_related('farm_profile').prefetch_related('groups')
 
         if self._is_superuser(request):
             return qs
@@ -398,12 +399,32 @@ class UserAdmin(
     # --- Display methods ---
 
     def is_staff_display(self, obj):
-        """Affiche le statut staff avec couleur."""
+        """Affiche les rôles opérationnels effectifs avec des badges lisibles."""
         if obj.is_superuser:
-            return format_html('<span style="color: purple; font-weight: bold;">OWNER</span>')
-        elif obj.is_staff:
-            return format_html('<span style="color: blue;">Admin</span>')
-        return format_html('<span style="color: gray;">-</span>')
+            return format_html(
+                '<span class="aquacare-role-badge aquacare-role-badge--owner">{}</span>',
+                _("Superadministrateur"),
+            )
+        if not obj.is_staff:
+            return format_html('<span class="aquacare-role-empty">—</span>')
+
+        role_labels = {
+            RBACConstants.GROUP_MANAGERS: (_("Manager aquacole"), "manager"),
+            RBACConstants.GROUP_COMMERCE: (_("Commerce"), "commerce"),
+            RBACConstants.GROUP_SUPPORT: (_("Support"), "support"),
+        }
+        roles = [
+            role_labels[group.name]
+            for group in obj.groups.all()
+            if group.name in role_labels
+        ]
+        if not roles:
+            roles = [(_("Staff sans role"), "staff")]
+        return format_html_join(
+            " ",
+            '<span class="aquacare-role-badge aquacare-role-badge--{}">{}</span>',
+            ((style, label) for label, style in roles),
+        )
     is_staff_display.short_description = _('Role')
     is_staff_display.admin_order_field = 'is_staff'
 

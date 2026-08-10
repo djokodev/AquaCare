@@ -7,6 +7,7 @@ import io
 import re
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -39,6 +40,7 @@ from django.db import connection
 from django.test import Client, RequestFactory
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import translation
 
 from tests.fixtures.factories import FarmProfileFactory, ProductionCycleFactory, UserFactory
 
@@ -961,7 +963,20 @@ def test_navigation_is_exact_ordered_and_deduplicated_by_role(roles, expected):
     assert keys == expected
     assert len(keys) == len(set(keys))
     if "activity" in keys:
-        assert 'href="/admin/#activities-alerts"' in response.content.decode()
+        assert 'href="/admin/activity-center/"' in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_activity_center_is_a_real_role_protected_admin_screen():
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    commerce = _staff_for_role(RBACConstants.GROUP_COMMERCE)
+    url = reverse("admin:aquacare_activity_center")
+
+    manager_response = _client_for(manager).get(url)
+
+    assert manager_response.status_code == 200
+    assert 'data-activity-center="true"' in manager_response.content.decode()
+    assert _client_for(commerce).get(url).status_code == 403
 
 
 @pytest.mark.django_db
@@ -986,6 +1001,7 @@ def test_badges_support_search_and_system_routes_are_owned_by_admin_site():
     names = {url.name for url in AquaCareAdminSite().get_urls() if url.name}
     assert {
         "admin_badge_counts",
+        "aquacare_activity_center",
         "chat_support_inbox",
         "aquacare_global_search",
         "aquacare_system_tools",
@@ -1012,3 +1028,55 @@ def test_primary_admin_lists_render_responsive_scroll_container():
     inbox = _client_for(support).get(reverse("admin:chat_support_inbox"))
     assert inbox.status_code == 200
     assert 'data-aquacare-responsive-list="true"' in inbox.content.decode()
+
+
+@pytest.mark.django_db
+def test_english_console_navigation_and_search_are_fully_translated():
+    user = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    type(user).objects.filter(pk=user.pk).update(language_preference="en")
+    user.refresh_from_db()
+    with translation.override("en"):
+        html = _client_for(user).get(reverse("admin:index")).content.decode()
+
+    assert ">Reports<" in html
+    assert 'aria-label="Search"' in html
+    assert ">Rapports<" not in html
+    assert 'aria-label="Rechercher"' not in html
+
+
+def test_admin_dark_theme_and_tables_have_global_readability_guards():
+    css = (
+        Path(__file__).parents[2]
+        / "apps"
+        / "common"
+        / "static"
+        / "css"
+        / "admin_custom.css"
+    ).read_text(encoding="utf-8")
+
+    assert ".jazzmin-login-page .login-box-msg" in css
+    assert ".aquacare-console .card-header .card-title" in css
+    assert "color: var(--text-primary) !important;" in css
+    assert ".aquacare-dashboard-card .info-box-icon" in css
+    assert "flex-shrink: 0;" in css
+    assert "body.change-list #result_list" in css
+    assert "width: max-content;" in css
+    assert "white-space: nowrap;" in css
+    assert ".field-pdf_download_link .aquacare-pdf-action" in css
+    assert ".aquacare-role-badge" in css
+
+
+@pytest.mark.django_db
+def test_user_role_column_names_operational_roles_with_accessible_badges():
+    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
+    manager.groups.add(Group.objects.get(name=RBACConstants.GROUP_SUPPORT))
+    owner = _staff_for_role(superuser=True)
+
+    html = _client_for(owner).get(reverse("admin:accounts_user_changelist")).content.decode()
+
+    assert 'class="aquacare-role-badge aquacare-role-badge--manager"' in html
+    assert 'class="aquacare-role-badge aquacare-role-badge--support"' in html
+    assert 'class="aquacare-role-badge aquacare-role-badge--owner"' in html
+    assert "Manager aquacole" in html
+    assert "Support" in html
+    assert "Superadministrateur" in html

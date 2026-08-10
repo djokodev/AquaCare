@@ -16,17 +16,19 @@
 
   .inbox-layout {
     display: grid;
-    grid-template-columns: 340px 1fr;
-    gap: 20px;
-    min-height: calc(100vh - 200px);
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    gap: 16px;
+    min-height: 560px;
   }
 
   .inbox-sidebar {
-    background: #1e293b;
+    background: #fff;
+    border: 1px solid #cbd5e1;
     border-radius: 12px;
     padding: 16px;
     overflow-y: auto;
-    max-height: calc(100vh - 220px);
+    max-height: min(680px, calc(100vh - 230px));
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
   }
 
   .inbox-header {
@@ -35,13 +37,13 @@
     justify-content: space-between;
     margin-bottom: 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid #cbd5e1;
   }
 
   .inbox-title {
     font-size: 16px;
     font-weight: 700;
-    color: #f8fafc;
+    color: var(--gray-dark);
   }
 
   .inbox-chip {
@@ -60,10 +62,11 @@
   }
 
   .conv-item {
-    border: 1px solid #334155;
+    display: block;
+    border: 1px solid #cbd5e1;
     border-radius: 10px;
     padding: 12px;
-    background: #0f172a;
+    background: #f8fafc;
     cursor: pointer;
     text-decoration: none;
     color: inherit;
@@ -72,25 +75,31 @@
 
   .conv-item:hover {
     border-color: var(--green-primary);
-    background: #1e293b;
+    background: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
   }
 
   .conv-item.active {
     border-color: var(--green-primary);
-    background: #1e293b;
+    background: rgba(5, 150, 105, 0.08);
     box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.3);
+  }
+
+  .conversation-summary {
+    min-width: 0;
   }
 
   .conv-item .conv-title {
     font-weight: 600;
-    color: #f8fafc;
+    color: var(--gray-dark);
     margin-bottom: 4px;
     font-size: 14px;
   }
 
   .conv-item .conv-meta {
     font-size: 11px;
-    color: #94a3b8;
+    color: #475569;
     display: flex;
     gap: 8px;
     align-items: center;
@@ -98,7 +107,7 @@
 
   .conv-item .conv-preview {
     font-size: 12px;
-    color: #cbd5e1;
+    color: #475569;
     margin-top: 6px;
     line-height: 1.4;
     overflow: hidden;
@@ -116,11 +125,16 @@
   }
 
   .inbox-main {
-    background: #1e293b;
+    background: #fff;
+    border: 1px solid #cbd5e1;
     border-radius: 12px;
     padding: 20px;
     display: flex;
     flex-direction: column;
+    height: min(680px, calc(100vh - 230px));
+    min-height: 560px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
   }
 
   .inbox-main-header {
@@ -128,13 +142,13 @@
     gap: 12px;
     align-items: center;
     padding-bottom: 16px;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid #cbd5e1;
     margin-bottom: 16px;
   }
 
   .inbox-main-header h2 {
     margin: 0;
-    color: #f8fafc;
+    color: var(--gray-dark);
     font-size: 18px;
     font-weight: 700;
   }
@@ -142,7 +156,7 @@
   .messages-container {
     flex: 1;
     overflow-y: auto;
-    max-height: calc(100vh - 400px);
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -163,9 +177,9 @@
   }
 
   .msg-bubble.user {
-    background: #0f172a;
-    border: 1px solid #334155;
-    color: #f8fafc;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    color: var(--gray-dark);
     align-self: flex-start;
   }
 
@@ -200,12 +214,12 @@
   .reply-form {
     margin-top: 16px;
     padding-top: 16px;
-    border-top: 1px solid #334155;
+    border-top: 1px solid #cbd5e1;
   }
 
   .reply-form label {
     font-weight: 600;
-    color: #f8fafc;
+    color: var(--gray-dark);
     margin-bottom: 8px;
     display: block;
     font-size: 13px;
@@ -214,9 +228,9 @@
   .reply-form textarea {
     width: 100%;
     min-height: 80px;
-    background: #0f172a;
-    color: #f8fafc;
-    border: 1px solid #334155;
+    background: #fff;
+    color: var(--gray-dark);
+    border: 1px solid #94a3b8;
     border-radius: 8px;
     padding: 10px;
     font-size: 14px;
@@ -252,10 +266,18 @@
   }
 
   .empty-state {
-    color: #64748b;
+    color: #475569;
     text-align: center;
     padding: 40px;
     font-size: 14px;
+  }
+
+  .inbox-main > .empty-state {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
   }
 
   .empty-state i {
@@ -265,14 +287,54 @@
     opacity: 0.5;
   }
 
+  .support-inbox-intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 14px 18px;
+    border-left: 4px solid var(--green-primary);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
+  }
+
+  .support-inbox-intro h1 {
+    margin: 0 0 2px;
+    color: var(--gray-dark);
+    font-size: 1.15rem;
+  }
+
+  .support-inbox-intro p {
+    margin: 0;
+    color: #475569;
+  }
+
+  .reply-note {
+    color: #475569;
+    font-size: 11px;
+  }
+
   @media (max-width: 991.98px) {
     .inbox-layout {
       grid-template-columns: 1fr;
     }
 
-    .inbox-sidebar,
-    .messages-container {
+    .inbox-sidebar {
       max-height: 50vh;
+    }
+
+    .inbox-main {
+      height: auto;
+      max-height: none;
+      min-height: 520px;
+      overflow: visible;
+    }
+
+    .support-inbox-intro {
+      align-items: flex-start;
+      flex-direction: column;
     }
   }
 </style>
@@ -289,6 +351,13 @@
 {% endblock %}
 
 {% block content %}
+<section class="support-inbox-intro">
+  <div>
+    <h1><i class="fas fa-headset" aria-hidden="true"></i> {% translate "Messagerie Support" %}</h1>
+    <p>{% translate "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page." %}</p>
+  </div>
+  <span class="inbox-chip">{% blocktrans count count=conversation_count %}{{ count }} conversation{% plural %}{{ count }} conversations{% endblocktrans %}</span>
+</section>
 <div class="inbox-layout" data-admin-i18n-native data-aquacare-responsive-list="true">
   <!-- Sidebar: Liste des conversations -->
   <div class="inbox-sidebar">
@@ -301,28 +370,30 @@
       {% for conv in conversations %}
         <a class="conv-item {% if selected_conversation and conv.id == selected_conversation.id %}active{% endif %}"
            href="?conversation={{ conv.id }}">
-          <div class="conv-title">
-            <i class="fas fa-user"></i>
-            {{ conv.user.display_name|default:conv.user.id }}
-          </div>
-          <div class="conv-meta">
-            <span><i class="fas fa-clock"></i> {{ conv.last_message_at|date:"d/m H:i" }}</span>
-            {% if conv.unread_count_admin > 0 %}
-              <span class="badge-unread">{% blocktrans count count=conv.unread_count_admin %}{{ count }} non lu{% plural %}{{ count }} non lus{% endblocktrans %}</span>
+          <div class="conversation-summary">
+            <div class="conv-title">
+              <i class="fas fa-user"></i>
+              {{ conv.user.display_name|default:conv.user.id }}
+            </div>
+            <div class="conv-meta">
+              <span><i class="fas fa-clock"></i> {{ conv.last_message_at|date:"d/m H:i" }}</span>
+              {% if conv.unread_count_admin > 0 %}
+                <span class="badge-unread">{% blocktrans count count=conv.unread_count_admin %}{{ count }} non lu{% plural %}{{ count }} non lus{% endblocktrans %}</span>
+              {% endif %}
+            </div>
+            {% if conv.last_message_content_ann %}
+              <div class="conv-preview">
+                {% if conv.last_message_sender_type_ann == "user" %}
+                  <i class="fas fa-user"></i>
+                {% elif conv.last_message_sender_type_ann == "admin" %}
+                  <i class="fas fa-headset"></i>
+                {% else %}
+                  <i class="fas fa-info-circle"></i>
+                {% endif %}
+                {{ conv.last_message_content_ann|truncatechars:60 }}
+              </div>
             {% endif %}
           </div>
-          {% if conv.last_message_content_ann %}
-            <div class="conv-preview">
-              {% if conv.last_message_sender_type_ann == "user" %}
-                <i class="fas fa-user"></i>
-              {% elif conv.last_message_sender_type_ann == "admin" %}
-                <i class="fas fa-headset"></i>
-              {% else %}
-                <i class="fas fa-info-circle"></i>
-              {% endif %}
-              {{ conv.last_message_content_ann|truncatechars:60 }}
-            </div>
-          {% endif %}
         </a>
       {% empty %}
         <div class="empty-state">
@@ -399,7 +470,7 @@
           <button class="btn-send" type="submit">
             <i class="fas fa-paper-plane"></i> {% translate "Envoyer" %}
           </button>
-          <span style="font-size:11px;color:#64748b;">
+          <span class="reply-note">
             <i class="fas fa-info-circle"></i> {% translate "Envoye en tant qu'Administration" %}
           </span>
         </div>

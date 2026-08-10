@@ -70,9 +70,8 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
                     "activity",
                     _("Activites et alertes"),
                     "fas fa-bell",
-                    "admin:index",
+                    "admin:aquacare_activity_center",
                     "activity_alerts",
-                    "#activities-alerts",
                 )
             )
         if has_capability_and_permission(
