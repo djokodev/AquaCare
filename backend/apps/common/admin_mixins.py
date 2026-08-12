@@ -3,7 +3,7 @@ Mixins de securite pour l'admin Django AquaCare.
 Implementent le RBAC multi-niveau avec audit logging.
 
 Usage:
-    from common.admin_mixins import SecuredModelAdmin, RBACConstants
+    from common.admin_mixins import SecuredModelAdmin
 
     @admin.register(MyModel)
     class MyModelAdmin(SecuredModelAdmin):
@@ -19,7 +19,12 @@ from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
 from .admin_audit import AuditLogMixin
-from .admin_policies import RBACConstants, RoleAwareAdminMixin
+from .admin_capabilities import (
+    AdminCapability,
+    has_capability,
+    has_capability_and_permission,
+)
+from .admin_policies import RoleAwareAdminMixin
 
 
 class SecuredModelAdmin(RoleAwareAdminMixin, AuditLogMixin, admin.ModelAdmin):
@@ -41,6 +46,9 @@ class SecuredModelAdmin(RoleAwareAdminMixin, AuditLogMixin, admin.ModelAdmin):
 
     # Champs toujours readonly pour non-superusers
     protected_fields = ['is_staff', 'is_superuser', 'groups', 'user_permissions']
+    view_capability: AdminCapability | None = None
+    add_capability: AdminCapability | None = None
+    change_capability: AdminCapability | None = None
 
     def get_queryset(self, request: HttpRequest) -> QuerySet:
         """
@@ -51,8 +59,8 @@ class SecuredModelAdmin(RoleAwareAdminMixin, AuditLogMixin, admin.ModelAdmin):
 
     def has_module_permission(self, request: HttpRequest) -> bool:
         """
-        Controle la visibilite du module dans le menu sidebar.
-        Verifie si l'utilisateur a acces a cette app selon son groupe.
+        Controle la visibilite par capacite et permission du modele.
+        ``ROLE_APPS`` n'est jamais consulte comme autorite de securite.
         """
         if not request.user.is_authenticated:
             return False
@@ -60,30 +68,32 @@ class SecuredModelAdmin(RoleAwareAdminMixin, AuditLogMixin, admin.ModelAdmin):
         if request.user.is_superuser:
             return True
 
-        # Verifier appartenance aux groupes autorises
-        app_label = self.model._meta.app_label
-        user_groups = set(request.user.groups.values_list('name', flat=True))
-
-        for group_name, allowed_apps in RBACConstants.ROLE_APPS.items():
-            if (
-                user_groups.intersection(RBACConstants.group_names_for(group_name))
-                and app_label in allowed_apps
-            ):
-                return True
-
-        return False
+        if self.view_capability is None:
+            return False
+        return has_capability_and_permission(
+            request.user,
+            self.view_capability,
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}",
+        )
 
     def has_view_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Controle l'acces en lecture."""
         if self._is_superuser(request):
             return True
-        return self.has_module_permission(request)
+        return self.has_module_permission(request) and request.user.has_perm(
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}"
+        )
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         """Controle l'acces en creation."""
         if self._is_superuser(request):
             return True
-        return self.has_module_permission(request)
+        capability = self.add_capability or self.view_capability
+        return capability is not None and has_capability_and_permission(
+            request.user,
+            capability,
+            f"{self.model._meta.app_label}.add_{self.model._meta.model_name}",
+        )
 
     def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """
@@ -97,7 +107,12 @@ class SecuredModelAdmin(RoleAwareAdminMixin, AuditLogMixin, admin.ModelAdmin):
         if obj and hasattr(obj, 'is_staff') and obj.is_staff:
             return False
 
-        return self.has_module_permission(request)
+        capability = self.change_capability or self.view_capability
+        return capability is not None and has_capability_and_permission(
+            request.user,
+            capability,
+            f"{self.model._meta.app_label}.change_{self.model._meta.model_name}",
+        )
 
     def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """
@@ -190,19 +205,31 @@ class CommerceOperatorMixin(RoleAwareAdminMixin):
         """Commerce operators peuvent voir le module commerce."""
         if self._is_superuser(request):
             return True
-        return self._has_role(request, RBACConstants.GROUP_COMMERCE)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_COMMERCE,
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}",
+        )
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         """Commerce operators peuvent ajouter produits."""
         if self._is_superuser(request):
             return True
-        return self._has_role(request, RBACConstants.GROUP_COMMERCE)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_COMMERCE,
+            f"{self.model._meta.app_label}.add_{self.model._meta.model_name}",
+        )
 
     def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Commerce operators peuvent modifier produits."""
         if self._is_superuser(request):
             return True
-        return self._has_role(request, RBACConstants.GROUP_COMMERCE)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_COMMERCE,
+            f"{self.model._meta.app_label}.change_{self.model._meta.model_name}",
+        )
 
     def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Seul superuser peut supprimer."""
@@ -219,19 +246,31 @@ class SupportOperatorMixin(RoleAwareAdminMixin):
         """Support operators peuvent voir le module chat."""
         if self._is_superuser(request):
             return True
-        return self._has_role(request, RBACConstants.GROUP_SUPPORT)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_SUPPORT,
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}",
+        )
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         """Support operators peuvent creer messages."""
         if self._is_superuser(request):
             return True
-        return self._has_role(request, RBACConstants.GROUP_SUPPORT)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_SUPPORT,
+            f"{self.model._meta.app_label}.add_{self.model._meta.model_name}",
+        )
 
     def has_change_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Support operators peuvent modifier conversations."""
         if self._is_superuser(request):
             return True
-        return self._has_role(request, RBACConstants.GROUP_SUPPORT)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_SUPPORT,
+            f"{self.model._meta.app_label}.change_{self.model._meta.model_name}",
+        )
 
     def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Seul superuser peut supprimer."""
@@ -248,14 +287,18 @@ class ManagerMixin(RoleAwareAdminMixin):
         """Managers peuvent voir accounts et aquaculture."""
         if self._is_superuser(request):
             return True
-        return self._has_role(request, RBACConstants.GROUP_MANAGERS)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_ACCOUNTS,
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}",
+        )
 
     def get_queryset(self, request: HttpRequest) -> QuerySet:
         """Managers ne voient pas les superusers."""
         qs = super().get_queryset(request)
 
         if not self._is_superuser(request):
-            if self._has_role(request, RBACConstants.GROUP_MANAGERS):
+            if has_capability(request.user, AdminCapability.MANAGE_ACCOUNTS):
                 # Exclure les superusers du queryset
                 if hasattr(self.model, 'is_superuser'):
                     qs = qs.filter(is_superuser=False)
@@ -271,7 +314,11 @@ class ManagerMixin(RoleAwareAdminMixin):
         if obj and hasattr(obj, 'is_staff') and obj.is_staff:
             return False
 
-        return self._has_role(request, RBACConstants.GROUP_MANAGERS)
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.MANAGE_ACCOUNTS,
+            f"{self.model._meta.app_label}.change_{self.model._meta.model_name}",
+        )
 
     def has_delete_permission(self, request: HttpRequest, obj: object | None = None) -> bool:
         """Seul superuser peut supprimer."""
@@ -297,7 +344,7 @@ class PIIMaskingMixin(RoleAwareAdminMixin):
         list_display = list(super().get_list_display(request))
 
         if not self._is_superuser(request):
-            is_manager = self._has_role(request, RBACConstants.GROUP_MANAGERS)
+            is_manager = has_capability(request.user, AdminCapability.MANAGE_ACCOUNTS)
 
             if not is_manager:
                 # Remplacer phone_number par version masquee

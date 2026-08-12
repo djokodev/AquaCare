@@ -12,8 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from common.admin_mixins import RBACConstants
+from common.admin_capabilities import CUSTOM_ADMIN_PERMISSIONS, ROLE_DJANGO_PERMISSIONS
+from common.admin_policies import RBACConstants
 from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -46,6 +48,7 @@ class Command(BaseCommand):
                     self._delete_groups()
 
                 self._create_groups()
+                self._create_custom_permissions()
                 self._assign_permissions()
 
                 if self.dry_run:
@@ -111,91 +114,40 @@ class Command(BaseCommand):
         """Assigne les permissions a chaque groupe."""
         self.stdout.write('\n--- Attribution des permissions ---')
 
-        # Permissions pour MANAGERS
-        self._assign_manager_permissions()
+        labels = {
+            RBACConstants.GROUP_MANAGERS: 'MANAGERS',
+            RBACConstants.GROUP_COMMERCE: 'COMMERCE',
+            RBACConstants.GROUP_SUPPORT: 'SUPPORT',
+        }
+        for group_name, permission_names in ROLE_DJANGO_PERMISSIONS.items():
+            permissions = []
+            for permission_name in permission_names:
+                app_label, codename = permission_name.split('.', 1)
+                permissions.extend(self._get_permissions_for_app(app_label, [codename]))
+            self._set_group_permissions(
+                self.groups[group_name],
+                permissions,
+                labels[group_name],
+            )
 
-        # Permissions pour COMMERCE
-        self._assign_commerce_permissions()
-
-        # Permissions pour SUPPORT
-        self._assign_support_permissions()
-
-    def _assign_manager_permissions(self) -> None:
-        """Permissions pour aquacare_managers."""
-        group = self.groups[RBACConstants.GROUP_MANAGERS]
-        permissions = []
-
-        # Accounts - view et change (pas delete, pas is_staff/is_superuser)
-        accounts_perms = self._get_permissions_for_app('accounts', [
-            'view_user', 'change_user',
-            'view_farmprofile', 'add_farmprofile', 'change_farmprofile',
-        ])
-        permissions.extend(accounts_perms)
-
-        # Aquaculture - CRUD complet
-        aquaculture_perms = self._get_permissions_for_app('aquaculture', [
-            'view_productioncycle', 'add_productioncycle', 'change_productioncycle',
-            'view_cyclelog', 'add_cyclelog', 'change_cyclelog',
-            'view_feedingplan', 'add_feedingplan', 'change_feedingplan',
-            'view_sanitarylog', 'add_sanitarylog', 'change_sanitarylog',
-            'view_nutritionalguide',
-            'view_cyclemetrics',
-        ])
-        permissions.extend(aquaculture_perms)
-
-        # Notifications - view seulement
-        notif_perms = self._get_permissions_for_app('notifications', [
-            'view_notification',
-            'view_notificationpreference',
-            'view_pushtoken',
-        ])
-        permissions.extend(notif_perms)
-
-        self._set_group_permissions(group, permissions, 'MANAGERS')
-
-    def _assign_commerce_permissions(self) -> None:
-        """Permissions pour aquacare_commerce."""
-        group = self.groups[RBACConstants.GROUP_COMMERCE]
-        permissions = []
-
-        # Commerce - CRUD produits, view commandes
-        commerce_perms = self._get_permissions_for_app('commerce', [
-            'view_product', 'add_product', 'change_product',
-            'view_order',
-            'view_orderitem',
-        ])
-        permissions.extend(commerce_perms)
-
-        # Aquaculture - view seulement (pour contexte)
-        aquaculture_perms = self._get_permissions_for_app('aquaculture', [
-            'view_productioncycle',
-            'view_nutritionalguide',
-        ])
-        permissions.extend(aquaculture_perms)
-
-        self._set_group_permissions(group, permissions, 'COMMERCE')
-
-    def _assign_support_permissions(self) -> None:
-        """Permissions pour aquacare_support."""
-        group = self.groups[RBACConstants.GROUP_SUPPORT]
-        permissions = []
-
-        # Chat - CRUD conversations et messages
-        chat_perms = self._get_permissions_for_app('chat', [
-            'view_conversation', 'change_conversation',
-            'view_message', 'add_message', 'change_message',
-        ])
-        permissions.extend(chat_perms)
-
-        # Notifications - view et change
-        notif_perms = self._get_permissions_for_app('notifications', [
-            'view_notification', 'add_notification', 'change_notification',
-            'view_notificationpreference', 'change_notificationpreference',
-            'view_pushtoken',
-        ])
-        permissions.extend(notif_perms)
-
-        self._set_group_permissions(group, permissions, 'SUPPORT')
+    def _create_custom_permissions(self) -> None:
+        """Crée les permissions d'action sur les ContentTypes existants."""
+        for permission_name, (app_label, model, name) in CUSTOM_ADMIN_PERMISSIONS.items():
+            _app_label, codename = permission_name.split('.', 1)
+            try:
+                content_type = ContentType.objects.get(app_label=app_label, model=model)
+            except ContentType.DoesNotExist:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f'  ContentType non trouve pour permission action: {permission_name}'
+                    )
+                )
+                continue
+            Permission.objects.update_or_create(
+                content_type=content_type,
+                codename=codename,
+                defaults={"name": name},
+            )
 
     def _get_permissions_for_app(self, app_label: str, codenames: list[str]) -> list[Permission]:
         """Recupere les permissions par app et codename."""

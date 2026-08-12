@@ -9,11 +9,21 @@ from django.test import RequestFactory
 
 
 def _request(*, superuser=False, group_exists=False):
+    role_names = ["aquacare_commerce"] if group_exists else []
+    allowed_permissions = (
+        {"commerce.view_order", "commerce.download_order_document"}
+        if group_exists
+        else set()
+    )
     request = RequestFactory().get("/admin/commerce/order/")
     request.user = SimpleNamespace(
+        is_authenticated=True,
+        is_staff=True,
         is_superuser=superuser,
+        has_perm=lambda permission: permission in allowed_permissions,
         groups=SimpleNamespace(
-            filter=lambda **kwargs: SimpleNamespace(exists=lambda: group_exists)
+            filter=lambda **kwargs: SimpleNamespace(exists=lambda: group_exists),
+            values_list=lambda *args, **kwargs: role_names,
         ),
     )
     return request

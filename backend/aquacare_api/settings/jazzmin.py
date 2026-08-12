@@ -23,14 +23,15 @@ JAZZMIN_SETTINGS = {
     # User display
     "user_avatar": None,
 
-    # Search models
-    "search_model": ["accounts.User", "accounts.FarmProfile"],
+    # La recherche native Jazzmin est statique et ne peut pas appliquer nos
+    # portees par role. Elle est remplacee atomiquement par la recherche
+    # AquaCare rendue dans la sidebar, pas supprimee fonctionnellement.
+    "search_model": None,
 
     # Top menu links
     "topmenu_links": [
         {"name": _("Accueil"), "url": "admin:index", "permissions": ["auth.view_user"]},
         {"name": _("Messagerie Support"), "url": "admin:chat_support_inbox", "permissions": ["chat.view_conversation"]},
-        {"app": "accounts"},
     ],
 
     # Side menu configuration
@@ -135,7 +136,9 @@ JAZZMIN_SETTINGS = {
 
     # Custom CSS/JS
     "custom_css": "css/admin_custom.css",
-    "custom_js": "js/admin_translations.js?v=3",
+    # Jazzmin passe cette valeur au tag static: une query string serait encodee
+    # dans le chemin (%3F) et rendrait le script introuvable.
+    "custom_js": "js/admin_translations.js",
 
     # UI builder (desactiver en production)
     "show_ui_builder": False,

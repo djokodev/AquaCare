@@ -1,3 +1,4 @@
+from common.admin_mixins import SecuredModelAdmin
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
@@ -6,7 +7,7 @@ from .models import GeolocatedFarm
 
 
 @admin.register(GeolocatedFarm)
-class GeolocatedFarmAdmin(admin.ModelAdmin):
+class GeolocatedFarmAdmin(SecuredModelAdmin):
     """
     Section GPS de l'admin : liste des fermes géolocalisées.
     """
@@ -52,6 +53,21 @@ class GeolocatedFarmAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_actions(self, request):
+        return {} if not request.user.is_superuser else super().get_actions(request)
 
     # ── Display methods ──────────────────────────────────────────────────────
 

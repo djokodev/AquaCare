@@ -65,14 +65,15 @@ class AdminViewState(models.Model):
     def get_last_seen(cls, user, section):
         """
         Retourne le datetime de la dernière consultation.
-        Crée la ligne avec la baseline 2024-01-01 si absente (première connexion).
+        La lecture des badges reste sans ecriture; la baseline est retournee si
+        aucune consultation explicite de section n'a encore ete enregistree.
         """
-        obj, _ = cls.objects.get_or_create(
-            user=user,
-            section=section,
-            defaults={'last_seen_at': cls._BASELINE},
+        return (
+            cls.objects.filter(user=user, section=section)
+            .values_list('last_seen_at', flat=True)
+            .first()
+            or cls._BASELINE
         )
-        return obj.last_seen_at
 
     @classmethod
     def mark_seen(cls, user, section):

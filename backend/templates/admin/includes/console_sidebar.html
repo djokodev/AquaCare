@@ -1,0 +1,40 @@
+{% load i18n static %}
+<aside class="main-sidebar elevation-4 {{ jazzmin_ui.sidebar_classes }}" id="jazzy-sidebar" data-admin-i18n-native data-badge-url="{% url 'admin:admin_badge_counts' %}">
+    <a href="{% url 'admin:index' %}" class="brand-link {{ jazzmin_ui.brand_classes }}" id="jazzy-logo">
+        <img src="{% static jazzmin_settings.site_logo %}" alt="{% blocktrans with name=jazzmin_settings.site_header %}Logo {{ name }}{% endblocktrans %}" class="{{ jazzmin_settings.site_logo_classes }} brand-image elevation-3" style="opacity: .8">
+        <span class="brand-text font-weight-light">{{ jazzmin_settings.site_brand }}</span>
+    </a>
+
+    <div class="sidebar">
+        <div class="user-panel mt-3 pb-3 mb-3 d-flex">
+            <div class="image"><i class="fas fa-inverse user-profile fa-user-circle" aria-hidden="true"></i></div>
+            <div class="info"><span class="d-block text-white">{{ request.user }}</span></div>
+        </div>
+
+        {% if aquacare_can_search %}
+        <form action="{% url 'admin:aquacare_global_search' %}" method="get" class="form-inline px-2 mb-2" role="search">
+            <div class="input-group input-group-sm w-100">
+                <input class="form-control form-control-navbar" type="search" name="q" minlength="2" placeholder="{% translate 'Rechercher une ferme ou un utilisateur' %}" aria-label="{% translate 'Recherche globale' %}">
+                <div class="input-group-append">
+                    <button class="btn btn-navbar" type="submit" aria-label="{% translate 'Rechercher' %}"><i class="fas fa-search" aria-hidden="true"></i></button>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+
+        <nav class="mt-2" aria-label="{% translate 'Navigation de la console' %}">
+            <ul class="nav nav-pills nav-sidebar flex-column {{ jazzmin_ui.sidebar_list_classes }}" data-widget="treeview" role="menu" data-collapsible="false">
+                {% for item in aquacare_navigation %}
+                <li class="nav-item">
+                    <a href="{{ item.url }}" class="nav-link" data-nav-key="{{ item.key }}"{% if item.badge_key %} data-badge-key="{{ item.badge_key }}"{% endif %}>
+                        <i class="nav-icon {{ item.icon }}" aria-hidden="true"></i>
+                        <p>{{ item.label }}{% if item.badge_key %}<span class="right badge badge-warning admin-nav-badge" hidden></span>{% endif %}</p>
+                    </a>
+                </li>
+                {% empty %}
+                <li class="nav-item"><span class="nav-link disabled"><p>{% translate "Aucun acces metier attribue" %}</p></span></li>
+                {% endfor %}
+            </ul>
+        </nav>
+    </div>
+</aside>

@@ -69,13 +69,17 @@ def support_user(db):
 class TestAdminViewState:
     """Tests du modèle AdminViewState."""
 
-    def test_get_last_seen_creates_with_baseline_on_first_call(self, staff_user):
-        """La première consultation retourne la baseline 2024-01-01."""
+    def test_get_last_seen_is_read_only_and_returns_baseline(self, staff_user):
+        """Le polling retourne la baseline sans ecrire un etat de vue."""
         from common.models import AdminViewState
 
         last_seen = AdminViewState.get_last_seen(staff_user, AdminViewState.SECTION_CYCLE_LOGS)
         expected_baseline = datetime(2024, 1, 1, tzinfo=UTC)
         assert last_seen == expected_baseline
+        assert not AdminViewState.objects.filter(
+            user=staff_user,
+            section=AdminViewState.SECTION_CYCLE_LOGS,
+        ).exists()
 
     def test_get_last_seen_returns_existing_value_on_second_call(self, staff_user):
         """La deuxième consultation retourne la valeur enregistrée."""
@@ -173,6 +177,8 @@ class TestBadgeCountsView:
         assert 'cycle_logs' in data
         assert 'sanitary_logs' in data
         assert 'orders' in data
+        assert 'activity_alerts' in data
+        assert 'reports' in data
         assert 'total' in data
         assert isinstance(data['total'], int)
 
@@ -181,7 +187,7 @@ class TestBadgeCountsView:
         response = admin_client.get('/admin/api/badge-counts/')
         data = json.loads(response.content)
 
-        expected_total = data['chat'] + data['cycle_logs'] + data['sanitary_logs'] + data['orders']
+        expected_total = data['chat'] + data['activity_alerts'] + data['orders'] + data['reports']
         assert data['total'] == expected_total
 
     def test_support_user_sees_only_chat(self, support_user):

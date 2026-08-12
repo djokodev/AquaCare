@@ -1325,3 +1325,420 @@ msgstr "Confirm receipt"
 
 msgid "Confirmer le retrait"
 msgstr "Confirm pickup"
+
+# Admin console lot 1
+msgid "Administration AquaCare"
+msgstr "AquaCare Administration"
+
+msgid "Console de supervision"
+msgstr "Supervision Console"
+
+msgid "Recherche globale"
+msgstr "Global Search"
+
+msgid "Activites et alertes"
+msgstr "Activities and Alerts"
+
+msgid "Boite Support"
+msgstr "Support Inbox"
+
+msgid "Outils systeme"
+msgstr "System Tools"
+
+msgid "Utilisateurs actifs"
+msgstr "Active Users"
+
+msgid "Incidents sanitaires actifs"
+msgstr "Active Health Incidents"
+
+msgid "Messages Support non lus"
+msgstr "Unread Support Messages"
+
+msgid "Rechercher une ferme ou un utilisateur"
+msgstr "Search for a farm or user"
+
+msgid "Navigation de la console"
+msgstr "Console Navigation"
+
+msgid "Aucun acces metier attribue"
+msgstr "No Business Access Assigned"
+
+msgid "Aucune donnee accessible avec vos permissions actuelles."
+msgstr "No data is available with your current permissions."
+
+msgid "Utilisez les compteurs ci-dessus pour ouvrir les listes de supervision filtrees."
+msgstr "Use the counters above to open filtered supervision lists."
+
+msgid "Console vide"
+msgstr "Empty Console"
+
+msgid "Aucun role metier AquaCare ne vous a ete attribue. Contactez un superadministrateur."
+msgstr "No AquaCare business role has been assigned to you. Contact a super administrator."
+
+#, python-format
+msgid "Saisissez au moins %(count)s caracteres."
+msgstr "Enter at least %(count)s characters."
+
+msgid "Aucun resultat autorise."
+msgstr "No Authorized Results."
+
+msgid "Unites"
+msgstr "Units"
+
+msgid "Journaux"
+msgstr "Logs"
+
+msgid "Sanitaire"
+msgstr "Health"
+
+msgid "Unite creee"
+msgstr "Unit Created"
+
+msgid "Cycle cree ou lance"
+msgstr "Cycle Created or Launched"
+
+msgid "Journal de cycle"
+msgstr "Cycle Log"
+
+msgid "Evenement sanitaire"
+msgstr "Health Event"
+
+msgid "Operation de calibrage"
+msgstr "Grading Operation"
+
+msgid "Recolte finale"
+msgstr "Final Harvest"
+
+msgid "Rapport de production"
+msgstr "Production Report"
+
+msgid "Message Support"
+msgstr "Support Message"
+
+msgid "Resolution sanitaire Admin non autorisee."
+msgstr "Admin health incident resolution is not authorized."
+
+msgid "Le proprietaire ne correspond pas a cet incident."
+msgstr "The farm owner does not match this incident."
+
+msgid "Incident sanitaire resolu via la console Admin"
+msgstr "Health incident resolved through the Admin console"
+
+msgid "Marquer les incidents selectionnes comme resolus"
+msgstr "Mark selected incidents as resolved"
+
+#, python-format
+msgid "%(count)d incident(s) sanitaire(s) resolu(s)."
+msgstr "%(count)d health incident(s) resolved."
+
+#, python-format
+msgid "Supervision de %(farm)s"
+msgstr "Supervision of %(farm)s"
+
+msgid "Derniere activite autorisee"
+msgstr "Latest Authorized Activity"
+
+msgid "Date metier"
+msgstr "Business Date"
+
+msgid "Aucune activite visible pour ce role."
+msgstr "No activity is visible for this role."
+
+msgid "Vous n'avez pas la permission d'agir sur cette conversation."
+msgstr "You do not have permission to act on this conversation."
+
+msgid "Messages marques comme lus."
+msgstr "Messages marked as read."
+
+msgid "Action Support non autorisee."
+msgstr "Unauthorized Support action."
+
+msgid "Aucune conversation."
+msgstr "No conversations."
+
+msgid "Aucun message dans cette conversation."
+msgstr "No messages in this conversation."
+
+msgid "Repondre en tant que Support"
+msgstr "Reply as Support"
+
+msgid "Ecrivez votre reponse..."
+msgstr "Write your reply..."
+
+msgid "Envoye en tant qu'Administration"
+msgstr "Sent as Administration"
+
+msgid "Marquer explicitement comme lu"
+msgstr "Explicitly Mark as Read"
+
+msgid "Selectionnez une conversation pour voir les messages."
+msgstr "Select a conversation to view messages."
+
+msgid "Pagination des conversations"
+msgstr "Conversation Pagination"
+
+msgid "Precedent"
+msgstr "Previous"
+
+#, python-format
+msgid "Page %(current)s sur %(total)s"
+msgstr "Page %(current)s of %(total)s"
+
+msgid "Systeme"
+msgstr "System"
+
+msgid "Voir la video"
+msgstr "View Video"
+
+#, python-format
+msgid "Logo %(name)s"
+msgstr "%(name)s Logo"
+
+#, python-format
+msgid "%(count)s conversation"
+msgid_plural "%(count)s conversations"
+msgstr[0] "%(count)s conversation"
+msgstr[1] "%(count)s conversations"
+
+#, python-format
+msgid "%(count)s non lu"
+msgid_plural "%(count)s non lus"
+msgstr[0] "%(count)s unread"
+msgstr[1] "%(count)s unread"
+
+# Admin console senior review corrections
+msgid "Inconnue"
+msgstr "Unknown"
+
+msgid "Ville inconnue"
+msgstr "Unknown city"
+
+#, python-format
+msgid "%(region)s, %(city)s"
+msgstr "%(region)s, %(city)s"
+
+msgid "Region et ville"
+msgstr "Region and city"
+
+msgid "Unites non archivees"
+msgstr "Non-archived units"
+
+msgid "Cycles actifs"
+msgstr "Active cycles"
+
+msgid "Incidents non resolus"
+msgstr "Unresolved incidents"
+
+msgid "Derniere activite"
+msgstr "Latest activity"
+
+msgid "Messages non lus"
+msgstr "Unread messages"
+
+msgid "Vue d'ensemble"
+msgstr "Overview"
+
+msgid "Activite"
+msgstr "Activity"
+
+msgid "Resolu"
+msgstr "Resolved"
+
+msgid "Non resolu"
+msgstr "Unresolved"
+
+msgid "Actif"
+msgstr "Active"
+
+msgid "Termine"
+msgstr "Completed"
+
+msgid "Inconnu"
+msgstr "Unknown"
+
+msgid "La cloture generique des cycles est interdite."
+msgstr "Generic cycle closure is prohibited."
+
+msgid "PDF non genere. Utilisez l'action de regeneration."
+msgstr "PDF not generated. Use the regeneration action."
+
+msgid "PDF non genere"
+msgstr "PDF not generated"
+
+msgid "Le rapport selectionne ne possede pas encore de PDF."
+msgstr "The selected report does not have a PDF yet."
+
+msgid "Fermes"
+msgstr "Farms"
+
+msgid "Tableau de bord commerce"
+msgstr "Commerce dashboard"
+
+msgid "Boite de reception"
+msgstr "Inbox"
+
+msgid "Fermes actives suivies"
+msgstr "Active farms monitored"
+
+msgid "Unités actives"
+msgstr "Active units"
+
+msgid "Incidents sanitaires non résolus"
+msgstr "Unresolved health incidents"
+
+msgid "Rapports récents"
+msgstr "Recent reports"
+
+#, python-format
+msgid "%(count)s incident(s) non résolu(s)"
+msgstr "%(count)s unresolved incident(s)"
+
+#, python-format
+msgid "Journal de cycle — %(farm)s"
+msgstr "Cycle log — %(farm)s"
+
+#, python-format
+msgid "Evenement sanitaire — %(farm)s"
+msgstr "Health event — %(farm)s"
+
+msgid "Commandes confirmées"
+msgstr "Confirmed orders"
+
+msgid "Commandes livrées"
+msgstr "Delivered orders"
+
+msgid "Commandes prêtes au retrait"
+msgstr "Orders ready for pickup"
+
+msgid "Commandes reçues"
+msgstr "Received orders"
+
+msgid "Commandes nécessitant une action"
+msgstr "Orders requiring action"
+
+msgid "Produits disponibles"
+msgstr "Available products"
+
+msgid "Produits indisponibles"
+msgstr "Unavailable products"
+
+#, python-format
+msgid "Commande %(number)s — %(status)s"
+msgstr "Order %(number)s — %(status)s"
+
+msgid "Ouvrir les commandes"
+msgstr "Open orders"
+
+msgid "Gerer les produits"
+msgstr "Manage products"
+
+msgid "Conversation récente"
+msgstr "Recent conversation"
+
+msgid "Ouvrir la boite de reception"
+msgstr "Open inbox"
+
+msgid "GPS"
+msgstr "GPS"
+
+msgid "GPS disponible"
+msgstr "GPS available"
+
+msgid "GPS non disponible"
+msgstr "GPS unavailable"
+
+msgid "Aucun element recent."
+msgstr "No recent items."
+
+msgid "Fermes nécessitant une attention"
+msgstr "Farms requiring attention"
+
+msgid "Aucune activité autorisée récente."
+msgstr "No recent authorized activity."
+
+msgid "Conversations récentes"
+msgstr "Recent conversations"
+
+msgid "Raccourcis métier"
+msgstr "Business shortcuts"
+
+msgid "Aucun outil technique enregistre."
+msgstr "No technical tools registered."
+
+msgid "Unites actives"
+msgstr "Active units"
+
+msgid "Cycles recemment termines"
+msgstr "Recently completed cycles"
+
+msgid "Derniere saisie quotidienne"
+msgstr "Latest daily entry"
+
+msgid "Incidents sanitaires non resolus"
+msgstr "Unresolved health incidents"
+
+msgid "Rapports recents"
+msgstr "Recent reports"
+
+msgid "Commandes en cours"
+msgstr "Current orders"
+
+msgid "Dernieres commandes"
+msgstr "Latest orders"
+
+msgid "Conversation disponible"
+msgstr "Conversation available"
+
+msgid "Non disponible"
+msgstr "Unavailable"
+
+msgid "Derniere activite Support"
+msgstr "Latest Support activity"
+
+msgid "Conversations Support necessitant une attention"
+msgstr "Support conversations requiring attention"
+
+msgid "%(user)s — %(farm)s"
+msgstr "%(user)s — %(farm)s"
+
+msgid "Utilisateur sans nom"
+msgstr "Unnamed user"
+
+msgid "Aucune ferme associee"
+msgstr "No associated farm"
+
+msgid "Rapports"
+msgstr "Reports"
+
+msgid "Rechercher"
+msgstr "Search"
+
+msgid "Consultez les journaux et incidents accessibles avec votre role."
+msgstr "View the logs and incidents available to your role."
+
+msgid "Journaux de cycle"
+msgstr "Cycle Logs"
+
+msgid "Incidents sanitaires"
+msgstr "Health Incidents"
+
+msgid "Activites recentes"
+msgstr "Recent Activity"
+
+msgid "Superadministrateur"
+msgstr "Super Administrator"
+
+msgid "Manager aquacole"
+msgstr "Aquaculture Manager"
+
+msgid "Staff sans role"
+msgstr "Staff Without a Role"
+
+msgid "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page."
+msgstr "Select a conversation, review its history, then reply without leaving the page."
+
+msgid "Visualiser"
+msgstr "View"
+
+msgid "Télécharger"
+msgstr "Download"

@@ -4,12 +4,29 @@ Configuration globale pour les tests AquaCare.
 Ce fichier contient des fixtures réutilisables et la configuration
 partagée entre tous les tests du projet.
 """
+import sys
+
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 User = get_user_model()
+
+
+if sys.version_info >= (3, 14):
+    # Django 5.2.7 copie encore `super()` dans BaseContext.__copy__, un
+    # comportement devenu invalide en Python 3.14. Ce correctif reste limite au
+    # runner de tests jusqu'a la prochaine mise a niveau Django.
+    from django.template.context import BaseContext
+
+    def _copy_template_context(context):
+        duplicate = context.__class__.__new__(context.__class__)
+        duplicate.__dict__ = context.__dict__.copy()
+        duplicate.dicts = context.dicts[:]
+        return duplicate
+
+    BaseContext.__copy__ = _copy_template_context
 
 
 @pytest.fixture

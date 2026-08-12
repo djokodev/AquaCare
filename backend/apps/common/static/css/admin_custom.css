@@ -50,6 +50,54 @@
     --shadow-focus: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
+/* Console Lot 1, la structure AdminLTE reste intacte pour PushMenu et mobile. */
+.aquacare-dashboard-card {
+    color: inherit;
+    min-height: 96px;
+    text-decoration: none;
+}
+
+.aquacare-dashboard-card:hover {
+    color: inherit;
+    text-decoration: none;
+    box-shadow: var(--shadow-focus);
+}
+
+.aquacare-search-results .list-group-item {
+    overflow-wrap: anywhere;
+}
+
+body.app-accounts.model-farmprofile.change-list .aquacare-responsive-table,
+body.app-accounts.model-user.change-list .aquacare-responsive-table,
+body.app-aquaculture.model-productioncycle.change-list .aquacare-responsive-table,
+body.app-aquaculture.model-cyclelog.change-list .aquacare-responsive-table,
+body.app-aquaculture.model-sanitarylog.change-list .aquacare-responsive-table,
+body.app-aquaculture.model-productionreport.change-list .aquacare-responsive-table,
+.farm-supervision,
+.inbox-layout {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+body.app-accounts.model-farmprofile.change-list .aquacare-responsive-table #result_list,
+body.app-accounts.model-user.change-list .aquacare-responsive-table #result_list,
+body.app-aquaculture.model-productioncycle.change-list .aquacare-responsive-table #result_list,
+body.app-aquaculture.model-cyclelog.change-list .aquacare-responsive-table #result_list,
+body.app-aquaculture.model-sanitarylog.change-list .aquacare-responsive-table #result_list,
+body.app-aquaculture.model-productionreport.change-list .aquacare-responsive-table #result_list {
+    min-width: 720px;
+}
+
+@media (max-width: 767.98px) {
+    #jazzy-sidebar .form-inline {
+        display: block;
+    }
+
+    .aquacare-dashboard-card {
+        min-height: 82px;
+    }
+}
+
 /* =============================================================================
    2. BASE - Reset et typographie
    ============================================================================= */
@@ -463,6 +511,54 @@ form[action=""] input[name="q"],
 #result_list td a:hover {
     color: var(--aqua-primary-lighter) !important;
     text-decoration: underline !important;
+}
+
+/* Actions PDF : le lien global des tableaux ne doit pas écraser le texte blanc. */
+body.app-aquaculture.model-productionreport.change-list
+    #result_list td.field-pdf_download_link .aquacare-pdf-action,
+body.app-aquaculture.model-productionreport.change-list
+    #result_list td.field-pdf_download_link .aquacare-pdf-action:hover {
+    color: #ffffff !important;
+    text-decoration: none !important;
+}
+
+/* Rôles Admin : badges pleins et libellés métier, sans bleu/violet peu lisible. */
+.aquacare-role-badge {
+    display: inline-block;
+    margin: 0.1rem 0.15rem 0.1rem 0;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    color: #ffffff !important;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.aquacare-role-badge--manager {
+    background: var(--aqua-primary-hover);
+}
+
+.aquacare-role-badge--commerce {
+    background: var(--aqua-primary-hover);
+}
+
+.aquacare-role-badge--support {
+    background: var(--aqua-primary-light);
+    color: var(--bg-darker) !important;
+}
+
+.aquacare-role-badge--owner {
+    background: var(--color-danger);
+}
+
+.aquacare-role-badge--staff {
+    background: var(--text-muted);
+    color: var(--bg-darker) !important;
+}
+
+.aquacare-role-empty {
+    color: var(--text-muted);
 }
 
 /* --- Commerce orders changelist --- */
@@ -932,4 +1028,82 @@ input[name="_continue"] {
 .small-box .inner h3,
 .small-box .inner p {
     color: var(--text-dark) !important;
+}
+
+/* Console metier: conserver un contraste lisible avec le theme sombre Jazzmin. */
+.aquacare-console {
+    width: 100%;
+}
+
+.aquacare-console .card-header .card-title,
+.farm-supervision .card-header .card-title {
+    color: var(--text-primary) !important;
+}
+
+.aquacare-console .card-body a.btn.btn-outline-success {
+    color: var(--aqua-primary-lighter) !important;
+}
+
+.aquacare-console .card-body a.btn.btn-outline-success:hover {
+    color: #ffffff !important;
+}
+
+/* Les longs libelles ne doivent ni comprimer ni couper les icones des cartes. */
+.aquacare-dashboard-card .info-box-icon {
+    flex: 0 0 5.5rem;
+    flex-shrink: 0;
+    min-width: 5.5rem;
+    width: 5.5rem;
+}
+
+.aquacare-dashboard-card .info-box-content {
+    min-width: 0;
+    overflow: visible;
+}
+
+.aquacare-dashboard-card .info-box-text {
+    line-height: 1.25;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+}
+
+/* Login Jazzmin: theme default clair, puis darkly via la media query du package. */
+.jazzmin-login-page .login-box-msg,
+.jazzmin-login-page .text-center {
+    color: var(--text-dark) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    .jazzmin-login-page .login-box-msg,
+    .jazzmin-login-page .text-center {
+        color: var(--text-primary) !important;
+    }
+}
+
+/* Toutes les listes Admin gardent une ligne par objet et scrollent horizontalement. */
+body.change-list #changelist .card-body.table-responsive,
+body.change-list .aquacare-responsive-table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.change-list #result_list {
+    table-layout: auto;
+    width: max-content;
+    min-width: 100%;
+}
+
+body.change-list #result_list th,
+body.change-list #result_list td {
+    overflow-wrap: normal;
+    vertical-align: middle;
+    white-space: nowrap;
+    word-break: normal;
+}
+
+.aquacare-console > .clearfix {
+    clear: both;
 }

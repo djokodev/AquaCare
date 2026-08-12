@@ -41,7 +41,7 @@ from accounts.constants import (  # noqa: E402
 # Application definition
 INSTALLED_APPS = [
     "jazzmin",  # DOIT etre AVANT django.contrib.admin
-    "django.contrib.admin",
+    "common.admin_site.AquaCareAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

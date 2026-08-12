@@ -14,13 +14,15 @@ import logging
 import zipfile
 from datetime import date
 
-from common.admin_mixins import (
-    RBACConstants,
-    SecuredModelAdmin,
+from common.admin_capabilities import (
+    AdminCapability,
+    has_capability,
+    has_capability_and_permission,
 )
+from common.admin_mixins import SecuredModelAdmin
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
 from django.db.models import Avg, Count, Sum
 from django.http import HttpResponse, HttpResponseRedirect
@@ -28,7 +30,7 @@ from django.urls import reverse
 from django.utils.html import escape, format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 
-from .domain.exceptions import BusinessRuleViolation
+from .domain.exceptions import BusinessRuleViolation, InvalidSanitaryDataException
 from .models import (
     CalibrationOperation,
     CycleLog,
@@ -48,6 +50,10 @@ from .services.administrative_log_deletion_service import (
 )
 from .services.integrity_error_service import translate_production_unit_integrity_error
 from .services.production_unit_service import ProductionUnitLifecycleService
+from .services.sanitary_application_service import (
+    AdminSanitaryApplicationService,
+    ResolveSanitaryIssueCommand,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,33 +69,34 @@ class AquacultureSecuredAdmin(SecuredModelAdmin):
         if request.user.is_superuser:
             return True
 
-        user_groups = set(request.user.groups.values_list('name', flat=True))
-
-        # Managers: acces complet
-        if RBACConstants.GROUP_MANAGERS in user_groups:
-            return True
-
-        # Commerce: acces lecture pour contexte produits
-        if RBACConstants.GROUP_COMMERCE in user_groups:
-            return True
-
-        return False
+        return has_capability(
+            request.user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+        ) and request.user.has_perm(
+            f"{self.model._meta.app_label}.view_{self.model._meta.model_name}"
+        )
 
     def has_add_permission(self, request):
         """Seuls superusers et managers peuvent ajouter."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists()
+        return has_capability(
+            request.user,
+            AdminCapability.MANAGE_AQUACULTURE_CONFIGURATION,
+        ) and request.user.has_perm(
+            f"{self.model._meta.app_label}.add_{self.model._meta.model_name}"
+        )
 
     def has_change_permission(self, request, obj=None):
         """Seuls superusers et managers peuvent modifier."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists()
+        return has_capability(
+            request.user,
+            AdminCapability.MANAGE_AQUACULTURE_CONFIGURATION,
+        ) and request.user.has_perm(
+            f"{self.model._meta.app_label}.change_{self.model._meta.model_name}"
+        )
 
     def has_delete_permission(self, request, obj=None):
         """Seul superuser peut supprimer."""
@@ -99,17 +106,11 @@ class AquacultureSecuredAdmin(SecuredModelAdmin):
         """Retire phone_number de la recherche pour non-managers."""
         search_fields = list(getattr(self, 'search_fields', []))
 
-        # Retirer les champs contenant phone_number pour non-superusers
-        if not request.user.is_superuser:
-            is_manager = request.user.groups.filter(
-                name=RBACConstants.GROUP_MANAGERS
-            ).exists()
-
-            if not is_manager:
-                search_fields = [
-                    f for f in search_fields
-                    if 'phone_number' not in f
-                ]
+        if not has_capability(
+            request.user,
+            AdminCapability.MANAGE_AQUACULTURE_CONFIGURATION,
+        ):
+            search_fields = [field for field in search_fields if 'phone_number' not in field]
 
         return search_fields
 
@@ -131,7 +132,16 @@ class CycleUnitAllocationInline(admin.TabularInline):
         'survival_rate_pct',
         'created_at',
     )
-    readonly_fields = ('survival_rate_pct', 'created_at')
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class CycleLogInline(admin.TabularInline):
@@ -235,6 +245,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     - Exporter les donnees pour analyses approfondies
     - Marquer les cycles comme termines
     """
+    change_list_template = "admin/change_list_responsive.html"
     list_display = [
         'id_short',
         'cycle_name',
@@ -298,7 +309,16 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         })
     )
 
-    actions = ['export_cycles_csv', 'generate_performance_report', 'mark_as_completed']
+    actions = ['export_cycles_csv']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     def get_queryset(self, request):
         """Optimize queries with select_related."""
@@ -310,18 +330,27 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         """Retire les actions selon le role."""
         actions = super().get_actions(request)
 
-        if not request.user.is_superuser:
-            is_manager = request.user.groups.filter(
-                name=RBACConstants.GROUP_MANAGERS
-            ).exists()
-
-            if not is_manager:
-                # Commerce n'a pas acces aux actions
-                for action in ['export_cycles_csv', 'generate_performance_report', 'mark_as_completed']:
-                    if action in actions:
-                        del actions[action]
+        if not self._can_export_cycles(request):
+            actions.pop('export_cycles_csv', None)
 
         return actions
+
+    @staticmethod
+    def _can_export_cycles(request):
+        return request.user.is_superuser or has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+            "aquaculture.export_productioncycle",
+        )
+
+    def changelist_view(self, request, extra_context=None):
+        if (
+            request.method == "POST"
+            and request.POST.get("action") == "export_cycles_csv"
+            and not self._can_export_cycles(request)
+        ):
+            raise PermissionDenied(_("Vous n'avez pas la permission d'exporter."))
+        return super().changelist_view(request, extra_context)
 
     # --- Display methods ---
 
@@ -365,7 +394,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
 
     def current_biomass_display(self, obj):
         """Display current biomass with formatting."""
-        if obj.current_biomass:
+        if obj.current_biomass is not None:
             return f"{obj.current_biomass:.1f} kg"
         return "-"
     current_biomass_display.short_description = _('Biomasse')
@@ -373,7 +402,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
 
     def survival_rate_display(self, obj):
         """Display survival rate with color coding."""
-        if obj.survival_rate:
+        if obj.survival_rate is not None:
             if obj.survival_rate >= 85:
                 color = '#28A745'
             elif obj.survival_rate >= 70:
@@ -391,7 +420,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
 
     def fcr_display(self, obj):
         """Display FCR with color coding."""
-        if obj.fcr:
+        if obj.fcr is not None:
             if obj.fcr <= 1.5:
                 color = '#28A745'
             elif obj.fcr <= 2.0:
@@ -409,13 +438,13 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
 
     def performance_indicator(self, obj):
         """Overall performance indicator."""
-        if obj.status != 'active' or not obj.survival_rate:
+        if obj.status != 'active' or obj.survival_rate is None:
             return "-"
 
         score = 0
         if obj.survival_rate >= 80:
             score += 1
-        if obj.fcr and obj.fcr <= 2.0:
+        if obj.fcr is not None and obj.fcr <= 2.0:
             score += 1
         if obj.days_active() <= 150:
             score += 1
@@ -438,10 +467,8 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     @admin.action(description=_("Exporter selection en CSV"))
     def export_cycles_csv(self, request, queryset):
         """Export selected cycles to CSV. Managers only."""
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission d'exporter."))
-                return
+        if not self._can_export_cycles(request):
+            raise PermissionDenied(_("Vous n'avez pas la permission d'exporter."))
 
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="cycles_production.csv"'
@@ -467,13 +494,17 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
                 cycle.end_date or '-',
                 duration,
                 cycle.initial_count,
-                cycle.final_count or cycle.current_count,
+                cycle.final_count if cycle.final_count is not None else cycle.current_count,
                 f"{cycle.survival_rate:.1f}" if cycle.survival_rate is not None else '-',
                 cycle.initial_average_weight,
-                cycle.final_average_weight or cycle.current_average_weight,
+                cycle.final_average_weight
+                if cycle.final_average_weight is not None
+                else cycle.current_average_weight,
                 cycle.total_feed_consumed,
                 f"{cycle.fcr:.2f}" if cycle.fcr is not None else '-',
-                cycle.final_biomass or cycle.current_biomass
+                cycle.final_biomass
+                if cycle.final_biomass is not None
+                else cycle.current_biomass,
             ])
 
         # Audit
@@ -487,10 +518,12 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     @admin.action(description=_("Generer rapport performance"))
     def generate_performance_report(self, request, queryset):
         """Generate performance report for selected cycles."""
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission de generer des rapports."))
-                return
+        if not request.user.is_superuser and not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_AQUACULTURE_SUPERVISION,
+            "aquaculture.export_productioncycle",
+        ):
+            raise PermissionDenied(_("Vous n'avez pas la permission de generer des rapports."))
 
         stats = queryset.aggregate(
             avg_survival=Avg('survival_rate'),
@@ -514,21 +547,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     @admin.action(description=_("Marquer comme termine"))
     def mark_as_completed(self, request, queryset):
         """Mark selected active cycles as completed."""
-        if not request.user.is_superuser:
-            if not request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists():
-                messages.error(request, _("Vous n'avez pas la permission de terminer des cycles."))
-                return
-
-        updated = queryset.filter(status='active').update(
-            status='harvested',
-            end_date=date.today()
-        )
-
-        # Audit
-        for cycle in queryset.filter(status='harvested'):
-            self.log_action(request, cycle, CHANGE, message="Cycle marque comme termine")
-
-        messages.success(request, _('{} cycle(s) marque(s) comme termine(s).').format(updated))
+        raise PermissionDenied(_("La cloture generique des cycles est interdite."))
 
 
 @admin.register(ProductionUnit)
@@ -665,6 +684,15 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
         }),
     )
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
             'cycle',
@@ -689,13 +717,14 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
     production_unit_display.short_description = _('Unité')
 
     def survival_rate_display(self, obj):
-        return obj.survival_rate_pct or '-'
+        return obj.survival_rate_pct if obj.survival_rate_pct is not None else '-'
     survival_rate_display.short_description = _('Survie')
 
 
 @admin.register(CycleLog)
 class CycleLogAdmin(AquacultureSecuredAdmin):
     """Administration securisee des journaux de cycle."""
+    change_list_template = "admin/change_list_responsive.html"
     delete_confirmation_template = 'admin/aquaculture/cyclelog/delete_confirmation.html'
     delete_selected_confirmation_template = (
         'admin/aquaculture/cyclelog/delete_selected_confirmation.html'
@@ -733,6 +762,12 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
         'id', 'client_uuid', 'synced_at', 'created_at', 'log_time'
     ]
     date_hierarchy = 'log_date'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
@@ -869,16 +904,17 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
     id_short.short_description = _('ID')
 
     def changelist_view(self, request, extra_context=None):
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_CYCLE_LOGS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)
 
 
 @admin.register(SanitaryLog)
 class SanitaryLogAdmin(AquacultureSecuredAdmin):
     """Administration securisee des journaux sanitaires."""
+    change_list_template = "admin/change_list_responsive.html"
     list_display = [
         'id_short',
         'farm_display',
@@ -910,6 +946,57 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
     ]
     readonly_fields = ['id', 'created_at', 'farmer_contact']
     date_hierarchy = 'event_date'
+    actions = ['resolve_selected_issues']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not (
+            request.user.is_superuser
+            or (
+                has_capability(request.user, AdminCapability.RESOLVE_SANITARY_ISSUES)
+                and request.user.has_perm("aquaculture.resolve_sanitarylog")
+            )
+        ):
+            actions.pop("resolve_selected_issues", None)
+        return actions
+
+    @admin.action(description=_("Marquer les incidents selectionnes comme resolus"))
+    def resolve_selected_issues(self, request, queryset):
+        if not (
+            request.user.is_superuser
+            or (
+                has_capability(request.user, AdminCapability.RESOLVE_SANITARY_ISSUES)
+                and request.user.has_perm("aquaculture.resolve_sanitarylog")
+            )
+        ):
+            raise PermissionDenied(_("Accès refusé."))
+        resolved_count = 0
+        for sanitary_log in queryset.select_related("cycle__farm_profile__user"):
+            try:
+                AdminSanitaryApplicationService.resolve_issue(
+                    farm_owner=sanitary_log.cycle.farm_profile.user,
+                    actor=request.user,
+                    sanitary_log=sanitary_log,
+                    command=ResolveSanitaryIssueCommand(),
+                )
+            except InvalidSanitaryDataException as exc:
+                messages.error(request, str(exc))
+            else:
+                resolved_count += 1
+        if resolved_count:
+            messages.success(
+                request,
+                _("%(count)d incident(s) sanitaire(s) resolu(s).") % {"count": resolved_count},
+            )
 
     def get_queryset(self, request):
         """Optimize queries with select_related for farmer contact info."""
@@ -1030,10 +1117,22 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
     id_short.short_description = _('ID')
 
     def changelist_view(self, request, extra_context=None):
+        if (
+            request.method == "POST"
+            and request.POST.get("action") == "resolve_selected_issues"
+            and not (
+                request.user.is_superuser
+                or (
+                    has_capability(request.user, AdminCapability.RESOLVE_SANITARY_ISSUES)
+                    and request.user.has_perm("aquaculture.resolve_sanitarylog")
+                )
+            )
+        ):
+            raise PermissionDenied(_("Accès refusé."))
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_SANITARY_LOGS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)
 
 
@@ -1045,10 +1144,19 @@ class FeedingPlanAdmin(AquacultureSecuredAdmin):
         'biomass', 'daily_feed_amount', 'feeding_rate', 'is_active'
     ]
     list_filter = [
-        'is_active', 'week_number', 'protein_percentage', 'start_date'
+        'cycle__farm_profile', 'is_active', 'week_number', 'protein_percentage', 'start_date'
     ]
     search_fields = ['cycle__cycle_name', 'recommended_feed_type']
     readonly_fields = ['id', 'created_at']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     fieldsets = (
         (_('Informations de base'), {
@@ -1126,6 +1234,23 @@ class NutritionalGuideAdmin(AquacultureSecuredAdmin):
         })
     )
 
+    def has_module_permission(self, request):
+        if request.user.is_superuser:
+            return True
+        return (
+            has_capability(request.user, AdminCapability.VIEW_AQUACULTURE_SUPERVISION)
+            or has_capability(request.user, AdminCapability.MANAGE_COMMERCE)
+        ) and request.user.has_perm("aquaculture.view_nutritionalguide")
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
     def species_display(self, obj):
         """Display species with icon."""
         return obj.get_species_display()
@@ -1175,17 +1300,19 @@ class CycleMetricsAdmin(AquacultureSecuredAdmin):
     id_short.short_description = _('ID')
 
     def has_add_permission(self, request):
-        """Disable manual creation of metrics, except for superusers."""
-        return request.user.is_superuser
+        return False
 
     def has_change_permission(self, request, obj=None):
-        """Read-only for all except superusers."""
-        return request.user.is_superuser
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(ProductionReport)
 class ProductionReportAdmin(AquacultureSecuredAdmin):
     """Administration des rapports de production."""
+    change_list_template = "admin/aquaculture/productionreport/change_list.html"
 
     list_display = [
         'id_short',
@@ -1246,14 +1373,39 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         """Managers et superusers peuvent voir les rapports (lecture seule)."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.view_productionreport",
+        )
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if request.user.is_superuser:
+            return actions
+        actions.pop('validate_report_action', None)
+        if not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.download_productionreport",
+        ):
+            actions.pop('download_report_pdf_action', None)
+        if not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.regenerate_productionreport",
+        ):
+            actions.pop('regenerate_report_action', None)
+        return actions
 
     def has_add_permission(self, request):
-        return request.user.is_superuser
+        return False
 
     def has_change_permission(self, request, obj=None):
-        """Tout est readonly — seul le superuser garde le droit 'change'."""
-        return request.user.is_superuser
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     # --- Custom URL for single-report PDF download ---
 
@@ -1274,25 +1426,33 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         ]
         return custom + urls
 
-    def _get_or_generate_pdf_content(self, report):
-        """Retourne le contenu PDF binaire du rapport (génère si absent)."""
+    def _read_pdf_content(self, report):
+        """Lit uniquement un PDF existant; un GET ne déclenche jamais de génération."""
         if not report.pdf_file:
-            from ..services.report_service import ReportService
-            report = ReportService.regenerate(report)
+            return None
         report.pdf_file.open('rb')
         content = report.pdf_file.read()
         report.pdf_file.close()
-        return report, content
+        return content
+
+    def has_report_download_permission(self, request) -> bool:
+        return request.user.is_superuser or has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.download_productionreport",
+        )
 
     def view_pdf_view(self, request, object_id):
         """Ouvre le PDF du rapport directement dans le navigateur (nouvel onglet)."""
         report = self.get_object(request, object_id)
         if report is None:
             return HttpResponse("Rapport introuvable.", status=404)
-        if not self.has_view_permission(request, report):
+        if not self.has_view_permission(request, report) or not self.has_report_download_permission(request):
             return HttpResponse("Accès refusé.", status=403)
         try:
-            report, content = self._get_or_generate_pdf_content(report)
+            content = self._read_pdf_content(report)
+            if content is None:
+                return HttpResponse(_("PDF non genere. Utilisez l'action de regeneration."), status=409)
             filename = f"rapport_{report.report_type}_{report.period_start}_{report.period_end}.pdf"
             response = HttpResponse(content, content_type='application/pdf')
             response['Content-Disposition'] = f'inline; filename="{filename}"'
@@ -1310,10 +1470,12 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         report = self.get_object(request, object_id)
         if report is None:
             return HttpResponse("Rapport introuvable.", status=404)
-        if not self.has_view_permission(request, report):
+        if not self.has_view_permission(request, report) or not self.has_report_download_permission(request):
             return HttpResponse("Accès refusé.", status=403)
         try:
-            report, content = self._get_or_generate_pdf_content(report)
+            content = self._read_pdf_content(report)
+            if content is None:
+                return HttpResponse(_("PDF non genere. Utilisez l'action de regeneration."), status=409)
             filename = f"rapport_{report.report_type}_{report.period_start}_{report.period_end}.pdf"
             response = HttpResponse(content, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -1377,15 +1539,19 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         )
         if obj.pdf_file:
             return format_html(
-                '<a href="{}" target="_blank" style="{}background:#3b82f6;color:white;">👁 Visualiser</a>'
+                '<a class="aquacare-pdf-action" href="{}" target="_blank" '
+                'style="{}background:#3b82f6;color:white;">👁 {}</a>'
                 '&nbsp;'
-                '<a href="{}" style="{}background:#059669;color:white;">📄 Télécharger</a>',
-                view_url, btn_base, download_url, btn_base,
+                '<a class="aquacare-pdf-action" href="{}" '
+                'style="{}background:#059669;color:white;">📄 {}</a>',
+                view_url,
+                btn_base,
+                _("Visualiser"),
+                download_url,
+                btn_base,
+                _("Télécharger"),
             )
-        return format_html(
-            '<a href="{}" style="{}background:#6b7280;color:white;">🔄 Générer PDF</a>',
-            download_url, btn_base,
-        )
+        return _("PDF non genere")
     pdf_download_link.short_description = _('PDF')
 
     def report_content_preview(self, obj):
@@ -1460,21 +1626,23 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
                 days = escape(str(cycle.get('days_active', '?')))
 
                 fcr = metrics.get('fcr')
-                fcr_color = '#059669' if fcr and float(fcr) <= 1.5 else (
-                    '#f59e0b' if fcr and float(fcr) <= 2.0 else '#dc2626'
+                fcr_color = '#059669' if fcr is not None and float(fcr) <= 1.5 else (
+                    '#f59e0b' if fcr is not None and float(fcr) <= 2.0 else '#dc2626'
                 )
-                fcr_str = escape(f'{float(fcr):.2f}' if fcr else '—')
+                fcr_str = escape(f'{float(fcr):.2f}' if fcr is not None else '—')
 
                 survival = metrics.get('survival_rate')
-                surv_color = '#059669' if survival and float(survival) >= 85 else (
-                    '#f59e0b' if survival and float(survival) >= 70 else '#dc2626'
+                surv_color = '#059669' if survival is not None and float(survival) >= 85 else (
+                    '#f59e0b' if survival is not None and float(survival) >= 70 else '#dc2626'
                 )
-                surv_str = escape(f'{float(survival):.1f}%' if survival else '—')
+                surv_str = escape(
+                    f'{float(survival):.1f}%' if survival is not None else '—'
+                )
 
                 biomass = escape(
                     str(
                         f'{float(metrics["current_biomass"]):.1f} kg'
-                        if metrics.get('current_biomass')
+                        if metrics.get('current_biomass') is not None
                         else '—'
                     )
                 )
@@ -1535,16 +1703,15 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
     @admin.action(description=_("Télécharger PDF(s) sélectionnés"))
     def download_report_pdf_action(self, request, queryset):
         """Télécharge les PDFs des rapports sélectionnés (1 → PDF, N → ZIP)."""
-        if not self.has_view_permission(request):
-            messages.error(request, _("Accès refusé."))
-            return
-        from ..services.report_service import ReportService
+        if not self.has_report_download_permission(request):
+            raise PermissionDenied(_("Accès refusé."))
         count = queryset.count()
         if count == 1:
             report = queryset.first()
             try:
                 if not report.pdf_file:
-                    report = ReportService.regenerate(report)
+                    messages.warning(request, _("Le rapport selectionne ne possede pas encore de PDF."))
+                    return None
                 report.pdf_file.open('rb')
                 content = report.pdf_file.read()
                 report.pdf_file.close()
@@ -1565,7 +1732,7 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
                 for report in queryset:
                     if not report.pdf_file:
-                        report = ReportService.regenerate(report)
+                        continue
                     report.pdf_file.open('rb')
                     content = report.pdf_file.read()
                     report.pdf_file.close()
@@ -1588,12 +1755,13 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
     @admin.action(description=_("Régénérer rapport(s) — nouveau PDF"))
     def regenerate_report_action(self, request, queryset):
         """Régénère les rapports sélectionnés (données fraîches + nouveau PDF)."""
-        if not request.user.is_superuser and not request.user.groups.filter(
-            name=RBACConstants.GROUP_MANAGERS
-        ).exists():
-            messages.error(request, _("Accès refusé."))
-            return
-        from ..services.report_service import ReportService
+        if not request.user.is_superuser and not has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.regenerate_productionreport",
+        ):
+            raise PermissionDenied(_("Accès refusé."))
+        from .services.report_service import ReportService
         success = 0
         for report in queryset:
             try:
@@ -1620,7 +1788,7 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         if not request.user.is_superuser:
             messages.error(request, _("Seul le superuser peut valider les rapports."))
             return
-        from ..services.report_service import ReportService
+        from .services.report_service import ReportService
         count = 0
         for report in queryset:
             try:
@@ -1642,10 +1810,34 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
             messages.success(request, _('{} rapport(s) validé(s).').format(count))
 
     def changelist_view(self, request, extra_context=None):
+        action = request.POST.get("action") if request.method == "POST" else None
+        if action == "download_report_pdf_action" and not self.has_report_download_permission(request):
+            raise PermissionDenied(_("Accès refusé."))
+        if action == "regenerate_report_action" and not (
+            request.user.is_superuser
+            or has_capability_and_permission(
+                request.user,
+                AdminCapability.VIEW_REPORTS,
+                "aquaculture.regenerate_productionreport",
+            )
+        ):
+            raise PermissionDenied(_("Accès refusé."))
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
+        can_view_dispatch_logs = has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.view_reportdispatchlog",
+        )
+        extra_context = {
+            **(extra_context or {}),
+            "can_view_dispatch_logs": can_view_dispatch_logs,
+            "dispatch_log_count": ReportDispatchLog.objects.count()
+            if can_view_dispatch_logs
+            else None,
+        }
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_PRODUCTION_REPORTS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)
 
 
@@ -1670,17 +1862,24 @@ class ReportDispatchLogAdmin(AquacultureSecuredAdmin):
         """Managers peuvent consulter les logs d'envoi en lecture seule."""
         if request.user.is_superuser:
             return True
-        return request.user.groups.filter(name=RBACConstants.GROUP_MANAGERS).exists()
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.view_reportdispatchlog",
+        )
 
     def has_add_permission(self, request):
-        return request.user.is_superuser
+        return False
 
     def has_change_permission(self, request, obj=None):
-        return request.user.is_superuser
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     def changelist_view(self, request, extra_context=None):
+        from common.admin_badge_views import clear_badge_cache
         from common.models import AdminViewState
-        from django.core.cache import cache
         AdminViewState.mark_seen(request.user, AdminViewState.SECTION_DISPATCH_LOGS)
-        cache.delete(f"admin_badge_counts_{request.user.pk}")
+        clear_badge_cache(request.user)
         return super().changelist_view(request, extra_context)

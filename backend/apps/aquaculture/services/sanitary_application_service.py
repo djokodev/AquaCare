@@ -6,6 +6,15 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from common.admin_capabilities import (
+    AdminCapability,
+    has_capability_and_permission,
+)
+from django.contrib.admin.models import CHANGE, LogEntry
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
+from django.utils.translation import gettext_lazy as _
+
 from ..models import SanitaryLog
 from .sanitary_service import SanitaryLogMutationResult, SanitaryService
 
@@ -85,3 +94,39 @@ class SanitaryApplicationService:
     def get_active_issues(user) -> list[dict[str, Any]]:
         """Retourne les incidents non resolus groupes par cycle."""
         return SanitaryService.get_active_issues_by_cycle(user)
+
+
+class AdminSanitaryApplicationService:
+    """Cas d'usage Admin separant proprietaire metier et acteur staff."""
+
+    @staticmethod
+    @transaction.atomic
+    def resolve_issue(
+        *,
+        farm_owner,
+        actor,
+        sanitary_log: SanitaryLog,
+        command: ResolveSanitaryIssueCommand,
+    ) -> SanitaryLog:
+        if not has_capability_and_permission(
+            actor,
+            AdminCapability.RESOLVE_SANITARY_ISSUES,
+            "aquaculture.resolve_sanitarylog",
+        ):
+            raise PermissionDenied(_("Resolution sanitaire Admin non autorisee."))
+        if sanitary_log.cycle.farm_profile.user_id != farm_owner.pk:
+            raise PermissionDenied(_("Le proprietaire ne correspond pas a cet incident."))
+
+        resolved_log = SanitaryApplicationService.resolve_issue(
+            user=farm_owner,
+            sanitary_log=sanitary_log,
+            command=command,
+        )
+        LogEntry.objects.log_actions(
+            user_id=actor.pk,
+            queryset=SanitaryLog.objects.filter(pk=resolved_log.pk),
+            action_flag=CHANGE,
+            change_message=str(_("Incident sanitaire resolu via la console Admin")),
+            single_object=True,
+        )
+        return resolved_log
