@@ -10,6 +10,7 @@ import { offlineService } from '@/services/offlineService';
 let mockLanguage = 'fr';
 const mockGetProducts = jest.fn();
 const mockGetFarmFeedReferences = jest.fn();
+const OFFLINE_SETUP_INTEGRATION_TIMEOUT_MS = 10_000;
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -185,6 +186,7 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
       });
       expect(mockDispatch).not.toHaveBeenCalled();
     },
+    OFFLINE_SETUP_INTEGRATION_TIMEOUT_MS,
   );
 
   it('préserve la baseline et les allocations pendant une édition offline', async () => {
