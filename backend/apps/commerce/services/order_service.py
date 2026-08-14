@@ -23,10 +23,7 @@ from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
 from ..domain.exceptions import DeliveryAddressIncompleteError, InvalidOrderError
 from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
 from ..models import Order, OrderItem
-from .admin_activity_projection_service import (
-    build_order_activity_command,
-    schedule_order_activity,
-)
+from .admin_activity_projection_service import record_order_activity
 from .base import BaseCommerceService
 from .product_service import ProductService
 from .production_cycle_gateway import ProductionCycleAccessError, ProductionCycleGateway
@@ -208,8 +205,9 @@ class OrderService(BaseCommerceService):
 
         OrderService._create_order_items(order, prepared_items)
         OrderService._notify_order_created(order)
-        schedule_order_activity(
-            build_order_activity_command(order, event_type='commerce.order.created')
+        record_order_activity(
+            order,
+            event_type='commerce.order.created',
         )
 
         OrderService.log_operation('order_created', {
@@ -599,15 +597,13 @@ class OrderService(BaseCommerceService):
         transaction.on_commit(
             lambda: OrderService._notify_order_ready_for_customer_confirmation(locked_order)
         )
-        schedule_order_activity(
-            build_order_activity_command(
-                locked_order,
-                event_type=(
-                    'commerce.order.delivered'
-                    if locked_order.delivery_method == 'home'
-                    else 'commerce.order.ready_for_pickup'
-                ),
-            )
+        record_order_activity(
+            locked_order,
+            event_type=(
+                'commerce.order.delivered'
+                if locked_order.delivery_method == 'home'
+                else 'commerce.order.ready_for_pickup'
+            ),
         )
         return OperatorOrderTransitionResult(order=locked_order, transitioned=True)
 
@@ -647,11 +643,9 @@ class OrderService(BaseCommerceService):
         locked_order.received_at = timezone.now()
         locked_order.save(update_fields=['status', 'received_at', 'updated_at'])
         CycleStoreApplicationService.import_received_order(locked_order)
-        schedule_order_activity(
-            build_order_activity_command(
-                locked_order,
-                event_type='commerce.order.received',
-            )
+        record_order_activity(
+            locked_order,
+            event_type='commerce.order.received',
         )
 
         return Order.objects.with_details().get(pk=locked_order.pk)

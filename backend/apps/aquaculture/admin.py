@@ -45,10 +45,6 @@ from .models import (
     ReportDispatchLog,
     SanitaryLog,
 )
-from .services.admin_activity_projection_service import (
-    build_production_unit_created_command,
-    schedule_aquaculture_activity,
-)
 from .services.administrative_log_deletion_service import (
     AdministrativeLogDeletionService,
 )
@@ -604,9 +600,7 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
         try:
             super().save_model(request, obj, form, change)
             if not change:
-                schedule_aquaculture_activity(
-                    build_production_unit_created_command(obj)
-                )
+                ProductionUnitLifecycleService.record_created(obj)
         except IntegrityError as exc:
             error = translate_production_unit_integrity_error(exc)
             raise ValidationError(error) from exc

@@ -70,9 +70,8 @@ from ..models import (
     ProductionUnit,
 )
 from .admin_activity_projection_service import (
-    build_final_harvest_completed_command,
-    build_production_cycle_created_command,
-    schedule_aquaculture_activity,
+    record_final_harvest_completed,
+    record_production_cycle_created,
 )
 from .allocation_ledger_service import AllocationLedgerService
 from .aquaculture_lock_service import AquacultureLockService
@@ -286,9 +285,7 @@ class ProductionCycleService(BaseService):
         CycleFeedRecommendationService.create_initial_plan(cycle, source='cycle_launch')
 
         if cycle.cycle_kind == ProductionCycle.CYCLE_KIND_STANDARD:
-            schedule_aquaculture_activity(
-                build_production_cycle_created_command(cycle)
-            )
+            record_production_cycle_created(cycle)
 
         ProductionCycleService.log_operation(
             "cycle_created",
@@ -1226,9 +1223,7 @@ class ProductionCycleService(BaseService):
         operation.allocation = locked_allocation
         FinalHarvestService.assert_projection(operation)
         if created:
-            schedule_aquaculture_activity(
-                build_final_harvest_completed_command(operation)
-            )
+            record_final_harvest_completed(operation)
         return locked_cycle, locked_allocation, operation, created
 
     @staticmethod

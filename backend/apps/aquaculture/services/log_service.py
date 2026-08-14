@@ -35,8 +35,7 @@ from ..domain.exceptions import (
 )
 from ..models import CycleLog, ProductionCycle
 from .admin_activity_projection_service import (
-    build_cycle_log_received_command,
-    schedule_aquaculture_activity,
+    record_cycle_log_received,
 )
 from .base import BaseService
 from .feed_stock_ledger_service import (
@@ -255,7 +254,7 @@ class CycleLogService(BaseService):
             level='info'
         )
 
-        schedule_aquaculture_activity(build_cycle_log_received_command(log))
+        record_cycle_log_received(log)
 
         return log
 
@@ -530,9 +529,7 @@ class CycleLogService(BaseService):
 
             for created_log in created_logs:
                 CycleFeedPlanProgressionService.record_progress_from_log(created_log)
-                schedule_aquaculture_activity(
-                    build_cycle_log_received_command(created_log)
-                )
+                record_cycle_log_received(created_log)
             result['created'] = len(created_logs)
             result['logs'].extend(created_logs)
 

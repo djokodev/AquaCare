@@ -40,10 +40,6 @@ from ..models import (
     ProductionCycle,
     ProductionUnit,
 )
-from .admin_activity_projection_service import (
-    build_production_unit_created_command,
-    schedule_aquaculture_activity,
-)
 from .cycle_service import ProductionCycleService
 from .cycle_store_application_service import (
     CycleStoreApplicationService,
@@ -546,9 +542,7 @@ class CycleLaunchApplicationService:
                     status="active",
                 )
                 production_units.append(unit)
-                schedule_aquaculture_activity(
-                    build_production_unit_created_command(unit)
-                )
+                ProductionUnitLifecycleService.record_created(unit)
         else:
             existing_units_by_id = {u.id: u for u in existing_units}
             for unit_data in payload["production_units"]:
@@ -567,9 +561,7 @@ class CycleLaunchApplicationService:
                         status="active",
                     )
                     production_units.append(unit)
-                    schedule_aquaculture_activity(
-                        build_production_unit_created_command(unit)
-                    )
+                    ProductionUnitLifecycleService.record_created(unit)
 
         for calibration_unit in payload.get('calibration_units', []):
             existing_calibration_unit = ProductionUnit.objects.filter(
@@ -604,9 +596,7 @@ class CycleLaunchApplicationService:
                 created_offline=payload['cycle'].get('created_offline', False),
                 synced_at=timezone.now() if payload['cycle'].get('created_offline', False) else None,
             )
-            schedule_aquaculture_activity(
-                build_production_unit_created_command(created_calibration_unit)
-            )
+            ProductionUnitLifecycleService.record_created(created_calibration_unit)
 
         units_by_local_id = {
             unit_data["local_id"]: unit

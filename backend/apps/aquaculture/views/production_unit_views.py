@@ -38,10 +38,6 @@ from ..services import (
     ProductionCycleApplicationService,
     ProductionUnitDashboardService,
 )
-from ..services.admin_activity_projection_service import (
-    build_production_unit_created_command,
-    schedule_aquaculture_activity,
-)
 from ..services.calibration_service import CalibrationService
 from ..services.integrity_error_service import translate_production_unit_integrity_error
 from ..services.production_unit_service import ProductionUnitLifecycleService
@@ -93,9 +89,7 @@ class ProductionUnitViewSet(
         try:
             with transaction.atomic():
                 unit = serializer.save(farm_profile=self.request.user.farm_profile)
-                schedule_aquaculture_activity(
-                    build_production_unit_created_command(unit)
-                )
+                ProductionUnitLifecycleService.record_created(unit)
         except DjangoValidationError as exc:
             raise serializers.ValidationError(
                 _translate_production_unit_validation_error(exc)

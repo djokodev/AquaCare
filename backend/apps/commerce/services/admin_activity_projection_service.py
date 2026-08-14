@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Literal
 
 from commerce.models import Order
@@ -9,7 +10,7 @@ from common.models import AdminActivityEvent
 from common.services.admin_activity_projection_service import (
     AdminActivityProjectionCommand,
     ProjectionOrigin,
-    schedule_admin_activity_projection,
+    safely_prepare_and_schedule_admin_activity_projection,
 )
 
 
@@ -54,5 +55,20 @@ def build_order_activity_command(
     )
 
 
-def schedule_order_activity(command: AdminActivityProjectionCommand) -> None:
-    schedule_admin_activity_projection(command)
+def record_order_activity(
+    order: Order,
+    *,
+    event_type: Literal[
+        'commerce.order.created',
+        'commerce.order.delivered',
+        'commerce.order.ready_for_pickup',
+        'commerce.order.received',
+    ],
+) -> bool:
+    return safely_prepare_and_schedule_admin_activity_projection(
+        partial(build_order_activity_command, order, event_type=event_type),
+        event_type=event_type,
+        source_app_label=order._meta.app_label,
+        source_model=order._meta.model_name,
+        source_object_id=order.pk,
+    )

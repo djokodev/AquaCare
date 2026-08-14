@@ -16,8 +16,7 @@ from ..domain.exceptions import BusinessRuleViolation, EventBeforeTrackingStartE
 from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from ..tasks import invalidate_dashboard_cache
 from .admin_activity_projection_service import (
-    build_calibration_completed_command,
-    schedule_aquaculture_activity,
+    record_calibration_completed,
 )
 from .allocation_ledger_service import AllocationLedgerService
 from .aquaculture_lock_service import AquacultureLockService
@@ -219,9 +218,7 @@ class CalibrationService:
             channels=['in_app'],
         )
         transaction.on_commit(lambda: invalidate_dashboard_cache(str(user.id)))
-        schedule_aquaculture_activity(
-            build_calibration_completed_command(operation)
-        )
+        record_calibration_completed(operation)
         return operation, warnings, True
 
     @staticmethod

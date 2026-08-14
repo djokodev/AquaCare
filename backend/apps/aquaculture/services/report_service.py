@@ -52,9 +52,8 @@ from ..models import (
     SanitaryLog,
 )
 from .admin_activity_projection_service import (
-    build_production_report_generated_command,
-    build_report_dispatch_command,
-    schedule_aquaculture_activity,
+    record_production_report_generated,
+    record_report_dispatch,
 )
 from .base import BaseService
 from .cycle_feed_service import CycleFeedService
@@ -422,9 +421,7 @@ class ReportService(BaseService):
         report.whatsapp_shared_at = None
         report.save()
         if not was_generated:
-            schedule_aquaculture_activity(
-                build_production_report_generated_command(report)
-            )
+            record_production_report_generated(report)
         return report
 
     @staticmethod
@@ -3751,9 +3748,7 @@ class ReportService(BaseService):
             error_message=error_message,
             metadata=metadata or {},
         )
-        schedule_aquaculture_activity(
-            build_report_dispatch_command(dispatch)
-        )
+        record_report_dispatch(dispatch)
         return dispatch
 
     @staticmethod

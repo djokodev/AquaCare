@@ -37,9 +37,7 @@ from ..models import (
     SanitaryLog,
 )
 from .admin_activity_projection_service import (
-    build_cycle_log_received_command,
-    build_production_unit_created_command,
-    schedule_aquaculture_activity,
+    record_cycle_log_received,
 )
 from .analytics_service import AnalyticsService
 from .base import BaseService
@@ -465,9 +463,7 @@ class SyncService(BaseService):
                             )
 
                         new_log = CycleLog.objects.create(**log_create_data)
-                        schedule_aquaculture_activity(
-                            build_cycle_log_received_command(new_log)
-                        )
+                        record_cycle_log_received(new_log)
                         affected_cycle_ids.add(str(cycle.id))
 
                         SyncService._record_sync_success(
@@ -975,9 +971,7 @@ class SyncService(BaseService):
                             created_offline=True,
                             synced_at=timezone.now(),
                         )
-                        schedule_aquaculture_activity(
-                            build_production_unit_created_command(server_tank)
-                        )
+                        ProductionUnitLifecycleService.record_created(server_tank)
                     sync_result['processed']['calibration_tanks'] += 1
                     SyncService._record_full_sync_accept(
                         sync_result,

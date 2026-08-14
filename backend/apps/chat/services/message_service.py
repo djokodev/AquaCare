@@ -20,10 +20,7 @@ from ..domain.exceptions import (
     MediaTooLarge,
 )
 from ..domain.value_objects import MediaAttachment, MediaKind, MessageContent
-from .admin_activity_projection_service import (
-    build_user_message_received_command,
-    schedule_user_message_activity,
-)
+from .admin_activity_projection_service import record_user_message_received
 from .conversation_service import ConversationService
 
 User = get_user_model()
@@ -235,9 +232,7 @@ class MessageService:
             created_offline=created_offline,
         )
         MessageService._finalize_sent_message(conversation, unread_recipient='admin')
-        schedule_user_message_activity(
-            build_user_message_received_command(message)
-        )
+        record_user_message_received(message)
         return message
 
     @staticmethod

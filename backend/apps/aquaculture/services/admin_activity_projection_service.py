@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from functools import partial
 from typing import Literal
 
 from aquaculture.domain.sanitary_severity import sanitary_severity
@@ -21,7 +22,7 @@ from common.models import AdminActivityEvent
 from common.services.admin_activity_projection_service import (
     AdminActivityProjectionCommand,
     ProjectionOrigin,
-    schedule_admin_activity_projection,
+    safely_prepare_and_schedule_admin_activity_projection,
 )
 
 
@@ -313,5 +314,105 @@ def build_report_dispatch_command(
     )
 
 
-def schedule_aquaculture_activity(command: AdminActivityProjectionCommand) -> None:
-    schedule_admin_activity_projection(command)
+def _record_aquaculture_activity(
+    source_object: object,
+    event_type: str,
+    command_factory,
+) -> bool:
+    return safely_prepare_and_schedule_admin_activity_projection(
+        command_factory,
+        event_type=event_type,
+        source_app_label=source_object._meta.app_label,
+        source_model=source_object._meta.model_name,
+        source_object_id=source_object.pk,
+    )
+
+
+def record_production_unit_created(unit: ProductionUnit) -> bool:
+    return _record_aquaculture_activity(
+        unit,
+        'aquaculture.production_unit.created',
+        partial(build_production_unit_created_command, unit),
+    )
+
+
+def record_production_cycle_created(cycle: ProductionCycle) -> bool:
+    return _record_aquaculture_activity(
+        cycle,
+        'aquaculture.production_cycle.created',
+        partial(build_production_cycle_created_command, cycle),
+    )
+
+
+def record_cycle_log_received(log: CycleLog) -> bool:
+    return _record_aquaculture_activity(
+        log,
+        'aquaculture.cycle_log.received',
+        partial(build_cycle_log_received_command, log),
+    )
+
+
+def record_sanitary_log_created(log: SanitaryLog) -> bool:
+    return _record_aquaculture_activity(
+        log,
+        'aquaculture.sanitary_log.created',
+        partial(
+            build_sanitary_log_command,
+            log,
+            event_type='aquaculture.sanitary_log.created',
+        ),
+    )
+
+
+def record_sanitary_log_resolved(
+    log: SanitaryLog,
+    *,
+    transition_recorded_at: datetime,
+) -> bool:
+    return _record_aquaculture_activity(
+        log,
+        'aquaculture.sanitary_log.resolved',
+        partial(
+            build_sanitary_log_command,
+            log,
+            event_type='aquaculture.sanitary_log.resolved',
+            transition_recorded_at=transition_recorded_at,
+        ),
+    )
+
+
+def record_calibration_completed(operation: CalibrationOperation) -> bool:
+    return _record_aquaculture_activity(
+        operation,
+        'aquaculture.calibration.completed',
+        partial(build_calibration_completed_command, operation),
+    )
+
+
+def record_final_harvest_completed(operation: FinalHarvestOperation) -> bool:
+    return _record_aquaculture_activity(
+        operation,
+        'aquaculture.final_harvest.completed',
+        partial(build_final_harvest_completed_command, operation),
+    )
+
+
+def record_production_report_generated(report: ProductionReport) -> bool:
+    return _record_aquaculture_activity(
+        report,
+        'aquaculture.production_report.generated',
+        partial(build_production_report_generated_command, report),
+    )
+
+
+def record_report_dispatch(dispatch: ReportDispatchLog) -> bool:
+    event_type = (
+        'aquaculture.report_dispatch.succeeded'
+        if dispatch.status == 'success'
+        else 'aquaculture.report_dispatch.failed'
+    )
+    return _record_aquaculture_activity(
+        dispatch,
+        event_type,
+        partial(build_report_dispatch_command, dispatch),
+    )

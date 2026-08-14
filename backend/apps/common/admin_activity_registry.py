@@ -16,6 +16,7 @@ class AdminActivityDefinition:
     source_model: str
     allowed_levels: frozenset[str]
     render_context_keys: frozenset[str]
+    replay_mutable_fields: frozenset[str]
 
 
 INFO: Final = frozenset({AdminActivityEvent.Level.INFO})
@@ -44,6 +45,7 @@ def _definition(
     *,
     levels: frozenset[str] = INFO,
     context: frozenset[str] = frozenset(),
+    replay_mutable_fields: frozenset[str] = frozenset(),
 ) -> AdminActivityDefinition:
     return AdminActivityDefinition(
         event_type=event_type,
@@ -52,6 +54,7 @@ def _definition(
         source_model=source_model,
         allowed_levels=levels,
         render_context_keys=context,
+        replay_mutable_fields=replay_mutable_fields,
     )
 
 
@@ -114,6 +117,7 @@ ADMIN_ACTIVITY_REGISTRY: Final[dict[str, AdminActivityDefinition]] = {
             'aquaculture',
             'productionreport',
             context=REPORT_CONTEXT,
+            replay_mutable_fields=frozenset({'occurred_at', 'source_recorded_at'}),
         ),
         _definition(
             'aquaculture.report_dispatch.succeeded',

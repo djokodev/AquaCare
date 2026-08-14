@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -38,6 +39,7 @@ from commerce.services.admin_activity_projection_service import (
     build_order_activity_command,
 )
 from common.admin_activity_registry import ADMIN_ACTIVITY_REGISTRY
+from common.models import AdminActivityEvent
 from common.services.admin_activity_projection_service import (
     AdminActivityProjectionCommand,
     ProjectionOrigin,
@@ -60,8 +62,10 @@ class ProjectionSource:
     domain: str
     queryset_factory: Callable[[], QuerySet]
     command_builder: Callable[..., AdminActivityProjectionCommand]
-    occurrence_field: str
-    occurrence_is_date: bool = False
+    backfill_field: str
+    repair_field: str | None
+    backfill_is_date: bool = False
+    repair_is_date: bool = False
 
 
 def _sources() -> tuple[ProjectionSource, ...]:
@@ -73,6 +77,7 @@ def _sources() -> tuple[ProjectionSource, ...]:
             lambda: ProductionUnit.objects.select_related('farm_profile'),
             build_production_unit_created_command,
             'created_at',
+            'created_at',
         ),
         ProjectionSource(
             'aquaculture.production_cycle.created',
@@ -82,7 +87,8 @@ def _sources() -> tuple[ProjectionSource, ...]:
             ),
             build_production_cycle_created_command,
             'start_date',
-            True,
+            'created_at',
+            backfill_is_date=True,
         ),
         ProjectionSource(
             'aquaculture.cycle_log.received',
@@ -93,7 +99,8 @@ def _sources() -> tuple[ProjectionSource, ...]:
             ),
             build_cycle_log_received_command,
             'log_date',
-            True,
+            'created_at',
+            backfill_is_date=True,
         ),
         ProjectionSource(
             'aquaculture.sanitary_log.created',
@@ -107,7 +114,8 @@ def _sources() -> tuple[ProjectionSource, ...]:
                 event_type='aquaculture.sanitary_log.created',
             ),
             'event_date',
-            True,
+            'created_at',
+            backfill_is_date=True,
         ),
         ProjectionSource(
             'aquaculture.sanitary_log.resolved',
@@ -121,7 +129,8 @@ def _sources() -> tuple[ProjectionSource, ...]:
                 event_type='aquaculture.sanitary_log.resolved',
             ),
             'resolution_date',
-            True,
+            None,
+            backfill_is_date=True,
         ),
         ProjectionSource(
             'aquaculture.calibration.completed',
@@ -133,6 +142,7 @@ def _sources() -> tuple[ProjectionSource, ...]:
             ),
             build_calibration_completed_command,
             'calibrated_at',
+            'created_at',
         ),
         ProjectionSource(
             'aquaculture.final_harvest.completed',
@@ -143,6 +153,7 @@ def _sources() -> tuple[ProjectionSource, ...]:
             ),
             build_final_harvest_completed_command,
             'harvested_at',
+            'created_at',
         ),
         ProjectionSource(
             'aquaculture.production_report.generated',
@@ -151,6 +162,7 @@ def _sources() -> tuple[ProjectionSource, ...]:
                 generated_at__isnull=False
             ),
             build_production_report_generated_command,
+            'generated_at',
             'generated_at',
         ),
         ProjectionSource(
@@ -161,6 +173,7 @@ def _sources() -> tuple[ProjectionSource, ...]:
             ).filter(status='success'),
             build_report_dispatch_command,
             'created_at',
+            'created_at',
         ),
         ProjectionSource(
             'aquaculture.report_dispatch.failed',
@@ -169,6 +182,7 @@ def _sources() -> tuple[ProjectionSource, ...]:
                 'report__farm_profile'
             ).filter(status='failed'),
             build_report_dispatch_command,
+            'created_at',
             'created_at',
         ),
         *(
@@ -179,6 +193,7 @@ def _sources() -> tuple[ProjectionSource, ...]:
                     'farm_profile'
                 ).filter(**{f'{field}__isnull': False}),
                 partial(build_order_activity_command, event_type=event_type),
+                field,
                 field,
             )
             for event_type, field in (
@@ -195,6 +210,7 @@ def _sources() -> tuple[ProjectionSource, ...]:
                 'conversation__user__farm_profile'
             ).filter(sender_type='user'),
             build_user_message_received_command,
+            'created_at',
             'created_at',
         ),
     )
@@ -236,23 +252,30 @@ def _bounded_queryset(
     *,
     since: date | None,
     until: date | None,
+    mode: ProjectionOrigin,
 ) -> QuerySet:
     queryset = source.queryset_factory()
     if since is None or until is None:
         return queryset.order_by('pk')
-    if source.occurrence_is_date:
+    field = source.backfill_field if mode == 'backfill' else source.repair_field
+    field_is_date = (
+        source.backfill_is_date if mode == 'backfill' else source.repair_is_date
+    )
+    if field is None:
+        return queryset.none()
+    if field_is_date:
         queryset = queryset.filter(
             **{
-                f'{source.occurrence_field}__gte': since,
-                f'{source.occurrence_field}__lte': until,
+                f'{field}__gte': since,
+                f'{field}__lte': until,
             }
         )
     else:
         start, end = _date_bounds(since, until)
         queryset = queryset.filter(
             **{
-                f'{source.occurrence_field}__gte': start,
-                f'{source.occurrence_field}__lt': end,
+                f'{field}__gte': start,
+                f'{field}__lt': end,
             }
         )
     return queryset.order_by('pk')
@@ -266,6 +289,7 @@ class Command(BaseCommand):
         parser.add_argument('--until', type=str)
         parser.add_argument('--domains', nargs='+')
         parser.add_argument('--event-types', nargs='+')
+        parser.add_argument('--source-object-id', type=str)
         parser.add_argument('--batch-size', type=int, default=DEFAULT_BATCH_SIZE)
         parser.add_argument('--max-events', type=int, default=DEFAULT_MAX_EVENTS)
         parser.add_argument('--dry-run', action='store_true')
@@ -317,6 +341,15 @@ class Command(BaseCommand):
         if unknown_types := requested_types - ADMIN_ACTIVITY_REGISTRY.keys():
             raise CommandError(f'Unknown event types: {", ".join(sorted(unknown_types))}')
 
+        source_object_id = self._parse_source_object_id(
+            options['source_object_id'],
+            mode=options['mode'],
+            requested_types=requested_types,
+            include_all=include_all,
+            since_option=options['since'],
+            until_option=options['until'],
+        )
+
         selected_sources = tuple(
             source
             for source in _sources()
@@ -324,7 +357,17 @@ class Command(BaseCommand):
             and (not requested_types or source.event_type in requested_types)
         )
         querysets = tuple(
-            (source, _bounded_queryset(source, since=since, until=until))
+            (
+                source,
+                source.queryset_factory().filter(pk=source_object_id).order_by('pk')
+                if source_object_id is not None
+                else _bounded_queryset(
+                    source,
+                    since=since,
+                    until=until,
+                    mode=options['mode'],
+                ),
+            )
             for source in selected_sources
         )
         candidate_count = sum(queryset.count() for _, queryset in querysets)
@@ -333,9 +376,7 @@ class Command(BaseCommand):
                 f'{candidate_count} candidates exceed --max-events={max_events}'
             )
         if options['dry_run']:
-            self.stdout.write(
-                self.style.SUCCESS(f'Dry run: {candidate_count} candidate events')
-            )
+            self._write_dry_run(querysets)
             return
 
         origin: ProjectionOrigin = options['mode']
@@ -379,6 +420,58 @@ class Command(BaseCommand):
             )
 
     @staticmethod
+    def _parse_source_object_id(
+        value: str | None,
+        *,
+        mode: str,
+        requested_types: frozenset[str],
+        include_all: bool,
+        since_option: str | None,
+        until_option: str | None,
+    ) -> uuid.UUID | None:
+        if value is None:
+            return None
+        if mode != 'repair':
+            raise CommandError('--source-object-id is only available in repair mode')
+        if len(requested_types) != 1:
+            raise CommandError('--source-object-id requires exactly one --event-types value')
+        if include_all or since_option or until_option:
+            raise CommandError(
+                '--source-object-id cannot be combined with --all, --since, or --until'
+            )
+        try:
+            return uuid.UUID(value)
+        except (AttributeError, ValueError) as exc:
+            raise CommandError('--source-object-id must be a valid UUID') from exc
+
+    def _write_dry_run(
+        self,
+        querysets: tuple[tuple[ProjectionSource, QuerySet], ...],
+    ) -> None:
+        total_candidates = 0
+        total_existing = 0
+        for source, queryset in querysets:
+            candidates = queryset.count()
+            existing = AdminActivityEvent.objects.filter(
+                event_type=source.event_type,
+                source_object_id__in=queryset.values('pk'),
+            ).count()
+            potential = max(candidates - existing, 0)
+            total_candidates += candidates
+            total_existing += existing
+            self.stdout.write(
+                f'{source.event_type}: candidates={candidates}, '
+                f'already_projected={existing}, potential_creations={potential}'
+            )
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'Dry run total: candidates={total_candidates}, '
+                f'already_projected={total_existing}, '
+                f'potential_creations={max(total_candidates - total_existing, 0)}'
+            )
+        )
+
+    @staticmethod
     def _project_batch(
         source: ProjectionSource,
         source_objects: list[object],
@@ -398,7 +491,7 @@ class Command(BaseCommand):
                     existing_count += int(not created)
                 except Exception as exc:
                     error_count += 1
-                    logger.exception(
+                    logger.error(
                         'Admin activity reconciliation failed',
                         extra={
                             'event': 'admin_activity.reconciliation.failed',

@@ -29,8 +29,8 @@ from ..domain.exceptions import (
 from ..domain.sanitary_severity import SANITARY_SEVERITY_BY_EVENT_TYPE
 from ..models import ProductionCycle, SanitaryLog
 from .admin_activity_projection_service import (
-    build_sanitary_log_command,
-    schedule_aquaculture_activity,
+    record_sanitary_log_created,
+    record_sanitary_log_resolved,
 )
 
 # Notification model moved to apps/notifications/models.py
@@ -229,12 +229,7 @@ class SanitaryService(BaseService):
             if affected_rate >= SanitaryService.CRITICAL_AFFECTED_THRESHOLD:
                 SanitaryService._create_critical_alert(sanitary_log, affected_rate)
 
-        schedule_aquaculture_activity(
-            build_sanitary_log_command(
-                sanitary_log,
-                event_type='aquaculture.sanitary_log.created',
-            )
-        )
+        record_sanitary_log_created(sanitary_log)
 
         return SanitaryLogMutationResult(log=sanitary_log, created=True)
 
@@ -368,12 +363,9 @@ class SanitaryService(BaseService):
             scheduled_for=timezone.now()
         )
 
-        schedule_aquaculture_activity(
-            build_sanitary_log_command(
-                sanitary_log,
-                event_type='aquaculture.sanitary_log.resolved',
-                transition_recorded_at=transition_recorded_at,
-            )
+        record_sanitary_log_resolved(
+            sanitary_log,
+            transition_recorded_at=transition_recorded_at,
         )
 
         return sanitary_log
