@@ -40,6 +40,10 @@ from ..models import (
     ProductionCycle,
     ProductionUnit,
 )
+from .admin_activity_projection_service import (
+    build_production_unit_created_command,
+    schedule_aquaculture_activity,
+)
 from .cycle_service import ProductionCycleService
 from .cycle_store_application_service import (
     CycleStoreApplicationService,
@@ -530,8 +534,28 @@ class CycleLaunchApplicationService:
         production_units: list[ProductionUnit] = []
         if payload["launch_kind"] == "initial_setup":
             for unit_data in payload["production_units"]:
-                production_units.append(
-                    ProductionUnit.objects.create(
+                unit = ProductionUnit.objects.create(
+                    client_uuid=derive_unit_client_uuid(
+                        payload["launch_uuid"], unit_data["local_id"]
+                    ),
+                    farm_profile=updated_farm,
+                    name=unit_data["name"],
+                    unit_type=normalize_production_unit_type(unit_data["unit_type"]),
+                    volume_m3=unit_data.get("volume_m3"),
+                    surface_m2=unit_data.get("surface_m2"),
+                    status="active",
+                )
+                production_units.append(unit)
+                schedule_aquaculture_activity(
+                    build_production_unit_created_command(unit)
+                )
+        else:
+            existing_units_by_id = {u.id: u for u in existing_units}
+            for unit_data in payload["production_units"]:
+                if unit_data["source"] == "existing":
+                    production_units.append(existing_units_by_id[unit_data["production_unit_id"]])
+                else:
+                    unit = ProductionUnit.objects.create(
                         client_uuid=derive_unit_client_uuid(
                             payload["launch_uuid"], unit_data["local_id"]
                         ),
@@ -542,25 +566,9 @@ class CycleLaunchApplicationService:
                         surface_m2=unit_data.get("surface_m2"),
                         status="active",
                     )
-                )
-        else:
-            existing_units_by_id = {u.id: u for u in existing_units}
-            for unit_data in payload["production_units"]:
-                if unit_data["source"] == "existing":
-                    production_units.append(existing_units_by_id[unit_data["production_unit_id"]])
-                else:
-                    production_units.append(
-                        ProductionUnit.objects.create(
-                            client_uuid=derive_unit_client_uuid(
-                                payload["launch_uuid"], unit_data["local_id"]
-                            ),
-                            farm_profile=updated_farm,
-                            name=unit_data["name"],
-                            unit_type=normalize_production_unit_type(unit_data["unit_type"]),
-                            volume_m3=unit_data.get("volume_m3"),
-                            surface_m2=unit_data.get("surface_m2"),
-                            status="active",
-                        )
+                    production_units.append(unit)
+                    schedule_aquaculture_activity(
+                        build_production_unit_created_command(unit)
                     )
 
         for calibration_unit in payload.get('calibration_units', []):
@@ -584,7 +592,7 @@ class CycleLaunchApplicationService:
                 if existing_calibration_unit.farm_profile_id != updated_farm.id:
                     raise CycleLaunchIdempotencyConflict()
                 continue
-            ProductionUnit.objects.create(
+            created_calibration_unit = ProductionUnit.objects.create(
                 client_uuid=calibration_unit['client_uuid'],
                 farm_profile=updated_farm,
                 name=calibration_unit['name'],
@@ -595,6 +603,9 @@ class CycleLaunchApplicationService:
                 status='active',
                 created_offline=payload['cycle'].get('created_offline', False),
                 synced_at=timezone.now() if payload['cycle'].get('created_offline', False) else None,
+            )
+            schedule_aquaculture_activity(
+                build_production_unit_created_command(created_calibration_unit)
             )
 
         units_by_local_id = {

@@ -26,7 +26,12 @@ from ..domain.exceptions import (
     OfflineSyncConflictError,
     SanitaryLogNotFoundException,
 )
+from ..domain.sanitary_severity import SANITARY_SEVERITY_BY_EVENT_TYPE
 from ..models import ProductionCycle, SanitaryLog
+from .admin_activity_projection_service import (
+    build_sanitary_log_command,
+    schedule_aquaculture_activity,
+)
 
 # Notification model moved to apps/notifications/models.py
 # Will be migrated to use NotificationService in Phase 1B
@@ -54,14 +59,7 @@ class SanitaryService(BaseService):
     """
 
     # Mapping de gravité par type d'événement
-    SEVERITY_MAP = {
-        'disease': 'critical',
-        'abnormal_mortality': 'critical',
-        'water_quality': 'warning',
-        'treatment': 'info',
-        'vaccination': 'info',
-        'other': 'info'
-    }
+    SEVERITY_MAP = SANITARY_SEVERITY_BY_EVENT_TYPE
 
     # Seuils d'alerte pour analyse
     CRITICAL_AFFECTED_THRESHOLD = 0.05  # 5% de l'effectif
@@ -231,6 +229,13 @@ class SanitaryService(BaseService):
             if affected_rate >= SanitaryService.CRITICAL_AFFECTED_THRESHOLD:
                 SanitaryService._create_critical_alert(sanitary_log, affected_rate)
 
+        schedule_aquaculture_activity(
+            build_sanitary_log_command(
+                sanitary_log,
+                event_type='aquaculture.sanitary_log.created',
+            )
+        )
+
         return SanitaryLogMutationResult(log=sanitary_log, created=True)
 
     @staticmethod
@@ -334,6 +339,7 @@ class SanitaryService(BaseService):
             )
 
         # Résolution du problème
+        transition_recorded_at = timezone.now()
         sanitary_log.resolved = True
         sanitary_log.resolution_date = resolution_date
         if resolution_notes:
@@ -360,6 +366,14 @@ class SanitaryService(BaseService):
             metadata={'cycle_id': str(sanitary_log.cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
             channels=['in_app', 'push'],
             scheduled_for=timezone.now()
+        )
+
+        schedule_aquaculture_activity(
+            build_sanitary_log_command(
+                sanitary_log,
+                event_type='aquaculture.sanitary_log.resolved',
+                transition_recorded_at=transition_recorded_at,
+            )
         )
 
         return sanitary_log
