@@ -15,6 +15,9 @@ from ..domain.calibration import WEIGHT_DIFFERENCE_WARNING_THRESHOLD, biomass_fo
 from ..domain.exceptions import BusinessRuleViolation, EventBeforeTrackingStartError
 from ..models import CalibrationOperation, CycleUnitAllocation, ProductionCycle, ProductionUnit
 from ..tasks import invalidate_dashboard_cache
+from .admin_activity_projection_service import (
+    record_calibration_completed,
+)
 from .allocation_ledger_service import AllocationLedgerService
 from .aquaculture_lock_service import AquacultureLockService
 from .cycle_service import ProductionCycleService
@@ -215,6 +218,7 @@ class CalibrationService:
             channels=['in_app'],
         )
         transaction.on_commit(lambda: invalidate_dashboard_cache(str(user.id)))
+        record_calibration_completed(operation)
         return operation, warnings, True
 
     @staticmethod

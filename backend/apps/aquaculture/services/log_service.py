@@ -34,6 +34,9 @@ from ..domain.exceptions import (
     OfflineSyncConflictError,
 )
 from ..models import CycleLog, ProductionCycle
+from .admin_activity_projection_service import (
+    record_cycle_log_received,
+)
 from .base import BaseService
 from .feed_stock_ledger_service import (
     FeedStockLedgerService,
@@ -250,6 +253,8 @@ class CycleLogService(BaseService):
             {"log_id": str(log.id), "mortality": log_data.get('mortality_count', 0)},
             level='info'
         )
+
+        record_cycle_log_received(log)
 
         return log
 
@@ -524,6 +529,7 @@ class CycleLogService(BaseService):
 
             for created_log in created_logs:
                 CycleFeedPlanProgressionService.record_progress_from_log(created_log)
+                record_cycle_log_received(created_log)
             result['created'] = len(created_logs)
             result['logs'].extend(created_logs)
 

@@ -51,6 +51,10 @@ from ..models import (
     ReportDispatchLog,
     SanitaryLog,
 )
+from .admin_activity_projection_service import (
+    record_production_report_generated,
+    record_report_dispatch,
+)
 from .base import BaseService
 from .cycle_feed_service import CycleFeedService
 from .farm_production_plan_service import FarmProductionPlanService
@@ -391,6 +395,12 @@ class ReportService(BaseService):
         generated_at: datetime,
         preserve_validation: bool = False,
     ) -> ProductionReport:
+        if timezone.is_naive(generated_at):
+            generated_at = timezone.make_aware(
+                generated_at,
+                timezone.get_current_timezone(),
+            )
+        was_generated = report.generated_at is not None
         report.payload = payload
         report.generated_at = generated_at
         report.pdf_file.save(filename, ContentFile(pdf_bytes), save=False)
@@ -410,6 +420,8 @@ class ReportService(BaseService):
         report.whatsapp_status = "not_shared"
         report.whatsapp_shared_at = None
         report.save()
+        if not was_generated:
+            record_production_report_generated(report)
         return report
 
     @staticmethod
@@ -3726,7 +3738,7 @@ class ReportService(BaseService):
         error_message: str = "",
         metadata: ReportDispatchMetadata | None = None,
     ) -> ReportDispatchLog:
-        return ReportDispatchLog.objects.create(
+        dispatch = ReportDispatchLog.objects.create(
             report=report,
             channel=channel,
             status=status,
@@ -3736,6 +3748,8 @@ class ReportService(BaseService):
             error_message=error_message,
             metadata=metadata or {},
         )
+        record_report_dispatch(dispatch)
+        return dispatch
 
     @staticmethod
     def _to_float(value: Decimal | float | int | str | None) -> float | None:
