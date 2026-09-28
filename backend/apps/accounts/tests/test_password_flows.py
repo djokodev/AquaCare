@@ -199,6 +199,23 @@ class TestPasswordForgotEndpoint:
         assert reset_path.startswith("/accounts/password/reset/")
         assert reset_path.count("/") >= 4  # uidb64 + token segments
 
+    def test_email_has_branded_html_alternative(self, api_client, user):
+        api_client.post(
+            self.url, {"phone_number": user.phone_number}, format="json"
+        )
+        message = mail.outbox[0]
+        html_parts = [
+            content
+            for content, mimetype in getattr(message, "alternatives", [])
+            if mimetype == "text/html"
+        ]
+        assert html_parts, "l'email doit contenir une alternative HTML"
+        html = html_parts[0]
+        assert "brand/aquacare-logo.png" in html
+        assert "#059669" in html
+        assert "/accounts/password/reset/" in html
+
+
 class TestPasswordResetEndpoint:
     url = "/api/accounts/password/reset/"
 

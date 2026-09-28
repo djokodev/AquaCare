@@ -20,6 +20,8 @@ from accounts.validators import normalize_phone_number
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -134,6 +136,9 @@ class PasswordResetService:
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
                 fail_silently=False,
+                html_message=cls._build_html_email(
+                    request, reset_link, language, subject
+                ),
             )
         except Exception:
             logger.exception(
@@ -153,6 +158,73 @@ class PasswordResetService:
             },
         )
         return True
+
+    @classmethod
+    def _build_html_email(
+        cls,
+        request,
+        reset_link: str,
+        language: str,
+        title: str,
+    ) -> str:
+        """
+        Rendu HTML de l'email, aux couleurs AquaCare.
+
+        Un echec de rendu ne doit jamais empecher l'envoi: on renvoie une
+        chaine vide, Django retombe alors sur la version texte seule.
+        """
+        try:
+            logo_url = request.build_absolute_uri(
+                static("brand/aquacare-logo.png")
+            )
+            texts = {
+                "title": title,
+                "intro": _pick_text(
+                    language,
+                    "Vous avez demande la reinitialisation du mot de passe de "
+                    "votre compte AquaCare.",
+                    "You requested a password reset for your AquaCare account.",
+                ),
+                "cta": _pick_text(
+                    language,
+                    "Choisir un nouveau mot de passe",
+                    "Choose a new password",
+                ),
+                "expiry": _pick_text(
+                    language,
+                    "Ce lien est valable 1 heure. Si vous n'etes pas a l'origine "
+                    "de cette demande, ignorez ce message: votre mot de passe "
+                    "actuel reste valable.",
+                    "This link is valid for 1 hour. If you did not request it, "
+                    "ignore this message: your current password stays valid.",
+                ),
+                "ignore": _pick_text(
+                    language,
+                    "Pour votre securite, ne partagez jamais ce lien avec "
+                    "quelqu'un d'autre.",
+                    "For your security, never share this link with anyone.",
+                ),
+                "team": _pick_text(
+                    language,
+                    "L'equipe AquaCare",
+                    "The AquaCare team",
+                ),
+            }
+            return render_to_string(
+                "accounts/emails/password_reset.html",
+                {
+                    "language": language,
+                    "logo_url": logo_url,
+                    "reset_link": reset_link,
+                    "texts": texts,
+                },
+            )
+        except Exception:
+            logger.exception(
+                "Password reset HTML email rendering failed; sending text only",
+                extra={"event": "accounts.password.reset.html_render_failed"},
+            )
+            return ""
 
     @staticmethod
     def _resolve_user_from_uid(uidb64: str) -> User | None:

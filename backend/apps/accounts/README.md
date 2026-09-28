@@ -442,7 +442,18 @@ Decision prod 2026-09 (issue: preparation production module accounts):
 
 Fichiers: `services/password_service.py`, `web_views.py`, `web_urls.py`,
 `domain/email_deliverability.py`, `domain/phone_operators.py`,
-`templates/accounts/*`.
+`templates/accounts/*`, `templates/accounts/emails/password_reset.html`.
+
+Expediteur email: `DEFAULT_FROM_EMAIL`. La valeur par defaut du code est
+`rapports@aquacare.tech` (adresse historique des rapports); elle doit etre
+fournie explicitement par l'environnement en staging/production et le domaine
+doit etre verifie chez Resend. Utiliser de preference une adresse dediee aux
+emails transactionnels (ex: `no-reply@aquacare.tech`) et la definir via
+`DEFAULT_FROM_EMAIL`, sans changer le default du code sans decision explicite.
+
+Les pages web et l'email utilisent le design AquaCare: logo partage
+(`common/static/brand/aquacare-logo.png`), vert de marque `#059669`, fond
+`#f8fafc`. Ne pas reintroduire le bleu legacy `#2563eb`.
 
 Implication frontend a planifier: rendre le champ email requis dans
 `RegisterScreen` et ajouter les ecrans "mot de passe oublie" / "changer mot

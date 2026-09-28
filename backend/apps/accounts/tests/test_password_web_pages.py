@@ -32,6 +32,14 @@ class TestPasswordResetConfirmPage:
         assert response.status_code == 200
         assert b"password" in response.content
 
+    def test_form_uses_aquacare_branding(self, client):
+        user = UserFactory(password=PASSWORD)
+        response = client.get(_confirm_url(user))
+        content = response.content.decode()
+        assert "brand/aquacare-logo.png" in content
+        assert "#059669" in content  # vert de marque, pas le bleu legacy
+        assert "#2563eb" not in content
+
     def test_form_speaks_user_language(self, client):
         user = UserFactory(password=PASSWORD, language_preference="en")
         response = client.get(_confirm_url(user))
@@ -100,3 +108,9 @@ class TestPasswordResetDonePage:
         response = client.get(f"/accounts/password/reset/done/?{urlencode({'lang': 'en'})}")
         assert response.status_code == 200
         assert "Password changed" in response.content.decode()
+
+    def test_done_page_uses_aquacare_branding(self, client):
+        response = client.get("/accounts/password/reset/done/")
+        content = response.content.decode()
+        assert "brand/aquacare-logo.png" in content
+        assert "#059669" in content
