@@ -1,6 +1,6 @@
 # Cycle report data lineage
 
-Version: `1.3.0`
+Version: `1.4.0`
 
 This document defines the backend sources used by cycle and unit PDF reports. A
 report is a historical snapshot: values that describe the stock, biomass,
@@ -42,10 +42,9 @@ the mutable current dashboard state.
   Global logs, global sanitary events, cycle costs, and unscoped feeding plans
   are never repartitioned between units.
 
-- Automatic daily, weekly, and monthly schedulers dispatch one task per active
-  cycle. Each task passes `farm_id`, `cycle_id`, `scope_type="cycle"`, and the
-  completed period bounds. The report uniqueness key is farm, cycle, type, and
-  period, so repeated dispatches reuse the same `ProductionReport`.
+- Reports are created on demand only (Direction A): from the mobile app or
+  the administration. The report uniqueness key is farm, cycle, type, and
+  period, so repeated requests reuse the same `ProductionReport`.
 - A new cycle-scoped report request must provide an active cycle belonging to
   the authenticated farm. Missing, invalid, foreign, or inactive cycles are
   rejected as a business error and returned as HTTP 400. The requested
@@ -62,7 +61,7 @@ the mutable current dashboard state.
 | Report field | Payload path | Source of truth | Model/service | Time type | Formula | Fallback | Legacy compatibility | Tests |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Farm name | `farm.farm_name` | Farm profile | `FarmProfile.farm_name` | `STATIC` | Direct field | — | Direct field | report service |
-| Report type and period | `report_meta.*` | Report request | `ReportService.build_period_bounds()` | `STATIC` | Type-specific bounds | Completed period when no reference date | — | report service |
+| Report type and period | `report_meta.*` | Report request | `ReportService.build_cycle_report_period_bounds()` | `STATIC` | Cycle-relative bounds for the requested date | — | — | report service |
 | Generation date | `report_meta.generated_at` | Application clock | `timezone.localtime(timezone.now())` | `STATIC` | ISO datetime | — | — | report service |
 | Cycle species/status | `cycles[].cycle.*` | Production cycle | `ProductionCycle` and localized helpers | `STATIC` | Direct field | — | Direct field | report service |
 | Start date / active days | `cycles[].cycle.start_date_display`, `days_active` | Production cycle | `ProductionCycle.start_date` | `STATIC` / `AS_OF_PERIOD_END` | `period_end - start + 1` | — | Direct field | report service |

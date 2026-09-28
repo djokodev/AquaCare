@@ -175,20 +175,6 @@ def _create_fcr_allocation(farm_profile, cycle, name):
 
 @pytest.mark.django_db
 class TestReportServiceEmailFormatting:
-    def test_completed_period_bounds_use_only_finished_periods(self):
-        assert ReportService.build_completed_period_bounds("daily", date(2026, 7, 20)) == (
-            date(2026, 7, 19),
-            date(2026, 7, 19),
-        )
-        assert ReportService.build_completed_period_bounds("weekly", date(2026, 7, 20)) == (
-            date(2026, 7, 13),
-            date(2026, 7, 19),
-        )
-        assert ReportService.build_completed_period_bounds("monthly", date(2026, 8, 1)) == (
-            date(2026, 7, 1),
-            date(2026, 7, 31),
-        )
-
     def test_build_email_subject_uses_natural_format(self):
         farm_profile = FarmProfileFactory()
 
@@ -825,30 +811,38 @@ class TestReportServicePayloadAndPdfTemplate:
         assert '200,00 poissons/m²' not in html
         assert '3.00 m²' not in html
 
-    def test_generate_all_active_cycles_skips_cycles_started_after_period_end(self):
+    @pytest.mark.parametrize('report_type', ['daily', 'weekly', 'monthly'])
+    def test_generate_for_farm_is_idempotent_for_same_scope(self, report_type):
         farm_profile = FarmProfileFactory()
-        included_cycle = ProductionCycleFactory(
-            farm_profile=farm_profile,
-            status="active",
-            start_date=date(2026, 3, 1),
-        )
-        excluded_cycle = ProductionCycleFactory(
-            farm_profile=farm_profile,
-            status="active",
-            start_date=date(2026, 3, 2),
-        )
+        first_cycle = ProductionCycleFactory(farm_profile=farm_profile, status='active')
+        second_cycle = ProductionCycleFactory(farm_profile=farm_profile, status='active')
+        period_start = date(2026, 3, 1)
+        period_end = date(2026, 3, 7)
 
-        with patch.object(ReportService, "generate_for_farm") as mock_generate:
-            count = ReportService._generate_for_all_active_cycles(
-                "daily",
-                date(2026, 2, 28),
-                date(2026, 3, 1),
-            )
+        with patch.object(ReportService, '_render_pdf', return_value=b'%PDF-fake'):
+            for cycle in (first_cycle, second_cycle, first_cycle, second_cycle):
+                ReportService.generate_for_farm(
+                    farm_profile=farm_profile,
+                    report_type=report_type,
+                    period_start=period_start,
+                    period_end=period_end,
+                    scope_type="cycle",
+                    scope_object_id=str(cycle.id),
+                    cycle_id=str(cycle.id),
+                )
 
-        assert count == 1
-        mock_generate.assert_called_once()
-        assert mock_generate.call_args.kwargs["cycle_id"] == str(included_cycle.id)
-        assert mock_generate.call_args.kwargs["cycle_id"] != str(excluded_cycle.id)
+        reports = ProductionReport.objects.filter(
+            farm_profile=farm_profile,
+            report_type=report_type,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        assert reports.count() == 2
+        assert set(reports.values_list('scope_object_id', flat=True)) == {first_cycle.id, second_cycle.id}
+        assert all(report.scope_type == 'cycle' for report in reports)
+        assert not ProductionReport.objects.filter(
+            farm_profile=farm_profile, scope_object_id__isnull=True
+        ).exists()
 
     def test_build_payload_rejects_invalid_or_inactive_cycle_scope(self):
         farm_profile = FarmProfileFactory()
