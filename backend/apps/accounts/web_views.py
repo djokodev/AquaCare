@@ -50,9 +50,6 @@ def _reset_texts(language_preference: str) -> dict[str, str]:
                 "Votre mot de passe a ete change. Vous pouvez maintenant vous "
                 "connecter a l'application AquaCare avec le nouveau mot de passe."
             ),
-            "footer": (
-                "Vous pouvez fermer cette page et retourner dans l'application AquaCare."
-            ),
         }
     return {
         "title": "New password",
@@ -71,7 +68,6 @@ def _reset_texts(language_preference: str) -> dict[str, str]:
             "Your password has been changed. You can now sign in to the AquaCare "
             "app with the new password."
         ),
-        "footer": "You can close this page and return to the AquaCare app.",
     }
 
 
