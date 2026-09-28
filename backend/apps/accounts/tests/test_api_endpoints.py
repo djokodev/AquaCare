@@ -145,6 +145,7 @@ class TestRegistrationEndpoint:
         # Essayer de créer avec le même téléphone
         data = {
             "phone_number": "+237690000000",  # Même téléphone
+            "email": "new.user@example.com",
             "first_name": "New",
             "last_name": "User",
             "password": "test45678",
@@ -163,6 +164,7 @@ class TestRegistrationEndpoint:
         """Test échec avec mots de passe différents."""
         data = {
             "phone_number": "+237690111111",
+            "email": "test.user@example.com",
             "first_name": "Test",
             "last_name": "User",
             "password": "motdepasse123",
@@ -180,6 +182,7 @@ class TestRegistrationEndpoint:
         """Test échec personne physique sans age_group."""
         data = {
             "phone_number": "+237690222222",
+            "email": "test.user2@example.com",
             "first_name": "Test",
             "last_name": "User",
             "password": "test12345",
@@ -197,6 +200,7 @@ class TestRegistrationEndpoint:
         """Test échec entreprise sans legal_status."""
         data = {
             "phone_number": "+237690333333",
+            "email": "company@example.com",
             "first_name": "Test",
             "last_name": "User",
             "business_name": "Test Company",
@@ -1040,6 +1044,7 @@ class TestRateLimiting:
                 register_url,
                 {
                     "phone_number": f"+23769900100{index}",
+                    "email": f"register{index}@example.com",
                     "first_name": f"Register{index}",
                     "last_name": "Success",
                     "password": "motdepasse123",
@@ -1056,6 +1061,7 @@ class TestRateLimiting:
             register_url,
             {
                 "phone_number": "+237699001010",
+                "email": "register.final@example.com",
                 "first_name": "RegisterFinal",
                 "last_name": "Success",
                 "password": "motdepasse123",

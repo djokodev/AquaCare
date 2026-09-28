@@ -166,6 +166,7 @@ REST_FRAMEWORK = {
         "accounts_token": ACCOUNT_TOKEN_THROTTLE_RATE,
         "accounts_farm_setup": ACCOUNT_FARM_SETUP_THROTTLE_RATE,
         "accounts_simulation": ACCOUNT_SIMULATION_THROTTLE_RATE,
+        "accounts_password_forgot": "3/hour",
         "chat_message": "10/minute",
         "commerce_simulation": "20/hour",
         "commerce_suggestions": "30/hour",
@@ -203,6 +204,9 @@ SIMPLE_JWT = {
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",
 }
+
+# Reinitialisation de mot de passe par email (module accounts)
+PASSWORD_RESET_TIMEOUT = 60 * 60  # lien valide 1 heure
 
 # Internationalization
 LANGUAGE_CODE = "fr-fr"

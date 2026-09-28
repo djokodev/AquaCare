@@ -32,6 +32,9 @@ from .serializers import (
     LoginSerializer,
     LogoutSerializer,
     MessageResponseSerializer,
+    PasswordChangeSerializer,
+    PasswordForgotSerializer,
+    PasswordResetSerializer,
     UserProfileSerializer,
     UserRegistrationSerializer,
 )
@@ -39,6 +42,11 @@ from .services.account_deletion_service import AccountDeletionService
 from .services.annual_simulation_service import AnnualSimulationService
 from .services.auth_application_service import AuthApplicationService, InvalidRefreshTokenError
 from .services.farm_setup_service import FarmSetupService
+from .services.password_service import (
+    InvalidPasswordResetLinkError,
+    PasswordChangeService,
+    PasswordResetService,
+)
 from .services.profile_mutation_service import AccountProfileMutationService
 from .services.profile_query_service import ProfileQueryService
 from .throttles import (
@@ -48,6 +56,7 @@ from .throttles import (
     AccountRegisterThrottle,
     AccountSimulationThrottle,
     AccountTokenThrottle,
+    PasswordForgotThrottle,
     SensitiveAccountActionThrottle,
 )
 
@@ -784,3 +793,173 @@ class AnnualSimulationView(generics.GenericAPIView):
             },
         )
         return Response(result, status=status.HTTP_200_OK)
+
+
+class PasswordChangeView(generics.GenericAPIView):
+    """
+    Changement de mot de passe par l'utilisateur authentifie.
+
+    Le mot de passe actuel est requis (protection anti-usurpation de
+    session volee). Le nouveau mot de passe passe les validateurs Django
+    configures (AUTH_PASSWORD_VALIDATORS).
+    """
+
+    serializer_class = PasswordChangeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [SensitiveAccountActionThrottle]
+
+    @extend_schema(
+        summary="Changer mon mot de passe",
+        description=(
+            "Remplace le mot de passe du compte authentifie. Le mot de passe "
+            "actuel est requis. Les tokens deja emis restent valables jusqu'a "
+            "leur expiration (rotation JWT classique)."
+        ),
+        request=PasswordChangeSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                description="Mot de passe change avec succes",
+            ),
+            400: VALIDATION_ERROR_RESPONSE,
+            401: AUTH_REQUIRED_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        PasswordChangeService.change_password(
+            request.user, serializer.validated_data["password"]
+        )
+        logger.info(
+            "Password change completed",
+            extra={
+                "event": "accounts.password.change.completed",
+                "endpoint": request.path,
+                "user_id": _user_id(request.user),
+                "status_code": status.HTTP_200_OK,
+            },
+        )
+        response_serializer = MessageResponseSerializer(
+            {"message": _("Mot de passe change avec succes.")}
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+
+class PasswordForgotView(generics.GenericAPIView):
+    """
+    Demande de reinitialisation de mot de passe par email.
+
+    Anti-enumeration: la reponse est identique que le telephone
+    corresponde ou non a un compte actif avec un email.
+    """
+
+    serializer_class = PasswordForgotSerializer
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [PasswordForgotThrottle, AccountTokenThrottle]
+
+    @extend_schema(
+        summary="Demander la reinitialisation du mot de passe",
+        description=(
+            "Envoie un lien de reinitialisation a l'email du compte associe au "
+            "telephone fourni. La reponse est volontairement identique que le "
+            "compte existe ou non. Le lien est valable 1 heure."
+        ),
+        request=PasswordForgotSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                description="Demande traitee (reponse identique dans tous les cas)",
+            ),
+            400: VALIDATION_ERROR_RESPONSE,
+            429: THROTTLED_RESPONSE,
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = PasswordResetService.find_resettable_user(
+            serializer.validated_data["phone_number"]
+        )
+        email_sent = False
+        if user is not None:
+            email_sent = PasswordResetService.send_reset_email(request, user)
+        logger.info(
+            "Password reset requested",
+            extra={
+                "event": "accounts.password.reset.requested",
+                "endpoint": request.path,
+                "account_found": user is not None,
+                "email_sent": email_sent,
+                "status_code": status.HTTP_200_OK,
+            },
+        )
+        response_serializer = MessageResponseSerializer(
+            {
+                "message": _(
+                    "Si un compte existe pour ce numero, un lien de "
+                    "reinitialisation a ete envoye par email."
+                )
+            }
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+
+class PasswordResetView(generics.GenericAPIView):
+    """
+    Confirmation de reinitialisation (contract API pour l'app mobile).
+
+    Expose le meme couple (uid, token) que le lien email, pour un ecran
+    dedie dans l'app. La page web server est l'autre chemin possible.
+    """
+
+    serializer_class = PasswordResetSerializer
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [AccountTokenThrottle]
+
+    @extend_schema(
+        summary="Definir le nouveau mot de passe",
+        description=(
+            "Valide le couple (uid, token) recu par email et definit le nouveau "
+            "mot de passe. Un lien expire ou un token invalide retourne une "
+            "erreur metier stable sans reveler l'existence du compte."
+        ),
+        request=PasswordResetSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=MessageResponseSerializer,
+                description="Mot de passe reinitialise avec succes",
+            ),
+            400: OpenApiResponse(
+                response=ErrorResponseSerializer,
+                description="Lien invalide ou expire, ou validation en echec",
+            ),
+            429: THROTTLED_RESPONSE,
+        },
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            PasswordResetService.confirm_reset(
+                serializer.validated_data["uid"],
+                serializer.validated_data["token"],
+                serializer.validated_data["password"],
+            )
+        except InvalidPasswordResetLinkError:
+            logger.info(
+                "Password reset link rejected",
+                extra={
+                    "event": "accounts.password.reset.link_rejected",
+                    "endpoint": request.path,
+                    "status_code": status.HTTP_400_BAD_REQUEST,
+                },
+            )
+            raise DRFValidationError(
+                {"detail": _("Lien de reinitialisation invalide ou expire.")}
+            )
+        response_serializer = MessageResponseSerializer(
+            {"message": _("Mot de passe reinitialise avec succes.")}
+        )
+        return Response(response_serializer.data, status=status.HTTP_200_OK)

@@ -20,6 +20,7 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer, TokenVe
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 
+from .domain.email_deliverability import EmailDeliverabilityValidator
 from .domain.farm_profile_rules import build_farm_profile_invariant_errors
 from .domain.farm_setup_rules import FarmSetupRules
 from .models import FarmProfile, User
@@ -57,9 +58,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         help_text="Format: +237XXXXXXXXX ou format international"
     )
     email = serializers.EmailField(
-        required=False,
-        allow_blank=True,
-        validators=[EmailValidator()],
+        required=True,
+        allow_blank=False,
+        validators=[EmailValidator(), EmailDeliverabilityValidator()],
+        help_text="Requis: sert de canal de reinitialisation du mot de passe",
     )
 
     class Meta:
@@ -563,6 +565,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
     is_individual = serializers.BooleanField(read_only=True)
     is_company = serializers.BooleanField(read_only=True)
 
+    email = serializers.EmailField(
+        required=False,
+        allow_blank=True,
+        validators=[EmailValidator(), EmailDeliverabilityValidator()],
+    )
+
     farm_profile = FarmProfileSerializer(read_only=True)
 
     class Meta:
@@ -667,3 +675,65 @@ class AccountsTokenVerifySerializer(TokenVerifySerializer):
         token = UntypedToken(attrs["token"])
         _ensure_token_user_is_active(token)
         return super().validate(attrs)
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Changement de mot de passe par l'utilisateur authentifie."""
+
+    current_password = serializers.CharField(
+        write_only=True,
+        help_text="Mot de passe actuel (protection anti-usurpation de session)",
+    )
+    password = serializers.CharField(
+        write_only=True,
+        help_text="Nouveau mot de passe (validateurs Django appliques)",
+    )
+    password_confirm = serializers.CharField(write_only=True)
+
+    def validate_current_password(self, value: str) -> str:
+        user = self.context["request"].user
+        if not user.check_password(value):
+            raise serializers.ValidationError(
+                _("Le mot de passe actuel est incorrect.")
+            )
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError(
+                _("Les mots de passe ne correspondent pas.")
+            )
+        if attrs["password"] == attrs["current_password"]:
+            raise serializers.ValidationError(
+                _("Le nouveau mot de passe doit etre different de l'actuel.")
+            )
+        validate_password(attrs["password"], user=self.context["request"].user)
+        return attrs
+
+
+class PasswordForgotSerializer(serializers.Serializer):
+    """Demande de reinitialisation par telephone (canal: email du compte)."""
+
+    phone_number = serializers.CharField(
+        validators=[PhoneNumberValidator()],
+        help_text="Telephone du compte; la reponse est volontairement identique "
+        "que le compte existe ou non (anti-enumeration)",
+    )
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    """Confirmation de reinitialisation (uid + token + nouveau mot de passe)."""
+
+    uid = serializers.CharField(write_only=True)
+    token = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)
+    password_confirm = serializers.CharField(write_only=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError(
+                _("Les mots de passe ne correspondent pas.")
+            )
+        # Meme politique de mot de passe que le changement authentifie.
+        validate_password(attrs["password"])
+        return attrs

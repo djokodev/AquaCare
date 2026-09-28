@@ -60,6 +60,18 @@ Current stack:
 
 ## Major technical decisions
 
+### Accounts password lifecycle and email deliverability (prod prep, 2026-09)
+
+Accounts adds an authenticated password change (`POST /api/accounts/password/change/`)
+and email-based password reset: `/password/forgot/` emails a link to a
+server-hosted reset page (`/accounts/password/reset/<uidb64>/<token>/`),
+`/password/reset/` exposes the same token contract for a future in-app screen.
+Registration now requires an email; the domain is checked for MX (A/AAAA
+fallback) with `dnspython`, failing open on DNS outages. There is no OTP for
+launch: the Cameroon mobile structural check plus an informational operator
+prefix registry (`accounts/domain/phone_operators.py`) stands in for a
+WhatsApp reachability check. `PASSWORD_RESET_TIMEOUT` is 1 hour.
+
 ### Calibration tanks and grading transfers
 
 A calibration tank reuses the existing physical `ProductionUnit` aggregate. `unit_type` remains the physical shape (`tank`, `pond`, `cage`), while `purpose` distinguishes `production` from `calibration`; calibration units must be tanks with a positive volume and no surface. There is no parallel `CalibrationTank` database model. The `/calibration-tanks/` API is a filtered compatibility facade over `ProductionUnit`.

@@ -86,6 +86,9 @@ urlpatterns = [
         name='account-deletion',
     ),
 
+    # Password reset web pages (opened from the email link)
+    path('', include('accounts.web_urls')),
+
     path('i18n/', include('django.conf.urls.i18n')),  # Required for Jazzmin language switcher
     path('admin/', admin.site.urls),
     path('api/', api_root, name='api-root'),
