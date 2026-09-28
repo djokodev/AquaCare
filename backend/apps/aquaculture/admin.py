@@ -599,6 +599,8 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
                 raise ValidationError(str(exc)) from exc
         try:
             super().save_model(request, obj, form, change)
+            if not change:
+                ProductionUnitLifecycleService.record_created(obj)
         except IntegrityError as exc:
             error = translate_production_unit_integrity_error(exc)
             raise ValidationError(error) from exc
