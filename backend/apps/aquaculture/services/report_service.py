@@ -1,8 +1,8 @@
 """
 Service métier pour génération et diffusion des rapports de production.
 
-Flux V1:
-- Brouillon auto (daily/weekly/monthly)
+Flux (Direction A — génération à la demande uniquement):
+- Création à la demande depuis l'app mobile ou l'administration
 - Validation manuelle
 - Envoi email backend
 - Marquage partage WhatsApp (action manuelle côté mobile)
@@ -424,53 +424,6 @@ class ReportService(BaseService):
                 pass
 
     @staticmethod
-    def build_period_bounds(report_type: str, reference_date: date | None = None) -> tuple[date, date]:
-        """
-        Construit les bornes de période à partir d'une date de référence.
-
-        - daily: jour de référence
-        - weekly: semaine ISO (lundi -> dimanche) contenant la date de référence
-        - monthly: mois contenant la date de référence
-        """
-        ref = reference_date or timezone.localdate()
-
-        if report_type == "daily":
-            return ref, ref
-
-        if report_type == "weekly":
-            start = ref - timedelta(days=ref.weekday())  # lundi
-            end = start + timedelta(days=6)  # dimanche
-            return start, end
-
-        if report_type == "monthly":
-            start = ref.replace(day=1)
-            if start.month == 12:
-                next_month = start.replace(year=start.year + 1, month=1, day=1)
-            else:
-                next_month = start.replace(month=start.month + 1, day=1)
-            end = next_month - timedelta(days=1)
-            return start, end
-
-        raise ValueError(f"Type de rapport non supporté: {report_type}")
-
-    @staticmethod
-    def build_completed_period_bounds(
-        report_type: str,
-        execution_date: date | None = None,
-    ) -> tuple[date, date]:
-        """Return the last fully completed period at execution time."""
-        current = execution_date or timezone.localdate()
-        if report_type == "daily":
-            reference = current - timedelta(days=1)
-        elif report_type == "weekly":
-            reference = current - timedelta(days=current.weekday() + 1)
-        elif report_type == "monthly":
-            reference = current.replace(day=1) - timedelta(days=1)
-        else:
-            raise ValueError(f"Type de rapport non supporté: {report_type}")
-        return ReportService.build_period_bounds(report_type, reference)
-
-    @staticmethod
     def get_cycle_report_period_length(report_type: str) -> int:
         """Return the number of cycle days required for a manual report."""
         if report_type == "daily":
@@ -732,55 +685,6 @@ class ReportService(BaseService):
             metadata=metadata or {},
         )
         return report
-
-    @staticmethod
-    def generate_daily_drafts(reference_date: date | None = None) -> int:
-        """Génère un brouillon journalier par cycle actif."""
-        start, end = ReportService.build_completed_period_bounds("daily", reference_date)
-        return ReportService._generate_for_all_active_cycles("daily", start, end)
-
-    @staticmethod
-    def generate_weekly_drafts(reference_date: date | None = None) -> int:
-        """Génère les brouillons hebdomadaires pour toutes les fermes actives."""
-        start, end = ReportService.build_completed_period_bounds("weekly", reference_date)
-        return ReportService._generate_for_all_active_cycles("weekly", start, end)
-
-    @staticmethod
-    def generate_monthly_drafts(reference_date: date | None = None) -> int:
-        """Génère les brouillons mensuels pour toutes les fermes actives."""
-        start, end = ReportService.build_completed_period_bounds("monthly", reference_date)
-        return ReportService._generate_for_all_active_cycles("monthly", start, end)
-
-    @staticmethod
-    def _generate_for_all_active_cycles(report_type: str, start: date, end: date) -> int:
-        cycles = ProductionCycle.objects.filter(
-            farm_profile__user__is_active=True,
-            status="active",
-            start_date__lte=end,
-        ).select_related("farm_profile")
-
-        generated = 0
-        for cycle in cycles:
-            try:
-                ReportService.generate_for_farm(
-                    farm_profile=cycle.farm_profile,
-                    report_type=report_type,
-                    period_start=start,
-                    period_end=end,
-                    scope_type="cycle",
-                    scope_object_id=str(cycle.id),
-                    cycle_id=str(cycle.id),
-                )
-                generated += 1
-            except Exception:
-                logger.exception(
-                    "Echec generation rapport %s pour cycle %s (%s -> %s)",
-                    report_type,
-                    cycle.id,
-                    start,
-                    end,
-                )
-        return generated
 
     @staticmethod
     def _serialize_sanitary_event(item, language_code: str, period_end: date | None) -> dict:

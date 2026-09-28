@@ -2400,8 +2400,9 @@ class ProductionReport(models.Model):
     """
     Rapport périodique de production (journalier / hebdomadaire / mensuel).
 
-    Le rapport est généré automatiquement sous forme de brouillon, puis validé
-    manuellement avant envoi. Le PDF est stocké pour audit et partage.
+    Le rapport est créé à la demande depuis l'application mobile ou
+    l'administration, sous forme de brouillon, puis validé manuellement
+    avant envoi. Le PDF est stocké pour audit et partage.
     """
 
     REPORT_SCOPE_CHOICES = [
