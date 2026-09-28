@@ -39,6 +39,7 @@ def _reset_texts(language_preference: str) -> dict[str, str]:
             "password_label": "Nouveau mot de passe",
             "password_confirm_label": "Confirmer le nouveau mot de passe",
             "submit": "Enregistrer le nouveau mot de passe",
+            "invalid_title": "Lien invalide",
             "invalid_link": (
                 "Ce lien de reinitialisation est invalide ou a expire. "
                 "Demandez un nouveau lien depuis l'application."
@@ -57,6 +58,7 @@ def _reset_texts(language_preference: str) -> dict[str, str]:
         "password_label": "New password",
         "password_confirm_label": "Confirm new password",
         "submit": "Save new password",
+        "invalid_title": "Invalid link",
         "invalid_link": (
             "This reset link is invalid or has expired. "
             "Request a new link from the app."
@@ -81,6 +83,10 @@ class _ResetPageBase(View):
         return user.language_preference or "fr"
 
     def _render_invalid(self, request, uidb64: str, token: str, language: str):
+        texts = _reset_texts(language)
+        # Le titre du formulaire ("Nouveau mot de passe") n'a pas de sens
+        # quand il n'y a plus de formulaire a remplir.
+        texts = {**texts, "title": texts["invalid_title"]}
         return render(
             request,
             "accounts/password_reset_form.html",
@@ -88,7 +94,7 @@ class _ResetPageBase(View):
                 "uidb64": uidb64,
                 "token": token,
                 "invalid_link": True,
-                "texts": _reset_texts(language),
+                "texts": texts,
             },
             status=400,
         )

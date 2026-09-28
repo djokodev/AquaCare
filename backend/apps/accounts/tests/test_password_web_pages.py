@@ -51,7 +51,18 @@ class TestPasswordResetConfirmPage:
         user = UserFactory(password=PASSWORD)
         response = client.get(_confirm_url_with_invalid_token(user))
         assert response.status_code == 400
-        assert b"invalide ou a expire" in response.content
+        content = response.content.decode()
+        assert "invalide ou a expire" in content
+        assert "Lien invalide" in content
+        assert "Nouveau mot de passe" not in content
+
+    def test_invalid_token_speaks_user_language(self, client):
+        user = UserFactory(password=PASSWORD, language_preference="en")
+        response = client.get(_confirm_url_with_invalid_token(user))
+        content = response.content.decode()
+        assert response.status_code == 400
+        assert "Invalid link" in content
+        assert "New password" not in content
 
     def test_successful_submit_changes_password_and_redirects(self, client):
         user = UserFactory(password=PASSWORD)

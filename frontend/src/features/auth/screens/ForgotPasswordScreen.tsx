@@ -53,11 +53,15 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       await authService.requestPasswordReset(trimmed);
       setIsSent(true);
     } catch (err) {
-      logger.error("Forgot password error:", err);
       if (err instanceof AuthRequestError) {
-        setError(err.message || "AUTH_UNKNOWN_ERROR");
-        setFieldError(err.fieldErrors.phone_number || null);
+        const fieldMessage = err.fieldErrors.phone_number || null;
+        setFieldError(fieldMessage);
+        setError(fieldMessage ? null : err.message || "AUTH_UNKNOWN_ERROR");
+        if (!fieldMessage) {
+          logger.error("Forgot password error:", err);
+        }
       } else {
+        logger.error("Forgot password error:", err);
         setError("AUTH_UNKNOWN_ERROR");
       }
     } finally {

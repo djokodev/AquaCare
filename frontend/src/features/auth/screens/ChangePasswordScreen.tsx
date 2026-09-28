@@ -81,15 +81,22 @@ export default function ChangePasswordScreen({ navigation }: Props) {
         [{ text: t("ok"), onPress: () => navigation.goBack() }]
       );
     } catch (err) {
-      logger.error("Change password error:", err);
       if (err instanceof AuthRequestError) {
-        setError(err.message || "AUTH_UNKNOWN_ERROR");
-        setFieldErrors({
+        const nextFieldErrors = {
           currentPassword: err.fieldErrors.current_password || "",
           newPassword: err.fieldErrors.password || "",
           confirmPassword: err.fieldErrors.password_confirm || "",
-        });
+        };
+        const hasFieldError = Object.values(nextFieldErrors).some(Boolean);
+        setFieldErrors(nextFieldErrors);
+        // Une erreur de champ suffit. La banniere ne s'affiche que s'il n'y
+        // a pas de message attache a un champ (reseau, serveur, etc.).
+        setError(hasFieldError ? null : err.message || "AUTH_UNKNOWN_ERROR");
+        if (!hasFieldError) {
+          logger.error("Change password error:", err);
+        }
       } else {
+        logger.error("Change password error:", err);
         setError("AUTH_UNKNOWN_ERROR");
       }
     } finally {

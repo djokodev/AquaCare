@@ -74,7 +74,7 @@ describe('features/auth/screens/ChangePasswordScreen', () => {
     mockChangePassword.mockRejectedValueOnce(
       new AuthRequestError('', { current_password: 'Le mot de passe actuel est incorrect.' })
     );
-    const { getAllByPlaceholderText, getByText, findByText } = render(
+    const { getAllByPlaceholderText, getByText, findByText, queryByText } = render(
       <ChangePasswordScreen navigation={mockNavigation} />
     );
 
@@ -86,6 +86,7 @@ describe('features/auth/screens/ChangePasswordScreen', () => {
     fireEvent.press(getByText('changePasswordSubmit'));
 
     expect(await findByText('Le mot de passe actuel est incorrect.')).toBeTruthy();
+    expect(queryByText('AUTH_UNKNOWN_ERROR')).toBeNull();
   });
 
   it('refuse une confirmation differente', () => {
