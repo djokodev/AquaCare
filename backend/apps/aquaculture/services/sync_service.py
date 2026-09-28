@@ -36,6 +36,9 @@ from ..models import (
     ProductionUnit,
     SanitaryLog,
 )
+from .admin_activity_projection_service import (
+    record_cycle_log_received,
+)
 from .analytics_service import AnalyticsService
 from .base import BaseService
 from .calibration_service import CalibrationService
@@ -460,6 +463,7 @@ class SyncService(BaseService):
                             )
 
                         new_log = CycleLog.objects.create(**log_create_data)
+                        record_cycle_log_received(new_log)
                         affected_cycle_ids.add(str(cycle.id))
 
                         SyncService._record_sync_success(
@@ -967,6 +971,7 @@ class SyncService(BaseService):
                             created_offline=True,
                             synced_at=timezone.now(),
                         )
+                        ProductionUnitLifecycleService.record_created(server_tank)
                     sync_result['processed']['calibration_tanks'] += 1
                     SyncService._record_full_sync_accept(
                         sync_result,

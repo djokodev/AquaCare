@@ -134,8 +134,13 @@ describe('features/aquaculture/screens/CreateFarmScreen', () => {
     'sauvegarde un setup initial %s sans simulation quand le réseau est absent',
     async (_mode, ongoing) => {
       mockOffline.isOnline.mockResolvedValue(false);
+      // Date figée pour un scénario déterministe : le mois précédent est
+      // juillet, où le jour 2026-07-01 est sélectionnable (cf. le pattern
+      // useFakeTimers/setSystemTime de CycleSimulationScreen.test.tsx).
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-20T12:00:00Z'));
       const { getAllByText, getByPlaceholderText, getByTestId, getByText } =
         render(<CreateFarmScreen navigation={navigation} />);
+      jest.useRealTimers();
 
       fireEvent.press(getByText('createFarmSpeciesTilapia'));
       if (ongoing) {

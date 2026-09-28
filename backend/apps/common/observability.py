@@ -105,6 +105,11 @@ class JsonLogFormatter(logging.Formatter):
         "retry_after",
         "exception_class",
         "view",
+        "event_type",
+        "source_app_label",
+        "source_model",
+        "source_object_id",
+        "dedupe_key",
     )
 
     def format(self, record: logging.LogRecord) -> str:

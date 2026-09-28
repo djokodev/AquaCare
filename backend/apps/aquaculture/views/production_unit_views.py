@@ -88,7 +88,8 @@ class ProductionUnitViewSet(
     def perform_create(self, serializer):
         try:
             with transaction.atomic():
-                serializer.save(farm_profile=self.request.user.farm_profile)
+                unit = serializer.save(farm_profile=self.request.user.farm_profile)
+                ProductionUnitLifecycleService.record_created(unit)
         except DjangoValidationError as exc:
             raise serializers.ValidationError(
                 _translate_production_unit_validation_error(exc)

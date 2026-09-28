@@ -100,19 +100,16 @@ class TestCeleryConfiguration:
             beat_schedule['send-scheduled-notifications']['task']
             == 'notifications.tasks.send_scheduled_notifications'
         )
-        assert (
-            beat_schedule['generate-daily-report-drafts']['task']
-            == 'aquaculture.tasks.generate_daily_report_drafts_task'
-        )
-        assert (
-            beat_schedule['generate-weekly-report-drafts']['task']
-            == 'aquaculture.tasks.generate_weekly_report_drafts_task'
-        )
-        assert (
-            beat_schedule['generate-monthly-report-drafts']['task']
-            == 'aquaculture.tasks.generate_monthly_report_drafts_task'
-        )
         assert beat_schedule['cleanup-jwt-blacklist']['task'] == 'accounts.tasks.cleanup_expired_tokens'
+
+        # Direction A: les brouillons de rapports ne sont plus générés
+        # automatiquement — uniquement à la demande (app/admin).
+        automatic_report_tasks = {
+            'generate-daily-report-drafts',
+            'generate-weekly-report-drafts',
+            'generate-monthly-report-drafts',
+        }
+        assert automatic_report_tasks.isdisjoint(beat_schedule.keys())
 
 
 class TestSettingsModuleResolution:

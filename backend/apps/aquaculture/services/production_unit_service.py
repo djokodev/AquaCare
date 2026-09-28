@@ -10,12 +10,18 @@ from django.utils.translation import gettext_lazy as _
 
 from ..domain.exceptions import BusinessRuleViolation
 from ..models import CycleUnitAllocation, ProductionCycle, ProductionUnit
+from .admin_activity_projection_service import record_production_unit_created
 
 
 class ProductionUnitLifecycleService:
     """Centralise les invariants afin que toutes les portes d'entrée les partagent."""
 
     OCCUPIED_PROTECTED_FIELDS = {'purpose', 'unit_type', 'volume_m3', 'status'}
+
+    @staticmethod
+    def record_created(unit: ProductionUnit) -> bool:
+        """Record one genuinely new physical unit through the owning service."""
+        return record_production_unit_created(unit)
 
     @staticmethod
     def calibration_tanks_for_api():

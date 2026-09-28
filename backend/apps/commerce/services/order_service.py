@@ -23,6 +23,7 @@ from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
 from ..domain.exceptions import DeliveryAddressIncompleteError, InvalidOrderError
 from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
 from ..models import Order, OrderItem
+from .admin_activity_projection_service import record_order_activity
 from .base import BaseCommerceService
 from .product_service import ProductService
 from .production_cycle_gateway import ProductionCycleAccessError, ProductionCycleGateway
@@ -187,7 +188,7 @@ class OrderService(BaseCommerceService):
 
         delivery_address_data = OrderService._build_delivery_address_snapshot(user)
         OrderService._validate_delivery_snapshot(delivery_method, delivery_address_data, user)
-        order = OrderService._create_order_with_retry(
+        order, created = OrderService._create_order_with_retry(
             user=user,
             delivery_method=delivery_method,
             pickup_location=pickup_location or '',
@@ -199,9 +200,15 @@ class OrderService(BaseCommerceService):
             delivery_fee=calculated_amounts.delivery_fee,
             total=calculated_amounts.total,
         )
+        if not created:
+            return order
 
         OrderService._create_order_items(order, prepared_items)
         OrderService._notify_order_created(order)
+        record_order_activity(
+            order,
+            event_type='commerce.order.created',
+        )
 
         OrderService.log_operation('order_created', {
             'order_id': str(order.id),
@@ -391,43 +398,55 @@ class OrderService(BaseCommerceService):
         delivery_fee: Decimal,
         total: Decimal,
         max_retries: int = 3,
-    ) -> Order:
+    ) -> tuple[Order, bool]:
         """
         Crée une commande en gérant les collisions concurrentes
         sur `order_number` ou `client_uuid`.
         """
         for _ in range(max_retries):
             try:
-                return Order.objects.create(
-                    user=user,
-                    farm_profile=user.farm_profile,
-                    order_number=OrderService.generate_order_number(),
-                    status='confirmed',  # Statut initial : commandée
-                    delivery_method=delivery_method,
-                    pickup_location=pickup_location,
-                    production_cycle=production_cycle,
-                    client_uuid=client_uuid,
-                    created_offline=created_offline,
-                    synced_at=None if created_offline else timezone.now(),
-                    # Snapshot adresse
-                    **delivery_address_data,
-                    farm_name_snapshot=user.farm_profile.farm_name or '',
-                    document_schema_version='1.0',
-                    issuer_snapshot=dict(settings.ORDER_DOCUMENT_ISSUER),
-                    fulfilment_partner_snapshot=dict(settings.ORDER_DOCUMENT_FULFILMENT_PARTNER),
-                    production_cycle_name_snapshot=(production_cycle.cycle_name if production_cycle else ''),
-                    pickup_location_display_fr_snapshot=(
-                        dict(PICKUP_LOCATION_CHOICES).get(pickup_location, '') if pickup_location else ''
-                    ),
-                    pickup_location_display_en_snapshot=(
-                        {'ndokoti': 'Ndokoti Market', 'ndogpasi': 'Ndogpasi Market'}.get(pickup_location, '')
-                        if pickup_location else ''
-                    ),
-                    # Montants
-                    subtotal=subtotal,
-                    delivery_fee=delivery_fee,
-                    total=total
-                )
+                with transaction.atomic():
+                    order = Order.objects.create(
+                        user=user,
+                        farm_profile=user.farm_profile,
+                        order_number=OrderService.generate_order_number(),
+                        status='confirmed',  # Statut initial : commandée
+                        delivery_method=delivery_method,
+                        pickup_location=pickup_location,
+                        production_cycle=production_cycle,
+                        client_uuid=client_uuid,
+                        created_offline=created_offline,
+                        synced_at=None if created_offline else timezone.now(),
+                        # Snapshot adresse
+                        **delivery_address_data,
+                        farm_name_snapshot=user.farm_profile.farm_name or '',
+                        document_schema_version='1.0',
+                        issuer_snapshot=dict(settings.ORDER_DOCUMENT_ISSUER),
+                        fulfilment_partner_snapshot=dict(
+                            settings.ORDER_DOCUMENT_FULFILMENT_PARTNER
+                        ),
+                        production_cycle_name_snapshot=(
+                            production_cycle.cycle_name if production_cycle else ''
+                        ),
+                        pickup_location_display_fr_snapshot=(
+                            dict(PICKUP_LOCATION_CHOICES).get(pickup_location, '')
+                            if pickup_location
+                            else ''
+                        ),
+                        pickup_location_display_en_snapshot=(
+                            {
+                                'ndokoti': 'Ndokoti Market',
+                                'ndogpasi': 'Ndogpasi Market',
+                            }.get(pickup_location, '')
+                            if pickup_location
+                            else ''
+                        ),
+                        # Montants
+                        subtotal=subtotal,
+                        delivery_fee=delivery_fee,
+                        total=total,
+                    )
+                return order, True
             except IntegrityError:
                 existing_order = OrderService._get_existing_order_for_user(
                     user,
@@ -435,7 +454,7 @@ class OrderService(BaseCommerceService):
                     with_details=True,
                 )
                 if existing_order:
-                    return existing_order
+                    return existing_order, False
                 continue
         raise InvalidOrderError("Impossible de créer la commande, veuillez réessayer.")
 
@@ -578,6 +597,14 @@ class OrderService(BaseCommerceService):
         transaction.on_commit(
             lambda: OrderService._notify_order_ready_for_customer_confirmation(locked_order)
         )
+        record_order_activity(
+            locked_order,
+            event_type=(
+                'commerce.order.delivered'
+                if locked_order.delivery_method == 'home'
+                else 'commerce.order.ready_for_pickup'
+            ),
+        )
         return OperatorOrderTransitionResult(order=locked_order, transitioned=True)
 
     @staticmethod
@@ -616,6 +643,10 @@ class OrderService(BaseCommerceService):
         locked_order.received_at = timezone.now()
         locked_order.save(update_fields=['status', 'received_at', 'updated_at'])
         CycleStoreApplicationService.import_received_order(locked_order)
+        record_order_activity(
+            locked_order,
+            event_type='commerce.order.received',
+        )
 
         return Order.objects.with_details().get(pk=locked_order.pk)
 

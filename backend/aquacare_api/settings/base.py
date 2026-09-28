@@ -311,6 +311,10 @@ FRONTEND_URL = _env_str('FRONTEND_URL', 'http://localhost:8081')
 # Notifications nourrissage : alarmes locales frontend prioritaires
 FEEDING_REMINDER_LOCAL_ALARM_ONLY = _env_bool('FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
 
+# Lot 2A écrit toujours les projections. Ce flag ne contrôlera que leur
+# exposition dans l'interface et les lectures, livrées au Lot 2B.
+ADMIN_ACTIVITY_CENTER_ENABLED = _env_bool('ADMIN_ACTIVITY_CENTER_ENABLED', False)
+
 # Upload limits
 # Photos compressées côté client (1280×720, max 5MB via serializer)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB max par requête

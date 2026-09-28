@@ -183,6 +183,30 @@ jobs:
           CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
         run: python manage.py migrate --noinput
 
+      - name: Run PostgreSQL Lot 2A projection contract
+        working-directory: ./backend
+        env:
+          DJANGO_SETTINGS_MODULE: aquacare_api.settings.postgres_test
+          PGTEST_DB: aquacare_ci
+          PGTEST_USER: aquacare
+          PGTEST_PASSWORD: aquacare
+          PGTEST_HOST: 127.0.0.1
+          PGTEST_PORT: 5432
+          PGTEST_DATABASE_NAME: test_aquacare_lot_2a
+          REDIS_CACHE_URL: redis://127.0.0.1:6379/1
+          CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+          CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
+        run: |
+          lot_2a_output="$(pytest -n 0 \
+            tests/test_admin_activity_projection.py \
+            tests/test_admin_activity_projection_postgresql.py \
+            -q)"
+          echo "$lot_2a_output"
+          if echo "$lot_2a_output" | grep -qi skipped; then
+            echo "PostgreSQL Lot 2A tests must not be skipped"
+            exit 1
+          fi
+
       - name: Run PostgreSQL transactional launch tests
         working-directory: ./backend
         env:
