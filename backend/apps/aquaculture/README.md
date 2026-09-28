@@ -198,8 +198,9 @@ Role:
 Role:
 
 1. Rapport periodique (`daily`, `weekly`, `monthly`) avec cycle scope optionnel.
-2. Workflow `pending -> draft -> validated`.
-3. Diffusion email/whatsapp tracee pour audit.
+2. Creation a la demande depuis l'app mobile ou l'administration.
+3. Workflow `pending -> draft -> validated`.
+4. Diffusion email/whatsapp tracee pour audit.
 
 Reports rule:
 
