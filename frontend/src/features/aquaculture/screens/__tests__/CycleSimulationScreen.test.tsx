@@ -214,6 +214,10 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
   });
 
   it('confirme et lance un ongoing sans appeler la simulation legacy', async () => {
+    // Date figée pour un scénario déterministe : la récolte planifiée
+    // (2026-06-01 + 90 jours = 2026-08-29) reste atteignable (cf. le pattern
+    // useFakeTimers/setSystemTime utilisé plus bas dans ce fichier).
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-25T12:00:00Z'));
     const route = buildRoute({
       onboardingMode: 'ongoing',
       startDate: '2026-06-01',
@@ -226,6 +230,7 @@ describe('features/aquaculture/screens/CycleSimulationScreen', () => {
     const { getByText, queryByText } = render(
       <CycleSimulationScreen navigation={navigation} route={route} />,
     );
+    jest.useRealTimers();
 
     expect(mockDispatch).not.toHaveBeenCalled();
     expect(queryByText('cycleVerificationSubtitle')).toBeNull();
