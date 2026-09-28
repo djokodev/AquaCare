@@ -147,6 +147,7 @@ export default function RegisterScreen({ navigation }: Props) {
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
+            required
             error={getFieldError("email")}
           />
 

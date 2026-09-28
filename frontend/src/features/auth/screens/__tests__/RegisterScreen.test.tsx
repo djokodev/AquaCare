@@ -88,6 +88,7 @@ describe('features/auth/screens/RegisterScreen', () => {
     fireEvent.press(getByText('company'));
 
     fireEvent.changeText(getByPlaceholderText('placeholderPhoneExample'), '680111222');
+    fireEvent.changeText(getByPlaceholderText('placeholderEmail'), 'entreprise@example.com');
     fireEvent.changeText(getByPlaceholderText('placeholderBusinessName'), 'Aqua Entreprise');
     fireEvent.press(getByTestId('select-legalStatus'));
     fireEvent.changeText(getByPlaceholderText('placeholderPromoterName'), 'Mme Promoteur');

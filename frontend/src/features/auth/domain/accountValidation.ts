@@ -48,7 +48,9 @@ export const validateRegisterForm = (
     errors.phone_number = 'invalidPhone';
   }
 
-  if (formData.email && !EMAIL_REGEX.test(formData.email.trim())) {
+  if (!formData.email || !formData.email.trim()) {
+    errors.email = 'required';
+  } else if (!EMAIL_REGEX.test(formData.email.trim())) {
     errors.email = 'invalidEmail';
   }
 

@@ -7,7 +7,7 @@ import type { RegisterRequest } from '@/features/auth/types/auth';
 
 const baseRegisterData: RegisterRequest = {
   phone_number: '+237670000000',
-  email: '',
+  email: 'user@example.com',
   first_name: 'Jean',
   last_name: 'Dupont',
   business_name: '',
@@ -52,6 +52,15 @@ describe('accountValidation', () => {
       expect(validateRegisterForm(baseRegisterData)).toEqual({});
     });
 
+    it('exige un email a l inscription', () => {
+      const errors = validateRegisterForm({
+        ...baseRegisterData,
+        email: '',
+      });
+
+      expect(errors).toEqual({ email: 'required' });
+    });
+
     it('exige les champs individuels', () => {
       const errors = validateRegisterForm({
         ...baseRegisterData,
@@ -86,8 +95,7 @@ describe('accountValidation', () => {
       });
     });
 
-    it('valide email, telephone et confirmation de mot de passe', () => {
-      const errors = validateRegisterForm({
+    it('valide email, telephone et confirmation de mot de passe', () => {      const errors = validateRegisterForm({
         ...baseRegisterData,
         phone_number: '+237123',
         email: 'bad-email',

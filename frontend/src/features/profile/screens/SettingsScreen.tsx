@@ -8,10 +8,21 @@ import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
 import logger from "@/utils/logger";
 import OnboardingService from "@/features/onboarding/services/onboardingService";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { ProfileStackParamList } from "@/navigation/MainNavigator";
 import { AppText, Button, Card, InteractiveCard, SelectableCard } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 
-export default function SettingsScreen() {
+type SettingsScreenNavigationProp = StackNavigationProp<
+  ProfileStackParamList,
+  "Settings"
+>;
+
+interface Props {
+  navigation: SettingsScreenNavigationProp;
+}
+
+export default function SettingsScreen({ navigation }: Props) {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -162,6 +173,19 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("accountManagement")}</AppText>
         <InteractiveCard
+          accessibilityLabel={t('changePassword')}
+          onPress={() => navigation.navigate('ChangePassword')}
+          style={[styles.actionCard, styles.actionCardSpacing]}
+        >
+          <View style={styles.actionContent}>
+            <Ionicons name="lock-closed-outline" size={20} color={colors.brand.primary} />
+            <View style={styles.actionText}>
+            <AppText variant="bodyStrong" color="link">{t("changePassword")}</AppText>
+            <AppText variant="caption" color="muted">{t("changePasswordDesc")}</AppText>
+            </View>
+          </View>
+        </InteractiveCard>
+        <InteractiveCard
           accessibilityLabel={t('deleteAccount')}
           onPress={handleDeleteAccount}
           disabled={isDeleting}
@@ -209,6 +233,7 @@ const styles = StyleSheet.create({
   sectionTitle: { marginBottom: spacing[3] },
   languageCard: { marginBottom: spacing[2] },
   actionCard: { justifyContent: 'flex-start' },
+  actionCardSpacing: { marginBottom: spacing[3] },
   resetCard: { justifyContent: 'flex-start', marginTop: spacing[3] },
   actionContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   actionText: { flex: 1, gap: spacing[1] },

@@ -34,6 +34,9 @@ export const API_ENDPOINTS = {
     TOKEN_REFRESH: '/accounts/token/refresh/',
     TOKEN_VERIFY: '/accounts/token/verify/',
     DELETE_ACCOUNT: '/accounts/delete/',
+    PASSWORD_CHANGE: '/accounts/password/change/',
+    PASSWORD_FORGOT: '/accounts/password/forgot/',
+    PASSWORD_RESET: '/accounts/password/reset/',
   },
   
   // Aquaculture module (pour plus tard)

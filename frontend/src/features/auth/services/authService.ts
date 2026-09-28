@@ -6,6 +6,7 @@ import { API_ENDPOINTS, STORAGE_KEYS } from '@/constants/api';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import {
   AuthFieldErrors,
+  ChangePasswordRequest,
   LoginRequest,
   RegisterRequest,
   AuthResponse,
@@ -85,6 +86,31 @@ class AuthService {
   async deleteAccount(): Promise<void> {
     await apiService.post(API_ENDPOINTS.AUTH.DELETE_ACCOUNT, { confirm: true });
     await apiService.clearTokens();
+  }
+
+  /**
+   * Demande de réinitialisation du mot de passe (lien envoyé par email).
+   * Réponse volontairement identique que le compte existe ou non.
+   */
+  async requestPasswordReset(phoneNumber: string): Promise<void> {
+    try {
+      await apiService.post(API_ENDPOINTS.AUTH.PASSWORD_FORGOT, {
+        phone_number: phoneNumber,
+      });
+    } catch (error: unknown) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  /**
+   * Changement de mot de passe de l'utilisateur connecté.
+   */
+  async changePassword(payload: ChangePasswordRequest): Promise<void> {
+    try {
+      await apiService.post(API_ENDPOINTS.AUTH.PASSWORD_CHANGE, payload);
+    } catch (error: unknown) {
+      throw this.handleAuthError(error);
+    }
   }
 
   /**

@@ -166,6 +166,13 @@ export default function LoginScreen({ navigation }: Props) {
             loading={isLoading}
           />
 
+          <Button
+            label={t("forgotPassword")}
+            onPress={() => navigation.navigate("ForgotPassword")}
+            variant="ghost"
+            size="small"
+          />
+
           <View style={styles.footer}>
             <AppText variant="helper" color="muted">
               {t("noAccount")}
