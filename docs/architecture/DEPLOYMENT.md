@@ -24,6 +24,10 @@
 - Avoid hardcoding secrets, tokens, DSNs, or machine-specific values in docs.
 - Use placeholders such as `<server-ip>`, `<api-domain>`, and `<sentry-dsn>` when describing environment variables.
 - Recheck the compose files after changing service names, ports, or the Django entrypoint module.
+- Transactional email goes through Resend for every sender: the `api` service
+  sends password-reset emails synchronously, and `celery_worker` sends report
+  and notification emails. Both services need `RESEND_API_KEY` and
+  `DEFAULT_FROM_EMAIL`; do not reintroduce a second email provider.
 
 ## Common URLs
 
