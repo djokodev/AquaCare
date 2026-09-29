@@ -54,6 +54,13 @@ class ApiService {
         if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
           originalRequest._retry = true;
 
+          // Sans refresh token, l'utilisateur n'est plus connecte (deconnexion
+          // volontaire ou requete partie juste avant): pas d'alerte
+          // "session expiree", on laisse simplement la requete echouer.
+          if (!(await this.hasRefreshToken())) {
+            return Promise.reject(error);
+          }
+
           try {
             const access = await this.getRefreshedAccessToken();
             if (access) {
@@ -70,6 +77,14 @@ class ApiService {
         return Promise.reject(error);
       }
     );
+  }
+
+  private async hasRefreshToken(): Promise<boolean> {
+    try {
+      return Boolean(await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN));
+    } catch {
+      return false;
+    }
   }
 
   private async getRefreshedAccessToken(): Promise<string | null> {
