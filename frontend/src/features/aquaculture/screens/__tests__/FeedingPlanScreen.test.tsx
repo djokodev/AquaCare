@@ -4,7 +4,12 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import FeedingPlanScreen from '../FeedingPlanScreen';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { savePlanSnapshotEntry } from '@/features/notifications/reminders/feedingReminders';
+import {
+  enableFeedingReminders,
+  markRemindersOffered,
+  savePlanSnapshotEntry,
+  shouldOfferReminders,
+} from '@/features/notifications/reminders/feedingReminders';
 
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
@@ -46,6 +51,17 @@ jest.mock('@/features/aquaculture/services/aquacultureService', () => ({
 
 jest.mock('@/features/notifications/reminders/feedingReminders', () => ({
   savePlanSnapshotEntry: jest.fn(() => Promise.resolve()),
+  shouldOfferReminders: jest.fn(() => Promise.resolve(false)),
+  markRemindersOffered: jest.fn(() => Promise.resolve()),
+  enableFeedingReminders: jest.fn(() => Promise.resolve({ status: 'scheduled', scheduledCount: 2 })),
+  loadReminderSettings: jest.fn(() => Promise.resolve({
+    enabled: false,
+    times: [{ id: 'a', hour: 8, minute: 30 }, { id: 'b', hour: 16, minute: 30 }],
+    days: [1, 2, 3, 4, 5, 6, 7],
+    bypassDnd: false,
+  })),
+  formatReminderTime: ({ hour, minute }: { hour: number; minute: number }) =>
+    `${String(hour).padStart(2, '0')}h${String(minute).padStart(2, '0')}`,
 }));
 
 jest.mock('react-redux', () => ({
@@ -295,5 +311,43 @@ describe('features/aquaculture/screens/FeedingPlanScreen', () => {
 
     expect(mockService.getFeedingPlansForAllocation).not.toHaveBeenCalled();
     expect(mockService.generateFeedingPlanForAllocation).not.toHaveBeenCalled();
+  });
+
+  describe('proposition des rappels apres generation', () => {
+    const generate = async () => {
+      mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([]);
+      mockService.getFeedingPlansForAllocation.mockResolvedValueOnce([feedingPlan]);
+      mockService.generateFeedingPlanForAllocation.mockResolvedValueOnce([feedingPlan]);
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      const { getByText } = render(<FeedingPlanScreen navigation={navigation} route={route} />);
+      await waitFor(() => expect(getByText('generateFeedingPlanShort')).toBeTruthy());
+      fireEvent.press(getByText('generateFeedingPlanShort'));
+      const confirmButtons = alertSpy.mock.calls[0][2] as Array<{ text?: string; onPress?: () => Promise<void> }>;
+      await confirmButtons.find((button) => button.text === 'generatePlan')?.onPress?.();
+      return alertSpy;
+    };
+
+    it('propose une seule fois d activer les rappels', async () => {
+      (shouldOfferReminders as jest.Mock).mockResolvedValueOnce(true);
+      const alertSpy = await generate();
+
+      await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(2));
+      const [title, message, buttons] = alertSpy.mock.calls[1] as [string, string, Array<{ text?: string; onPress?: () => Promise<void> }>];
+      expect(title).toBe('feedingPlanGenerated');
+      expect(message).toBe('remindersOfferMessage');
+      expect(markRemindersOffered).toHaveBeenCalledWith('user-1');
+
+      await buttons.find((button) => button.text === 'remindersOfferEnable')?.onPress?.();
+      expect(enableFeedingReminders).toHaveBeenCalledWith('user-1', expect.any(Object), 'fr-FR');
+      alertSpy.mockRestore();
+    });
+
+    it('affiche une simple confirmation si la proposition a deja ete faite', async () => {
+      const alertSpy = await generate();
+
+      await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('success', 'feedingPlanGenerated'));
+      expect(markRemindersOffered).not.toHaveBeenCalled();
+      alertSpy.mockRestore();
+    });
   });
 });

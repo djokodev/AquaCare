@@ -86,6 +86,7 @@ export const DEFAULT_FEEDING_REMINDER_SETTINGS: FeedingReminderSettings = {
 };
 
 const settingsKey = (userId: string) => `feeding_reminders_settings_v1:${userId}`;
+const offeredKey = (userId: string) => `feeding_reminders_offered_v1:${userId}`;
 const snapshotKey = (userId: string) => `feeding_reminders_plan_snapshot_v1:${userId}`;
 
 const isValidTime = (value: unknown): value is ReminderTime => {
@@ -379,3 +380,44 @@ export const scheduleFeedingSnooze = async (
 
 export const isFeedingAlarmNotification = (notification: Notifications.Notification): boolean =>
   isFeedingAlarm(notification.request.content.data);
+
+/**
+ * Proposition unique d'activer les rappels (après le premier plan généré) :
+ * seulement si les rappels sont éteints et que la question n'a jamais été posée.
+ */
+export const shouldOfferReminders = async (userId: string): Promise<boolean> => {
+  try {
+    if ((await AsyncStorage.getItem(offeredKey(userId))) === 'true') {
+      return false;
+    }
+    const settings = await loadReminderSettings(userId);
+    return !settings.enabled && settings.times.length > 0 && settings.days.length > 0;
+  } catch {
+    return false;
+  }
+};
+
+export const markRemindersOffered = async (userId: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(offeredKey(userId), 'true');
+  } catch {
+    // ignore
+  }
+};
+
+/** Active les rappels avec les réglages enregistrés (8h30 et 16h30 par défaut). */
+export const enableFeedingReminders = async (
+  userId: string,
+  messages: FeedingReminderMessages,
+  locale: string,
+): Promise<ReminderScheduleResult> => {
+  const settings = { ...(await loadReminderSettings(userId)), enabled: true };
+  await saveReminderSettings(userId, settings);
+  return scheduleFeedingReminders({
+    settings,
+    snapshot: await loadPlanSnapshot(userId),
+    messages,
+    locale,
+    requestPermission: true,
+  });
+};

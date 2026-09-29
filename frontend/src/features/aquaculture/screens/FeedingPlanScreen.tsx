@@ -12,7 +12,15 @@ import { StackNavigationProp } from '@react-navigation/stack';
 
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 import { useSelector } from 'react-redux';
-import { savePlanSnapshotEntry } from '@/features/notifications/reminders/feedingReminders';
+import {
+  enableFeedingReminders,
+  formatReminderTime,
+  loadReminderSettings,
+  markRemindersOffered,
+  savePlanSnapshotEntry,
+  shouldOfferReminders,
+} from '@/features/notifications/reminders/feedingReminders';
+import { getFeedingReminderMessages, getReminderLocale } from '@/features/notifications/reminders/reminderMessages';
 import type { RootState } from '@/store/store';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { FeedingPlan } from '@/types/aquaculture';
@@ -197,6 +205,48 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
     ).catch((snapshotError) => logger.warn('Feeding reminder snapshot not saved', snapshotError));
   }, [cycleUnitAllocationId, displayedFeedingPlans, error, hasValidUnitContext, loading, unitLabel, userId]);
 
+  /**
+   * Après la génération : propose une seule fois d'activer les rappels de
+   * nourrissage (alarmes locales), sinon simple confirmation.
+   */
+  const announcePlanGenerated = useCallback(async (plans: FeedingPlan[]) => {
+    if (!userId || !(await shouldOfferReminders(userId))) {
+      Alert.alert(t('success'), t('feedingPlanGenerated'));
+      return;
+    }
+    await markRemindersOffered(userId);
+    // La ration du plan doit figurer dans les alarmes dès l'activation.
+    const currentPlan = plans.find((plan) => plan.start_date <= todayIsoDate && todayIsoDate <= plan.end_date);
+    if (currentPlan) {
+      await savePlanSnapshotEntry(userId, cycleUnitAllocationId, {
+        unitName: currentPlan.production_unit_name || unitLabel,
+        feedPerMealKg: Number(currentPlan.feed_per_meal),
+        endDate: currentPlan.end_date,
+      }).catch(() => undefined);
+    }
+    const times = (await loadReminderSettings(userId)).times.map(formatReminderTime).join(', ');
+    Alert.alert(t('feedingPlanGenerated'), t('remindersOfferMessage', { times }), [
+      { text: t('remindersOfferLater'), style: 'cancel' },
+      {
+        text: t('remindersOfferEnable'),
+        onPress: async () => {
+          const result = await enableFeedingReminders(
+            userId,
+            getFeedingReminderMessages(t),
+            getReminderLocale(i18n.language),
+          );
+          if (result.status === 'scheduled') {
+            Alert.alert(t('success'), t('remindersOfferEnabled', { times }));
+          } else if (result.status === 'permission_denied') {
+            Alert.alert(t('feedingRemindersTitle'), t('remindersPermissionDenied'));
+          } else {
+            Alert.alert(t('error'), t('remindersScheduleError'));
+          }
+        },
+      },
+    ]);
+  }, [cycleUnitAllocationId, i18n.language, t, todayIsoDate, unitLabel, userId]);
+
   const generateFeedingPlan = useCallback(() => {
     if (!hasValidUnitContext) {
       return;
@@ -223,7 +273,7 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
               currentWeekOnly: true,
             });
             setFeedingPlans(updatedPlans);
-            Alert.alert(t('success'), t('feedingPlanGenerated'));
+            await announcePlanGenerated(updatedPlans);
           } catch (err: unknown) {
             logger.error('Erreur generation plan unitaire:', err);
             Alert.alert(t('error'), formatAquacultureErrorWithAction(parseApiError(err), t));
@@ -233,7 +283,7 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
         },
       },
     ]);
-  }, [cycleId, cycleUnitAllocationId, displayedFeedingPlans.length, hasValidUnitContext, t, unitLabel]);
+  }, [announcePlanGenerated, cycleId, cycleUnitAllocationId, displayedFeedingPlans.length, hasValidUnitContext, t, unitLabel]);
 
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-US';
 

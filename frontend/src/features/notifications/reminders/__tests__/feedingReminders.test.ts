@@ -16,6 +16,9 @@ import {
   loadPlanSnapshot,
   scheduleFeedingReminders,
   scheduleFeedingSnooze,
+  shouldOfferReminders,
+  markRemindersOffered,
+  enableFeedingReminders,
 } from '../feedingReminders';
 
 jest.mock('expo-notifications', () => ({
@@ -252,5 +255,25 @@ describe('feedingReminders', () => {
 
   it('normalise des reglages absents', () => {
     expect(normalizeSettings(undefined).times).toHaveLength(2);
+  });
+
+  it('propose les rappels une seule fois et seulement s ils sont eteints', async () => {
+    expect(await shouldOfferReminders('user-1')).toBe(true);
+    await markRemindersOffered('user-1');
+    expect(await shouldOfferReminders('user-1')).toBe(false);
+
+    await saveReminderSettings('user-2', { ...DEFAULT_FEEDING_REMINDER_SETTINGS, enabled: true });
+    expect(await shouldOfferReminders('user-2')).toBe(false);
+  });
+
+  it('active les rappels avec les heures enregistrees en demandant la permission', async () => {
+    mocked.getPermissionsAsync.mockResolvedValue({ status: 'undetermined' } as never);
+    mocked.requestPermissionsAsync.mockResolvedValue({ status: 'granted' } as never);
+
+    const result = await enableFeedingReminders('user-1', messages, 'fr-FR');
+
+    expect(result.status).toBe('scheduled');
+    expect(mocked.requestPermissionsAsync).toHaveBeenCalled();
+    expect((await loadReminderSettings('user-1')).enabled).toBe(true);
   });
 });
