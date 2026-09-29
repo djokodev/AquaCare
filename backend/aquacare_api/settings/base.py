@@ -317,6 +317,11 @@ EMAIL_LOGO_URL = _env_str(
 # Frontend URL (pour les liens dans les emails)
 FRONTEND_URL = _env_str('FRONTEND_URL', 'http://localhost:8081')
 
+# URL publique de l'API pour les liens envoyes par email (reset mot de passe).
+# Vide en dev: on retombe sur l'hote de la requete (tests en LAN). En
+# staging/prod elle est fixee pour ne jamais dependre de l'en-tete Host.
+PUBLIC_API_BASE_URL = _env_str('PUBLIC_API_BASE_URL', '')
+
 # Notifications nourrissage : alarmes locales frontend prioritaires
 FEEDING_REMINDER_LOCAL_ALARM_ONLY = _env_bool('FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
 

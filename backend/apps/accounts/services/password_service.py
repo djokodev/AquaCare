@@ -109,7 +109,9 @@ class PasswordResetService:
             "accounts-web:password_reset_confirm",
             kwargs={"uidb64": uidb64, "token": token},
         )
-        base_url = request.build_absolute_uri("/")
+        # Jamais l'en-tete Host en prod: un Host force (IP du serveur, domaine
+        # non prevu) produirait un lien non chiffre ou empoisonne.
+        base_url = getattr(settings, "PUBLIC_API_BASE_URL", "") or request.build_absolute_uri("/")
         return f"{base_url.rstrip('/')}{path}"
 
     @classmethod

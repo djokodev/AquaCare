@@ -1077,6 +1077,9 @@ class TestRateLimiting:
         assert response.status_code == status.HTTP_201_CREATED
 
 
+DELETE_PAYLOAD = {'confirm': True, 'current_password': 'testpass123'}
+
+
 @pytest.mark.django_db
 class TestAccountDeletionEndpoint:
     """
@@ -1100,7 +1103,7 @@ class TestAccountDeletionEndpoint:
 
     def test_delete_account_success(self):
         """POST confirm=true → 200 + compte désactivé."""
-        response = self.client.post(self.url, {'confirm': True, 'current_password': 'testpass123'}, format='json')
+        response = self.client.post(self.url, DELETE_PAYLOAD, format='json')
 
         assert response.status_code == status.HTTP_200_OK
         self.user.refresh_from_db()
@@ -1109,7 +1112,7 @@ class TestAccountDeletionEndpoint:
     def test_delete_account_keeps_query_budget(self, django_assert_max_num_queries):
         """La suppression est rare, mais son nettoyage doit rester plafonne."""
         with django_assert_max_num_queries(16):
-            response = self.client.post(self.url, {'confirm': True, 'current_password': 'testpass123'}, format='json')
+            response = self.client.post(self.url, DELETE_PAYLOAD, format='json')
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -1122,7 +1125,7 @@ class TestAccountDeletionEndpoint:
     def test_delete_account_requires_auth(self):
         """POST sans token → 401."""
         unauthenticated_client = APIClient()
-        response = unauthenticated_client.post(self.url, {'confirm': True, 'current_password': 'testpass123'}, format='json')
+        response = unauthenticated_client.post(self.url, DELETE_PAYLOAD, format='json')
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -1134,7 +1137,7 @@ class TestAccountDeletionEndpoint:
             defaults={'farm_name': 'Ferme Test', 'total_ponds': 2},
         )
 
-        response = self.client.post(self.url, {'confirm': True, 'current_password': 'testpass123'}, format='json')
+        response = self.client.post(self.url, DELETE_PAYLOAD, format='json')
 
         assert response.status_code == status.HTTP_200_OK
         self.user.refresh_from_db()
@@ -1145,14 +1148,14 @@ class TestAccountDeletionEndpoint:
 
     def test_delete_account_can_be_retried_without_mutating_anonymized_identity(self):
         """Un retry mobile après succès doit rester idempotent."""
-        first_response = self.client.post(self.url, {'confirm': True, 'current_password': 'testpass123'}, format='json')
+        first_response = self.client.post(self.url, DELETE_PAYLOAD, format='json')
         assert first_response.status_code == status.HTTP_200_OK
         self.user.refresh_from_db()
         self.user.farm_profile.refresh_from_db()
         first_phone = self.user.phone_number
         first_farm_name = self.user.farm_profile.farm_name
 
-        second_response = self.client.post(self.url, {'confirm': True, 'current_password': 'testpass123'}, format='json')
+        second_response = self.client.post(self.url, DELETE_PAYLOAD, format='json')
 
         assert second_response.status_code == status.HTTP_200_OK
         self.user.refresh_from_db()

@@ -372,3 +372,20 @@ class TestPasswordResetEndpoint:
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert not BlacklistedToken.objects.filter(token__user=user).exists()
+
+
+class TestResetLinkBaseUrl:
+    url = "/api/accounts/password/forgot/"
+
+    def test_reset_link_uses_public_base_url_not_host_header(self, api_client, user, settings):
+        settings.PUBLIC_API_BASE_URL = "https://api.aquacare.tech"
+        settings.ALLOWED_HOSTS = ["*"]
+        api_client.post(
+            self.url,
+            {"phone_number": user.phone_number},
+            format="json",
+            HTTP_HOST="77.237.241.223",
+        )
+        body = mail.outbox[0].body
+        assert "https://api.aquacare.tech/accounts/password/reset/" in body
+        assert "77.237.241.223" not in body
