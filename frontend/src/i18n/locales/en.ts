@@ -587,6 +587,13 @@
   openSettings: 'Open Settings',
   updateLocation: 'Update farm location',
   farmBackToProfile: 'Back to profile',
+  farmMapDirections: 'Directions',
+  farmMapShare: 'Share location',
+  farmMapShareMessage: '{{name}}: {{url}}',
+  farmMapSatellite: 'Satellite view',
+  farmMapStandard: 'Map view',
+  farmMapRecenter: 'Recenter on the farm',
+  farmMapOpenError: 'Could not open the navigation app.',
   back: 'Back',
 
   // Intervention Zones

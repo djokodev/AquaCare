@@ -586,6 +586,13 @@ export const fr = {
   openSettings: 'Ouvrir les réglages',
   updateLocation: 'Mettre à jour la localisation',
   farmBackToProfile: 'Retour au profil',
+  farmMapDirections: 'Itinéraire',
+  farmMapShare: 'Partager la position',
+  farmMapShareMessage: '{{name}} : {{url}}',
+  farmMapSatellite: 'Vue satellite',
+  farmMapStandard: 'Vue plan',
+  farmMapRecenter: 'Recentrer sur la ferme',
+  farmMapOpenError: "Impossible d'ouvrir l'application de navigation.",
   back: 'Retour',
 
   // Intervention Zones
