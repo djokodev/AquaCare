@@ -53,6 +53,10 @@ first production deployment and store submission.
       key (iOS). Without them no remote push reaches a store or dev build.
 - [ ] Remote push cannot be tested with Expo Go on Android (removed since
       SDK 53): test order and support push on a dev build or TestFlight.
+- [ ] Local dev build: after any change to `app.json` plugins (sound,
+      entitlements, permissions), regenerate the native folders with
+      `npx expo prebuild --clean` then rebuild (`npx expo run:ios --device`,
+      `npx expo run:android`). Metro reload is not enough.
 - [ ] The alarm sound `feeding_alarm.wav` and the iOS time-sensitive level
       only work on a dev build or store build (Expo Go plays the default sound).
       Check the Time Sensitive capability is enabled for `cm.mavecam.aquacare`
