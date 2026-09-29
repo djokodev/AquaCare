@@ -179,10 +179,7 @@ export default function SettingsScreen({ navigation }: Props) {
         >
           <View style={styles.actionContent}>
             <Ionicons name="lock-closed-outline" size={20} color={colors.brand.primary} />
-            <View style={styles.actionText}>
             <AppText variant="bodyStrong" color="link">{t("changePassword")}</AppText>
-            <AppText variant="caption" color="muted">{t("changePasswordDesc")}</AppText>
-            </View>
           </View>
         </InteractiveCard>
         <InteractiveCard
@@ -193,10 +190,7 @@ export default function SettingsScreen({ navigation }: Props) {
         >
           <View style={styles.actionContent}>
             <Ionicons name="trash-outline" size={20} color={colors.status.error} />
-            <View style={styles.actionText}>
             <AppText variant="bodyStrong" color="error">{t("deleteAccount")}</AppText>
-            <AppText variant="caption" color="muted">{t("deleteAccountDesc")}</AppText>
-            </View>
           </View>
         </InteractiveCard>
 
@@ -209,10 +203,7 @@ export default function SettingsScreen({ navigation }: Props) {
           >
             <View style={styles.actionContent}>
               <Ionicons name="refresh-circle-outline" size={20} color={colors.brand.primary} />
-              <View style={styles.actionText}>
               <AppText variant="bodyStrong" color="link">{t("onboardingResetAction")}</AppText>
-              <AppText variant="caption" color="muted">{t("onboardingResetHint")}</AppText>
-              </View>
             </View>
           </InteractiveCard>
         )}
@@ -236,6 +227,5 @@ const styles = StyleSheet.create({
   actionCardSpacing: { marginBottom: spacing[3] },
   resetCard: { justifyContent: 'flex-start', marginTop: spacing[3] },
   actionContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  actionText: { flex: 1, gap: spacing[1] },
   aboutParagraph: { marginTop: spacing[3] },
 });
