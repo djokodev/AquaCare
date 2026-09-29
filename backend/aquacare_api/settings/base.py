@@ -248,6 +248,10 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
+# Documentation OpenAPI publique en dev; reservee a l'equipe (is_staff) en
+# staging/prod pour ne pas exposer la carte complete des endpoints.
+API_DOCS_PUBLIC = True
+
 # drf-spectacular
 SPECTACULAR_SETTINGS = {
     "TITLE": "AquaCare API",

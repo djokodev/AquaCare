@@ -20,6 +20,21 @@ from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+
+def api_docs_view_kwargs() -> dict:
+    """Acces a la documentation OpenAPI: public en dev, equipe seulement sinon.
+
+    La session de l'admin Django suffit pour ouvrir la doc depuis un navigateur.
+    """
+    permission = AllowAny if getattr(settings, 'API_DOCS_PUBLIC', False) else IsAdminUser
+    return {
+        'permission_classes': [permission],
+        'authentication_classes': [SessionAuthentication, JWTAuthentication],
+    }
 
 
 def api_root(request: HttpRequest) -> JsonResponse:
@@ -95,9 +110,17 @@ urlpatterns = [
     path('api/health/', health_check, name='health-check'),  # Health check pour Docker
 
     # Documentation Swagger/OpenAPI
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path('api/schema/', SpectacularAPIView.as_view(**api_docs_view_kwargs()), name='schema'),
+    path(
+        'api/docs/',
+        SpectacularSwaggerView.as_view(url_name='schema', **api_docs_view_kwargs()),
+        name='swagger-ui',
+    ),
+    path(
+        'api/redoc/',
+        SpectacularRedocView.as_view(url_name='schema', **api_docs_view_kwargs()),
+        name='redoc',
+    ),
 
     # API Endpoints
     path('api/accounts/', include('accounts.urls')),
