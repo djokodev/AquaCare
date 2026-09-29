@@ -19,13 +19,11 @@ Decision prod 2026-09 (module accounts):
 from __future__ import annotations
 
 import logging
-from email.mime.image import MIMEImage
 
 from accounts.models import User
 from accounts.validators import normalize_phone_number
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.contrib.staticfiles import finders
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
@@ -39,7 +37,6 @@ from .account_cleanup_adapters import JwtTokenCleanupAdapter
 logger = logging.getLogger("accounts")
 
 LOGO_STATIC_PATH = "brand/aquacare-logo.png"
-LOGO_CONTENT_ID = "aquacare-logo"
 
 __all__ = [
     "PasswordChangeService",
@@ -158,18 +155,9 @@ class PasswordResetService:
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 to=[user.email],
             )
-            logo = cls._load_inline_logo()
-            html = cls._build_html_email(
-                request, reset_link, language, subject, inline_logo=logo is not None
-            )
+            html = cls._build_html_email(request, reset_link, language, subject)
             if html:
                 message.attach_alternative(html, "text/html")
-                if logo is not None:
-                    # Logo embarque (CID): s'affiche sans charger d'image
-                    # distante, meme si le client bloque les images externes
-                    # ou si l'URL de l'API n'est pas publique (dev en LAN).
-                    message.mixed_subtype = "related"
-                    message.attach(logo)
             message.send(fail_silently=False)
         except Exception:
             logger.exception(
@@ -190,25 +178,6 @@ class PasswordResetService:
         )
         return True
 
-    @staticmethod
-    def _load_inline_logo() -> MIMEImage | None:
-        """Logo AquaCare en piece jointe inline (Content-ID), ou None."""
-        try:
-            path = finders.find(LOGO_STATIC_PATH)
-            if not path:
-                return None
-            with open(path, "rb") as logo_file:
-                image = MIMEImage(logo_file.read(), _subtype="png")
-        except Exception:
-            logger.exception(
-                "Password reset email logo could not be loaded",
-                extra={"event": "accounts.password.reset.logo_missing"},
-            )
-            return None
-        image.add_header("Content-ID", f"<{LOGO_CONTENT_ID}>")
-        image.add_header("Content-Disposition", "inline", filename="aquacare-logo.png")
-        return image
-
     @classmethod
     def _build_html_email(
         cls,
@@ -216,7 +185,6 @@ class PasswordResetService:
         reset_link: str,
         language: str,
         title: str,
-        inline_logo: bool = False,
     ) -> str:
         """
         Rendu HTML de l'email, aux couleurs AquaCare.
@@ -225,10 +193,12 @@ class PasswordResetService:
         chaine vide, Django retombe alors sur la version texte seule.
         """
         try:
+            # URL publique HTTPS: Gmail et les autres clients telechargent le
+            # logo via leur proxy d'images. Une URL d'API locale (LAN) ou une
+            # image CID (retiree par le relais SMTP Resend) ne s'affichent pas.
             logo_url = (
-                f"cid:{LOGO_CONTENT_ID}"
-                if inline_logo
-                else request.build_absolute_uri(static(LOGO_STATIC_PATH))
+                getattr(settings, "EMAIL_LOGO_URL", "")
+                or request.build_absolute_uri(static(LOGO_STATIC_PATH))
             )
             texts = {
                 "title": title,

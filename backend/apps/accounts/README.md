@@ -452,9 +452,10 @@ Expediteur email: `DEFAULT_FROM_EMAIL`. Decision 2026-09: tous les emails
 transactionnels (reset, rapports, notifications) partent de
 `AquaCare <no-reply@aquacare.tech>`, valeur fixee dans le code, les stacks
 compose et le workflow de deploiement (pas de secret GitHub necessaire). Le
-domaine `aquacare.tech` doit etre verifie chez Resend. Le logo de l'email de
-reset est embarque en piece jointe inline (CID) pour s'afficher meme quand le
-client bloque les images distantes.
+domaine `aquacare.tech` doit etre verifie chez Resend. Le logo de l'email est
+charge depuis `EMAIL_LOGO_URL` (defaut: logo public de la prod,
+`https://api.aquacare.tech/static/brand/aquacare-logo.png`). Une URL d'API
+locale ou une image CID ne s'affichent pas dans Gmail via Resend.
 
 Les pages web et l'email utilisent le design AquaCare: logo partage
 (`common/static/brand/aquacare-logo.png`), vert de marque `#059669`, fond

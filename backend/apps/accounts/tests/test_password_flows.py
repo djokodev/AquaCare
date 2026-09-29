@@ -234,13 +234,7 @@ class TestPasswordForgotEndpoint:
         ]
         assert html_parts, "l'email doit contenir une alternative HTML"
         html = html_parts[0]
-        assert 'src="cid:aquacare-logo"' in html
-        logo_parts = [
-            part for part in message.message().walk()
-            if part.get("Content-ID") == "<aquacare-logo>"
-        ]
-        assert len(logo_parts) == 1
-        assert logo_parts[0].get_content_type() == "image/png"
+        assert 'src="https://api.aquacare.tech/static/brand/aquacare-logo.png"' in html
         assert "#059669" in html
         assert "/accounts/password/reset/" in html
 

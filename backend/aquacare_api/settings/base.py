@@ -308,6 +308,11 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = _env_str('EMAIL_HOST_USER', 'resend')
 EMAIL_HOST_PASSWORD = _env_str('RESEND_API_KEY')
 DEFAULT_FROM_EMAIL = _env_str('DEFAULT_FROM_EMAIL', 'AquaCare <no-reply@aquacare.tech>')
+# Logo des emails: URL publique HTTPS (servie par la prod via /static/).
+EMAIL_LOGO_URL = _env_str(
+    'EMAIL_LOGO_URL',
+    'https://api.aquacare.tech/static/brand/aquacare-logo.png',
+)
 
 # Frontend URL (pour les liens dans les emails)
 FRONTEND_URL = _env_str('FRONTEND_URL', 'http://localhost:8081')
