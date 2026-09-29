@@ -10,6 +10,9 @@ Decision prod 2026-09 (module accounts):
   la confirmation pour un ecran dedie dans l'app plus tard.
 - Anti-enumeration: /password/forgot/ repond toujours OK, meme si le compte
   n'existe pas, est desactive, supprime ou sans email.
+- Un reset revoque tous les refresh tokens du compte (sessions volees
+  incluses). Le changement de mot de passe authentifie ne les revoque PAS:
+  l'appareil courant resterait deconnecte sans changement cote mobile.
 """
 from __future__ import annotations
 
@@ -20,11 +23,14 @@ from accounts.validators import normalize_phone_number
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.db import transaction
 from django.template.loader import render_to_string
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+
+from .account_cleanup_adapters import JwtTokenCleanupAdapter
 
 logger = logging.getLogger("accounts")
 
@@ -251,10 +257,15 @@ class PasswordResetService:
         return user
 
     @classmethod
+    @transaction.atomic
     def confirm_reset(cls, uidb64: str, token: str, new_password: str) -> User:
         user = cls.resolve_reset_target(uidb64, token)
         user.set_password(new_password)
         user.save(update_fields=["password"])
+        # Un reset signifie souvent "quelqu'un d'autre a acces au compte":
+        # on revoque tous les refresh tokens encore en circulation, sinon un
+        # token vole resterait renouvelable indefiniment (rotation JWT).
+        JwtTokenCleanupAdapter().cleanup_for_user(user.pk)
         logger.info(
             "Password reset completed via email link",
             extra={

@@ -319,3 +319,33 @@ class TestPasswordResetEndpoint:
             format="json",
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_reset_revokes_existing_refresh_tokens(self, api_client, user):
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = str(RefreshToken.for_user(user))
+        response = api_client.post(
+            self.url,
+            {**_reset_target(user), "password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert BlacklistedToken.objects.filter(token__user=user).count() == 1
+        refreshed = api_client.post(
+            "/api/accounts/token/refresh/", {"refresh": refresh}, format="json"
+        )
+        assert refreshed.status_code != status.HTTP_200_OK
+
+    def test_failed_reset_keeps_refresh_tokens_valid(self, api_client, user):
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        RefreshToken.for_user(user)
+        response = api_client.post(
+            self.url,
+            {**_reset_target(user), "password": "123", "password_confirm": "123"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert not BlacklistedToken.objects.filter(token__user=user).exists()
