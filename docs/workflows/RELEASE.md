@@ -26,7 +26,8 @@ first production deployment and store submission.
 - [ ] Origin firewall accepts HTTP/HTTPS only from Cloudflare IP ranges:
       `common.client_ip` trusts `CF-Connecting-IP` from the nginx proxy, so a
       direct hit on the server IP must be impossible.
-- [ ] Cloudflare SSL/TLS mode set to "Full (strict)" with an origin certificate.
+- [ ] Cloudflare SSL/TLS mode set to "Full (strict)" with an origin certificate,
+      and "Always Use HTTPS" enabled (Django keeps SECURE_SSL_REDIRECT off).
 - [ ] `PUBLIC_API_BASE_URL` matches the environment (defaults: prod
       `https://api.aquacare.tech`, staging `https://api-staging.aquacare.tech`).
 - [ ] `API_DOCS_PUBLIC` stays false in staging/production (docs staff-only).
