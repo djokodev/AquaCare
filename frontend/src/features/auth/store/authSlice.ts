@@ -94,11 +94,17 @@ const getThunkErrorPayload = (error: unknown): AuthErrorPayload => {
       return { message: normalizeAuthMessage(data.error), fieldErrors: {} };
     }
 
+    const fieldErrors: Record<string, string> = {};
+    for (const [field, value] of Object.entries(data)) {
+      const first = Array.isArray(value) ? value[0] : value;
+      if (typeof first === 'string' && first.trim()) fieldErrors[field] = first;
+    }
+
     const firstFieldError = Object.values(data).find(Boolean);
     if (Array.isArray(firstFieldError) && firstFieldError.length > 0) {
       return {
         message: normalizeAuthMessage(String(firstFieldError[0])),
-        fieldErrors: {},
+        fieldErrors: normalizeFieldErrors(fieldErrors),
       };
     }
     if (firstFieldError) {
@@ -170,11 +176,11 @@ export const logoutUser = createAsyncThunk<boolean, void, { rejectValue: AuthErr
   }
 );
 
-export const deleteAccountUser = createAsyncThunk<boolean, void, { rejectValue: AuthErrorPayload }>(
+export const deleteAccountUser = createAsyncThunk<boolean, string, { rejectValue: AuthErrorPayload }>(
   'auth/deleteAccount',
-  async (_, { rejectWithValue }) => {
+  async (currentPassword, { rejectWithValue }) => {
     try {
-      await authService.deleteAccount();
+      await authService.deleteAccount(currentPassword);
       return true;
     } catch (error: unknown) {
       return rejectWithValue(getThunkErrorPayload(error));

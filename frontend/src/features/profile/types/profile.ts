@@ -77,7 +77,10 @@ export type UpdateUserProfilePayload = Partial<
     | 'age_group'
     | 'language_preference'
   >
->;
+> & {
+  /** Mot de passe actuel, exigé par l'API pour changer l'email. */
+  current_password?: string;
+};
 
 export type UpdateFarmProfilePayload = Partial<
   Pick<

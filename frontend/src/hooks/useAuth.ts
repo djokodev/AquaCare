@@ -94,8 +94,8 @@ export const useAuth = () => {
     return dispatch(logoutUser());
   }, [dispatch]);
 
-  const deleteAccount = useCallback(() => {
-    return dispatch(deleteAccountUser()).unwrap();
+  const deleteAccount = useCallback((currentPassword: string) => {
+    return dispatch(deleteAccountUser(currentPassword)).unwrap();
   }, [dispatch]);
 
   const checkAuth = useCallback(() => {

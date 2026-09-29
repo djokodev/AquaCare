@@ -9,7 +9,8 @@ import { STORAGE_KEYS } from "@/constants/api";
 import logger from "@/utils/logger";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { ProfileStackParamList } from "@/navigation/MainNavigator";
-import { AppText, Button, Card, InteractiveCard, SelectableCard } from '@/components/ui';
+import { AppText, Button, Card, InteractiveCard, PasswordConfirmModal, SelectableCard } from '@/components/ui';
+import type { AuthErrorPayload } from '@/features/auth/types/auth';
 import { colors, spacing } from '@/theme';
 
 type SettingsScreenNavigationProp = StackNavigationProp<
@@ -25,6 +26,8 @@ export default function SettingsScreen({ navigation }: Props) {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletePasswordVisible, setIsDeletePasswordVisible] = useState(false);
+  const [deletePasswordError, setDeletePasswordError] = useState<string | null>(null);
   const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
   const languageUpdateInProgressRef = useRef(false);
   const [settings, setSettings] = useState({ language: i18n.language });
@@ -86,20 +89,35 @@ export default function SettingsScreen({ navigation }: Props) {
         {
           text: t('deleteAccountConfirm'),
           style: 'destructive',
-          onPress: async () => {
-            setIsDeleting(true);
-            try {
-              await deleteAccount();
-              // Redux state cleared → navigation auto-redirects to login
-            } catch (error) {
-              logger.error('Delete account error:', error);
-              Alert.alert(t('deleteAccountError'));
-              setIsDeleting(false);
-            }
+          onPress: () => {
+            setDeletePasswordError(null);
+            setIsDeletePasswordVisible(true);
           },
         },
       ]
     );
+  };
+
+  const confirmDeleteAccount = async (currentPassword: string) => {
+    setIsDeleting(true);
+    setDeletePasswordError(null);
+    try {
+      await deleteAccount(currentPassword);
+      setIsDeletePasswordVisible(false);
+      // Redux state cleared → navigation auto-redirects to login
+    } catch (error) {
+      const payload = error as Partial<AuthErrorPayload> | undefined;
+      const passwordError = payload?.fieldErrors?.current_password;
+      if (passwordError) {
+        setDeletePasswordError(passwordError);
+      } else {
+        logger.error('Delete account error:', error);
+        setIsDeletePasswordVisible(false);
+        Alert.alert(t('deleteAccountError'));
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
 
@@ -169,6 +187,19 @@ export default function SettingsScreen({ navigation }: Props) {
       <View style={styles.section}>
         <Button label={t('disconnect')} variant="danger" iconLeft="log-out" onPress={handleLogout} />
       </View>
+      <PasswordConfirmModal
+        visible={isDeletePasswordVisible}
+        title={t('deleteAccountPasswordTitle')}
+        message={t('deleteAccountPasswordMessage')}
+        passwordLabel={t('currentPassword')}
+        confirmLabel={t('deleteAccountConfirm')}
+        cancelLabel={t('cancel')}
+        error={deletePasswordError}
+        loading={isDeleting}
+        destructive
+        onConfirm={(password) => void confirmDeleteAccount(password)}
+        onCancel={() => setIsDeletePasswordVisible(false)}
+      />
     </ScrollView>
   );
 }

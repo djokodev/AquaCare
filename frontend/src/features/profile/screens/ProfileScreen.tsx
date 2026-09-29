@@ -6,7 +6,8 @@ import type { NavigationProp, RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import LocationSelector from '@/components/common/LocationSelector';
-import { AppText, Button, Card, ErrorState, IconButton, InteractiveCard, LoadingState, SelectionModal } from '@/components/ui';
+import { AppText, Button, Card, ErrorState, IconButton, InteractiveCard, LoadingState, PasswordConfirmModal, SelectionModal } from '@/components/ui';
+import type { AuthErrorPayload } from '@/features/auth/types/auth';
 import { CAMEROON_REGIONS, INTERVENTION_ZONES } from '@/constants/cameroon';
 import { getAccountErrorMessage } from '@/features/auth/utils/accountsErrorPresenter';
 import { ProfileInfoList, ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
@@ -28,7 +29,9 @@ export default function ProfileScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
   const { user, farmProfile, isLoading, error, updateProfile, loadProfile, logout, displayName, isIndividual } = useAuth();
   const [showInterventionZoneModal, setShowInterventionZoneModal] = useState(false);
-  const { isEditing, setIsEditing, isSaving, editData, updateEditField, locationData, setLocationData, save } = useProfileEditor({ user, updateProfile });
+  const { isEditing, isEmailChanged, setIsEditing, isSaving, editData, updateEditField, locationData, setLocationData, save } = useProfileEditor({ user, updateProfile });
+  const [isEmailPasswordVisible, setIsEmailPasswordVisible] = useState(false);
+  const [emailPasswordError, setEmailPasswordError] = useState<string | null>(null);
   const returnToCart = route?.params?.returnToCart === true;
 
   const handleReturnToCart = () => {
@@ -50,9 +53,10 @@ export default function ProfileScreen({ navigation, route }: Props) {
     }
   }, [route?.params?.startEditing, setIsEditing]);
 
-  const handleSave = async () => {
+  const saveProfile = async (currentPassword?: string) => {
     try {
-      await save();
+      await save(currentPassword);
+      setIsEmailPasswordVisible(false);
       Alert.alert(
         t('success'),
         t('profileUpdatedSuccess'),
@@ -61,8 +65,24 @@ export default function ProfileScreen({ navigation, route }: Props) {
           : undefined,
       );
     } catch (saveError) {
+      const passwordError = (saveError as Partial<AuthErrorPayload> | undefined)?.fieldErrors?.current_password;
+      if (passwordError && currentPassword !== undefined) {
+        setEmailPasswordError(passwordError);
+        return;
+      }
+      setIsEmailPasswordVisible(false);
       Alert.alert(t('error'), getAccountErrorMessage(saveError, t));
     }
+  };
+
+  const handleSave = () => {
+    if (isEmailChanged) {
+      // Changer l'email (canal de réinitialisation) exige le mot de passe.
+      setEmailPasswordError(null);
+      setIsEmailPasswordVisible(true);
+      return;
+    }
+    void saveProfile();
   };
 
   const handleLogout = () => {
@@ -118,6 +138,18 @@ export default function ProfileScreen({ navigation, route }: Props) {
       </View>
 
       <SelectionModal visible={showInterventionZoneModal} title={t('selectInterventionZone')} options={INTERVENTION_ZONES.map((zone) => ({ value: zone.value, label: t(zone.labelKey) }))} selectedValue={editData.intervention_zone} onSelect={(value) => { updateEditField('intervention_zone', value); setShowInterventionZoneModal(false); }} onClose={() => setShowInterventionZoneModal(false)} closeLabel={t('close')} emptyLabel={t('notProvided')} />
+      <PasswordConfirmModal
+        visible={isEmailPasswordVisible}
+        title={t('emailChangePasswordTitle')}
+        message={t('emailChangePasswordMessage')}
+        passwordLabel={t('currentPassword')}
+        confirmLabel={t('saveChanges')}
+        cancelLabel={t('cancel')}
+        error={emailPasswordError}
+        loading={isSaving}
+        onConfirm={(password) => void saveProfile(password)}
+        onCancel={() => setIsEmailPasswordVisible(false)}
+      />
     </ScrollView>
   );
 }

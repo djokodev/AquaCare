@@ -83,8 +83,15 @@ class AuthService {
   /**
    * Suppression définitive du compte
    */
-  async deleteAccount(): Promise<void> {
-    await apiService.post(API_ENDPOINTS.AUTH.DELETE_ACCOUNT, { confirm: true });
+  async deleteAccount(currentPassword: string): Promise<void> {
+    try {
+      await apiService.post(API_ENDPOINTS.AUTH.DELETE_ACCOUNT, {
+        confirm: true,
+        current_password: currentPassword,
+      });
+    } catch (error: unknown) {
+      throw this.handleAuthError(error);
+    }
     await apiService.clearTokens();
   }
 

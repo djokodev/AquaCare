@@ -180,10 +180,13 @@ class TestUserProfileSerializer:
         """
         user = user_factory()
         
+        user.set_password('MotDePasse2026')
+        user.save(update_fields=['password'])
         update_data = {
             'first_name': 'Nouveau Prénom',
             'last_name': 'Nouveau Nom',
-            'email': 'nouveau_email@exemple.com'
+            'email': 'nouveau_email@exemple.com',
+            'current_password': 'MotDePasse2026',
         }
         
         serializer = UserProfileSerializer(user, data=update_data, partial=True)
