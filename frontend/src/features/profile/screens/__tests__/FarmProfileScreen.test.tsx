@@ -60,11 +60,6 @@ jest.mock('@/hooks/useFarmLocation', () => ({
 
 jest.mock('@/features/profile/utils/accountProfilePresentation', () => ({
   formatFarmName: (value: string) => value,
-  getCertificationPresentation: () => ({
-    color: jest.requireActual('@/theme').colors.brand.light,
-    icon: 'checkmark-circle',
-    text: 'certificationPending',
-  }),
 }));
 
 jest.mock('@/features/auth/utils/accountsErrorPresenter', () => ({
@@ -176,12 +171,13 @@ describe('features/profile/screens/FarmProfileScreen', () => {
     expect(screen.getByText('noFarmProfile')).toBeTruthy();
   });
 
-  it('affiche le badge de certification courant', async () => {
-    const { getByText } = render(<FarmProfileScreen />);
+  it("n'affiche plus de badge de certification", async () => {
+    const { queryByText, getAllByText } = render(<FarmProfileScreen />);
 
     await waitFor(() => {
-      expect(getByText('certificationPending')).toBeTruthy();
+      expect(getAllByText('farmInfo').length).toBeGreaterThan(0);
     });
+    expect(queryByText('certificationPending')).toBeNull();
   });
 
   it("n'affiche plus le champ de production annuelle", async () => {

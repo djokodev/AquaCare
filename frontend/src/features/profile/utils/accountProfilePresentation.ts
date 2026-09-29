@@ -1,18 +1,3 @@
-import type { TFunction } from 'i18next';
-import type { ComponentProps } from 'react';
-import type { Ionicons } from '@expo/vector-icons';
-
-import { AQUACARE_COLORS } from '@/constants/colors';
-import type { FarmProfile } from '@/features/profile/types/profile';
-
-type IoniconName = ComponentProps<typeof Ionicons>['name'];
-
-export interface CertificationPresentation {
-  color: string;
-  icon: IoniconName;
-  text: string;
-}
-
 export const formatFarmName = (farmName?: string): string => {
   if (!farmName) return '';
   if (farmName.startsWith('Ferme de ') && farmName.includes(' ')) {
@@ -22,40 +7,16 @@ export const formatFarmName = (farmName?: string): string => {
   return farmName;
 };
 
-export const getCertificationPresentation = (
-  farmProfile: Pick<FarmProfile, 'certification_status'> | null | undefined,
-  t: TFunction
-): CertificationPresentation => {
-  switch (farmProfile?.certification_status) {
-    case 'certified':
-      return {
-        color: AQUACARE_COLORS.GREEN_PRIMARY,
-        icon: 'checkmark-circle',
-        text: t('farmCertified'),
-      };
-    case 'pending':
-      return {
-        color: AQUACARE_COLORS.WARNING,
-        icon: 'time',
-        text: t('certificationPending'),
-      };
-    case 'suspended':
-      return {
-        color: AQUACARE_COLORS.ERROR,
-        icon: 'pause-circle',
-        text: t('certificationSuspended'),
-      };
-    case 'rejected':
-      return {
-        color: AQUACARE_COLORS.GRAY_LIGHT,
-        icon: 'close-circle',
-        text: t('certificationRejected'),
-      };
-    default:
-      return {
-        color: AQUACARE_COLORS.GRAY_LIGHT,
-        icon: 'help-circle',
-        text: farmProfile ? t('statusUnknown') : t('noFarmProfile'),
-      };
-  }
+/**
+ * Raccourcit la partie locale d'un email pour tenir sur une ligne:
+ * "djoko.dev.pro@gmail.com" -> "djoko…@gmail.com".
+ */
+export const formatCompactEmail = (email?: string, visibleChars = 5): string => {
+  if (!email) return '';
+  const atIndex = email.lastIndexOf('@');
+  if (atIndex <= 0) return email;
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex);
+  if (local.length <= visibleChars + 1) return email;
+  return `${local.slice(0, visibleChars)}…${domain}`;
 };

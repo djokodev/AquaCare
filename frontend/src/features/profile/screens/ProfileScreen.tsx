@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -11,7 +11,7 @@ import { CAMEROON_REGIONS, INTERVENTION_ZONES } from '@/constants/cameroon';
 import { getAccountErrorMessage } from '@/features/auth/utils/accountsErrorPresenter';
 import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
 import { useProfileEditor } from '@/features/profile/hooks/useProfileEditor';
-import { getCertificationPresentation } from '@/features/profile/utils/accountProfilePresentation';
+import { formatCompactEmail } from '@/features/profile/utils/accountProfilePresentation';
 import { useAuth } from '@/hooks/useAuth';
 import type { ProfileStackParamList, RootStackParamList } from '@/navigation/MainNavigator';
 import { colors, radii, spacing } from '@/theme';
@@ -30,7 +30,6 @@ export default function ProfileScreen({ navigation, route }: Props) {
   const [showInterventionZoneModal, setShowInterventionZoneModal] = useState(false);
   const { isEditing, setIsEditing, isSaving, editData, updateEditField, locationData, setLocationData, save } = useProfileEditor({ user, updateProfile });
   const returnToCart = route?.params?.returnToCart === true;
-  const certification = useMemo(() => getCertificationPresentation(farmProfile, t), [farmProfile, t]);
 
   const handleReturnToCart = () => {
     const rootNavigation = navigation.getParent()?.getParent() as NavigationProp<RootStackParamList> | undefined;
@@ -82,12 +81,11 @@ export default function ProfileScreen({ navigation, route }: Props) {
         <View style={styles.avatar}><Ionicons name="person" size={32} color={colors.text.inverse} /></View>
         <AppText variant="screenTitle" color="inverse" style={styles.center}>{displayName}</AppText>
         <AppText color="inverse">{isIndividual ? t('individualAccount') : t('companyAccount')}</AppText>
-        {farmProfile ? <View style={[styles.certification, { backgroundColor: certification.color }]}><Ionicons name={certification.icon} size={16} color={colors.text.inverse} /><AppText variant="label" color="inverse">{certification.text}</AppText></View> : null}
       </View>
 
       <Section title={isIndividual ? t('personalInfo') : t('companyInfo')} action={<IconButton icon={isEditing ? 'close' : 'pencil'} accessibilityLabel={t(isEditing ? 'cancel' : 'edit')} variant="ghost" onPress={() => setIsEditing(!isEditing)} />}>
         <ProfileInfoRow label={t('phoneNumber')} value={user.phone_number} />
-        <ProfileInfoRow label={t('email')} value={isEditing ? undefined : user.email || t('notProvided')} editable={isEditing} onChangeText={(value) => updateEditField('email', value)} inputValue={editData.email} placeholder={t('yourEmail')} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} textContentType="emailAddress" selectable />
+        <ProfileInfoRow label={t('email')} value={isEditing ? undefined : formatCompactEmail(user.email) || t('notProvided')} editable={isEditing} onChangeText={(value) => updateEditField('email', value)} inputValue={editData.email} placeholder={t('yourEmail')} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} textContentType="emailAddress" />
         {isIndividual ? <>
           <ProfileInfoRow label={t('firstName')} value={user.first_name || t('notProvided')} />
           <ProfileInfoRow label={t('lastName')} value={user.last_name || t('notProvided')} />
@@ -110,7 +108,6 @@ export default function ProfileScreen({ navigation, route }: Props) {
 
       <Section title={t('preferences')}>
         <ProfileInfoRow icon="language" label={t('preferredLanguage')} value={user.language_preference === 'fr' ? t('french') : t('english')} />
-        <ProfileInfoRow icon="shield-checkmark" label={t('accountVerified')} value={user.is_verified ? t('yes') : t('no')} />
       </Section>
 
       {isEditing ? <Button label={isSaving ? t('saving') : t('saveChanges')} loading={isSaving} onPress={handleSave} containerStyle={styles.saveButton} /> : null}
@@ -135,7 +132,6 @@ const styles = StyleSheet.create({
   saveButton: { marginHorizontal: spacing[4] },
   hero: { alignItems: 'center', gap: spacing[2], backgroundColor: colors.brand.primary, padding: spacing[5] },
   avatar: { width: 80, height: 80, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand.dark },
-  certification: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], borderRadius: radii.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   center: { textAlign: 'center' },
   section: { gap: spacing[2], paddingHorizontal: spacing[4] },
   sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

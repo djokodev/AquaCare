@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useFarmLocation } from "@/hooks/useFarmLocation";
 import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
 import { useFarmProfileEditor } from "@/features/profile/hooks/useFarmProfileEditor";
-import { formatFarmName, getCertificationPresentation } from "@/features/profile/utils/accountProfilePresentation";
+import { formatFarmName } from "@/features/profile/utils/accountProfilePresentation";
 import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
 import { AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
@@ -29,10 +29,6 @@ export default function FarmProfileScreen() {
 
   const { isEditing, setIsEditing, isSaving, editData, updateEditField, save, saveLocation } =
     useFarmProfileEditor({ farmProfile, updateFarm });
-  const certification = useMemo(
-    () => getCertificationPresentation(farmProfile, t),
-    [farmProfile, t]
-  );
   const activeProductionUnits = useMemo(
     () => productionUnits.filter((unit) => unit.status === "active"),
     [productionUnits]
@@ -139,7 +135,6 @@ export default function FarmProfileScreen() {
       <View style={styles.hero}>
         <View style={styles.avatar}><Ionicons name="business" size={32} color={colors.text.inverse} /></View>
         <AppText variant="screenTitle" color="inverse" style={styles.center}>{formatFarmName(farmProfile.farm_name) || t('myFarm')}</AppText>
-        <View style={[styles.certification, { backgroundColor: certification.color }]}><Ionicons name={certification.icon} size={16} color={colors.text.inverse} /><AppText variant="label" color="inverse">{certification.text}</AppText></View>
       </View>
 
       <View style={styles.section}>
@@ -215,7 +210,6 @@ const styles = StyleSheet.create({
   content: { gap: spacing[4], paddingBottom: spacing[6] },
   hero: { alignItems: 'center', gap: spacing[2], backgroundColor: colors.brand.primary, padding: spacing[5] },
   avatar: { width: 64, height: 64, borderRadius: radii.full, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.brand.dark },
-  certification: { flexDirection: 'row', alignItems: 'center', gap: spacing[2], borderRadius: radii.full, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   center: { textAlign: 'center' },
   section: { gap: spacing[2], paddingHorizontal: spacing[4] },
   sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
