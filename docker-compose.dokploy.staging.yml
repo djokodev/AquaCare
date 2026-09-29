@@ -57,7 +57,7 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-staging}
-      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@aquacare.tech}
       EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       DJANGO_SUPERUSER_PHONE: ${DJANGO_SUPERUSER_PHONE:-}
@@ -105,7 +105,7 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-staging}
-      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@aquacare.tech}
       EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       DJANGO_SUPERUSER_PHONE: ${DJANGO_SUPERUSER_PHONE:-}
@@ -149,7 +149,7 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-staging}
-      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-staging@aquacare.tech}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@aquacare.tech}
       EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       DJANGO_SUPERUSER_PHONE: ${DJANGO_SUPERUSER_PHONE:-}

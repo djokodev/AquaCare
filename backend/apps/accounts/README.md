@@ -444,12 +444,11 @@ Fichiers: `services/password_service.py`, `web_views.py`, `web_urls.py`,
 `domain/email_deliverability.py`, `domain/phone_operators.py`,
 `templates/accounts/*`, `templates/accounts/emails/password_reset.html`.
 
-Expediteur email: `DEFAULT_FROM_EMAIL`. La valeur par defaut du code est
-`rapports@aquacare.tech` (adresse historique des rapports); elle doit etre
-fournie explicitement par l'environnement en staging/production et le domaine
-doit etre verifie chez Resend. Utiliser de preference une adresse dediee aux
-emails transactionnels (ex: `no-reply@aquacare.tech`) et la definir via
-`DEFAULT_FROM_EMAIL`, sans changer le default du code sans decision explicite.
+Expediteur email: `DEFAULT_FROM_EMAIL`. Decision 2026-09: tous les emails
+transactionnels (reset, rapports, notifications) partent de
+`no-reply@aquacare.tech`, valeur par defaut du code et des stacks compose.
+En staging/production, le secret `DEFAULT_FROM_EMAIL` doit porter la meme
+valeur et le domaine `aquacare.tech` doit etre verifie chez Resend.
 
 Les pages web et l'email utilisent le design AquaCare: logo partage
 (`common/static/brand/aquacare-logo.png`), vert de marque `#059669`, fond
