@@ -94,6 +94,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
           {isSent ? (
             <InlineAlert
               tone="success"
+              showIcon={false}
               message={
                 emailHint
                   ? t("forgotPasswordSentTo", { email: emailHint })

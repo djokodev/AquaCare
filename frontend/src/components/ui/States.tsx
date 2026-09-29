@@ -82,9 +82,11 @@ export function InlineAlert({
   title,
   message,
   compact = false,
+  showIcon = true,
 }: Pick<StateProps, "title" | "message"> & {
   tone?: "info" | "success" | "warning" | "error";
   compact?: boolean;
+  showIcon?: boolean;
 }) {
   const backgrounds = {
     info: colors.status.infoSurface,
@@ -101,7 +103,7 @@ export function InlineAlert({
   return (
     <Card style={[styles.alert, compact && styles.compactAlert, { backgroundColor: backgrounds[tone] }]}>
       <View style={[styles.alertRow, compact && styles.compactAlertRow]}>
-        <Ionicons name={icon[tone]} size={20} color={colors.status[tone]} />
+        {showIcon ? <Ionicons name={icon[tone]} size={20} color={colors.status[tone]} /> : null}
         <View style={styles.alertText}>
           {title ? <AppText variant="label">{title}</AppText> : null}
           {message ? <AppText variant="helper" numberOfLines={compact ? 1 : undefined} adjustsFontSizeToFit={compact} minimumFontScale={0.85}>{message}</AppText> : null}
