@@ -166,7 +166,6 @@ export default function SettingsScreen({ navigation }: Props) {
         <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("about")}</AppText>
         <Card>
           <AppText>{t("aboutSummaryParagraph1")}</AppText>
-          <AppText style={styles.aboutParagraph}>{t("aboutSummaryParagraph2")}</AppText>
         </Card>
       </View>
 
@@ -227,5 +226,4 @@ const styles = StyleSheet.create({
   actionCardSpacing: { marginBottom: spacing[3] },
   resetCard: { justifyContent: 'flex-start', marginTop: spacing[3] },
   actionContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  aboutParagraph: { marginTop: spacing[3] },
 });

@@ -83,9 +83,11 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content} className="px-5">
         <Card variant="elevated" style={styles.card}>
           <AppText variant="screenTitle">{t("forgotPasswordTitle")}</AppText>
-          <AppText variant="body" color="muted">
-            {t("forgotPasswordIntro")}
-          </AppText>
+          {!isSent && (
+            <AppText variant="body" color="muted">
+              {t("forgotPasswordIntro")}
+            </AppText>
+          )}
 
           {isSent ? (
             <InlineAlert tone="success" message={t("forgotPasswordSentMessage")} />
