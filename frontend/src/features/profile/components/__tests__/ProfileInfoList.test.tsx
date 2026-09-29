@@ -29,4 +29,24 @@ describe('ProfileInfoList', () => {
     expect(rowBorder('middle', screen)).not.toBe(0);
     expect(rowBorder('last', screen)).toBe(0);
   });
+
+  it('does not produce duplicate React keys when rows come from several fragments', () => {
+    const consoleError = console.error as jest.Mock;
+    consoleError.mockClear();
+
+    render(
+      <ProfileInfoList>
+        <ProfileInfoRow label="a" value="1" />
+        <>
+          <ProfileInfoRow label="b" value="2" />
+          <ProfileInfoRow label="c" value="3" />
+        </>
+      </ProfileInfoList>
+    );
+
+    const duplicateKeyErrors = consoleError.mock.calls.filter((args) =>
+      String(args[0]).includes('same key')
+    );
+    expect(duplicateKeyErrors).toHaveLength(0);
+  });
 });

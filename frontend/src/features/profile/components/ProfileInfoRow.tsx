@@ -64,11 +64,16 @@ export function ProfileInfoList({ children }: { children: React.ReactNode }) {
   const lastIndex = items.length - 1;
   return (
     <>
-      {items.map((child, index) =>
-        index === lastIndex && React.isValidElement(child) && child.type === ProfileInfoRow
-          ? React.cloneElement(child as React.ReactElement<ProfileInfoRowProps>, { showDivider: false })
-          : child
-      )}
+      {items.map((child, index) => {
+        if (!React.isValidElement(child)) return child;
+        // Les clés de Children.toArray (.0, .1) se répètent d'un fragment à
+        // l'autre une fois aplaties: on impose une clé unique par position.
+        const isLastRow = index === lastIndex && child.type === ProfileInfoRow;
+        return React.cloneElement(child as React.ReactElement<ProfileInfoRowProps>, {
+          key: `profile-info-${index}`,
+          ...(isLastRow ? { showDivider: false } : {}),
+        });
+      })}
     </>
   );
 }

@@ -139,7 +139,7 @@ export default function FarmProfileScreen() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}><AppText variant="sectionTitle">{t('farmInfo')}</AppText><IconButton icon={isEditing ? 'close' : 'pencil'} accessibilityLabel={t(isEditing ? 'cancel' : 'edit')} variant="ghost" onPress={() => setIsEditing(!isEditing)} /></View>
-        <Card variant="outlined">
+        <Card variant="outlined" style={styles.infoCard}>
           <ProfileInfoList>
           <ProfileInfoRow
             label={t("farmName") || ""}
@@ -207,6 +207,7 @@ export default function FarmProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  infoCard: { paddingVertical: spacing[1] },
   screen: { flex: 1, backgroundColor: colors.surface.page },
   content: { gap: spacing[4], paddingBottom: spacing[6] },
   hero: { alignItems: 'center', gap: spacing[2], backgroundColor: colors.brand.primary, padding: spacing[5] },

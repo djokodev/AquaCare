@@ -123,11 +123,12 @@ export default function ProfileScreen({ navigation, route }: Props) {
 }
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return <View style={styles.section}><View style={styles.sectionHeader}><AppText variant="sectionTitle">{title}</AppText>{action}</View><Card variant="outlined"><ProfileInfoList>{children}</ProfileInfoList></Card></View>;
+  return <View style={styles.section}><View style={styles.sectionHeader}><AppText variant="sectionTitle">{title}</AppText>{action}</View><Card variant="outlined" style={styles.infoCard}><ProfileInfoList>{children}</ProfileInfoList></Card></View>;
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface.page },
+  infoCard: { paddingVertical: spacing[1] },
   content: { gap: spacing[4], paddingBottom: spacing[6] },
   saveButton: { marginHorizontal: spacing[4] },
   hero: { alignItems: 'center', gap: spacing[2], backgroundColor: colors.brand.primary, padding: spacing[5] },
