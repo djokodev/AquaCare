@@ -133,3 +133,23 @@ class TestSettingsModuleResolution:
 
         assert reloaded_settings._resolve_settings_module() == 'aquacare_api.settings.test'
         assert reloaded_settings.DEBUG is False
+
+
+def test_api_docs_are_staff_only_when_not_public(settings):
+    from rest_framework.permissions import AllowAny, IsAdminUser
+
+    from aquacare_api.urls import api_docs_view_kwargs
+
+    settings.API_DOCS_PUBLIC = False
+    assert api_docs_view_kwargs()['permission_classes'] == [IsAdminUser]
+    settings.API_DOCS_PUBLIC = True
+    assert api_docs_view_kwargs()['permission_classes'] == [AllowAny]
+
+
+def test_production_settings_hide_api_docs_by_default():
+    import ast
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[2] / 'aquacare_api/settings/production.py').read_text()
+    assert "API_DOCS_PUBLIC = config('API_DOCS_PUBLIC', default=False, cast=bool)" in source
+    ast.parse(source)

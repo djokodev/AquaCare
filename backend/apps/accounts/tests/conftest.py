@@ -145,3 +145,41 @@ def production_cycle(farm_profile):
     cycle.save()
 
     return cycle
+
+
+@pytest.fixture(autouse=True)
+def _django_314_template_context_copy_compat():
+    """
+    Compatibilite Django 5.1 + Python 3.14 (environnements de dev local).
+
+    BaseContext.__copy__ utilise copy(super()); sur Python 3.14, super()
+    devient copiable et renvoie un proxy sans attribut 'dicts', ce qui casse
+    le rendu de templates via le test client Django (AttributeError: 'super'
+    object has no attribute 'dicts'). La CI et la production Docker tournent
+    en Python 3.12 et ne sont pas affectees.
+
+    On remplace la copie par une implementation fonctionnelle uniquement
+    quand le bug est present (Python >= 3.14), le temps d'une montee de
+    version Django officiellement compatible 3.14.
+    """
+    import sys
+
+    if sys.version_info < (3, 14):
+        yield
+        return
+
+    from django.template.context import BaseContext
+
+    original_copy = BaseContext.__copy__
+
+    def _patched_copy(context_instance):
+        duplicate = type(context_instance).__new__(type(context_instance))
+        duplicate.__dict__.update(context_instance.__dict__)
+        duplicate.dicts = context_instance.dicts[:]
+        return duplicate
+
+    BaseContext.__copy__ = _patched_copy
+    try:
+        yield
+    finally:
+        BaseContext.__copy__ = original_copy

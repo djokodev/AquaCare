@@ -18,6 +18,7 @@ describe('services/authService', () => {
 
   const mockRegisterData = {
     phone_number: '+237670000000',
+    email: 'user@example.com',
     first_name: 'John',
     last_name: 'Doe',
     account_type: 'individual' as const,

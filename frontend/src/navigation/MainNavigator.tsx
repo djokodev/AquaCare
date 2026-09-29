@@ -12,6 +12,7 @@ import FarmMapScreen from '@/features/profile/screens/FarmMapScreen';
 import FarmProfileScreen from '@/features/profile/screens/FarmProfileScreen';
 import ProfileScreen from '@/features/profile/screens/ProfileScreen';
 import SettingsScreen from '@/features/profile/screens/SettingsScreen';
+import ChangePasswordScreen from '@/features/auth/screens/ChangePasswordScreen';
 import DesignSystemGalleryScreen from '@/features/dev/screens/DesignSystemGalleryScreen';
 
 // Aquaculture Screens
@@ -214,6 +215,7 @@ export type ProfileStackParamList = {
   ProfileMain: { startEditing?: boolean; returnToCart?: boolean } | undefined;
   FarmProfile: undefined;
   Settings: undefined;
+  ChangePassword: undefined;
   DesignSystemGallery: undefined;
 };
 
@@ -246,6 +248,11 @@ function ProfileNavigator() {
         name="Settings"
         component={SettingsScreen}
         options={{ title: t('settings') }}
+      />
+      <ProfileStack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{ title: t('changePasswordTitle') }}
       />
       {__DEV__ ? <ProfileStack.Screen name="DesignSystemGallery" component={DesignSystemGalleryScreen} options={{ headerShown: false }} /> : null}
     </ProfileStack.Navigator>

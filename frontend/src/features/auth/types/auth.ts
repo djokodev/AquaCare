@@ -35,7 +35,7 @@ export interface LoginRequest {
 
 export interface RegisterRequest {
   phone_number: string;
-  email?: string;
+  email: string;
   first_name?: string;
   last_name?: string;
   business_name?: string;
@@ -62,6 +62,12 @@ export interface AuthResponse {
     refresh: string;
   };
   message: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  password: string;
+  password_confirm: string;
 }
 
 export interface ApiError {

@@ -18,6 +18,7 @@ describe('services/authService', () => {
 
   const mockRegisterData = {
     phone_number: '+237670000000',
+    email: 'user@example.com',
     first_name: 'John',
     last_name: 'Doe',
     account_type: 'individual' as const,
@@ -285,6 +286,88 @@ describe('services/authService', () => {
       const result = await authService.getCurrentUser();
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('requestPasswordReset', () => {
+    it('appelle l endpoint forgot avec le telephone', async () => {
+      mockApiService.post.mockResolvedValueOnce({ data: { email_hint: 'd***@gmail.com' } } as any);
+
+      const result = await authService.requestPasswordReset('+237670000000');
+
+      expect(result).toEqual({ emailHint: 'd***@gmail.com' });
+
+      expect(mockApiService.post).toHaveBeenCalledWith(
+        '/accounts/password/forgot/',
+        { phone_number: '+237670000000' }
+      );
+    });
+
+    it('propage une erreur metier en AuthRequestError', async () => {
+      mockApiService.post.mockRejectedValueOnce({
+        response: { status: 429, data: {} },
+      });
+
+      await expect(authService.requestPasswordReset('+237670000000')).rejects.toBeInstanceOf(
+        AuthRequestError
+      );
+    });
+  });
+
+  describe('changePassword', () => {
+    it('appelle l endpoint change avec le payload attendu', async () => {
+      mockApiService.post.mockResolvedValueOnce({ data: {} } as any);
+
+      await authService.changePassword({
+        current_password: 'motdepasse123',
+        password: 'NouveauMotDePasse2026',
+        password_confirm: 'NouveauMotDePasse2026',
+      });
+
+      expect(mockApiService.post).toHaveBeenCalledWith(
+        '/accounts/password/change/',
+        {
+          current_password: 'motdepasse123',
+          password: 'NouveauMotDePasse2026',
+          password_confirm: 'NouveauMotDePasse2026',
+        }
+      );
+    });
+
+    it('stocke la nouvelle paire de tokens renvoyee par le serveur', async () => {
+      mockApiService.post.mockResolvedValueOnce({
+        data: { tokens: { access: 'new-access', refresh: 'new-refresh' } },
+      } as any);
+
+      await authService.changePassword({
+        current_password: 'motdepasse123',
+        password: 'NouveauMotDePasse2026',
+        password_confirm: 'NouveauMotDePasse2026',
+      });
+
+      expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith('aquacare_access_token', 'new-access');
+      expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith('aquacare_refresh_token', 'new-refresh');
+    });
+
+    it('remonte les erreurs de champ 400', async () => {
+      mockApiService.post.mockRejectedValueOnce({
+        response: {
+          status: 400,
+          data: { current_password: ['Le mot de passe actuel est incorrect.'] },
+        },
+      });
+
+      await expect(
+        authService.changePassword({
+          current_password: 'mauvais',
+          password: 'NouveauMotDePasse2026',
+          password_confirm: 'NouveauMotDePasse2026',
+        })
+      ).rejects.toMatchObject({
+        fieldErrors: {
+          current_password: 'Le mot de passe actuel est incorrect.',
+        },
+      });
     });
   });
 });

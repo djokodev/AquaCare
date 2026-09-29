@@ -132,6 +132,9 @@ jobs:
           POSTGRES_PORT=5432
           JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
           COMPOSE_PROJECT_NAME=aquacare
+          EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+          DEFAULT_FROM_EMAIL="AquaCare <no-reply@aquacare.tech>"
+          RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
           DJANGO_SUPERUSER_PHONE=${{ secrets.DJANGO_SUPERUSER_PHONE }}
           DJANGO_SUPERUSER_PASSWORD=${{ secrets.DJANGO_SUPERUSER_PASSWORD }}
           DJANGO_SUPERUSER_FIRST_NAME=${{ secrets.DJANGO_SUPERUSER_FIRST_NAME }}

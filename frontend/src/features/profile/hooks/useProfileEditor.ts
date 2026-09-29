@@ -47,7 +47,7 @@ export const useProfileEditor = ({ user, updateProfile }: UseProfileEditorOption
     []
   );
 
-  const save = useCallback(async () => {
+  const save = useCallback(async (currentPassword?: string) => {
     if (isSaving) return;
 
     const payload: UpdateUserProfilePayload = {
@@ -57,6 +57,7 @@ export const useProfileEditor = ({ user, updateProfile }: UseProfileEditorOption
       district: locationData.arrondissement,
       city: locationData.city,
       neighborhood: locationData.neighborhood,
+      ...(currentPassword ? { current_password: currentPassword } : {}),
     };
 
     setIsSaving(true);
@@ -68,8 +69,13 @@ export const useProfileEditor = ({ user, updateProfile }: UseProfileEditorOption
     }
   }, [editData, isSaving, locationData, updateProfile]);
 
+  const isEmailChanged = Boolean(
+    user && (editData.email ?? '').trim().toLowerCase() !== (user.email ?? '').trim().toLowerCase()
+  );
+
   return {
     isEditing,
+    isEmailChanged,
     setIsEditing,
     isSaving,
     editData,

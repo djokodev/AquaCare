@@ -17,6 +17,8 @@ Le module `accounts` porte l'identite des pisciculteurs AquaCare et les donnees 
 7. La simulation annuelle de production exposee depuis le parcours accounts.
 8. La suppression logique et l'anonymisation de compte.
 9. L'administration securisee des utilisateurs, des fermes et de la carte GPS.
+10. Le cycle de vie du mot de passe: changement authentifie et reinitialisation
+    par email (page web serveur + contract API pour l'app).
 
 Le module est backend uniquement. Le frontend mobile consomme les endpoints `/api/accounts/`, mais ne doit pas porter les calculs definitifs ni les regles d'autorisation.
 
@@ -409,13 +411,67 @@ Comportement:
 
 Choix: suppression logique plutot que suppression physique, pour preserver l'integrite referentielle des commandes, rapports et donnees historiques.
 
+## Cycle De Vie Du Mot De Passe
+
+Decision prod 2026-09 (issue: preparation production module accounts):
+
+1. **Changement authentifie** (`POST /password/change/`): mot de passe actuel
+   requis, validateurs Django appliques. Les tokens deja emis restent valables
+   jusqu'a expiration (pas d'invalidation de masse: la ferme typique a un
+   seul appareil).
+2. **Reinitialisation par email** (`POST /password/forgot/` puis confirmation):
+   le lien pointe vers une page web hebergee par l'API, donc utilisable depuis
+   le navigateur du telephone sans deep link applicatif. L'API
+   `/password/reset/` expose le meme contrat pour un ecran dedie dans l'app.
+3. **Email obligatoire a l'inscription**, avec verification de delivrabilite
+   du domaine (records MX, sinon A/AAAA) via `dnspython`. Pas de message de
+   confirmation envoye (pas d'OTP email pour le lancement). Echec ouvert si le
+   DNS est indisponible de notre cote.
+4. **Erreurs explicites** (decision 2026-09, remplace l'anti-enumeration):
+   `/password/forgot/` repond 400 sur `phone_number` si aucun compte actif
+   n'existe ou si le compte n'a pas d'email, 503 si l'envoi echoue, et 200
+   avec `email_hint` (email masque, ex: `d***@gmail.com`) en cas de succes.
+   Le login revelait deja l'existence d'un compte; `accounts_password_forgot`
+   (5/heure par IP) limite les essais.
+5. **Token de reset**: `django.contrib.auth.tokens.default_token_generator`;
+   le hash du mot de passe est dans le hash du token, donc tout changement de
+   mot de passe invalide les liens en circulation. `PASSWORD_RESET_TIMEOUT`
+   est fixe a 1 heure (voir `settings/base.py`).
+6. **Pas d'OTP SMS** pour le lancement: le proxy WhatsApp du numero est la
+   validation structurelle du mobile camerounais
+   (`accounts/domain/phone_operators.py` maintient un registre informatif
+   des prefixes MTN/Orange/Camtel/Nexttel pour le support; aucun prefixe
+   inconnu ne rejet un numero, pour eviter de bloquer des plages allouees
+   plus tard par l'ARTEL).
+
+Fichiers: `services/password_service.py`, `web_views.py`, `web_urls.py`,
+`domain/email_deliverability.py`, `domain/phone_operators.py`,
+`templates/accounts/*`, `templates/accounts/emails/password_reset.html`.
+
+Expediteur email: `DEFAULT_FROM_EMAIL`. Decision 2026-09: tous les emails
+transactionnels (reset, rapports, notifications) partent de
+`AquaCare <no-reply@aquacare.tech>`, valeur fixee dans le code, les stacks
+compose et le workflow de deploiement (pas de secret GitHub necessaire). Le
+domaine `aquacare.tech` doit etre verifie chez Resend. Le logo de l'email est
+charge depuis `EMAIL_LOGO_URL` (defaut: logo public de la prod,
+`https://api.aquacare.tech/static/brand/aquacare-logo.png`). Une URL d'API
+locale ou une image CID ne s'affichent pas dans Gmail via Resend.
+
+Les pages web et l'email utilisent le design AquaCare: logo partage
+(`common/static/brand/aquacare-logo.png`), vert de marque `#059669`, fond
+`#f8fafc`. Ne pas reintroduire le bleu legacy `#2563eb`.
+
+Implication frontend a planifier: rendre le champ email requis dans
+`RegisterScreen` et ajouter les ecrans "mot de passe oublie" / "changer mot
+de passe" (le chemin web fonctionne sans ces ecrans).
+
 ## Contrats API
 
 Base path: `/api/accounts/`
 
 | Endpoint | Methodes | Auth | Role |
 | --- | --- | --- | --- |
-| `/register/` | `POST` | Non | Creation compte et tokens |
+| `/register/` | `POST` | Non | Creation compte et tokens (email obligatoire) |
 | `/login/` | `POST` | Non | Connexion et tokens |
 | `/logout/` | `POST` | Oui | Blacklist refresh token |
 | `/token/refresh/` | `POST` | Non, refresh requis | Rotation token si compte actif |
@@ -424,7 +480,17 @@ Base path: `/api/accounts/`
 | `/farm/` | `GET`, `PUT`, `PATCH` | Oui | Profil ferme |
 | `/farm/setup/` | `POST`, `PATCH` | Oui | Alias legacy du setup aquaculture |
 | `/farm/simulate/` | `POST` | Oui | Alias legacy de la simulation aquaculture |
+| `/password/change/` | `POST` | Oui | Changement de mot de passe (mot de passe actuel requis) |
+| `/password/forgot/` | `POST` | Non | Demande de reset par email (erreur explicite si numero inconnu ou sans email) |
+| `/password/reset/` | `POST` | Non | Confirmation du reset (uid + token + nouveau mot de passe) |
 | `/delete/` | `POST` | Oui | Anonymisation compte |
+
+Pages web (hors `/api/`, ouvertes depuis le lien email):
+
+| Endpoint | Methodes | Role |
+| --- | --- | --- |
+| `/accounts/password/reset/<uidb64>/<token>/` | `GET`, `POST` | Formulaire de definition du nouveau mot de passe |
+| `/accounts/password/reset/done/` | `GET` | Confirmation visuelle |
 
 Base path canonique aquaculture pour le setup mobile:
 
@@ -741,6 +807,14 @@ Budgets de requetes couverts par tests:
 10. Un nom de connexion individuel doit contenir au moins prenom et nom apres normalisation.
 11. Les noms identiques peuvent exister, le login par telephone doit rester disponible.
 12. Les superusers crees via `create_superuser` n'ont pas de `FarmProfile` automatique.
+13. L'email est obligatoire a l'inscription: ne pas repasser le champ en optionnel
+    sans remplacer le canal de reinitialisation du mot de passe.
+14. Le check MX email ne doit jamais rejeter un utilisateur a cause d'une
+    indisponibilite DNS de notre cote (fail-open volontaire).
+15. Le rendu de templates via le test client echoue sur Python 3.14 + Django
+    5.1 (`BaseContext.__copy__` + `copy(super())`): le conftest du module
+    installe un shim local; la CI et la production Docker (Python 3.12) ne
+    sont pas concernees.
 
 ## Ou Lire Ensuite
 

@@ -6,6 +6,7 @@ import { API_ENDPOINTS, STORAGE_KEYS } from '@/constants/api';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import {
   AuthFieldErrors,
+  ChangePasswordRequest,
   LoginRequest,
   RegisterRequest,
   AuthResponse,
@@ -82,9 +83,57 @@ class AuthService {
   /**
    * Suppression définitive du compte
    */
-  async deleteAccount(): Promise<void> {
-    await apiService.post(API_ENDPOINTS.AUTH.DELETE_ACCOUNT, { confirm: true });
+  async deleteAccount(currentPassword: string): Promise<void> {
+    try {
+      await apiService.post(API_ENDPOINTS.AUTH.DELETE_ACCOUNT, {
+        confirm: true,
+        current_password: currentPassword,
+      });
+    } catch (error: unknown) {
+      throw this.handleAuthError(error);
+    }
     await apiService.clearTokens();
+  }
+
+  /**
+   * Demande de réinitialisation du mot de passe (lien envoyé par email).
+   * Retourne l'email masqué du destinataire; un numéro inconnu ou un compte
+   * sans email remonte en erreur de champ `phone_number`.
+   */
+  async requestPasswordReset(phoneNumber: string): Promise<{ emailHint: string }> {
+    try {
+      const response = await apiService.post<{ email_hint?: string }>(
+        API_ENDPOINTS.AUTH.PASSWORD_FORGOT,
+        { phone_number: phoneNumber },
+      );
+      return { emailHint: response.data?.email_hint ?? '' };
+    } catch (error: unknown) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  /**
+   * Changement de mot de passe de l'utilisateur connecté.
+   */
+  async changePassword(payload: ChangePasswordRequest): Promise<void> {
+    let tokens: { access?: string; refresh?: string } | undefined;
+    try {
+      const response = await apiService.post<{ tokens?: { access?: string; refresh?: string } }>(
+        API_ENDPOINTS.AUTH.PASSWORD_CHANGE,
+        payload,
+      );
+      tokens = response.data?.tokens;
+    } catch (error: unknown) {
+      throw this.handleAuthError(error);
+    }
+    // Le serveur a révoqué toutes les sessions: on garde l'appareil courant
+    // connecté avec la nouvelle paire de tokens qu'il renvoie.
+    if (tokens?.access && tokens?.refresh) {
+      await Promise.all([
+        SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, tokens.access),
+        SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh),
+      ]);
+    }
   }
 
   /**

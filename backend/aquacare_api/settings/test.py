@@ -98,6 +98,10 @@ CORS_ALLOWED_ORIGINS = []
 MEDIA_ROOT = '/tmp/test_media'
 STATIC_ROOT = '/tmp/test_static'
 
+# Pas de resolution DNS reelle dans les tests (le check MX est testé
+# unitairement avec des resolvers injectés).
+ACCOUNT_EMAIL_MX_VALIDATION = False
+
 # ✅ JWT Configuration pour tests
 # Override SIMPLE_JWT pour utiliser le SECRET_KEY défini ci-dessus
 SIMPLE_JWT = {

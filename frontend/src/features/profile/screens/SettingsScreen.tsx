@@ -7,17 +7,29 @@ import * as SecureStore from "expo-secure-store";
 import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
 import logger from "@/utils/logger";
-import OnboardingService from "@/features/onboarding/services/onboardingService";
-import { AppText, Button, Card, InteractiveCard, SelectableCard } from '@/components/ui';
+import { StackNavigationProp } from "@react-navigation/stack";
+import { ProfileStackParamList } from "@/navigation/MainNavigator";
+import { AppText, Button, Card, InteractiveCard, PasswordConfirmModal, SelectableCard } from '@/components/ui';
+import type { AuthErrorPayload } from '@/features/auth/types/auth';
 import { colors, spacing } from '@/theme';
 
-export default function SettingsScreen() {
+type SettingsScreenNavigationProp = StackNavigationProp<
+  ProfileStackParamList,
+  "Settings"
+>;
+
+interface Props {
+  navigation: SettingsScreenNavigationProp;
+}
+
+export default function SettingsScreen({ navigation }: Props) {
   const { t, i18n } = useTranslation();
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletePasswordVisible, setIsDeletePasswordVisible] = useState(false);
+  const [deletePasswordError, setDeletePasswordError] = useState<string | null>(null);
   const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
   const languageUpdateInProgressRef = useRef(false);
-  const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
   const [settings, setSettings] = useState({ language: i18n.language });
 
   useEffect(() => {
@@ -77,49 +89,37 @@ export default function SettingsScreen() {
         {
           text: t('deleteAccountConfirm'),
           style: 'destructive',
-          onPress: async () => {
-            setIsDeleting(true);
-            try {
-              await deleteAccount();
-              // Redux state cleared → navigation auto-redirects to login
-            } catch (error) {
-              logger.error('Delete account error:', error);
-              Alert.alert(t('deleteAccountError'));
-              setIsDeleting(false);
-            }
+          onPress: () => {
+            setDeletePasswordError(null);
+            setIsDeletePasswordVisible(true);
           },
         },
       ]
     );
   };
 
-  const handleResetOnboarding = () => {
-    if (isResettingOnboarding) return;
-
-    Alert.alert(
-      t("onboardingResetConfirmTitle"),
-      t("onboardingResetConfirmMessage"),
-      [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("onboardingResetAction"),
-          style: "destructive",
-          onPress: async () => {
-            setIsResettingOnboarding(true);
-            try {
-              await OnboardingService.reset();
-              await logout();
-            } catch (error) {
-              logger.error("Onboarding reset error:", error);
-              Alert.alert(t("error"), t("onboardingResetError"));
-            } finally {
-              setIsResettingOnboarding(false);
-            }
-          },
-        },
-      ]
-    );
+  const confirmDeleteAccount = async (currentPassword: string) => {
+    setIsDeleting(true);
+    setDeletePasswordError(null);
+    try {
+      await deleteAccount(currentPassword);
+      setIsDeletePasswordVisible(false);
+      // Redux state cleared → navigation auto-redirects to login
+    } catch (error) {
+      const payload = error as Partial<AuthErrorPayload> | undefined;
+      const passwordError = payload?.fieldErrors?.current_password;
+      if (passwordError) {
+        setDeletePasswordError(passwordError);
+      } else {
+        logger.error('Delete account error:', error);
+        setIsDeletePasswordVisible(false);
+        Alert.alert(t('deleteAccountError'));
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   };
+
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -155,12 +155,21 @@ export default function SettingsScreen() {
         <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("about")}</AppText>
         <Card>
           <AppText>{t("aboutSummaryParagraph1")}</AppText>
-          <AppText style={styles.aboutParagraph}>{t("aboutSummaryParagraph2")}</AppText>
         </Card>
       </View>
 
       <View style={styles.section}>
         <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("accountManagement")}</AppText>
+        <InteractiveCard
+          accessibilityLabel={t('changePassword')}
+          onPress={() => navigation.navigate('ChangePassword')}
+          style={[styles.actionCard, styles.actionCardSpacing]}
+        >
+          <View style={styles.actionContent}>
+            <Ionicons name="lock-closed-outline" size={20} color={colors.brand.primary} />
+            <AppText variant="bodyStrong" color="link">{t("changePassword")}</AppText>
+          </View>
+        </InteractiveCard>
         <InteractiveCard
           accessibilityLabel={t('deleteAccount')}
           onPress={handleDeleteAccount}
@@ -169,34 +178,28 @@ export default function SettingsScreen() {
         >
           <View style={styles.actionContent}>
             <Ionicons name="trash-outline" size={20} color={colors.status.error} />
-            <View style={styles.actionText}>
             <AppText variant="bodyStrong" color="error">{t("deleteAccount")}</AppText>
-            <AppText variant="caption" color="muted">{t("deleteAccountDesc")}</AppText>
-            </View>
           </View>
         </InteractiveCard>
 
-        {__DEV__ && (
-          <InteractiveCard
-            accessibilityLabel={t('onboardingResetAction')}
-            onPress={handleResetOnboarding}
-            disabled={isResettingOnboarding}
-            style={styles.resetCard}
-          >
-            <View style={styles.actionContent}>
-              <Ionicons name="refresh-circle-outline" size={20} color={colors.brand.primary} />
-              <View style={styles.actionText}>
-              <AppText variant="bodyStrong" color="link">{t("onboardingResetAction")}</AppText>
-              <AppText variant="caption" color="muted">{t("onboardingResetHint")}</AppText>
-              </View>
-            </View>
-          </InteractiveCard>
-        )}
       </View>
 
       <View style={styles.section}>
         <Button label={t('disconnect')} variant="danger" iconLeft="log-out" onPress={handleLogout} />
       </View>
+      <PasswordConfirmModal
+        visible={isDeletePasswordVisible}
+        title={t('deleteAccountPasswordTitle')}
+        message={t('deleteAccountPasswordMessage')}
+        passwordLabel={t('currentPassword')}
+        confirmLabel={t('deleteAccountConfirm')}
+        cancelLabel={t('cancel')}
+        error={deletePasswordError}
+        loading={isDeleting}
+        destructive
+        onConfirm={(password) => void confirmDeleteAccount(password)}
+        onCancel={() => setIsDeletePasswordVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -209,8 +212,6 @@ const styles = StyleSheet.create({
   sectionTitle: { marginBottom: spacing[3] },
   languageCard: { marginBottom: spacing[2] },
   actionCard: { justifyContent: 'flex-start' },
-  resetCard: { justifyContent: 'flex-start', marginTop: spacing[3] },
+  actionCardSpacing: { marginBottom: spacing[3] },
   actionContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
-  actionText: { flex: 1, gap: spacing[1] },
-  aboutParagraph: { marginTop: spacing[3] },
 });

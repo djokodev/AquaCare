@@ -65,6 +65,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "common.client_ip.TrustedClientIPMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "common.observability.RequestCorrelationMiddleware",
@@ -152,6 +153,9 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "common.observability.observability_exception_handler",
+    # L'IP client est deja normalisee par common.client_ip (X-Forwarded-For
+    # retire): les throttles utilisent REMOTE_ADDR, jamais une valeur client.
+    "NUM_PROXIES": 0,
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -166,6 +170,7 @@ REST_FRAMEWORK = {
         "accounts_token": ACCOUNT_TOKEN_THROTTLE_RATE,
         "accounts_farm_setup": ACCOUNT_FARM_SETUP_THROTTLE_RATE,
         "accounts_simulation": ACCOUNT_SIMULATION_THROTTLE_RATE,
+        "accounts_password_forgot": "5/hour",
         "chat_message": "10/minute",
         "commerce_simulation": "20/hour",
         "commerce_suggestions": "30/hour",
@@ -203,6 +208,9 @@ SIMPLE_JWT = {
     "USER_ID_FIELD": "id",
     "USER_ID_CLAIM": "user_id",
 }
+
+# Reinitialisation de mot de passe par email (module accounts)
+PASSWORD_RESET_TIMEOUT = 60 * 60  # lien valide 1 heure
 
 # Internationalization
 LANGUAGE_CODE = "fr-fr"
@@ -243,6 +251,10 @@ AUTHENTICATION_BACKENDS = [
     "accounts.backends.AquaCareAuthBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
+
+# Documentation OpenAPI publique en dev; reservee a l'equipe (is_staff) en
+# staging/prod pour ne pas exposer la carte complete des endpoints.
+API_DOCS_PUBLIC = True
 
 # drf-spectacular
 SPECTACULAR_SETTINGS = {
@@ -303,10 +315,20 @@ EMAIL_PORT = _env_int('EMAIL_PORT', 587)
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = _env_str('EMAIL_HOST_USER', 'resend')
 EMAIL_HOST_PASSWORD = _env_str('RESEND_API_KEY')
-DEFAULT_FROM_EMAIL = _env_str('DEFAULT_FROM_EMAIL', 'rapports@aquacare.tech')
+DEFAULT_FROM_EMAIL = _env_str('DEFAULT_FROM_EMAIL', 'AquaCare <no-reply@aquacare.tech>')
+# Logo des emails: URL publique HTTPS (servie par la prod via /static/).
+EMAIL_LOGO_URL = _env_str(
+    'EMAIL_LOGO_URL',
+    'https://api.aquacare.tech/static/brand/aquacare-logo.png',
+)
 
 # Frontend URL (pour les liens dans les emails)
 FRONTEND_URL = _env_str('FRONTEND_URL', 'http://localhost:8081')
+
+# URL publique de l'API pour les liens envoyes par email (reset mot de passe).
+# Vide en dev: on retombe sur l'hote de la requete (tests en LAN). En
+# staging/prod elle est fixee pour ne jamais dependre de l'en-tete Host.
+PUBLIC_API_BASE_URL = _env_str('PUBLIC_API_BASE_URL', '')
 
 # Notifications nourrissage : alarmes locales frontend prioritaires
 FEEDING_REMINDER_LOCAL_ALARM_ONLY = _env_bool('FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)

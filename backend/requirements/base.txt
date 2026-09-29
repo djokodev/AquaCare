@@ -1,44 +1,45 @@
 # Django Core
-Django==5.1.11
+Django==5.2.17
 python-decouple==3.8
 
 # Admin UI
 django-jazzmin==3.0.1
 
 # Django REST Framework
-djangorestframework==3.16.1
+djangorestframework==3.17.2
 djangorestframework_simplejwt==5.5.1
 django-cors-headers==4.7.0
-django-filter==24.3
+django-filter==25.2
 
 # Database
 psycopg2-binary==2.9.10
 
 # API Documentation
-drf-spectacular==0.28.0
+drf-spectacular==0.29.0
 
 # Image Processing
-pillow==11.3.0
+pillow==12.3.0
 
 # JWT
-PyJWT==2.10.1
+PyJWT==2.15.1
 
 # Task queue
 celery==5.4.0
-django-celery-beat==2.7.0
+django-celery-beat==2.8.1
 redis==5.0.4
 
 # HTTP clients
-requests==2.32.3
+requests==2.34.2
 
 # Utilities
 tzdata==2025.2
 PyYAML==6.0.2
-sqlparse==0.5.3
+sqlparse==0.6.0
+dnspython==2.7.0
 
 # Static files serving via Gunicorn (dev + prod)
 whitenoise==6.8.2
 
 # PDF Generation
-weasyprint==61.2
-pydyf==0.11.0
+weasyprint==70.0
+pydyf==0.12.1

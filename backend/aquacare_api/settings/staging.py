@@ -22,6 +22,7 @@ ALLOWED_HOSTS = config(
     default='77.237.241.223,api-staging.aquacare.tech'
 )
 ALLOWED_HOSTS = _split_csv(ALLOWED_HOSTS)
+PUBLIC_API_BASE_URL = config('PUBLIC_API_BASE_URL', default='https://api-staging.aquacare.tech')
 
 # CSRF — requis Django 4.0+ pour les requêtes HTTPS (admin, forms)
 CSRF_TRUSTED_ORIGINS = [

@@ -102,7 +102,7 @@ function DashboardActionCard({
 
 export default function DashboardScreen({ navigation }: any) {
   const { t, i18n } = useTranslation();
-  const { displayName, loadFarmProfile } = useAuth();
+  const { loadFarmProfile } = useAuth();
   const dispatch = useDispatch<AppDispatch>();
 
   const [harvestModalVisible, setHarvestModalVisible] = useState(false);
@@ -507,7 +507,6 @@ export default function DashboardScreen({ navigation }: any) {
         }
       >
         <DashboardHeader
-          displayName={displayName}
           unreadCount={unreadCount}
           onNotificationsPress={handleNotificationsPress}
           onSettingsPress={handleSettingsPress}
@@ -533,7 +532,6 @@ export default function DashboardScreen({ navigation }: any) {
         }
       >
         <DashboardHeader
-          displayName={displayName}
           unreadCount={unreadCount}
           onNotificationsPress={handleNotificationsPress}
           onSettingsPress={handleSettingsPress}

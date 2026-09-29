@@ -27,6 +27,11 @@ urlpatterns = [
     path('farm/setup/', views.FarmSetupView.as_view(), name='farm_setup'),
     path('farm/simulate/', views.AnnualSimulationView.as_view(), name='annual_simulation'),
 
+    # Password lifecycle
+    path('password/change/', views.PasswordChangeView.as_view(), name='password_change'),
+    path('password/forgot/', views.PasswordForgotView.as_view(), name='password_forgot'),
+    path('password/reset/', views.PasswordResetView.as_view(), name='password_reset'),
+
     # Account deletion
     path('delete/', views.AccountDeletionView.as_view(), name='delete_account'),
 ]

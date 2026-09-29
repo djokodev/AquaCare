@@ -20,6 +20,7 @@ jest.mock('@/components/SelectField', () => {
 describe('features/auth/screens/RegisterScreen', () => {
   const mockRegister = jest.fn();
   const mockClearAuthError = jest.fn();
+  const mockClearAuthFieldError = jest.fn();
   const mockNavigation = {
     navigate: jest.fn(),
   } as any;
@@ -32,6 +33,7 @@ describe('features/auth/screens/RegisterScreen', () => {
       error: null,
       fieldErrors: {},
       clearAuthError: mockClearAuthError,
+      clearAuthFieldError: mockClearAuthFieldError,
     });
   });
 
@@ -88,6 +90,7 @@ describe('features/auth/screens/RegisterScreen', () => {
     fireEvent.press(getByText('company'));
 
     fireEvent.changeText(getByPlaceholderText('placeholderPhoneExample'), '680111222');
+    fireEvent.changeText(getByPlaceholderText('placeholderEmail'), 'entreprise@example.com');
     fireEvent.changeText(getByPlaceholderText('placeholderBusinessName'), 'Aqua Entreprise');
     fireEvent.press(getByTestId('select-legalStatus'));
     fireEvent.changeText(getByPlaceholderText('placeholderPromoterName'), 'Mme Promoteur');
@@ -141,6 +144,7 @@ describe('features/auth/screens/RegisterScreen', () => {
         phone_number: 'Un compte existe déjà avec ce numéro de téléphone.',
       },
       clearAuthError: mockClearAuthError,
+      clearAuthFieldError: mockClearAuthFieldError,
     });
 
     const { getByText } = render(<RegisterScreen navigation={mockNavigation} />);

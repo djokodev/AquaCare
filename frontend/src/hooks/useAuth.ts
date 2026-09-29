@@ -13,6 +13,7 @@ import {
   updateUserProfile,
   updateFarmProfile,
   clearError,
+  clearFieldError,
 } from '@/features/auth/store/authSlice';
 import {
   LoginRequest,
@@ -93,8 +94,8 @@ export const useAuth = () => {
     return dispatch(logoutUser());
   }, [dispatch]);
 
-  const deleteAccount = useCallback(() => {
-    return dispatch(deleteAccountUser()).unwrap();
+  const deleteAccount = useCallback((currentPassword: string) => {
+    return dispatch(deleteAccountUser(currentPassword)).unwrap();
   }, [dispatch]);
 
   const checkAuth = useCallback(() => {
@@ -127,6 +128,10 @@ export const useAuth = () => {
     dispatch(clearError());
   }, [dispatch]);
 
+  const clearAuthFieldError = useCallback((field: string) => {
+    dispatch(clearFieldError(field));
+  }, [dispatch]);
+
   const displayName = useMemo(() => {
     const user = authState.user;
     if (!user) return '';
@@ -155,6 +160,7 @@ export const useAuth = () => {
     updateProfile,
     updateFarm,
     clearAuthError,
+    clearAuthFieldError,
     loadFarmProfile: loadFarmProfileOnly,
 
     // Computed properties

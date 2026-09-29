@@ -1,31 +1,38 @@
-import React from 'react';
-import {
-  StyleSheet,
-  View,
-} from 'react-native';
-import MapView, { Marker, UrlTile } from 'react-native-maps';
+import React, { useRef, useState } from 'react';
+import { Alert, Linking, Share, StyleSheet, View } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 
-import { AppText, Button, Card, EmptyState } from '@/components/ui';
-import { colors, shadows, spacing } from '@/theme';
+import { AppText, Button, Card, EmptyState, IconButton } from '@/components/ui';
+import { colors, radii, shadows, spacing } from '@/theme';
 import { useAuth } from '@/hooks/useAuth';
 import type { RootStackParamList } from '@/navigation/MainNavigator';
+import { buildDirectionsUrl, buildShareLocationUrl } from '@/features/profile/utils/farmMapLinks';
+import logger from '@/utils/logger';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'FarmMap'>;
 
+const FARM_ZOOM_DELTA = 0.01;
+
+/**
+ * Carte native de la ferme (Apple Plans sur iOS, Google Maps sur Android).
+ * Pensée pour la livraison: vue satellite pour les zones sans rues nommées,
+ * itinéraire dans l'app de navigation du téléphone et partage de la position.
+ */
 const FarmMapScreen: React.FC = () => {
   const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const { farmProfile } = useAuth();
+  const mapRef = useRef<MapView>(null);
+  const [isSatellite, setIsSatellite] = useState(false);
 
   const latitude = farmProfile?.latitude ? Number(farmProfile.latitude) : null;
   const longitude = farmProfile?.longitude ? Number(farmProfile.longitude) : null;
-  const hasLocation = latitude !== null && longitude !== null;
 
-  if (!hasLocation) {
+  if (latitude === null || longitude === null) {
     return (
       <View style={styles.container}>
         <EmptyState title={t('farmNoLocation')} message={t('farmNoLocationHint')} actionLabel={t('farmBackToProfile')} onAction={() => navigation.goBack()} />
@@ -33,46 +40,69 @@ const FarmMapScreen: React.FC = () => {
     );
   }
 
+  const point = { latitude, longitude };
+  const farmName = farmProfile?.farm_name || t('myFarm');
+  const region = { ...point, latitudeDelta: FARM_ZOOM_DELTA, longitudeDelta: FARM_ZOOM_DELTA };
+
+  const openDirections = async () => {
+    try {
+      await Linking.openURL(buildDirectionsUrl(point));
+    } catch (error) {
+      logger.warn('Farm directions could not be opened', error);
+      Alert.alert(t('error'), t('farmMapOpenError'));
+    }
+  };
+
+  const shareLocation = async () => {
+    try {
+      await Share.share({ message: t('farmMapShareMessage', { name: farmName, url: buildShareLocationUrl(point) }) });
+    } catch (error) {
+      logger.warn('Farm location could not be shared', error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={styles.map}
-        initialRegion={{
-          latitude,
-          longitude,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        }}
+        initialRegion={region}
+        mapType={isSatellite ? 'hybrid' : 'standard'}
+        showsCompass
+        showsScale
+        toolbarEnabled={false}
       >
-        <UrlTile
-          urlTemplate="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maximumZ={19}
-          flipY={false}
-          tileSize={256}
-        />
-        <Marker
-          coordinate={{ latitude, longitude }}
-          title={farmProfile?.farm_name ?? t('myFarm')}
-          description={farmProfile?.location_address ?? ''}
-          pinColor={colors.brand.primary}
-        />
+        <Marker coordinate={point} title={farmName} description={farmProfile?.location_address ?? ''} pinColor={colors.brand.primary} />
       </MapView>
+
+      <View style={styles.mapControls}>
+        <IconButton
+          icon={isSatellite ? 'map-outline' : 'earth-outline'}
+          accessibilityLabel={t(isSatellite ? 'farmMapStandard' : 'farmMapSatellite')}
+          onPress={() => setIsSatellite((value) => !value)}
+          style={styles.controlButton}
+        />
+        <IconButton
+          icon="locate-outline"
+          accessibilityLabel={t('farmMapRecenter')}
+          onPress={() => mapRef.current?.animateToRegion(region, 400)}
+          style={styles.controlButton}
+        />
+      </View>
 
       <Card style={styles.infoCard}>
         <View style={styles.infoRow}>
           <Ionicons name="location" size={18} color={colors.brand.primary} />
           <View style={styles.infoText}>
-            <AppText variant="bodyStrong">{farmProfile?.farm_name}</AppText>
+            <AppText variant="bodyStrong">{farmName}</AppText>
             {farmProfile?.location_address ? (
               <AppText variant="caption" color="muted">{farmProfile.location_address}</AppText>
             ) : null}
-            <AppText variant="caption" color="muted" style={styles.coords}>
-              {latitude.toFixed(6)}, {longitude.toFixed(6)}
-            </AppText>
           </View>
         </View>
 
-        <Button label={t('back')} variant="outline" iconLeft="arrow-back" onPress={() => navigation.goBack()} />
+        <Button label={t('farmMapDirections')} iconLeft="navigate" onPress={() => void openDirections()} />
+        <Button label={t('farmMapShare')} variant="outline" iconLeft="share-social" onPress={() => void shareLocation()} />
       </Card>
     </View>
   );
@@ -85,6 +115,17 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  mapControls: {
+    position: 'absolute',
+    top: spacing[4],
+    right: spacing[4],
+    gap: spacing[2],
+  },
+  controlButton: {
+    backgroundColor: colors.surface.card,
+    borderRadius: radii.full,
+    ...shadows.medium,
   },
   infoCard: {
     borderBottomLeftRadius: 0,
@@ -99,10 +140,6 @@ const styles = StyleSheet.create({
   },
   infoText: {
     flex: 1,
-  },
-  coords: {
-    marginTop: spacing[1],
-    fontFamily: 'monospace',
   },
 });
 

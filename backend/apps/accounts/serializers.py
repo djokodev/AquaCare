@@ -20,6 +20,7 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer, TokenVe
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken, UntypedToken
 
+from .domain.email_deliverability import EmailDeliverabilityValidator
 from .domain.farm_profile_rules import build_farm_profile_invariant_errors
 from .domain.farm_setup_rules import FarmSetupRules
 from .models import FarmProfile, User
@@ -57,9 +58,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         help_text="Format: +237XXXXXXXXX ou format international"
     )
     email = serializers.EmailField(
-        required=False,
-        allow_blank=True,
-        validators=[EmailValidator()],
+        required=True,
+        allow_blank=False,
+        validators=[EmailValidator(), EmailDeliverabilityValidator()],
+        help_text="Requis: sert de canal de reinitialisation du mot de passe",
     )
 
     class Meta:
@@ -563,6 +565,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
     is_individual = serializers.BooleanField(read_only=True)
     is_company = serializers.BooleanField(read_only=True)
 
+    email = serializers.EmailField(
+        required=False,
+        allow_blank=False,
+        validators=[EmailValidator(), EmailDeliverabilityValidator()],
+    )
+    current_password = serializers.CharField(
+        write_only=True,
+        required=False,
+        trim_whitespace=False,
+        help_text="Mot de passe actuel, obligatoire pour changer l'email",
+    )
+
     farm_profile = FarmProfileSerializer(read_only=True)
 
     class Meta:
@@ -573,7 +587,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'full_name', 'login_name', 'display_name', 'is_individual', 'is_company',
             'activity_type', 'region', 'department', 'district', 'city', 'neighborhood',
             'legal_status', 'promoter_name', 'age_group', 'intervention_zone',
-            'farm_profile', 'date_joined', 'is_active'
+            'farm_profile', 'date_joined', 'is_active', 'current_password'
         )
         read_only_fields = (
             'id', 'phone_number', 'account_type', 'is_verified', 'date_joined', 'is_active',
@@ -582,6 +596,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        current_password = attrs.pop("current_password", None)
+        new_email = attrs.get("email")
+        if (
+            self.instance is not None
+            and new_email is not None
+            and new_email.strip().lower() != (self.instance.email or "").strip().lower()
+        ):
+            # L'email est le canal de reinitialisation: le changer sans le
+            # mot de passe permettrait de voler le compte depuis une session
+            # empruntee (email change + "mot de passe oublie").
+            if not current_password:
+                raise serializers.ValidationError(
+                    {"current_password": [_("Saisissez votre mot de passe actuel pour changer l'email.")]}
+                )
+            if not self.instance.check_password(current_password):
+                raise serializers.ValidationError(
+                    {"current_password": [_("Le mot de passe actuel est incorrect.")]}
+                )
         return validate_user_account_invariants(attrs, self.instance)
 
 
@@ -637,10 +669,23 @@ class AccountDeletionSerializer(serializers.Serializer):
         required=True,
         help_text="Doit être true pour confirmer la suppression du compte."
     )
+    current_password = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+        help_text="Mot de passe actuel: la suppression est definitive.",
+    )
 
     def validate_confirm(self, value: bool) -> bool:
         if value is not True:
             raise serializers.ValidationError(_("Confirmation explicite requise."))
+        return value
+
+    def validate_current_password(self, value: str) -> str:
+        user = self.context["request"].user
+        # Un retry apres suppression reussie reste idempotent: le compte est
+        # deja desactive et son mot de passe rendu inutilisable.
+        if user.is_active and not user.check_password(value):
+            raise serializers.ValidationError(_("Le mot de passe actuel est incorrect."))
         return value
 
 
@@ -667,3 +712,78 @@ class AccountsTokenVerifySerializer(TokenVerifySerializer):
         token = UntypedToken(attrs["token"])
         _ensure_token_user_is_active(token)
         return super().validate(attrs)
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Changement de mot de passe par l'utilisateur authentifie."""
+
+    current_password = serializers.CharField(
+        write_only=True,
+        help_text="Mot de passe actuel (protection anti-usurpation de session)",
+    )
+    password = serializers.CharField(
+        write_only=True,
+        help_text="Nouveau mot de passe (validateurs Django appliques)",
+    )
+    password_confirm = serializers.CharField(write_only=True)
+
+    def validate_current_password(self, value: str) -> str:
+        user = self.context["request"].user
+        if not user.check_password(value):
+            raise serializers.ValidationError(
+                _("Le mot de passe actuel est incorrect.")
+            )
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError(
+                _("Les mots de passe ne correspondent pas.")
+            )
+        if attrs["password"] == attrs["current_password"]:
+            raise serializers.ValidationError(
+                _("Le nouveau mot de passe doit etre different de l'actuel.")
+            )
+        validate_password(attrs["password"], user=self.context["request"].user)
+        return attrs
+
+
+class PasswordForgotSerializer(serializers.Serializer):
+    """Demande de reinitialisation par telephone (canal: email du compte)."""
+
+    phone_number = serializers.CharField(
+        validators=[PhoneNumberValidator()],
+        help_text="Telephone du compte; le lien est envoye a l'email du compte",
+    )
+
+
+class PasswordChangeResponseSerializer(serializers.Serializer):
+    """Confirmation + nouvelle paire de tokens pour l'appareil courant."""
+
+    message = serializers.CharField(read_only=True)
+    tokens = AuthTokenSerializer(read_only=True)
+
+
+class PasswordForgotResponseSerializer(serializers.Serializer):
+    """Confirmation d'envoi avec l'email masque du destinataire."""
+
+    message = serializers.CharField(read_only=True)
+    email_hint = serializers.CharField(read_only=True)
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    """Confirmation de reinitialisation (uid + token + nouveau mot de passe)."""
+
+    uid = serializers.CharField(write_only=True)
+    token = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True)
+    password_confirm = serializers.CharField(write_only=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError(
+                _("Les mots de passe ne correspondent pas.")
+            )
+        # Meme politique de mot de passe que le changement authentifie.
+        validate_password(attrs["password"])
+        return attrs

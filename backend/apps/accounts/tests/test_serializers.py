@@ -66,6 +66,7 @@ class TestUserRegistrationSerializer:
         """
         data = {
             'phone_number': '+237692345678',
+            'email': 'jean.mismatch@exemple.com',
             'first_name': 'Jean',
             'last_name': 'Test',
             'account_type': 'individual',
@@ -120,6 +121,7 @@ class TestUserRegistrationSerializer:
         """
         data = {
             'phone_number': '+237692345679',
+            'email': 'espaces@exemple.com',
             'first_name': '   ',
             'last_name': '   ',
             'account_type': 'individual',
@@ -178,10 +180,13 @@ class TestUserProfileSerializer:
         """
         user = user_factory()
         
+        user.set_password('MotDePasse2026')
+        user.save(update_fields=['password'])
         update_data = {
             'first_name': 'Nouveau Prénom',
             'last_name': 'Nouveau Nom',
-            'email': 'nouveau_email@exemple.com'
+            'email': 'nouveau_email@exemple.com',
+            'current_password': 'MotDePasse2026',
         }
         
         serializer = UserProfileSerializer(user, data=update_data, partial=True)

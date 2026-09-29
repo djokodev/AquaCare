@@ -10,6 +10,7 @@ jest.mock('@/hooks/useAuth', () => ({
 describe('features/auth/screens/LoginScreen', () => {
   const mockLogin = jest.fn();
   const mockClearAuthError = jest.fn();
+  const mockClearAuthFieldError = jest.fn();
   const mockNavigation = {
     navigate: jest.fn(),
   } as any;
@@ -22,6 +23,7 @@ describe('features/auth/screens/LoginScreen', () => {
       error: null,
       fieldErrors: {},
       clearAuthError: mockClearAuthError,
+      clearAuthFieldError: mockClearAuthFieldError,
     });
   });
 
@@ -86,10 +88,27 @@ describe('features/auth/screens/LoginScreen', () => {
         login_name: "Aucun compte n'est associé à ce nom de connexion.",
       },
       clearAuthError: mockClearAuthError,
+      clearAuthFieldError: mockClearAuthFieldError,
     });
 
     const { getByText } = render(<LoginScreen navigation={mockNavigation} />);
 
     expect(getByText("Aucun compte n'est associé à ce nom de connexion.")).toBeTruthy();
+  });
+
+  it("efface l'erreur backend d'un champ des que l'utilisateur le corrige", () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      login: mockLogin,
+      isLoading: false,
+      error: null,
+      fieldErrors: { password: 'Mot de passe incorrect.' },
+      clearAuthError: mockClearAuthError,
+      clearAuthFieldError: mockClearAuthFieldError,
+    });
+
+    const { getByPlaceholderText } = render(<LoginScreen navigation={mockNavigation} />);
+    fireEvent.changeText(getByPlaceholderText('********'), 'nouvel-essai');
+
+    expect(mockClearAuthFieldError).toHaveBeenCalledWith('password');
   });
 });

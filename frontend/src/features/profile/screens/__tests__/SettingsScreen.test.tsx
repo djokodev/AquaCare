@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import * as SecureStore from 'expo-secure-store';
 
 import SettingsScreen from '../SettingsScreen';
@@ -34,6 +34,8 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/hooks/useAuth', () => ({
   useAuth: jest.fn(),
 }));
+
+const mockNavigation = { navigate: jest.fn(), goBack: jest.fn() };
 
 jest.mock('@/utils/logger', () => ({
   __esModule: true,
@@ -74,7 +76,7 @@ describe('features/profile/screens/SettingsScreen', () => {
   });
 
   it('affiche les infos user et change la langue', async () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = render(<SettingsScreen navigation={mockNavigation as any} />);
 
     expect(getByText('Jean Dupont')).toBeTruthy();
     expect(getByText('+237670000000')).toBeTruthy();
@@ -91,7 +93,7 @@ describe('features/profile/screens/SettingsScreen', () => {
   it('rollback la langue sur erreur et bloque la double action', async () => {
     let rejectUpdate: (reason?: unknown) => void = () => undefined;
     mockUpdateProfile.mockReturnValue(new Promise((_resolve, reject) => { rejectUpdate = reject; }));
-    const screen = render(<SettingsScreen />);
+    const screen = render(<SettingsScreen navigation={mockNavigation as any} />);
 
     fireEvent.press(screen.getByText('languageEnglish'));
     await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
@@ -107,7 +109,7 @@ describe('features/profile/screens/SettingsScreen', () => {
   });
 
   it('declenche logout quand l utilisateur confirme', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = render(<SettingsScreen navigation={mockNavigation as any} />);
 
     fireEvent.press(getByText('disconnect'));
 
@@ -123,7 +125,7 @@ describe('features/profile/screens/SettingsScreen', () => {
   });
 
   it('affiche la modale de confirmation lors de la suppression de compte', () => {
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText } = render(<SettingsScreen navigation={mockNavigation as any} />);
 
     fireEvent.press(getByText('deleteAccount'));
 
@@ -139,7 +141,7 @@ describe('features/profile/screens/SettingsScreen', () => {
 
   it('appelle deleteAccount lors de la confirmation de suppression', async () => {
     mockDeleteAccount.mockResolvedValue(undefined);
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText, getAllByText, getByPlaceholderText } = render(<SettingsScreen navigation={mockNavigation as any} />);
 
     fireEvent.press(getByText('deleteAccount'));
 
@@ -149,7 +151,40 @@ describe('features/profile/screens/SettingsScreen', () => {
     const actions = alertCall?.[2] as Array<{ text: string; style: string; onPress?: () => void }>;
     const confirmAction = actions.find((a) => a.style === 'destructive');
 
-    await confirmAction?.onPress?.();
-    expect(mockDeleteAccount).toHaveBeenCalled();
+    act(() => {
+      confirmAction?.onPress?.();
+    });
+    expect(mockDeleteAccount).not.toHaveBeenCalled();
+
+    fireEvent.changeText(getByPlaceholderText('********'), 'MotDePasse2026');
+    fireEvent.press(getAllByText('deleteAccountConfirm').slice(-1)[0]);
+
+    await waitFor(() => {
+      expect(mockDeleteAccount).toHaveBeenCalledWith('MotDePasse2026');
+    });
+  });
+
+  it('affiche l erreur de mot de passe sans supprimer le compte', async () => {
+    mockDeleteAccount.mockRejectedValue({
+      message: 'Le mot de passe actuel est incorrect.',
+      fieldErrors: { current_password: 'Le mot de passe actuel est incorrect.' },
+    });
+    const { getByText, getAllByText, getByPlaceholderText, findByText } = render(
+      <SettingsScreen navigation={mockNavigation as any} />
+    );
+
+    fireEvent.press(getByText('deleteAccount'));
+    const alertCall = (Alert.alert as jest.Mock).mock.calls.find(
+      (call) => call[0] === 'deleteAccountConfirmTitle'
+    );
+    const actions = alertCall?.[2] as Array<{ style: string; onPress?: () => void }>;
+    act(() => {
+      actions.find((a) => a.style === 'destructive')?.onPress?.();
+    });
+
+    fireEvent.changeText(getByPlaceholderText('********'), 'mauvais');
+    fireEvent.press(getAllByText('deleteAccountConfirm').slice(-1)[0]);
+
+    expect(await findByText('Le mot de passe actuel est incorrect.')).toBeTruthy();
   });
 });

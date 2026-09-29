@@ -39,6 +39,12 @@ class AccountTokenThrottle(AnonRateThrottle):
     scope = "accounts_token"
 
 
+class PasswordForgotThrottle(AnonRateThrottle):
+    """Throttle strict pour la demande de reinitialisation (anti-spam email)."""
+
+    scope = "accounts_password_forgot"
+
+
 class AccountFarmSetupThrottle(UserRateThrottle):
     """Throttle for authenticated farm setup mutations."""
 
