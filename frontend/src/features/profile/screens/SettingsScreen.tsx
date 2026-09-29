@@ -7,7 +7,6 @@ import * as SecureStore from "expo-secure-store";
 import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
 import logger from "@/utils/logger";
-import OnboardingService from "@/features/onboarding/services/onboardingService";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { ProfileStackParamList } from "@/navigation/MainNavigator";
 import { AppText, Button, Card, InteractiveCard, SelectableCard } from '@/components/ui';
@@ -28,7 +27,6 @@ export default function SettingsScreen({ navigation }: Props) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingLanguage, setIsUpdatingLanguage] = useState(false);
   const languageUpdateInProgressRef = useRef(false);
-  const [isResettingOnboarding, setIsResettingOnboarding] = useState(false);
   const [settings, setSettings] = useState({ language: i18n.language });
 
   useEffect(() => {
@@ -104,33 +102,6 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
-  const handleResetOnboarding = () => {
-    if (isResettingOnboarding) return;
-
-    Alert.alert(
-      t("onboardingResetConfirmTitle"),
-      t("onboardingResetConfirmMessage"),
-      [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("onboardingResetAction"),
-          style: "destructive",
-          onPress: async () => {
-            setIsResettingOnboarding(true);
-            try {
-              await OnboardingService.reset();
-              await logout();
-            } catch (error) {
-              logger.error("Onboarding reset error:", error);
-              Alert.alert(t("error"), t("onboardingResetError"));
-            } finally {
-              setIsResettingOnboarding(false);
-            }
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
@@ -193,19 +164,6 @@ export default function SettingsScreen({ navigation }: Props) {
           </View>
         </InteractiveCard>
 
-        {__DEV__ && (
-          <InteractiveCard
-            accessibilityLabel={t('onboardingResetAction')}
-            onPress={handleResetOnboarding}
-            disabled={isResettingOnboarding}
-            style={styles.resetCard}
-          >
-            <View style={styles.actionContent}>
-              <Ionicons name="refresh-circle-outline" size={20} color={colors.brand.primary} />
-              <AppText variant="bodyStrong" color="link">{t("onboardingResetAction")}</AppText>
-            </View>
-          </InteractiveCard>
-        )}
       </View>
 
       <View style={styles.section}>
@@ -224,6 +182,5 @@ const styles = StyleSheet.create({
   languageCard: { marginBottom: spacing[2] },
   actionCard: { justifyContent: 'flex-start' },
   actionCardSpacing: { marginBottom: spacing[3] },
-  resetCard: { justifyContent: 'flex-start', marginTop: spacing[3] },
   actionContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
 });
