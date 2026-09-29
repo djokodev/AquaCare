@@ -47,7 +47,7 @@ interface Props {
 
 export default function RegisterScreen({ navigation }: Props) {
   const { t } = useTranslation();
-  const { register, isLoading, error, fieldErrors, clearAuthError } = useAuth();
+  const { register, isLoading, error, fieldErrors, clearAuthError, clearAuthFieldError } = useAuth();
 
   const [formData, setFormData] = useState<RegisterRequest>({
     phone_number: "",
@@ -92,6 +92,7 @@ export default function RegisterScreen({ navigation }: Props) {
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
     }
+    if (fieldErrors[field]) clearAuthFieldError(field);
     if (error) clearAuthError();
   };
 
@@ -178,7 +179,10 @@ export default function RegisterScreen({ navigation }: Props) {
                 label={t("ageGroup")}
                 value={formData.age_group}
                 onChange={(value) => updateField("age_group", value)}
-                options={AGE_GROUPS}
+                options={AGE_GROUPS.map((option) => ({
+                  ...option,
+                  label: t(`ageGroupOption_${option.value}`, { defaultValue: option.label }),
+                }))}
                 placeholder={t("selectOption")}
                 error={getFieldError("age_group")}
                 required

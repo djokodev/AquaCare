@@ -272,6 +272,12 @@ export const authSlice = createSlice({
     clearError: (state) => {
       clearAuthErrors(state);
     },
+    clearFieldError: (state, action: PayloadAction<string>) => {
+      if (state.fieldErrors[action.payload]) {
+        const { [action.payload]: _removed, ...rest } = state.fieldErrors;
+        state.fieldErrors = rest;
+      }
+    },
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
     },
@@ -431,5 +437,5 @@ export const authSlice = createSlice({
   },
 });
 
-export const { clearError, setUser, setFarmProfile } = authSlice.actions;
+export const { clearError, clearFieldError, setUser, setFarmProfile } = authSlice.actions;
 export default authSlice.reducer;

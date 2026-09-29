@@ -38,9 +38,15 @@ interface Props {
   navigation: LoginScreenNavigationProp;
 }
 
+const SERVER_FIELD_BY_FORM_FIELD = {
+  loginName: "login_name",
+  phoneNumber: "phone_number",
+  password: "password",
+} as const;
+
 export default function LoginScreen({ navigation }: Props) {
   const { t } = useTranslation();
-  const { login, isLoading, error, fieldErrors, clearAuthError } = useAuth();
+  const { login, isLoading, error, fieldErrors, clearAuthError, clearAuthFieldError } = useAuth();
 
   const [formData, setFormData] = useState({
     loginName: "",
@@ -90,6 +96,10 @@ export default function LoginScreen({ navigation }: Props) {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+    const serverField = SERVER_FIELD_BY_FORM_FIELD[field];
+    if (fieldErrors[serverField]) {
+      clearAuthFieldError(serverField);
     }
     if (error) {
       clearAuthError();
