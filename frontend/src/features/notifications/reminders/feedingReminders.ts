@@ -10,6 +10,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 import logger from '@/utils/logger';
 
@@ -22,6 +23,13 @@ export const FEEDING_ALARM_CHANNEL_ID = 'feeding_alarms';
 /** Fichier embarqué via le plugin expo-notifications (build de dev / stores). */
 export const FEEDING_ALARM_SOUND = 'feeding_alarm.wav';
 export const MAX_REMINDER_TIMES = 6;
+
+/**
+ * Expo Go est une app précompilée : elle ne contient pas nos fichiers son.
+ * On y utilise le son par défaut pour éviter l'erreur « Custom sound not found ».
+ */
+const isExpoGo = (): boolean => Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+const alarmSound = (): string => (isExpoGo() ? 'default' : FEEDING_ALARM_SOUND);
 /** Jours au format Expo : 1 = dimanche ... 7 = samedi. */
 export const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
 
@@ -196,7 +204,7 @@ export const ensureFeedingAlarmChannel = async (
     name: messages.channelName,
     description: messages.channelDescription,
     importance: Notifications.AndroidImportance.MAX,
-    sound: FEEDING_ALARM_SOUND,
+    sound: alarmSound(),
     vibrationPattern: [0, 800, 400, 800, 400, 800],
     enableVibrate: true,
     bypassDnd,
@@ -323,7 +331,7 @@ export const scheduleFeedingReminders = async ({
           content: {
             title: messages.title,
             body,
-            sound: FEEDING_ALARM_SOUND,
+            sound: alarmSound(),
             priority: Notifications.AndroidNotificationPriority.MAX,
             interruptionLevel: 'timeSensitive',
             categoryIdentifier: FEEDING_ALARM_CATEGORY_ID,
@@ -355,7 +363,7 @@ export const scheduleFeedingSnooze = async (
     content: {
       title: notification.request.content.title ?? fallback.title,
       body: notification.request.content.body ?? fallback.snoozeBody,
-      sound: FEEDING_ALARM_SOUND,
+      sound: alarmSound(),
       priority: Notifications.AndroidNotificationPriority.MAX,
       interruptionLevel: 'timeSensitive',
       categoryIdentifier: FEEDING_ALARM_CATEGORY_ID,

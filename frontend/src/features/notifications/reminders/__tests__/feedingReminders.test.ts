@@ -40,6 +40,12 @@ jest.mock('expo-notifications', () => ({
   },
 }));
 
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { executionEnvironment: 'standalone' },
+  ExecutionEnvironment: { StoreClient: 'storeClient', Standalone: 'standalone' },
+}));
+
 jest.mock('@/utils/logger', () => ({
   __esModule: true,
   default: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() },
