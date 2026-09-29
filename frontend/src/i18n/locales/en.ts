@@ -110,6 +110,9 @@
   changePasswordSuccessMessage: 'Your password has been changed successfully.',
   hello: "Hello",
   welcome: "Welcome to",
+  goodMorning: "Good morning",
+  goodAfternoon: "Good afternoon",
+  goodEvening: "Good evening",
 
   // Messages
   welcomeMessage: 'Welcome to AquaCare',

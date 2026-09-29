@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconButton } from '@/components/ui';
+import { AppText, IconButton } from '@/components/ui';
+import { getDashboardGreetingKey } from '@/features/main/utils/dashboardGreeting';
 import { colors, spacing } from '@/theme';
 
 /**
@@ -28,7 +29,7 @@ interface DashboardHeaderProps {
 /**
  * Composant Header personnalisé pour le Dashboard
  *
- * Affiche uniquement 2 boutons d'action à droite :
+ * Affiche une salutation selon l'heure (sans le nom) et 2 boutons à droite :
  *   1. Cloche notifications avec badge count
  *   2. Bouton Settings
  *
@@ -48,10 +49,15 @@ export default function DashboardHeader({
 }: DashboardHeaderProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const greeting = t(getDashboardGreetingKey(new Date().getHours()));
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + spacing[3] }]}>
-      <View className="flex-row justify-end items-center">
+      <View className="flex-row justify-between items-center">
+        <AppText variant="screenTitle" color="inverse" style={styles.greeting} numberOfLines={1}>
+          {greeting}
+        </AppText>
+
         {/* Right Actions */}
         <View className="flex-row gap-3 items-center">
           {/* Notifications Bell */}
@@ -80,4 +86,5 @@ export default function DashboardHeader({
 
 const styles = StyleSheet.create({
   header: { backgroundColor: colors.brand.primary, paddingHorizontal: spacing[5], paddingBottom: spacing[5] },
+  greeting: { flex: 1, marginRight: spacing[4] },
 });

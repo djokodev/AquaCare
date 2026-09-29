@@ -109,6 +109,9 @@ export const fr = {
   changePasswordSuccessMessage: 'Votre mot de passe a été changé avec succès.',
   hello: "Bonjour",
   welcome: "Bienvenue dans",
+  goodMorning: "Bonjour",
+  goodAfternoon: "Bon après-midi",
+  goodEvening: "Bonsoir",
 
   // Messages
   welcomeMessage: 'Bienvenue sur AquaCare',
