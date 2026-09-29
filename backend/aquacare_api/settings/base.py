@@ -65,6 +65,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "common.client_ip.TrustedClientIPMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "common.observability.RequestCorrelationMiddleware",
@@ -152,6 +153,9 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "common.observability.observability_exception_handler",
+    # L'IP client est deja normalisee par common.client_ip (X-Forwarded-For
+    # retire): les throttles utilisent REMOTE_ADDR, jamais une valeur client.
+    "NUM_PROXIES": 0,
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
