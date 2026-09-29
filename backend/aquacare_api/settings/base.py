@@ -166,7 +166,7 @@ REST_FRAMEWORK = {
         "accounts_token": ACCOUNT_TOKEN_THROTTLE_RATE,
         "accounts_farm_setup": ACCOUNT_FARM_SETUP_THROTTLE_RATE,
         "accounts_simulation": ACCOUNT_SIMULATION_THROTTLE_RATE,
-        "accounts_password_forgot": "3/hour",
+        "accounts_password_forgot": "5/hour",
         "chat_message": "10/minute",
         "commerce_simulation": "20/hour",
         "commerce_suggestions": "30/hour",

@@ -26,6 +26,7 @@ from .serializers import (
     AnnualSimulationInputSerializer,
     AnnualSimulationResponseSerializer,
     AuthSuccessResponseSerializer,
+    DetailErrorResponseSerializer,
     ErrorResponseSerializer,
     FarmProfileSerializer,
     FarmSetupSerializer,
@@ -33,6 +34,7 @@ from .serializers import (
     LogoutSerializer,
     MessageResponseSerializer,
     PasswordChangeSerializer,
+    PasswordForgotResponseSerializer,
     PasswordForgotSerializer,
     PasswordResetSerializer,
     UserProfileSerializer,
@@ -46,6 +48,7 @@ from .services.password_service import (
     InvalidPasswordResetLinkError,
     PasswordChangeService,
     PasswordResetService,
+    mask_email,
 )
 from .services.profile_mutation_service import AccountProfileMutationService
 from .services.profile_query_service import ProfileQueryService
@@ -851,8 +854,9 @@ class PasswordForgotView(generics.GenericAPIView):
     """
     Demande de reinitialisation de mot de passe par email.
 
-    Anti-enumeration: la reponse est identique que le telephone
-    corresponde ou non a un compte actif avec un email.
+    Le lien est envoye a l'email du compte associe au telephone. Un numero
+    sans compte actif, un compte sans email et un echec d'envoi retournent
+    une erreur explicite pour guider l'utilisateur.
     """
 
     serializer_class = PasswordForgotSerializer
@@ -862,18 +866,21 @@ class PasswordForgotView(generics.GenericAPIView):
     @extend_schema(
         summary="Demander la reinitialisation du mot de passe",
         description=(
-            "Envoie un lien de reinitialisation a l'email du compte associe au "
-            "telephone fourni. La reponse est volontairement identique que le "
-            "compte existe ou non. Le lien est valable 1 heure."
+            "Envoie un lien de reinitialisation (valable 1 heure) a l'email du "
+            "compte associe au telephone fourni et retourne l'email masque."
         ),
         request=PasswordForgotSerializer,
         responses={
             200: OpenApiResponse(
-                response=MessageResponseSerializer,
-                description="Demande traitee (reponse identique dans tous les cas)",
+                response=PasswordForgotResponseSerializer,
+                description="Lien envoye; email_hint contient l'email masque",
             ),
             400: VALIDATION_ERROR_RESPONSE,
             429: THROTTLED_RESPONSE,
+            503: OpenApiResponse(
+                response=DetailErrorResponseSerializer,
+                description="L'email n'a pas pu etre envoye",
+            ),
         },
     )
     def post(self, request, *args, **kwargs):
@@ -882,25 +889,40 @@ class PasswordForgotView(generics.GenericAPIView):
         user = PasswordResetService.find_resettable_user(
             serializer.validated_data["phone_number"]
         )
-        email_sent = False
-        if user is not None:
-            email_sent = PasswordResetService.send_reset_email(request, user)
-        logger.info(
-            "Password reset requested",
-            extra={
-                "event": "accounts.password.reset.requested",
-                "endpoint": request.path,
-                "account_found": user is not None,
-                "email_sent": email_sent,
-                "status_code": status.HTTP_200_OK,
-            },
-        )
-        response_serializer = MessageResponseSerializer(
+        log_extra = {"event": "accounts.password.reset.requested", "endpoint": request.path}
+        if user is None:
+            logger.info("Password reset requested for unknown phone", extra={**log_extra, "outcome": "unknown_phone"})
+            raise DRFValidationError(
+                {"phone_number": [_("Aucun compte n'est associé à ce numéro de téléphone.")]}
+            )
+        if not (user.email or "").strip():
+            logger.info(
+                "Password reset requested for account without email",
+                extra={**log_extra, "outcome": "no_email"},
+            )
+            raise DRFValidationError(
+                {
+                    "phone_number": [
+                        _(
+                            "Aucun email n'est enregistré pour ce compte. "
+                            "Contactez le support AquaCare."
+                        )
+                    ]
+                }
+            )
+        if not PasswordResetService.send_reset_email(request, user):
+            logger.warning("Password reset email not delivered", extra={**log_extra, "outcome": "email_failed"})
+            response_serializer = DetailErrorResponseSerializer(
+                {"detail": _("L'email n'a pas pu être envoyé. Réessayez dans quelques minutes.")}
+            )
+            return Response(response_serializer.data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        logger.info("Password reset email sent", extra={**log_extra, "outcome": "sent", "user_id": _user_id(user)})
+        email_hint = mask_email(user.email)
+        response_serializer = PasswordForgotResponseSerializer(
             {
-                "message": _(
-                    "Si un compte existe pour ce numero, un lien de "
-                    "reinitialisation a ete envoye par email."
-                )
+                "message": _("Lien de réinitialisation envoyé à %(email)s.") % {"email": email_hint},
+                "email_hint": email_hint,
             }
         )
         return Response(response_serializer.data, status=status.HTTP_200_OK)

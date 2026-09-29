@@ -427,8 +427,12 @@ Decision prod 2026-09 (issue: preparation production module accounts):
    du domaine (records MX, sinon A/AAAA) via `dnspython`. Pas de message de
    confirmation envoye (pas d'OTP email pour le lancement). Echec ouvert si le
    DNS est indisponible de notre cote.
-4. **Anti-enumeration**: `/password/forgot/` repond toujours 200 avec le meme
-   message, que le compte existe, soit desactive, supprime ou sans email.
+4. **Erreurs explicites** (decision 2026-09, remplace l'anti-enumeration):
+   `/password/forgot/` repond 400 sur `phone_number` si aucun compte actif
+   n'existe ou si le compte n'a pas d'email, 503 si l'envoi echoue, et 200
+   avec `email_hint` (email masque, ex: `d***@gmail.com`) en cas de succes.
+   Le login revelait deja l'existence d'un compte; `accounts_password_forgot`
+   (5/heure par IP) limite les essais.
 5. **Token de reset**: `django.contrib.auth.tokens.default_token_generator`;
    le hash du mot de passe est dans le hash du token, donc tout changement de
    mot de passe invalide les liens en circulation. `PASSWORD_RESET_TIMEOUT`
@@ -476,7 +480,7 @@ Base path: `/api/accounts/`
 | `/farm/setup/` | `POST`, `PATCH` | Oui | Alias legacy du setup aquaculture |
 | `/farm/simulate/` | `POST` | Oui | Alias legacy de la simulation aquaculture |
 | `/password/change/` | `POST` | Oui | Changement de mot de passe (mot de passe actuel requis) |
-| `/password/forgot/` | `POST` | Non | Demande de reset par email (anti-enumeration) |
+| `/password/forgot/` | `POST` | Non | Demande de reset par email (erreur explicite si numero inconnu ou sans email) |
 | `/password/reset/` | `POST` | Non | Confirmation du reset (uid + token + nouveau mot de passe) |
 | `/delete/` | `POST` | Oui | Anonymisation compte |
 

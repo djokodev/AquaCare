@@ -291,9 +291,11 @@ describe('services/authService', () => {
 
   describe('requestPasswordReset', () => {
     it('appelle l endpoint forgot avec le telephone', async () => {
-      mockApiService.post.mockResolvedValueOnce({ data: {} } as any);
+      mockApiService.post.mockResolvedValueOnce({ data: { email_hint: 'd***@gmail.com' } } as any);
 
-      await authService.requestPasswordReset('+237670000000');
+      const result = await authService.requestPasswordReset('+237670000000');
+
+      expect(result).toEqual({ emailHint: 'd***@gmail.com' });
 
       expect(mockApiService.post).toHaveBeenCalledWith(
         '/accounts/password/forgot/',

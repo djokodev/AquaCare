@@ -33,6 +33,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [emailHint, setEmailHint] = useState("");
 
   const handleSubmit = async () => {
     const trimmed = phoneNumber.trim();
@@ -50,7 +51,8 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
     setIsSubmitting(true);
 
     try {
-      await authService.requestPasswordReset(trimmed);
+      const result = await authService.requestPasswordReset(trimmed);
+      setEmailHint(result.emailHint);
       setIsSent(true);
     } catch (err) {
       if (err instanceof AuthRequestError) {
@@ -90,7 +92,14 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
           )}
 
           {isSent ? (
-            <InlineAlert tone="success" message={t("forgotPasswordSentMessage")} />
+            <InlineAlert
+              tone="success"
+              message={
+                emailHint
+                  ? t("forgotPasswordSentTo", { email: emailHint })
+                  : t("forgotPasswordSentMessage")
+              }
+            />
           ) : (
             <>
               <PhoneInputField

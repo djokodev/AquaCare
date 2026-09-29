@@ -716,9 +716,15 @@ class PasswordForgotSerializer(serializers.Serializer):
 
     phone_number = serializers.CharField(
         validators=[PhoneNumberValidator()],
-        help_text="Telephone du compte; la reponse est volontairement identique "
-        "que le compte existe ou non (anti-enumeration)",
+        help_text="Telephone du compte; le lien est envoye a l'email du compte",
     )
+
+
+class PasswordForgotResponseSerializer(serializers.Serializer):
+    """Confirmation d'envoi avec l'email masque du destinataire."""
+
+    message = serializers.CharField(read_only=True)
+    email_hint = serializers.CharField(read_only=True)
 
 
 class PasswordResetSerializer(serializers.Serializer):

@@ -8,8 +8,10 @@ Decision prod 2026-09 (module accounts):
 - Le lien de reset pointe vers une page web serveur (utilisable depuis le
   navigateur du telephone, sans deep link applicatif); l'API expose aussi
   la confirmation pour un ecran dedie dans l'app plus tard.
-- Anti-enumeration: /password/forgot/ repond toujours OK, meme si le compte
-  n'existe pas, est desactive, supprime ou sans email.
+- /password/forgot/ indique clairement si le numero n'a pas de compte actif
+  ou pas d'email (decision produit 2026-09: le login revele deja l'existence
+  d'un compte, l'anti-enumeration n'apportait donc rien ici). Le throttle
+  PasswordForgotThrottle limite les essais.
 - Un reset revoque tous les refresh tokens du compte (sessions volees
   incluses). Le changement de mot de passe authentifie ne les revoque PAS:
   l'appareil courant resterait deconnecte sans changement cote mobile.
@@ -43,7 +45,16 @@ __all__ = [
     "PasswordChangeService",
     "PasswordResetService",
     "InvalidPasswordResetLinkError",
+    "mask_email",
 ]
+
+
+def mask_email(email: str) -> str:
+    """Masque un email pour l'afficher sans le reveler: d***@gmail.com."""
+    local, _, domain = (email or "").strip().partition("@")
+    if not local or not domain:
+        return ""
+    return f"{local[0]}***@{domain}"
 
 
 class InvalidPasswordResetLinkError(Exception):

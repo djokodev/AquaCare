@@ -90,13 +90,16 @@ class AuthService {
 
   /**
    * Demande de réinitialisation du mot de passe (lien envoyé par email).
-   * Réponse volontairement identique que le compte existe ou non.
+   * Retourne l'email masqué du destinataire; un numéro inconnu ou un compte
+   * sans email remonte en erreur de champ `phone_number`.
    */
-  async requestPasswordReset(phoneNumber: string): Promise<void> {
+  async requestPasswordReset(phoneNumber: string): Promise<{ emailHint: string }> {
     try {
-      await apiService.post(API_ENDPOINTS.AUTH.PASSWORD_FORGOT, {
-        phone_number: phoneNumber,
-      });
+      const response = await apiService.post<{ email_hint?: string }>(
+        API_ENDPOINTS.AUTH.PASSWORD_FORGOT,
+        { phone_number: phoneNumber },
+      );
+      return { emailHint: response.data?.email_hint ?? '' };
     } catch (error: unknown) {
       throw this.handleAuthError(error);
     }

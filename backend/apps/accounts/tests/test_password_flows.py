@@ -1,6 +1,6 @@
 """Tests des flux de cycle de vie du mot de passe (Direction prod 2026-09):
 - Changement de mot de passe authentifie
-- Demande de reinitialisation par email (anti-enumeration)
+- Demande de reinitialisation par email (erreurs explicites)
 - Confirmation de reinitialisation (API + page web serveur)
 """
 import re
@@ -157,31 +157,54 @@ class TestPasswordForgotEndpoint:
         api_client.post(self.url, {"phone_number": user.phone_number}, format="json")
         assert "Reset your password" in mail.outbox[0].subject
 
-    def test_unknown_phone_returns_same_response_without_email(self, api_client):
-        response = api_client.post(
-            self.url, {"phone_number": "+237690999888"}, format="json"
-        )
-        assert response.status_code == status.HTTP_200_OK
-        assert len(mail.outbox) == 0
-        assert "reinitialisation" in response.data["message"].lower()
-
-    def test_inactive_account_does_not_send_email(self, api_client, user):
-        user.is_active = False
-        user.save(update_fields=["is_active"])
-        response = api_client.post(
-            self.url, {"phone_number": user.phone_number}, format="json"
-        )
-        assert response.status_code == status.HTTP_200_OK
-        assert len(mail.outbox) == 0
-
-    def test_account_without_email_does_not_send(self, api_client, user):
-        user.email = ""
+    def test_success_returns_masked_email_hint(self, api_client, user):
+        user.email = "djoko@example.com"
         user.save(update_fields=["email"])
         response = api_client.post(
             self.url, {"phone_number": user.phone_number}, format="json"
         )
         assert response.status_code == status.HTTP_200_OK
+        assert response.data["email_hint"] == "d***@example.com"
+        assert "djoko@" not in response.data["message"]
+
+    def test_unknown_phone_is_reported(self, api_client):
+        response = api_client.post(
+            self.url, {"phone_number": "+237690999888"}, format="json"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "phone_number" in response.data
         assert len(mail.outbox) == 0
+
+    def test_inactive_account_is_reported_as_unknown(self, api_client, user):
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        response = api_client.post(
+            self.url, {"phone_number": user.phone_number}, format="json"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "phone_number" in response.data
+        assert len(mail.outbox) == 0
+
+    def test_account_without_email_is_reported(self, api_client, user):
+        user.email = ""
+        user.save(update_fields=["email"])
+        response = api_client.post(
+            self.url, {"phone_number": user.phone_number}, format="json"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "support" in str(response.data["phone_number"]).lower()
+        assert len(mail.outbox) == 0
+
+    def test_delivery_failure_returns_503(self, api_client, user):
+        with patch(
+            "accounts.services.password_service.EmailMultiAlternatives.send",
+            side_effect=OSError("smtp down"),
+        ):
+            response = api_client.post(
+                self.url, {"phone_number": user.phone_number}, format="json"
+            )
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert "detail" in response.data
 
     def test_invalid_phone_format_is_rejected(self, api_client):
         response = api_client.post(

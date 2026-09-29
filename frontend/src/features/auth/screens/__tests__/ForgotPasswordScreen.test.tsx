@@ -39,7 +39,7 @@ describe('features/auth/screens/ForgotPasswordScreen', () => {
   });
 
   it('envoie la demande avec le numero formate puis affiche la confirmation', async () => {
-    mockRequestPasswordReset.mockResolvedValueOnce(undefined);
+    mockRequestPasswordReset.mockResolvedValueOnce({ emailHint: 'd***@gmail.com' });
     const { getByPlaceholderText, getByText } = render(
       <ForgotPasswordScreen navigation={mockNavigation} />
     );
@@ -50,10 +50,10 @@ describe('features/auth/screens/ForgotPasswordScreen', () => {
     await waitFor(() => {
       expect(mockRequestPasswordReset).toHaveBeenCalledWith('+237670000000');
     });
-    expect(getByText('forgotPasswordSentMessage')).toBeTruthy();
+    expect(getByText('forgotPasswordSentTo')).toBeTruthy();
   });
 
-  it('affiche l erreur backend sans reveler l existence du compte', async () => {
+  it('affiche l erreur backend sous le champ telephone', async () => {
     mockRequestPasswordReset.mockRejectedValueOnce(
       new AuthRequestError('AUTH_RATE_LIMITED')
     );
