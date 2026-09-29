@@ -94,7 +94,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
               <PhoneInputField
                 value={phoneNumber}
                 onChange={handleChangePhone}
-                error={fieldError || undefined}
+                error={fieldError ? t(fieldError, { defaultValue: fieldError }) : undefined}
               />
 
               <AuthErrorBlock error={error} />

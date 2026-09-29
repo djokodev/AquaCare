@@ -48,15 +48,15 @@ export default function ChangePasswordScreen({ navigation }: Props) {
     const nextErrors: Record<string, string> = {};
 
     if (!formData.currentPassword.trim()) {
-      nextErrors.currentPassword = "required";
+      nextErrors.currentPassword = t("required");
     }
     if (!formData.newPassword.trim()) {
-      nextErrors.newPassword = "required";
+      nextErrors.newPassword = t("required");
     } else if (formData.newPassword.length < 8) {
-      nextErrors.newPassword = "passwordTooShort";
+      nextErrors.newPassword = t("passwordTooShort");
     }
     if (formData.newPassword !== formData.confirmPassword) {
-      nextErrors.confirmPassword = "passwordMismatch";
+      nextErrors.confirmPassword = t("passwordMismatch");
     }
 
     setFieldErrors(nextErrors);
