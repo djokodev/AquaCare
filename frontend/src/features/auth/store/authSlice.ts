@@ -3,6 +3,8 @@ import { AuthRequestError, authService } from '@/features/auth/services/authServ
 import { profileService } from '@/features/profile/services/profileService';
 import { sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
 import { dashboardSyncService } from '@/services/dashboardSyncService';
+import { unregisterPushToken } from '@/features/notifications/services/pushRegistration';
+import { cancelAllFeedingReminders } from '@/features/notifications/reminders/feedingReminders';
 import {
   AuthErrorPayload,
   User,
@@ -166,11 +168,17 @@ export const logoutUser = createAsyncThunk<boolean, void, { rejectValue: AuthErr
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
+      // Avant la révocation des jetons : le serveur doit savoir que ce
+      // téléphone ne doit plus recevoir les push de ce compte.
+      await unregisterPushToken();
       await authService.logout();
       return true;
     } catch (error: unknown) {
       return rejectWithValue(getThunkErrorPayload(error));
     } finally {
+      // Les réglages restent mémorisés par compte ; seules les alarmes programmées
+      // sur le téléphone sont retirées pour le prochain utilisateur.
+      await cancelAllFeedingReminders();
       await dashboardSyncService.clear();
     }
   }
@@ -181,6 +189,7 @@ export const deleteAccountUser = createAsyncThunk<boolean, string, { rejectValue
   async (currentPassword, { rejectWithValue }) => {
     try {
       await authService.deleteAccount(currentPassword);
+      await cancelAllFeedingReminders();
       return true;
     } catch (error: unknown) {
       return rejectWithValue(getThunkErrorPayload(error));

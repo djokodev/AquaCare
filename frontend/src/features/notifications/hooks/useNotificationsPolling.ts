@@ -6,13 +6,13 @@ import { fetchNotificationsSilent } from '@/features/notifications/store/notific
 import type { AppDispatch, RootState } from '@/store/store';
 
 /**
- * Global polling hook to keep notifications (badge + liste) fresh
- * même lorsque l'utilisateur reste sur un écran (ex: Dashboard).
+ * Rafraîchit la liste in-app (badge + liste) à intervalle lent et à chaque
+ * retour au premier plan. Les notifications urgentes arrivent en push.
+ * Les notifications sont liées au compte (commandes, support), pas au cycle.
  */
-export function useNotificationsPolling(intervalMs: number = 4000) {
+export function useNotificationsPolling(intervalMs: number = 60_000) {
   const dispatch = useDispatch<AppDispatch>();
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
-  const currentCycleId = useSelector((state: RootState) => state.aquaculture.currentCycle?.id);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const isFetchingRef = useRef(false);
@@ -31,11 +31,11 @@ export function useNotificationsPolling(intervalMs: number = 4000) {
 
     isFetchingRef.current = true;
     try {
-      await dispatch(fetchNotificationsSilent({ cycleId: currentCycleId }));
+      await dispatch(fetchNotificationsSilent(undefined));
     } finally {
       isFetchingRef.current = false;
     }
-  }, [currentCycleId, dispatch, isAuthenticated]);
+  }, [dispatch, isAuthenticated]);
 
   const startPolling = useCallback(() => {
     if (!isAuthenticated || pollingRef.current) {

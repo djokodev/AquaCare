@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useRegisterPushNotifications } from '@/hooks/useRegisterPushNotifications';
+import { registerPushTokenIfPermitted } from '@/features/notifications/services/pushRegistration';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
 import LoadingScreen from '@/features/main/screens/LoadingScreen';
@@ -20,7 +20,6 @@ const Stack = createStackNavigator<AppStackParamList>();
 
 export default function AppNavigator() {
   const { isAuthenticated, checkAuth } = useAuth();
-  const { registerPushToken } = useRegisterPushNotifications();
 
   // Etat onboarding
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
@@ -48,12 +47,13 @@ export default function AppNavigator() {
     refreshOnboardingFlag();
   }, [refreshOnboardingFlag]);
 
-  // Enregistrer le token push quand authentifié
+  // Réenregistre le token push si la permission a déjà été accordée.
+  // La demande de permission se fait au bon moment (commande, support).
   useEffect(() => {
     if (isAuthenticated) {
-      registerPushToken();
+      void registerPushTokenIfPermitted();
     }
-  }, [isAuthenticated, registerPushToken]);
+  }, [isAuthenticated]);
 
   if (!authReady || isCheckingOnboarding) {
     return <LoadingScreen />;

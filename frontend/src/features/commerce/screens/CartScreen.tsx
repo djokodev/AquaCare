@@ -43,6 +43,7 @@ import {
   SelectableCard,
 } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
+import { promptPushPermissionOnce } from '@/features/notifications/services/pushRegistration';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Cart'>;
 type RoutePropType = RouteProp<RootStackParamList, 'Cart'>;
@@ -253,6 +254,7 @@ export default function CartScreen() {
                   onPress: () => {
                     dispatch(clearCart());
                     navigation.navigate('OrdersHistory', storeNavigationParams);
+                    void promptPushPermissionOnce('order');
                   },
                 },
                 {
@@ -260,6 +262,7 @@ export default function CartScreen() {
                   onPress: () => {
                     dispatch(clearCart());
                     navigation.navigate('ProductCatalog', storeNavigationParams);
+                    void promptPushPermissionOnce('order');
                   },
                 },
               ]);

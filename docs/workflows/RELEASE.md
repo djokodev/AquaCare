@@ -45,6 +45,27 @@ first production deployment and store submission.
 - [ ] Check the farm map, satellite toggle, Directions and Share buttons on a
       real iPhone and a real Android phone with a Cameroon location.
 
+### Notifications and feeding reminders
+
+- [ ] Run `python manage.py migrate` (notifications `0004` purges retired
+      notification types and drops email preference fields).
+- [ ] Push credentials in EAS: FCM V1 service account key (Android) and APNs
+      key (iOS). Without them no remote push reaches a store or dev build.
+- [ ] Remote push cannot be tested with Expo Go on Android (removed since
+      SDK 53): test order and support push on a dev build or TestFlight.
+- [ ] The alarm sound `feeding_alarm.wav` and the iOS time-sensitive level
+      only work on a dev build or store build (Expo Go plays the default sound).
+      Check the Time Sensitive capability is enabled for `cm.mavecam.aquacare`
+      in the Apple developer account.
+- [ ] Android 14+: exact alarms need "Alarms and reminders" allowed for
+      AquaCare, otherwise Android may deliver a reminder a few minutes late.
+      Check on a real device; decide if an in-app shortcut is needed.
+- [ ] Android "Ring in Do Not Disturb" needs AquaCare allowed in the phone's
+      Do Not Disturb settings.
+- [ ] On a real device: tap an order push opens the orders history, tap a
+      support push opens the support chat, logout stops push on the device,
+      a second account on the same phone receives only its own push.
+
 ### Mobile build and stores
 
 - [ ] Remaining npm advisories (image-size via Metro, decode-uri-component via

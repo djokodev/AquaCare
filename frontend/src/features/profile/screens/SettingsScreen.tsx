@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { STORAGE_KEYS } from "@/constants/api";
 import logger from "@/utils/logger";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { ProfileStackParamList } from "@/navigation/MainNavigator";
+import { ProfileStackParamList, RootStackParamList } from "@/navigation/MainNavigator";
 import { AppText, Button, Card, InteractiveCard, PasswordConfirmModal, SelectableCard } from '@/components/ui';
 import type { AuthErrorPayload } from '@/features/auth/types/auth';
 import { colors, spacing } from '@/theme';
@@ -24,6 +24,8 @@ interface Props {
 
 export default function SettingsScreen({ navigation }: Props) {
   const { t, i18n } = useTranslation();
+  // Écran de la pile racine : navigate remonte au navigateur parent.
+  const rootNavigation = navigation as unknown as StackNavigationProp<RootStackParamList>;
   const { user, updateProfile, logout, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeletePasswordVisible, setIsDeletePasswordVisible] = useState(false);
@@ -149,6 +151,20 @@ export default function SettingsScreen({ navigation }: Props) {
             )}
           </SelectableCard>
         ))}            
+      </View>
+
+      <View style={styles.section}>
+        <AppText variant="sectionTitle" style={styles.sectionTitle}>{t("remindersSection")}</AppText>
+        <InteractiveCard
+          accessibilityLabel={t('feedingRemindersTitle')}
+          onPress={() => rootNavigation.navigate('FeedingReminders')}
+          style={styles.actionCard}
+        >
+          <View style={styles.actionContent}>
+            <Ionicons name="alarm-outline" size={20} color={colors.brand.primary} />
+            <AppText variant="bodyStrong" color="link">{t("feedingRemindersTitle")}</AppText>
+          </View>
+        </InteractiveCard>
       </View>
 
       <View style={styles.section}>

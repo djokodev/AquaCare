@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   Alert,
   RefreshControl,
@@ -11,7 +11,9 @@ import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { useLocalFeedingAlarms } from '@/features/notifications/hooks/useLocalFeedingAlarms';
+import { useSelector } from 'react-redux';
+import { savePlanSnapshotEntry } from '@/features/notifications/reminders/feedingReminders';
+import type { RootState } from '@/store/store';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { FeedingPlan } from '@/types/aquaculture';
 import { formatDate, formatNumber, formatPercentage } from '@/utils';
@@ -91,11 +93,7 @@ const getLocalDateIso = () => {
 
 export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScreenProps) {
   const { t, i18n } = useTranslation();
-  const {
-    reconcileCycleAlarms,
-    getFormattedMealTimes,
-    setAlarmsEnabled,
-  } = useLocalFeedingAlarms();
+  const userId = useSelector((state: RootState) => state.auth.user?.id ?? null);
 
   const routeParams = route.params;
   const cycleId = routeParams?.cycleId ?? '';
@@ -113,11 +111,7 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
   const [refreshing, setRefreshing] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [feedingPlans, setFeedingPlans] = useState<FeedingPlan[]>([]);
-  const [alarmsReady, setAlarmsReady] = useState(false);
-  const [alarmStatus, setAlarmStatus] = useState<'active' | 'pending' | 'permission_denied' | 'error'>('pending');
-  const [alarmInfo, setAlarmInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const isSchedulingRef = useRef(false);
   const todayIsoDate = useMemo(getLocalDateIso, []);
   const displayedFeedingPlans = useMemo(
     () =>
@@ -128,77 +122,11 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
     [feedingPlans, todayIsoDate]
   );
 
-  const alarmMessages = useMemo(
-    () => ({
-      title: t('feedingAlarmTitle'),
-      body: t('feedingAlarmBody'),
-      actionFeedNow: t('alarmActionFeedNow'),
-      actionSnooze10m: t('alarmActionSnooze10m'),
-    }),
-    [t]
-  );
-
-  const syncAlarmsForCurrentUnit = useCallback(
-    async (plans: FeedingPlan[]) => {
-      if (!hasValidUnitContext || !alarmsReady || isSchedulingRef.current) {
-        return;
-      }
-
-      isSchedulingRef.current = true;
-      try {
-        const activePlans = plans.filter((plan) => plan.is_active);
-        const result = await reconcileCycleAlarms({
-          cycleId,
-          scopeId: scopeKey,
-          cycleName: unitLabel,
-          activePlans,
-          enabled: true,
-          messages: alarmMessages,
-        });
-
-        if (result.status === 'permission_denied') {
-          setAlarmStatus('permission_denied');
-          setAlarmInfo(t('alarmPermissionDenied'));
-          return;
-        }
-
-        if (result.status === 'error') {
-          setAlarmStatus('error');
-          setAlarmInfo(t('alarmScheduleError'));
-          return;
-        }
-
-        if (activePlans.length > 0) {
-          setAlarmStatus('active');
-          setAlarmInfo(t('alarmsScheduled', { times: getFormattedMealTimes(activePlans[0].meals_per_day).join(', ') }));
-        } else {
-          setAlarmStatus('pending');
-          setAlarmInfo(t('alarmsStatusPending'));
-        }
-      } finally {
-        isSchedulingRef.current = false;
-      }
-    },
-    [
-      alarmMessages,
-      alarmsReady,
-      cycleId,
-      getFormattedMealTimes,
-      hasValidUnitContext,
-      reconcileCycleAlarms,
-      scopeKey,
-      t,
-      unitLabel,
-    ]
-  );
-
   const loadData = useCallback(
     async (mode: 'initial' | 'refresh' = 'initial') => {
       if (!hasValidUnitContext) {
         setFeedingPlans([]);
         setError(t('feedingPlanUnitContextIncompleteError'));
-        setAlarmInfo(null);
-        setAlarmStatus('pending');
         if (mode === 'refresh') {
           setRefreshing(false);
         } else {
@@ -242,23 +170,6 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
   }, [navigation, productionUnitName, t]);
 
   useEffect(() => {
-    let mounted = true;
-    setAlarmsEnabled(true)
-      .catch((storageError) => {
-        logger.warn("Impossible de forcer les alarmes d'alimentation actives", storageError);
-      })
-      .finally(() => {
-        if (mounted) {
-          setAlarmsReady(true);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [setAlarmsEnabled]);
-
-  useEffect(() => {
     void loadData();
   }, [loadData]);
 
@@ -266,13 +177,25 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
     await loadData('refresh');
   }, [loadData]);
 
+  // Mémorise la ration par repas de l'unité pour l'afficher dans les rappels
+  // de nourrissage (alarmes locales), même hors connexion.
   useEffect(() => {
-    if (!hasValidUnitContext || !alarmsReady) {
+    if (!userId || !hasValidUnitContext || loading || error) {
       return;
     }
-
-    void syncAlarmsForCurrentUnit(displayedFeedingPlans);
-  }, [alarmsReady, displayedFeedingPlans, hasValidUnitContext, syncAlarmsForCurrentUnit]);
+    const currentPlan = displayedFeedingPlans[0];
+    void savePlanSnapshotEntry(
+      userId,
+      cycleUnitAllocationId,
+      currentPlan
+        ? {
+          unitName: currentPlan.production_unit_name || unitLabel,
+          feedPerMealKg: Number(currentPlan.feed_per_meal),
+          endDate: currentPlan.end_date,
+        }
+        : null,
+    ).catch((snapshotError) => logger.warn('Feeding reminder snapshot not saved', snapshotError));
+  }, [cycleUnitAllocationId, displayedFeedingPlans, error, hasValidUnitContext, loading, unitLabel, userId]);
 
   const generateFeedingPlan = useCallback(() => {
     if (!hasValidUnitContext) {
@@ -336,9 +259,11 @@ export default function FeedingPlanScreen({ navigation, route }: FeedingPlanScre
           <AppText variant="sectionTitle" style={{ marginBottom: spacing[3] }}>{t('feedingPlans')}</AppText>
           <Button label={generatingPlan ? t('generating') : t('generateFeedingPlanShort')} onPress={generateFeedingPlan} disabled={generatingPlan} loading={generatingPlan} iconLeft="refresh" />
 
-          <InlineAlert
-            tone={alarmStatus === 'active' ? 'success' : alarmStatus === 'permission_denied' ? 'error' : alarmStatus === 'error' ? 'warning' : 'info'}
-            message={alarmInfo ?? (alarmStatus === 'active' ? t('alarmsStatusActive') : t('alarmsStatusPending'))}
+          <Button
+            label={t('feedingRemindersTitle')}
+            variant="outline"
+            iconLeft="alarm-outline"
+            onPress={() => navigation.navigate('FeedingReminders')}
           />
 
           {error ? (
