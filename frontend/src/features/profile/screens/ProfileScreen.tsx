@@ -9,7 +9,7 @@ import LocationSelector from '@/components/common/LocationSelector';
 import { AppText, Button, Card, ErrorState, IconButton, InteractiveCard, LoadingState, SelectionModal } from '@/components/ui';
 import { CAMEROON_REGIONS, INTERVENTION_ZONES } from '@/constants/cameroon';
 import { getAccountErrorMessage } from '@/features/auth/utils/accountsErrorPresenter';
-import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
+import { ProfileInfoList, ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
 import { useProfileEditor } from '@/features/profile/hooks/useProfileEditor';
 import { formatCompactEmail } from '@/features/profile/utils/accountProfilePresentation';
 import { useAuth } from '@/hooks/useAuth';
@@ -123,7 +123,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
 }
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return <View style={styles.section}><View style={styles.sectionHeader}><AppText variant="sectionTitle">{title}</AppText>{action}</View><Card variant="outlined">{children}</Card></View>;
+  return <View style={styles.section}><View style={styles.sectionHeader}><AppText variant="sectionTitle">{title}</AppText>{action}</View><Card variant="outlined"><ProfileInfoList>{children}</ProfileInfoList></Card></View>;
 }
 
 const styles = StyleSheet.create({

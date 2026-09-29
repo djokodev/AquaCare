@@ -12,7 +12,7 @@ import { useFarmLocation } from "@/hooks/useFarmLocation";
 import { getAccountErrorMessage } from "@/features/auth/utils/accountsErrorPresenter";
 import { useFarmProfileEditor } from "@/features/profile/hooks/useFarmProfileEditor";
 import { formatFarmName } from "@/features/profile/utils/accountProfilePresentation";
-import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
+import { ProfileInfoList, ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
 import { AppText, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
 import type { ProductionUnit } from "@/types/aquaculture";
@@ -140,6 +140,7 @@ export default function FarmProfileScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}><AppText variant="sectionTitle">{t('farmInfo')}</AppText><IconButton icon={isEditing ? 'close' : 'pencil'} accessibilityLabel={t(isEditing ? 'cancel' : 'edit')} variant="ghost" onPress={() => setIsEditing(!isEditing)} /></View>
         <Card variant="outlined">
+          <ProfileInfoList>
           <ProfileInfoRow
             label={t("farmName") || ""}
             value={isEditing ? undefined : formatFarmName(farmProfile.farm_name) || t("notProvided")}
@@ -168,6 +169,7 @@ export default function FarmProfileScreen() {
             inputValue={editData.water_source}
             placeholder={t("waterSourcePlaceholder") || ""}
           />
+          </ProfileInfoList>
         </Card>
       </View>
 
@@ -177,7 +179,6 @@ export default function FarmProfileScreen() {
           {farmProfile.latitude && farmProfile.longitude ? (
             <>
               <View style={styles.locationStatus}>
-                <Ionicons name="checkmark-circle" size={20} color={colors.brand.primary} />
                 <View style={styles.flex}>
                   <AppText variant="label" color="link">{t('locationCaptureSuccess')}</AppText>
                   {farmProfile.location_address ? <AppText>{farmProfile.location_address}</AppText> : null}
