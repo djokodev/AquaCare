@@ -116,10 +116,23 @@ class AuthService {
    * Changement de mot de passe de l'utilisateur connecté.
    */
   async changePassword(payload: ChangePasswordRequest): Promise<void> {
+    let tokens: { access?: string; refresh?: string } | undefined;
     try {
-      await apiService.post(API_ENDPOINTS.AUTH.PASSWORD_CHANGE, payload);
+      const response = await apiService.post<{ tokens?: { access?: string; refresh?: string } }>(
+        API_ENDPOINTS.AUTH.PASSWORD_CHANGE,
+        payload,
+      );
+      tokens = response.data?.tokens;
     } catch (error: unknown) {
       throw this.handleAuthError(error);
+    }
+    // Le serveur a révoqué toutes les sessions: on garde l'appareil courant
+    // connecté avec la nouvelle paire de tokens qu'il renvoie.
+    if (tokens?.access && tokens?.refresh) {
+      await Promise.all([
+        SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, tokens.access),
+        SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, tokens.refresh),
+      ]);
     }
   }
 

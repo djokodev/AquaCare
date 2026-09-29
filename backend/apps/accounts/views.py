@@ -33,6 +33,7 @@ from .serializers import (
     LoginSerializer,
     LogoutSerializer,
     MessageResponseSerializer,
+    PasswordChangeResponseSerializer,
     PasswordChangeSerializer,
     PasswordForgotResponseSerializer,
     PasswordForgotSerializer,
@@ -815,13 +816,13 @@ class PasswordChangeView(generics.GenericAPIView):
         summary="Changer mon mot de passe",
         description=(
             "Remplace le mot de passe du compte authentifie. Le mot de passe "
-            "actuel est requis. Les tokens deja emis restent valables jusqu'a "
-            "leur expiration (rotation JWT classique)."
+            "actuel est requis. Toutes les sessions existantes sont revoquees et "
+            "une nouvelle paire de tokens est renvoyee pour l'appareil courant."
         ),
         request=PasswordChangeSerializer,
         responses={
             200: OpenApiResponse(
-                response=MessageResponseSerializer,
+                response=PasswordChangeResponseSerializer,
                 description="Mot de passe change avec succes",
             ),
             400: VALIDATION_ERROR_RESPONSE,
@@ -832,7 +833,7 @@ class PasswordChangeView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        PasswordChangeService.change_password(
+        tokens = PasswordChangeService.change_password(
             request.user, serializer.validated_data["password"]
         )
         logger.info(
@@ -844,8 +845,11 @@ class PasswordChangeView(generics.GenericAPIView):
                 "status_code": status.HTTP_200_OK,
             },
         )
-        response_serializer = MessageResponseSerializer(
-            {"message": _("Mot de passe change avec succes.")}
+        response_serializer = PasswordChangeResponseSerializer(
+            {
+                "message": _("Mot de passe change avec succes."),
+                "tokens": {"refresh": tokens.refresh, "access": tokens.access},
+            }
         )
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 

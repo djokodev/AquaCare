@@ -13,8 +13,8 @@ Decision prod 2026-09 (module accounts):
   d'un compte, l'anti-enumeration n'apportait donc rien ici). Le throttle
   PasswordForgotThrottle limite les essais.
 - Un reset revoque tous les refresh tokens du compte (sessions volees
-  incluses). Le changement de mot de passe authentifie ne les revoque PAS:
-  l'appareil courant resterait deconnecte sans changement cote mobile.
+  incluses). Un changement de mot de passe authentifie les revoque aussi et
+  renvoie une nouvelle paire de tokens a l'appareil courant.
 """
 from __future__ import annotations
 
@@ -66,9 +66,19 @@ class PasswordChangeService:
     """Changement de mot de passe par l'utilisateur authentifie."""
 
     @staticmethod
-    def change_password(user: User, new_password: str) -> None:
+    @transaction.atomic
+    def change_password(user: User, new_password: str):
+        """
+        Change le mot de passe, coupe toutes les sessions existantes (autres
+        appareils, token eventuellement vole) et retourne une nouvelle paire
+        de tokens pour l'appareil courant, qui reste connecte.
+        """
+        from .auth_application_service import AuthApplicationService
+
         user.set_password(new_password)
         user.save(update_fields=["password"])
+        JwtTokenCleanupAdapter().cleanup_for_user(user.pk)
+        tokens = AuthApplicationService.build_auth_tokens(user)
         logger.info(
             "Password changed by owner",
             extra={
@@ -76,6 +86,7 @@ class PasswordChangeService:
                 "user_id": str(user.pk),
             },
         )
+        return tokens
 
 
 class PasswordResetService:

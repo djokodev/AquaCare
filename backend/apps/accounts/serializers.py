@@ -757,6 +757,13 @@ class PasswordForgotSerializer(serializers.Serializer):
     )
 
 
+class PasswordChangeResponseSerializer(serializers.Serializer):
+    """Confirmation + nouvelle paire de tokens pour l'appareil courant."""
+
+    message = serializers.CharField(read_only=True)
+    tokens = AuthTokenSerializer(read_only=True)
+
+
 class PasswordForgotResponseSerializer(serializers.Serializer):
     """Confirmation d'envoi avec l'email masque du destinataire."""
 

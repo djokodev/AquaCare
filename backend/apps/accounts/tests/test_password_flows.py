@@ -65,6 +65,34 @@ class TestPasswordChangeEndpoint:
         assert user.check_password(NEW_PASSWORD)
         assert not user.check_password(PASSWORD)
 
+    def test_change_password_revokes_sessions_and_returns_new_tokens(self, api_client, user):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        old_refresh = str(RefreshToken.for_user(user))
+        api_client.force_authenticate(user=user)
+        response = api_client.post(
+            self.url,
+            {
+                "current_password": PASSWORD,
+                "password": NEW_PASSWORD,
+                "password_confirm": NEW_PASSWORD,
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        new_refresh = response.data["tokens"]["refresh"]
+        assert response.data["tokens"]["access"]
+        api_client.force_authenticate(user=None)
+
+        revoked = api_client.post(
+            "/api/accounts/token/refresh/", {"refresh": old_refresh}, format="json"
+        )
+        assert revoked.status_code != status.HTTP_200_OK
+        renewed = api_client.post(
+            "/api/accounts/token/refresh/", {"refresh": new_refresh}, format="json"
+        )
+        assert renewed.status_code == status.HTTP_200_OK
+
     def test_wrong_current_password_is_rejected(self, api_client, user):
         api_client.force_authenticate(user=user)
         response = api_client.post(

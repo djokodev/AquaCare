@@ -334,6 +334,21 @@ describe('services/authService', () => {
       );
     });
 
+    it('stocke la nouvelle paire de tokens renvoyee par le serveur', async () => {
+      mockApiService.post.mockResolvedValueOnce({
+        data: { tokens: { access: 'new-access', refresh: 'new-refresh' } },
+      } as any);
+
+      await authService.changePassword({
+        current_password: 'motdepasse123',
+        password: 'NouveauMotDePasse2026',
+        password_confirm: 'NouveauMotDePasse2026',
+      });
+
+      expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith('aquacare_access_token', 'new-access');
+      expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith('aquacare_refresh_token', 'new-refresh');
+    });
+
     it('remonte les erreurs de champ 400', async () => {
       mockApiService.post.mockRejectedValueOnce({
         response: {
