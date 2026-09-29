@@ -1,22 +1,114 @@
 /** Dates métier AquaCare, exprimées dans le fuseau de la ferme. */
 export const AQUACARE_TIME_ZONE = 'Africa/Douala';
 
-export const getBusinessIsoDate = (
+export interface BusinessDateTime {
+  date: string;
+  time: string;
+}
+
+interface NumericDateTimeParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}
+
+const getNumericDateTimeParts = (
   value: Date = new Date(),
   timeZone: string = AQUACARE_TIME_ZONE,
-): string => {
+): NumericDateTimeParts => {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   }).formatToParts(value);
   const values = Object.fromEntries(
     parts
       .filter((part) => part.type !== 'literal')
       .map((part) => [part.type, part.value]),
   );
-  return `${values.year}-${values.month}-${values.day}`;
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+  };
+};
+
+const padTwoDigits = (value: number): string => String(value).padStart(2, '0');
+
+export const getBusinessDateTime = (
+  value: Date = new Date(),
+  timeZone: string = AQUACARE_TIME_ZONE,
+): BusinessDateTime => {
+  const parts = getNumericDateTimeParts(value, timeZone);
+  return {
+    date: `${parts.year}-${padTwoDigits(parts.month)}-${padTwoDigits(parts.day)}`,
+    time: `${padTwoDigits(parts.hour)}:${padTwoDigits(parts.minute)}`,
+  };
+};
+
+export const getBusinessIsoDate = (
+  value: Date = new Date(),
+  timeZone: string = AQUACARE_TIME_ZONE,
+): string => getBusinessDateTime(value, timeZone).date;
+
+export const parseBusinessDateTime = (
+  localDate: string,
+  localTime: string,
+  timeZone: string = AQUACARE_TIME_ZONE,
+): Date | null => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(localTime)) {
+    return null;
+  }
+  const [year, month, day] = localDate.split('-').map(Number);
+  const [hour, minute] = localTime.split(':').map(Number);
+  const desiredUtc = Date.UTC(year, month - 1, day, hour, minute);
+  const normalized = new Date(desiredUtc);
+  if (
+    normalized.getUTCFullYear() !== year
+    || normalized.getUTCMonth() !== month - 1
+    || normalized.getUTCDate() !== day
+    || normalized.getUTCHours() !== hour
+    || normalized.getUTCMinutes() !== minute
+  ) {
+    return null;
+  }
+
+  let candidateMilliseconds = desiredUtc;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const candidateParts = getNumericDateTimeParts(
+      new Date(candidateMilliseconds),
+      timeZone,
+    );
+    const candidateAsUtc = Date.UTC(
+      candidateParts.year,
+      candidateParts.month - 1,
+      candidateParts.day,
+      candidateParts.hour,
+      candidateParts.minute,
+    );
+    candidateMilliseconds += desiredUtc - candidateAsUtc;
+  }
+
+  const candidate = new Date(candidateMilliseconds);
+  const candidateParts = getNumericDateTimeParts(candidate, timeZone);
+  if (
+    candidateParts.year !== year
+    || candidateParts.month !== month
+    || candidateParts.day !== day
+    || candidateParts.hour !== hour
+    || candidateParts.minute !== minute
+  ) {
+    return null;
+  }
+  return candidate;
 };
 
 /** Inclusive day count between two ISO dates (server convention). */

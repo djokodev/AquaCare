@@ -238,6 +238,47 @@ describe('components/modals harvest flows', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
+  it('uses the Douala harvest date and time at the UTC midnight boundary', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-14T23:15:00.000Z'));
+    try {
+      const dispatch = jest.fn(() => ({
+        unwrap: jest.fn().mockResolvedValue({ reconciliation_status: 'reconciled' }),
+      }));
+      mockUseDispatch.mockReturnValue(dispatch);
+      (harvestCycle as unknown as jest.Mock).mockReturnValue({ type: 'harvest-cycle' });
+      const { getByLabelText, getByTestId } = render(
+        <HarvestModal
+          visible
+          onClose={jest.fn()}
+          cycle={{
+            id: 'cycle-1',
+            cycle_name: 'Cycle 1',
+            start_date: '2020-01-01',
+            initial_count: 1000,
+            current_count: 900,
+            initial_average_weight: 10,
+            current_average_weight: 300,
+          } as never}
+        />
+      );
+
+      expect(getByLabelText('Harvest date').props.value).toBe('2026-08-15');
+      expect(getByLabelText('Harvest time').props.value).toBe('00:15');
+
+      fireEvent.press(getByTestId('harvest-submit'));
+
+      await waitFor(() => expect(
+        offlineService.syncRelevantCalibrationOperationsForHarvest,
+      ).toHaveBeenCalledWith(expect.objectContaining({
+        harvestedAt: '2026-08-14T23:15:00.000Z',
+      })));
+      expect(Alert.alert).not.toHaveBeenCalledWith('Error', 'harvestDatetimeFuture');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it.each([
     ['pending', 'Pending reconciliation', 'The harvest is saved, but some offline operations still need to sync before the final stock can be confirmed.'],
     ['reconciled', 'Success', 'Cycle harvested successfully!'],
@@ -279,8 +320,6 @@ describe('components/modals harvest flows', () => {
       }),
     }));
     mockUseDispatch.mockReturnValue(dispatch);
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const date = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
     const { getByLabelText, getByTestId } = render(
       <HarvestModal
         visible
@@ -301,16 +340,11 @@ describe('components/modals harvest flows', () => {
           current_fish_count: 900,
           initial_biomass_kg: 9,
           current_biomass_kg: 270,
-          session_started_at: new Date(
-            yesterday.getFullYear(),
-            yesterday.getMonth(),
-            yesterday.getDate(),
-            8,
-          ).toISOString(),
+          session_started_at: '2026-08-14T07:00:00.000Z',
         } as never}
       />
     );
-    fireEvent.changeText(getByLabelText('Harvest date'), date);
+    fireEvent.changeText(getByLabelText('Harvest date'), '2026-08-14');
     fireEvent.changeText(getByLabelText('Harvest time'), '07:59');
     fireEvent.press(getByTestId('harvest-submit'));
     expect(Alert.alert).toHaveBeenCalledWith(
