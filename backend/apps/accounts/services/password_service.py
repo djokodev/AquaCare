@@ -17,12 +17,14 @@ Decision prod 2026-09 (module accounts):
 from __future__ import annotations
 
 import logging
+from email.mime.image import MIMEImage
 
 from accounts.models import User
 from accounts.validators import normalize_phone_number
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from django.contrib.staticfiles import finders
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
 from django.templatetags.static import static
@@ -33,6 +35,9 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from .account_cleanup_adapters import JwtTokenCleanupAdapter
 
 logger = logging.getLogger("accounts")
+
+LOGO_STATIC_PATH = "brand/aquacare-logo.png"
+LOGO_CONTENT_ID = "aquacare-logo"
 
 __all__ = [
     "PasswordChangeService",
@@ -109,20 +114,20 @@ class PasswordResetService:
         language = user.language_preference or "fr"
         subject = _pick_text(
             language,
-            "AquaCare — Reinitialisation de votre mot de passe",
-            "AquaCare — Password reset",
+            "Réinitialisation de votre mot de passe",
+            "Reset your password",
         )
         body = _pick_text(
             language,
             (
                 "Bonjour,\n\n"
-                "Vous avez demande la reinitialisation de votre mot de passe "
+                "Vous avez demandé la réinitialisation de votre mot de passe "
                 "AquaCare.\n\n"
-                f"Ouvrez ce lien pour choisir un nouveau mot de passe (valide 1 heure):\n"
+                f"Ouvrez ce lien pour choisir un nouveau mot de passe (valable 1 heure) :\n"
                 f"{reset_link}\n\n"
-                "Si vous n'etes pas a l'origine de cette demande, ignorez ce message; "
+                "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : "
                 "votre mot de passe actuel reste valable.\n\n"
-                "L'equipe AquaCare"
+                "L'équipe AquaCare"
             ),
             (
                 "Hello,\n\n"
@@ -136,16 +141,25 @@ class PasswordResetService:
         )
 
         try:
-            send_mail(
+            message = EmailMultiAlternatives(
                 subject=subject,
-                message=body,
+                body=body,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=False,
-                html_message=cls._build_html_email(
-                    request, reset_link, language, subject
-                ),
+                to=[user.email],
             )
+            logo = cls._load_inline_logo()
+            html = cls._build_html_email(
+                request, reset_link, language, subject, inline_logo=logo is not None
+            )
+            if html:
+                message.attach_alternative(html, "text/html")
+                if logo is not None:
+                    # Logo embarque (CID): s'affiche sans charger d'image
+                    # distante, meme si le client bloque les images externes
+                    # ou si l'URL de l'API n'est pas publique (dev en LAN).
+                    message.mixed_subtype = "related"
+                    message.attach(logo)
+            message.send(fail_silently=False)
         except Exception:
             logger.exception(
                 "Password reset email delivery failed",
@@ -165,6 +179,25 @@ class PasswordResetService:
         )
         return True
 
+    @staticmethod
+    def _load_inline_logo() -> MIMEImage | None:
+        """Logo AquaCare en piece jointe inline (Content-ID), ou None."""
+        try:
+            path = finders.find(LOGO_STATIC_PATH)
+            if not path:
+                return None
+            with open(path, "rb") as logo_file:
+                image = MIMEImage(logo_file.read(), _subtype="png")
+        except Exception:
+            logger.exception(
+                "Password reset email logo could not be loaded",
+                extra={"event": "accounts.password.reset.logo_missing"},
+            )
+            return None
+        image.add_header("Content-ID", f"<{LOGO_CONTENT_ID}>")
+        image.add_header("Content-Disposition", "inline", filename="aquacare-logo.png")
+        return image
+
     @classmethod
     def _build_html_email(
         cls,
@@ -172,6 +205,7 @@ class PasswordResetService:
         reset_link: str,
         language: str,
         title: str,
+        inline_logo: bool = False,
     ) -> str:
         """
         Rendu HTML de l'email, aux couleurs AquaCare.
@@ -180,14 +214,16 @@ class PasswordResetService:
         chaine vide, Django retombe alors sur la version texte seule.
         """
         try:
-            logo_url = request.build_absolute_uri(
-                static("brand/aquacare-logo.png")
+            logo_url = (
+                f"cid:{LOGO_CONTENT_ID}"
+                if inline_logo
+                else request.build_absolute_uri(static(LOGO_STATIC_PATH))
             )
             texts = {
                 "title": title,
                 "intro": _pick_text(
                     language,
-                    "Vous avez demande la reinitialisation du mot de passe de "
+                    "Vous avez demandé la réinitialisation du mot de passe de "
                     "votre compte AquaCare.",
                     "You requested a password reset for your AquaCare account.",
                 ),
@@ -198,21 +234,21 @@ class PasswordResetService:
                 ),
                 "expiry": _pick_text(
                     language,
-                    "Ce lien est valable 1 heure. Si vous n'etes pas a l'origine "
-                    "de cette demande, ignorez ce message: votre mot de passe "
+                    "Ce lien est valable 1 heure. Si vous n'êtes pas à l'origine "
+                    "de cette demande, ignorez ce message : votre mot de passe "
                     "actuel reste valable.",
                     "This link is valid for 1 hour. If you did not request it, "
                     "ignore this message: your current password stays valid.",
                 ),
                 "ignore": _pick_text(
                     language,
-                    "Pour votre securite, ne partagez jamais ce lien avec "
+                    "Pour votre sécurité, ne partagez jamais ce lien avec "
                     "quelqu'un d'autre.",
                     "For your security, never share this link with anyone.",
                 ),
                 "team": _pick_text(
                     language,
-                    "L'equipe AquaCare",
+                    "L'équipe AquaCare",
                     "The AquaCare team",
                 ),
             }

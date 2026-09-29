@@ -150,12 +150,12 @@ class TestPasswordForgotEndpoint:
 
     def test_french_email_for_french_account(self, api_client, user):
         api_client.post(self.url, {"phone_number": user.phone_number}, format="json")
-        assert "Reinitialisation" in mail.outbox[0].subject
+        assert "Réinitialisation" in mail.outbox[0].subject
 
     def test_english_email_for_english_account(self, api_client):
         user = UserFactory(language_preference="en", password=PASSWORD)
         api_client.post(self.url, {"phone_number": user.phone_number}, format="json")
-        assert "Password reset" in mail.outbox[0].subject
+        assert "Reset your password" in mail.outbox[0].subject
 
     def test_unknown_phone_returns_same_response_without_email(self, api_client):
         response = api_client.post(
@@ -211,7 +211,13 @@ class TestPasswordForgotEndpoint:
         ]
         assert html_parts, "l'email doit contenir une alternative HTML"
         html = html_parts[0]
-        assert "brand/aquacare-logo.png" in html
+        assert 'src="cid:aquacare-logo"' in html
+        logo_parts = [
+            part for part in message.message().walk()
+            if part.get("Content-ID") == "<aquacare-logo>"
+        ]
+        assert len(logo_parts) == 1
+        assert logo_parts[0].get_content_type() == "image/png"
         assert "#059669" in html
         assert "/accounts/password/reset/" in html
 

@@ -41,15 +41,15 @@ def _reset_texts(language_preference: str) -> dict[str, str]:
             "submit": "Enregistrer le nouveau mot de passe",
             "invalid_title": "Lien invalide",
             "invalid_link": (
-                "Ce lien de reinitialisation est invalide ou a expire. "
+                "Ce lien de réinitialisation est invalide ou a expiré. "
                 "Demandez un nouveau lien depuis l'application."
             ),
             "mismatch": "Les mots de passe ne correspondent pas.",
             "invalid_password": "Ce mot de passe n'est pas valide.",
-            "success_title": "Mot de passe modifie",
+            "success_title": "Mot de passe modifié",
             "success_intro": (
-                "Votre mot de passe a ete change. Vous pouvez maintenant vous "
-                "connecter a l'application AquaCare avec le nouveau mot de passe."
+                "Votre mot de passe a été changé. Vous pouvez maintenant vous "
+                "connecter à l'application AquaCare avec le nouveau mot de passe."
             ),
         }
     return {

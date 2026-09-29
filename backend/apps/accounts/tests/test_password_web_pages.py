@@ -52,7 +52,7 @@ class TestPasswordResetConfirmPage:
         response = client.get(_confirm_url_with_invalid_token(user))
         assert response.status_code == 400
         content = response.content.decode()
-        assert "invalide ou a expire" in content
+        assert "invalide ou a expiré" in content
         assert "Lien invalide" in content
         assert "Nouveau mot de passe" not in content
 
