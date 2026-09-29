@@ -10,7 +10,7 @@ import { CycleUnitAllocation, HarvestData, ProductionCycle } from '@/types/aquac
 import { getApiErrorMessage } from '@/utils/errorParser';
 import { AppText, Button, Card, FormField, IconButton, InlineAlert, TextField } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
-import { getBusinessIsoDate } from '@/utils/businessDate';
+import { getBusinessDateTime, parseBusinessDateTime } from '@/utils/businessDate';
 import { offlineService } from '@/services/offlineService';
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
 
@@ -41,35 +41,8 @@ const toNumber = (value: number | string | null | undefined): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const localHarvestDate = (value: Date): string => {
-  return getBusinessIsoDate(value);
-};
-
-const localHarvestTime = (value: Date): string =>
-  `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
-
-const parseLocalHarvestDateTime = (localDate: string, localTime: string): Date | null => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(localTime)) {
-    return null;
-  }
-  const [year, month, day] = localDate.split('-').map(Number);
-  const [hour, minute] = localTime.split(':').map(Number);
-  const value = new Date(year, month - 1, day, hour, minute, 0, 0);
-  if (
-    Number.isNaN(value.getTime()) ||
-    value.getFullYear() !== year ||
-    value.getMonth() !== month - 1 ||
-    value.getDate() !== day ||
-    value.getHours() !== hour ||
-    value.getMinutes() !== minute
-  ) {
-    return null;
-  }
-  return value;
-};
-
 const toHarvestIso = (localDate: string, localTime: string): string | null =>
-  parseLocalHarvestDateTime(localDate, localTime)?.toISOString() ?? null;
+  parseBusinessDateTime(localDate, localTime)?.toISOString() ?? null;
 
 const createClientUuid = (): string => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -119,13 +92,17 @@ export default function HarvestModal({
   const initialFishCount = isUnitScope ? unitAllocation?.initial_fish_count ?? 0 : cycle?.initial_count ?? 0;
   const initialAverageWeight = isUnitScope ? getAllocationInitialAverageWeight(unitAllocation) : cycle?.initial_average_weight ?? 0;
   const availableAverageWeight = isUnitScope ? getAllocationCurrentAverageWeight(unitAllocation) : cycle?.current_average_weight ?? 0;
+  const [initialHarvestMoment] = useState(() => {
+    const instant = new Date();
+    return { instant, ...getBusinessDateTime(instant) };
+  });
   const [loading, setLoading] = useState(false);
   const [cycleAllocations, setCycleAllocations] = useState<CycleUnitAllocation[]>([]);
-  const [harvestTime, setHarvestTime] = useState(localHarvestTime(new Date()));
+  const [harvestTime, setHarvestTime] = useState(initialHarvestMoment.time);
   const [formData, setFormData] = useState<HarvestData>({
     client_uuid: createClientUuid(),
-    harvest_date: localHarvestDate(new Date()),
-    final_harvested_at: new Date().toISOString(),
+    harvest_date: initialHarvestMoment.date,
+    final_harvested_at: initialHarvestMoment.instant.toISOString(),
     final_count: availableFishCount,
     final_average_weight: availableAverageWeight,
     total_harvested_weight: 0,
@@ -148,17 +125,19 @@ export default function HarvestModal({
 
   useEffect(() => {
     if (!visible || (isUnitScope ? !unitAllocation : !cycle)) return;
+    const instant = new Date();
+    const businessDateTime = getBusinessDateTime(instant);
     setFormData({
       client_uuid: createClientUuid(),
-      harvest_date: localHarvestDate(new Date()),
-      final_harvested_at: new Date().toISOString(),
+      harvest_date: businessDateTime.date,
+      final_harvested_at: instant.toISOString(),
       final_count: availableFishCount,
       final_average_weight: availableAverageWeight,
       total_harvested_weight: 0,
       harvest_notes: '',
       created_offline: false,
     });
-    setHarvestTime(localHarvestTime(new Date()));
+    setHarvestTime(businessDateTime.time);
   }, [availableAverageWeight, availableFishCount, cycle, isUnitScope, unitAllocation, visible]);
 
   useEffect(() => {
@@ -186,7 +165,7 @@ export default function HarvestModal({
       Alert.alert(t('error'), t('harvestDateRequired'));
       return false;
     }
-    const harvestedAt = parseLocalHarvestDateTime(formData.harvest_date, harvestTime);
+    const harvestedAt = parseBusinessDateTime(formData.harvest_date, harvestTime);
     if (!harvestedAt) {
       Alert.alert(t('error'), t('harvestDateInvalid'));
       return false;
@@ -206,7 +185,7 @@ export default function HarvestModal({
       .filter((value) => !Number.isNaN(value.getTime()))
       .sort((left, right) => right.getTime() - left.getTime())[0];
     const legacySessionStart = cycle?.start_date
-      ? new Date(`${cycle.start_date}T00:00:00`)
+      ? parseBusinessDateTime(cycle.start_date, '00:00')
       : null;
     const sessionStart = exactSessionStart ?? legacySessionStart;
     if (sessionStart && harvestedAt < sessionStart) {

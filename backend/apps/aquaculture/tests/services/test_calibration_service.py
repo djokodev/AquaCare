@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from threading import Barrier
 
@@ -10,6 +10,7 @@ import pytest
 from aquaculture.domain.exceptions import (
     AllocationAlreadyFinallyHarvested,
     BusinessRuleViolation,
+    EventBeforeTrackingStartError,
     FinalHarvestIdempotencyConflict,
     FinalHarvestStockMismatch,
 )
@@ -180,6 +181,50 @@ class TestCalibrationService:
 
         with pytest.raises(BusinessRuleViolation, match='autre cycle'):
             self.calibrate(second_source, tank, transferred_count=100)
+
+    def test_calibration_uses_douala_date_across_midnight_utc(
+        self,
+        production_cycle,
+        monkeypatch,
+    ):
+        calibrated_at = datetime(2026, 8, 14, 23, 15, tzinfo=UTC)
+        monkeypatch.setattr(
+            timezone,
+            'now',
+            lambda: datetime(2026, 8, 14, 23, 20, tzinfo=UTC),
+        )
+        production_cycle.start_date = date(2026, 8, 15)
+        production_cycle.save(update_fields=['start_date'])
+        source = self.setup_source(production_cycle)
+
+        operation, _, _ = self.calibrate(
+            source,
+            self.create_tank(source),
+            calibrated_at=calibrated_at,
+        )
+
+        assert operation.destination_allocation.cycle.start_date == date(2026, 8, 15)
+
+    def test_calibration_before_douala_tracking_date_is_rejected(
+        self,
+        production_cycle,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            timezone,
+            'now',
+            lambda: datetime(2026, 8, 14, 23, 20, tzinfo=UTC),
+        )
+        production_cycle.start_date = date(2026, 8, 15)
+        production_cycle.save(update_fields=['start_date'])
+        source = self.setup_source(production_cycle)
+
+        with pytest.raises(EventBeforeTrackingStartError):
+            self.calibrate(
+                source,
+                self.create_tank(source),
+                calibrated_at=datetime(2026, 8, 14, 22, 59, tzinfo=UTC),
+            )
 
     def test_client_uuid_is_idempotent_and_conflicting_payload_is_rejected(self, production_cycle):
         source = self.setup_source(production_cycle)

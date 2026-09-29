@@ -340,6 +340,7 @@ class CalibrationService:
     def _validate_context(
         *, source, destination_unit, user, calibrated_at, transferred_count, transferred_average_weight_g
     ):
+        calibration_date = timezone.localdate(calibrated_at)
         if (
             source.cycle.farm_profile.user_id != user.id
             or destination_unit.farm_profile_id != source.cycle.farm_profile_id
@@ -369,7 +370,7 @@ class CalibrationService:
             raise BusinessRuleViolation(_('Le nombre de poissons transférés doit être positif.'))
         if transferred_average_weight_g <= 0:
             raise BusinessRuleViolation(_('Le poids moyen transféré doit être positif.'))
-        if calibrated_at.date() < source.cycle.analysis_start_date:
+        if calibration_date < source.cycle.analysis_start_date:
             raise EventBeforeTrackingStartError(
                 tracking_start_date=source.cycle.analysis_start_date,
             )
@@ -379,15 +380,16 @@ class CalibrationService:
     @staticmethod
     def _create_destination_allocation(*, source, destination_unit, calibrated_at, first_count, first_average_weight_g):
         first_biomass = biomass_for(first_count, first_average_weight_g)
+        calibration_date = timezone.localdate(calibrated_at)
         cycle = ProductionCycle.objects.create(
             farm_profile=source.cycle.farm_profile,
-            cycle_name=f'{destination_unit.name} - Calibration {calibrated_at.date().isoformat()}',
+            cycle_name=f'{destination_unit.name} - Calibration {calibration_date.isoformat()}',
             species=source.cycle.species,
             pond_identifier=destination_unit.name,
             pond_volume_m3=destination_unit.volume_m3,
             pond_surface_m2=None,
             infrastructure_type=['bac_calibrage'],
-            start_date=calibrated_at.date(),
+            start_date=calibration_date,
             initial_count=first_count,
             initial_average_weight=first_average_weight_g,
             initial_biomass=first_biomass,

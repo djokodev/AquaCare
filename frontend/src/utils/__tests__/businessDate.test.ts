@@ -1,7 +1,9 @@
 import {
+  getBusinessDateTime,
   getBusinessIsoDate,
   getOngoingCycleSchedule,
   inclusiveDaysBetween,
+  parseBusinessDateTime,
   plannedHarvestIsoDate,
 } from '@/utils/businessDate';
 
@@ -12,6 +14,18 @@ describe('getBusinessIsoDate', () => {
 
   it('keeps a date unchanged during the Douala business day', () => {
     expect(getBusinessIsoDate(new Date('2026-07-28T12:00:00.000Z'))).toBe('2026-07-28');
+  });
+
+  it('keeps the Douala date and time together across midnight UTC', () => {
+    const instant = new Date('2026-08-14T23:15:00.000Z');
+
+    expect(getBusinessDateTime(instant)).toEqual({
+      date: '2026-08-15',
+      time: '00:15',
+    });
+    expect(parseBusinessDateTime('2026-08-15', '00:15')?.toISOString()).toBe(
+      '2026-08-14T23:15:00.000Z',
+    );
   });
 });
 
