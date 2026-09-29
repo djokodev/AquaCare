@@ -15,14 +15,14 @@ type Props = {
 };
 
 /** Jours affichés du lundi au dimanche (format Expo : 1 = dimanche). */
-const DISPLAY_DAYS: { weekday: number; labelKey: string }[] = [
-  { weekday: 2, labelKey: 'weekdayShortMon' },
-  { weekday: 3, labelKey: 'weekdayShortTue' },
-  { weekday: 4, labelKey: 'weekdayShortWed' },
-  { weekday: 5, labelKey: 'weekdayShortThu' },
-  { weekday: 6, labelKey: 'weekdayShortFri' },
-  { weekday: 7, labelKey: 'weekdayShortSat' },
-  { weekday: 1, labelKey: 'weekdayShortSun' },
+const DISPLAY_DAYS: { weekday: number; letterKey: string; labelKey: string }[] = [
+  { weekday: 2, letterKey: 'weekdayLetterMon', labelKey: 'weekdayMon' },
+  { weekday: 3, letterKey: 'weekdayLetterTue', labelKey: 'weekdayTue' },
+  { weekday: 4, letterKey: 'weekdayLetterWed', labelKey: 'weekdayWed' },
+  { weekday: 5, letterKey: 'weekdayLetterThu', labelKey: 'weekdayThu' },
+  { weekday: 6, letterKey: 'weekdayLetterFri', labelKey: 'weekdayFri' },
+  { weekday: 7, letterKey: 'weekdayLetterSat', labelKey: 'weekdaySat' },
+  { weekday: 1, letterKey: 'weekdayLetterSun', labelKey: 'weekdaySun' },
 ];
 
 type EditingState = { id?: string; hour: number; minute: number } | null;
@@ -71,10 +71,7 @@ export default function FeedingRemindersScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.card}>
           <View style={styles.switchRow}>
-            <View style={styles.flex}>
-              <AppText variant="bodyStrong">{t('remindersEnable')}</AppText>
-              <AppText variant="caption" color="muted">{t('remindersEnableHelp')}</AppText>
-            </View>
+            <AppText variant="bodyStrong" style={styles.flex}>{t('remindersEnable')}</AppText>
             <Switch
               accessibilityLabel={t('remindersEnable')}
               value={settings.enabled}
@@ -126,7 +123,7 @@ export default function FeedingRemindersScreen({ navigation }: Props) {
         <View style={styles.section}>
           <AppText variant="sectionTitle">{t('remindersDays')}</AppText>
           <View style={styles.days}>
-            {DISPLAY_DAYS.map(({ weekday, labelKey }) => {
+            {DISPLAY_DAYS.map(({ weekday, letterKey, labelKey }) => {
               const selected = settings.days.includes(weekday);
               return (
                 <Pressable
@@ -137,7 +134,7 @@ export default function FeedingRemindersScreen({ navigation }: Props) {
                   onPress={() => void toggleDay(weekday)}
                   style={[styles.dayChip, selected && styles.dayChipSelected]}
                 >
-                  <AppText variant="label" color={selected ? 'inverse' : 'primary'}>{t(labelKey)}</AppText>
+                  <AppText variant="bodyStrong" color={selected ? 'inverse' : 'primary'}>{t(letterKey)}</AppText>
                 </Pressable>
               );
             })}
@@ -161,7 +158,6 @@ export default function FeedingRemindersScreen({ navigation }: Props) {
           </Card>
         ) : null}
 
-        <InlineAlert tone="info" message={t('remindersPlanInfo')} />
       </ScrollView>
 
       <ReminderTimeModal
@@ -188,11 +184,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[3] },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
-  days: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
+  // 7 pastilles rondes de même taille sur une seule ligne.
+  days: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing[2] },
   dayChip: {
-    minWidth: 44,
-    minHeight: 44,
-    paddingHorizontal: spacing[3],
+    flex: 1,
+    maxWidth: 48,
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.full,

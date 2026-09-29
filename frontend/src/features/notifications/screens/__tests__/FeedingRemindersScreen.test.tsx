@@ -86,7 +86,7 @@ describe('FeedingRemindersScreen', () => {
     mockHook.mockReturnValue(state);
     const { getByLabelText } = render(<FeedingRemindersScreen navigation={navigation} />);
 
-    fireEvent.press(getByLabelText('weekdayShortSun'));
+    fireEvent.press(getByLabelText('weekdaySun'));
 
     expect(state.toggleDay).toHaveBeenCalledWith(1);
   });
