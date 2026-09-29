@@ -23,6 +23,15 @@ first production deployment and store submission.
 - [ ] DRF throttles see the real client IP behind Cloudflare (login, register,
       forgot password limits are per IP).
 - [ ] Off-server PostgreSQL and media backups with a tested restore.
+- [ ] Origin firewall accepts HTTP/HTTPS only from Cloudflare IP ranges:
+      `common.client_ip` trusts `CF-Connecting-IP` from the nginx proxy, so a
+      direct hit on the server IP must be impossible.
+- [ ] Cloudflare SSL/TLS mode set to "Full (strict)" with an origin certificate.
+- [ ] `PUBLIC_API_BASE_URL` matches the environment (defaults: prod
+      `https://api.aquacare.tech`, staging `https://api-staging.aquacare.tech`).
+- [ ] `API_DOCS_PUBLIC` stays false in staging/production (docs staff-only).
+- [ ] Rebuild images after the Django 5.2 upgrade and generate one cycle report
+      PDF and one order document PDF on staging (WeasyPrint 70).
 
 ### Maps (iOS and Android)
 
@@ -36,6 +45,10 @@ first production deployment and store submission.
       real iPhone and a real Android phone with a Cameroon location.
 
 ### Mobile build and stores
+
+- [ ] Remaining npm advisories (image-size via Metro, decode-uri-component via
+      React Navigation) need breaking upgrades; re-run `npm audit --omit=dev`
+      at the next Expo SDK upgrade.
 
 - [ ] Splash screen still uses the legacy blue `#2563eb`; switch to brand green.
 - [ ] Google Play developer account: identity and phone verification unresolved,
