@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import LocationSelector from '@/components/common/LocationSelector';
 import { AppText, Button, Card, ErrorState, IconButton, InteractiveCard, LoadingState, SelectionModal } from '@/components/ui';
-import { INTERVENTION_ZONES } from '@/constants/cameroon';
+import { CAMEROON_REGIONS, INTERVENTION_ZONES } from '@/constants/cameroon';
 import { getAccountErrorMessage } from '@/features/auth/utils/accountsErrorPresenter';
 import { ProfileInfoRow } from '@/features/profile/components/ProfileInfoRow';
 import { useProfileEditor } from '@/features/profile/hooks/useProfileEditor';
@@ -91,7 +91,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
         {isIndividual ? <>
           <ProfileInfoRow label={t('firstName')} value={user.first_name || t('notProvided')} />
           <ProfileInfoRow label={t('lastName')} value={user.last_name || t('notProvided')} />
-          {user.age_group ? <ProfileInfoRow label={t('ageGroup')} value={user.age_group} /> : null}
+          {user.age_group ? <ProfileInfoRow label={t('ageGroup')} value={t(`ageGroupOption_${user.age_group}`, { defaultValue: user.age_group })} /> : null}
         </> : <>
           <ProfileInfoRow label={t('businessName')} value={user.business_name || t('notProvided')} />
           {user.legal_status ? <ProfileInfoRow label={t('legalStatus')} value={user.legal_status} /> : null}
@@ -100,7 +100,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
       </Section>
 
       <Section title={t('location')}>
-        {user.region ? <ProfileInfoRow label={t('region')} value={user.region} /> : null}
+        {user.region ? <ProfileInfoRow label={t('region')} value={CAMEROON_REGIONS.find((region) => region.code === user.region)?.name ?? user.region} /> : null}
         <LocationSelector value={locationData} onChange={setLocationData} userRegion={user.region} editable={isEditing} />
         {isEditing ? <InteractiveCard accessibilityLabel={t('selectInterventionZone')} onPress={() => setShowInterventionZoneModal(true)} style={styles.selector}>
           <View style={styles.flex}><AppText variant="label">{t('interventionZone')} *</AppText><AppText variant="caption" color={editData.intervention_zone ? 'link' : 'muted'}>{editData.intervention_zone ? t(INTERVENTION_ZONES.find((zone) => zone.value === editData.intervention_zone)?.labelKey || 'notProvided') : t('selectInterventionZone')}</AppText></View>
