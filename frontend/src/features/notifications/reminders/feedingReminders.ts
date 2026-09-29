@@ -10,6 +10,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { isRunningInExpoGo } from 'expo';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
 import logger from '@/utils/logger';
@@ -28,7 +29,16 @@ export const MAX_REMINDER_TIMES = 6;
  * Expo Go est une app précompilée : elle ne contient pas nos fichiers son.
  * On y utilise le son par défaut pour éviter l'erreur « Custom sound not found ».
  */
-const isExpoGo = (): boolean => Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+const isExpoGo = (): boolean => {
+  try {
+    if (isRunningInExpoGo()) {
+      return true;
+    }
+  } catch {
+    // module natif absent : ce n'est pas Expo Go
+  }
+  return Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+};
 const alarmSound = (): string => (isExpoGo() ? 'default' : FEEDING_ALARM_SOUND);
 /** Jours au format Expo : 1 = dimanche ... 7 = samedi. */
 export const ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];

@@ -43,6 +43,8 @@ jest.mock('expo-notifications', () => ({
   },
 }));
 
+jest.mock('expo', () => ({ isRunningInExpoGo: jest.fn(() => false) }));
+
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { executionEnvironment: 'standalone' },
