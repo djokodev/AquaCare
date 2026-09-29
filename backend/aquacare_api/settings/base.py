@@ -307,7 +307,7 @@ EMAIL_PORT = _env_int('EMAIL_PORT', 587)
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = _env_str('EMAIL_HOST_USER', 'resend')
 EMAIL_HOST_PASSWORD = _env_str('RESEND_API_KEY')
-DEFAULT_FROM_EMAIL = _env_str('DEFAULT_FROM_EMAIL', 'no-reply@aquacare.tech')
+DEFAULT_FROM_EMAIL = _env_str('DEFAULT_FROM_EMAIL', 'AquaCare <no-reply@aquacare.tech>')
 
 # Frontend URL (pour les liens dans les emails)
 FRONTEND_URL = _env_str('FRONTEND_URL', 'http://localhost:8081')

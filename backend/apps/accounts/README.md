@@ -446,9 +446,11 @@ Fichiers: `services/password_service.py`, `web_views.py`, `web_urls.py`,
 
 Expediteur email: `DEFAULT_FROM_EMAIL`. Decision 2026-09: tous les emails
 transactionnels (reset, rapports, notifications) partent de
-`no-reply@aquacare.tech`, valeur par defaut du code et des stacks compose.
-En staging/production, le secret `DEFAULT_FROM_EMAIL` doit porter la meme
-valeur et le domaine `aquacare.tech` doit etre verifie chez Resend.
+`AquaCare <no-reply@aquacare.tech>`, valeur fixee dans le code, les stacks
+compose et le workflow de deploiement (pas de secret GitHub necessaire). Le
+domaine `aquacare.tech` doit etre verifie chez Resend. Le logo de l'email de
+reset est embarque en piece jointe inline (CID) pour s'afficher meme quand le
+client bloque les images distantes.
 
 Les pages web et l'email utilisent le design AquaCare: logo partage
 (`common/static/brand/aquacare-logo.png`), vert de marque `#059669`, fond

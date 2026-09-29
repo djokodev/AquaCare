@@ -74,7 +74,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis_broker:6379/0
       - REDIS_CACHE_URL=redis://redis_cache:6379/0
       - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
-      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-no-reply@aquacare.tech}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-AquaCare <no-reply@aquacare.tech>}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - DJANGO_SUPERUSER_PHONE=${DJANGO_SUPERUSER_PHONE:-}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-}
@@ -122,7 +122,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis_broker:6379/0
       - REDIS_CACHE_URL=redis://redis_cache:6379/0
       - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
-      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-no-reply@aquacare.tech}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-AquaCare <no-reply@aquacare.tech>}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
     depends_on:
       db:
@@ -159,7 +159,7 @@ services:
       - CELERY_BROKER_URL=redis://redis_broker:6379/0
       - CELERY_RESULT_BACKEND=redis://redis_broker:6379/0
       - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
-      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-no-reply@aquacare.tech}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-AquaCare <no-reply@aquacare.tech>}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
     depends_on:
       db:
