@@ -21,7 +21,6 @@ from typing import TypedDict
 from django.db.models import Avg, F, Max, Min, Sum
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from notifications.services import NotificationService
 
 from ..constants import DEFAULT_FEED_PRICE_PER_KG
 from ..domain.calculators import AquacultureCalculator
@@ -1032,72 +1031,5 @@ class AnalyticsService(BaseService):
             AnalyticsService.log_operation(
                 'update_cycle_metrics_data_error',
                 {'cycle_id': str(cycle.id), 'error': str(e)},
-                level='error'
-            )
-
-    @staticmethod
-    def check_and_create_environmental_alerts(log: CycleLog) -> None:
-        """
-        Vérifie les paramètres environnementaux et crée des notifications si nécessaire.
-
-        Appelé automatiquement par le signal update_cycle_after_log après chaque
-        saisie quotidienne. Analyse les paramètres d'eau et densité pour détecter
-        les conditions potentiellement dangereuses.
-
-        Paramètres vérifiés:
-            - Température de l'eau (min/max par espèce)
-            - pH (plage optimale)
-            - Oxygène dissous (seuil critique)
-            - Densité d'élevage (surcharge)
-
-        Args:
-            log: CycleLog contenant les paramètres environnementaux du jour
-
-        Note:
-            Délègue à AquacultureCalculator pour calculs et à NotificationService
-            pour création des alertes. Gestion robuste des erreurs.
-
-        Example:
-            >>> AnalyticsService.check_and_create_environmental_alerts(daily_log)
-            # Crée notifications si température < 24°C pour clarias
-        """
-        try:
-            cycle = log.cycle
-            alerts = AquacultureCalculator.check_environmental_alerts(
-                cycle.species,
-                temperature_c=log.water_temperature,
-                ph=log.ph_level,
-                oxygen_mg_l=log.dissolved_oxygen,
-                density_kg_m3=cycle.current_density_kg_m3()
-            )
-
-            # Cr?er notifications pour chaque alerte d?tect?e
-            for alert_message in alerts:
-                NotificationService.create_notification(
-                    user=cycle.farm_profile.user,
-                    notification_type='water_quality_alert',
-                    title=str(_('Alerte param?tres environnementaux')),
-                    message=alert_message,
-                    content_object=cycle,
-                    priority='high',
-                    channels=['in_app', 'push'],
-                    scheduled_for=timezone.now()
-                )
-
-            if alerts:
-                AnalyticsService.log_operation(
-                    'environmental_alerts_created',
-                    {
-                        'cycle_id': str(cycle.id),
-                        'log_date': str(log.log_date),
-                        'alerts_count': len(alerts)
-                    },
-                    level='warning'
-                )
-
-        except Exception as e:
-            AnalyticsService.log_operation(
-                'check_environmental_alerts_error',
-                {'log_id': str(log.id) if log.id else 'unknown', 'error': str(e)},
                 level='error'
             )

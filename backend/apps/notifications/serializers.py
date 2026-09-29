@@ -39,13 +39,7 @@ class NotificationSerializer(NotificationErrorVisibilityMixin, serializers.Model
         source='get_priority_display',
         read_only=True
     )
-    email_error = serializers.SerializerMethodField()
     push_error = serializers.SerializerMethodField()
-
-    def get_email_error(self, obj: Notification) -> str | None:
-        if self._can_expose_delivery_errors():
-            return obj.email_error
-        return None
 
     def get_push_error(self, obj: Notification) -> str | None:
         if self._can_expose_delivery_errors():
@@ -70,8 +64,6 @@ class NotificationSerializer(NotificationErrorVisibilityMixin, serializers.Model
             'is_sent',
             'is_read',
             'read_at',
-            'email_sent_at',
-            'email_error',
             'push_sent_at',
             'push_error',
             'created_at',
@@ -82,8 +74,6 @@ class NotificationSerializer(NotificationErrorVisibilityMixin, serializers.Model
             'user',
             'sent_at',
             'is_sent',
-            'email_sent_at',
-            'email_error',
             'push_sent_at',
             'push_error',
             'created_at',
@@ -107,13 +97,7 @@ class NotificationListSerializer(NotificationErrorVisibilityMixin, serializers.M
         source='get_notification_type_display',
         read_only=True
     )
-    email_error = serializers.SerializerMethodField()
     push_error = serializers.SerializerMethodField()
-
-    def get_email_error(self, obj: Notification) -> str | None:
-        if self._can_expose_delivery_errors():
-            return obj.email_error
-        return None
 
     def get_push_error(self, obj: Notification) -> str | None:
         if self._can_expose_delivery_errors():
@@ -134,7 +118,6 @@ class NotificationListSerializer(NotificationErrorVisibilityMixin, serializers.M
             'scheduled_for',
             'is_read',
             'read_at',
-            'email_error',
             'push_error',
             'created_at',
         ]
@@ -159,37 +142,13 @@ class NotificationPreferenceSerializer(serializers.ModelSerializer):
         model = NotificationPreference
         fields = [
             'user',
-            # Canaux globaux
             'in_app_enabled',
-            'email_enabled',
             'push_enabled',
-            # Aquaculture
-            'feeding_reminders',
-            'sampling_reminders',
-            'sanitary_alerts',
-            'cycle_milestones',
-            'mortality_alerts',
-            'water_quality_alerts',
-            # Commerce
             'order_confirmations',
             'order_status_updates',
-            'delivery_notifications',
-            'product_recommendations',
-            'price_alerts',
-            # Support
-            'ticket_updates',
             'support_messages',
-            # Chat
-            'chat_messages',
-            'chat_mentions',
-            # System
-            'system_alerts',
-            'account_security',
-            # Email
-            'email_frequency',
             'quiet_hours_start',
             'quiet_hours_end',
-            # Audit
             'created_at',
             'updated_at',
         ]
@@ -215,6 +174,9 @@ class PushTokenSerializer(serializers.ModelSerializer):
             'created_at',
         ]
         read_only_fields = ['id', 'user', 'is_active', 'last_used_at', 'created_at']
+        # L'unicite est geree par le use case (reassignation atomique du token).
+        validators: list = []
+        extra_kwargs = {'expo_push_token': {'validators': []}}
 
     def validate_expo_push_token(self, value: str) -> str:
         """
@@ -243,6 +205,12 @@ class PushTokenSerializer(serializers.ModelSerializer):
                 "Plateforme doit être 'ios' ou 'android'"
             )
         return cast(PushPlatform | None, value)
+
+
+class PushTokenUnregisterSerializer(serializers.Serializer):
+    """Payload de suppression d'un token push a la deconnexion."""
+
+    expo_push_token = serializers.CharField(max_length=255, trim_whitespace=True)
 
 
 class MarkNotificationReadSerializer(serializers.Serializer):

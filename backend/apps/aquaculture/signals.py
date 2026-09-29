@@ -11,35 +11,19 @@ Responsabilités des signals :
 
 Architecture : Signal → Service Layer (découplage complet)
 """
-from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
-from django.utils import timezone
-from notifications.services import NotificationService
 
 from .domain.calculators import AquacultureCalculator
-from .models import CycleLog, CycleMetrics, ProductionCycle, SanitaryLog
+from .models import CycleLog, CycleMetrics, ProductionCycle
 from .services import AnalyticsService, ProductionCycleService
 from .services.sync_service import is_sync_in_progress
 
 # =============================================================================
 # SIGNALS PRODUCTIONCY CLE
 # =============================================================================
-
-@receiver(pre_save, sender=ProductionCycle)
-def track_previous_cycle_status(sender, instance, **kwargs):
-    """
-    Memorise le statut precedent pour detecter une vraie transition vers `harvested`.
-    """
-    previous_status = None
-    if instance.pk:
-        previous_status = ProductionCycle.objects.filter(id=instance.pk).values_list(
-            'status', flat=True
-        ).first()
-    instance._previous_status = previous_status
-
 
 @receiver(pre_save, sender=ProductionCycle)
 def calculate_initial_biomass(sender, instance, **kwargs):
@@ -86,92 +70,13 @@ def calculate_initial_biomass(sender, instance, **kwargs):
 
 @receiver(post_save, sender=ProductionCycle)
 def create_cycle_metrics(sender, instance, created, **kwargs):
-    """
-    Crée les métriques de cycle et notifications initiales pour les nouveaux cycles.
-
-    DÉLÉGATION : NotificationService pour notifications
-    """
+    """Crée l'objet de métriques associé à chaque nouveau cycle."""
     if created:
-        # Create associated metrics object
         CycleMetrics.objects.create(
             cycle=instance,
             growth_curve_data=[],
             survival_curve_data=[],
             cumulative_feed_data=[]
-        )
-
-        # Create welcome notification
-        NotificationService.create_notification(
-            user=instance.farm_profile.user,
-            notification_type='cycle_milestone',
-            title=f"Nouveau cycle démarré, {instance.cycle_name}",
-            message=(
-                f"Votre cycle {instance.cycle_name} a été créé avec succès. "
-                f"Nous vous accompagnerons tout au long de cette production."
-            ),
-            content_object=instance,
-            metadata={'cycle_id': str(instance.id)},
-            channels=['in_app', 'push'],
-            scheduled_for=timezone.now(),
-        )
-
-        # Create first week sampling reminder
-        sampling_date = instance.analysis_start_date + timedelta(days=7)
-        if sampling_date >= timezone.localdate():
-            NotificationService.create_notification(
-                user=instance.farm_profile.user,
-                notification_type='sampling_reminder',
-                title=f"Échantillonnage, {instance.cycle_name}",
-                message="Planifiez la première pesée pour suivre la croissance.",
-                content_object=instance,
-                metadata={'cycle_id': str(instance.id)},
-                channels=['in_app', 'push'],
-                scheduled_for=timezone.make_aware(
-                    datetime.combine(sampling_date, datetime.min.time()).replace(hour=9, minute=0)
-                ),
-            )
-
-
-@receiver(post_save, sender=ProductionCycle)
-def check_cycle_completion(sender, instance, **kwargs):
-    """
-    Traite la finalisation de cycle et crée les notifications finales.
-
-    DÉLÉGATION : NotificationService pour notifications
-    """
-    previous_status = getattr(instance, '_previous_status', None)
-    just_harvested = previous_status != 'harvested'
-    if instance.status == 'harvested' and instance.end_date and just_harvested:
-        # Notification de clôture du cycle
-        NotificationService.create_notification(
-            user=instance.farm_profile.user,
-            notification_type='cycle_milestone',
-            title=f"Cycle terminé, {instance.cycle_name}",
-            message=(
-                f"Félicitations ! Cycle {instance.cycle_name} récolté. "
-                f"Taux de survie: {float(instance.survival_rate or 0):.1f}%, FCR: {float(instance.fcr or 0):.2f}."
-            ),
-            content_object=instance,
-            metadata={'cycle_id': str(instance.id)},
-            channels=['in_app', 'push'],
-            scheduled_for=timezone.now(),
-        )
-
-        # Recommandation pour le prochain cycle (J+1)
-        next_cycle_message = (
-            "Vous pouvez maintenant démarrer un nouveau cycle. "
-            "Utilisez les données de ce cycle pour optimiser le prochain."
-        )
-
-        NotificationService.create_notification(
-            user=instance.farm_profile.user,
-            notification_type='cycle_milestone',
-            title="Prêt pour un nouveau cycle",
-            message=next_cycle_message,
-            content_object=instance,
-            metadata={'cycle_id': str(instance.id)},
-            channels=['in_app', 'push'],
-            scheduled_for=timezone.now() + timedelta(days=1),
         )
 
 
@@ -235,23 +140,3 @@ def recalculate_cycle_on_log_delete(sender, instance, **kwargs):
         pass
 
 
-# =============================================================================
-# SIGNALS SANITARYLOG
-# =============================================================================
-
-@receiver(post_save, sender=SanitaryLog)
-def handle_sanitary_event(sender, instance, created, **kwargs):
-    """
-    Traite les événements sanitaires créés manuellement (non via service).
-
-    NOTE : Les SanitaryLog créés via SanitaryService.create_sanitary_log()
-    ont déjà leurs notifications générées. Ce signal sert de filet de sécurité
-    pour logs créés directement (admin Django, fixtures, tests).
-
-    DÉLÉGATION : SanitaryService pour logique métier complète
-    """
-    if created and not instance.resolved:
-        # Delegate notification creation to SanitaryService
-        # (includes severity mapping, message formatting, and alert logic)
-        from .services.sanitary_service import SanitaryService
-        SanitaryService._create_sanitary_notification(instance)

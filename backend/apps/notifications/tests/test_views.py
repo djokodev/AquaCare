@@ -76,7 +76,6 @@ class TestNotificationViewSet:
             title='Alert with delivery errors',
             message='Test message',
             scheduled_for=timezone.now(),
-            email_error='SMTP hard failure details',
             push_error='Expo push error details',
         )
 
@@ -85,22 +84,19 @@ class TestNotificationViewSet:
 
         assert response.status_code == status.HTTP_200_OK
         result = next(item for item in response.data['results'] if item['id'] == str(notification.id))
-        assert 'email_error' in result
+        assert 'email_error' not in result
         assert 'push_error' in result
-        assert result['email_error'] is None
         assert result['push_error'] is None
 
     def test_retrieve_notification_masks_delivery_errors(self, authenticated_client, notification):
         """Le détail d'une notification masque aussi les erreurs techniques."""
-        notification.email_error = 'SMTP detailed failure'
         notification.push_error = 'Expo detailed failure'
-        notification.save(update_fields=['email_error', 'push_error'])
+        notification.save(update_fields=['push_error'])
 
         url = reverse('notifications:notification-detail', kwargs={'pk': notification.id})
         response = authenticated_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['email_error'] is None
         assert response.data['push_error'] is None
 
     def test_list_notifications_unauthorized(self, api_client):
@@ -325,16 +321,15 @@ class TestNotificationPreferenceViewSet:
         """Test modification des pr�f�rences."""
         url = '/api/notification-preferences/'
         data = {
-            'email_enabled': False,
             'push_enabled': False,
-            'email_frequency': 'never'
+            'support_messages': False,
         }
         response = authenticated_client.patch(url, data, format='json')
 
         assert response.status_code == status.HTTP_200_OK
         notification_preference.refresh_from_db()
-        assert notification_preference.email_enabled is False
         assert notification_preference.push_enabled is False
+        assert notification_preference.support_messages is False
 
     def test_replace_preferences_with_put(self, authenticated_client, notification_preference):
         """Le PUT complet doit reutiliser le meme endpoint DRF."""
@@ -343,26 +338,10 @@ class TestNotificationPreferenceViewSet:
             url,
             {
                 'in_app_enabled': True,
-                'email_enabled': True,
                 'push_enabled': False,
-                'feeding_reminders': True,
-                'sampling_reminders': True,
-                'sanitary_alerts': True,
-                'cycle_milestones': True,
-                'mortality_alerts': True,
-                'water_quality_alerts': True,
                 'order_confirmations': True,
-                'order_status_updates': True,
-                'delivery_notifications': True,
-                'product_recommendations': False,
-                'price_alerts': False,
-                'ticket_updates': True,
+                'order_status_updates': False,
                 'support_messages': True,
-                'chat_messages': True,
-                'chat_mentions': True,
-                'system_alerts': True,
-                'account_security': True,
-                'email_frequency': 'daily',
                 'quiet_hours_start': None,
                 'quiet_hours_end': None,
             },
@@ -372,7 +351,7 @@ class TestNotificationPreferenceViewSet:
         assert response.status_code == status.HTTP_200_OK
         notification_preference.refresh_from_db()
         assert notification_preference.push_enabled is False
-        assert notification_preference.email_frequency == 'daily'
+        assert notification_preference.order_status_updates is False
 
 
 @pytest.mark.django_db
@@ -422,6 +401,54 @@ class TestPushTokenViewSet:
         assert token.device_name == 'Pixel 8'
         assert token.platform == 'ios'
         assert token.is_active is True
+
+    def test_register_push_token_reassigns_token_owned_by_previous_account(
+        self, authenticated_client, user, user2
+    ):
+        """Changement de compte sur le meme telephone : pas d'erreur 500, token reassigne."""
+        token_value = 'ExponentPushToken[sharedphone123]'
+        PushToken.objects.create(user=user2, expo_push_token=token_value, device_id='phone-1')
+
+        url = reverse('notifications:notification-register-push-token')
+        response = authenticated_client.post(
+            url,
+            {'expo_push_token': token_value, 'device_id': 'phone-1', 'platform': 'android'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert PushToken.objects.get(expo_push_token=token_value).user_id == user.id
+
+    def test_register_same_token_twice_is_idempotent(self, authenticated_client, user):
+        url = reverse('notifications:notification-register-push-token')
+        payload = {'expo_push_token': 'ExponentPushToken[sameagain1234]', 'device_id': 'phone-1'}
+
+        first = authenticated_client.post(url, payload, format='json')
+        second = authenticated_client.post(url, payload, format='json')
+
+        assert first.status_code == status.HTTP_201_CREATED
+        assert second.status_code == status.HTTP_200_OK
+        assert PushToken.objects.filter(user=user).count() == 1
+
+    def test_unregister_push_token_removes_only_own_token(self, authenticated_client, user, user2):
+        own = 'ExponentPushToken[ownedtoken1234]'
+        foreign = 'ExponentPushToken[foreigntoken12]'
+        PushToken.objects.create(user=user, expo_push_token=own, device_id='phone-1')
+        PushToken.objects.create(user=user2, expo_push_token=foreign, device_id='phone-2')
+        url = reverse('notifications:notification-unregister-push-token')
+
+        response = authenticated_client.post(url, {'expo_push_token': own}, format='json')
+        foreign_response = authenticated_client.post(url, {'expo_push_token': foreign}, format='json')
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert foreign_response.status_code == status.HTTP_204_NO_CONTENT
+        assert not PushToken.objects.filter(user=user).exists()
+        assert PushToken.objects.filter(user=user2).exists()
+
+    def test_unregister_push_token_requires_authentication(self, api_client):
+        url = reverse('notifications:notification-unregister-push-token')
+        response = api_client.post(url, {'expo_push_token': 'ExponentPushToken[x]'}, format='json')
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_register_push_token_rejects_malformed_token(self, authenticated_client):
         """Un token Expo partiel ou mal formé doit être refusé."""

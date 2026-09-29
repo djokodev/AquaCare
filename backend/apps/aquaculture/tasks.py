@@ -1,17 +1,15 @@
 """
 Taches Celery pour le module aquaculture.
 
-- Traitements post-log asynchrones (notifications, alertes, analytics)
+- Traitements post-log asynchrones (analytics)
 - Génération asynchrone d'un rapport à la demande (endpoint app/admin)
 - Invalidation du cache Dashboard
 """
 import logging
 import uuid
-from datetime import date, datetime, timedelta
 
 from celery import shared_task
 from django.core.cache import cache
-from django.utils import timezone
 
 from .services import ReportService
 
@@ -28,15 +26,9 @@ def post_log_async_tasks(log_id: str) -> None:
     Async processing after a CycleLog is created.
 
     Handles non-critical operations that don't need to block the HTTP response:
-    - Mortality alert notifications
-    - Environmental parameter alerts
     - Cycle metrics data update
-    - Sampling reminder check
     - Dashboard cache invalidation
     """
-    from notifications.models import Notification
-    from notifications.services import NotificationService
-
     from .models import CycleLog
     from .services import AnalyticsService
 
@@ -49,78 +41,9 @@ def post_log_async_tasks(log_id: str) -> None:
         return
 
     cycle = instance.cycle
-    user = cycle.farm_profile.user
 
-    # 1. Mortality alert
-    if instance.mortality_count and instance.mortality_count > 0:
-        mortality_rate = (
-            (instance.mortality_count / cycle.current_count * 100)
-            if cycle.current_count > 0 else 0
-        )
-
-        if mortality_rate > 2.0:
-            message = (
-                f"Mortalite anormale detectee : {instance.mortality_count} "
-                f"morts ({mortality_rate:.1f}%). "
-                "Verifier la qualite de l'eau et l'etat sanitaire."
-            )
-            NotificationService.create_notification(
-                user=user,
-                notification_type='mortality_alert',
-                title=f"Alerte mortalite, {cycle.cycle_name}",
-                message=message,
-                content_object=cycle,
-                metadata={
-                    'cycle_id': str(cycle.id),
-                    'mortality_count': instance.mortality_count,
-                    'mortality_rate': mortality_rate,
-                },
-                channels=['in_app', 'push'],
-                priority='urgent' if mortality_rate > 5.0 else 'high',
-            )
-
-    # 2. Environmental parameter alerts
-    AnalyticsService.check_and_create_environmental_alerts(instance)
-
-    # 3. Update cycle metrics data (incremental)
     AnalyticsService.update_cycle_metrics_data(cycle, new_log=instance)
-
-    # 4. Sampling reminder check
-    last_sampling = cycle.logs.filter(
-        average_weight__isnull=False
-    ).exclude(id=instance.id).order_by('-log_date').first()
-
-    if last_sampling:
-        days_since_sampling = (instance.log_date - last_sampling.log_date).days
-    else:
-        days_since_sampling = (instance.log_date - cycle.start_date).days
-
-    if days_since_sampling >= 7 and not instance.average_weight:
-        next_sampling_date = instance.log_date + timedelta(days=7)
-
-        if next_sampling_date > date.today():
-            exists = Notification.objects.filter(
-                user=user,
-                notification_type='sampling_reminder',
-                scheduled_for__date=next_sampling_date
-            ).exists()
-
-            if not exists:
-                NotificationService.create_notification(
-                    user=user,
-                    notification_type='sampling_reminder',
-                    title=f"Échantillonnage hebdomadaire, {cycle.cycle_name}",
-                    message="Effectuer une pesée pour suivre la croissance (minimum 20 poissons).",
-                    content_object=cycle,
-                    metadata={'cycle_id': str(cycle.id)},
-                    channels=['in_app', 'push'],
-                    scheduled_for=timezone.make_aware(
-                        datetime.combine(next_sampling_date, datetime.min.time()).replace(hour=9, minute=0)
-                    ),
-                )
-
-    # 5. Invalidate dashboard cache for this user
-    invalidate_dashboard_cache(str(user.id))
+    invalidate_dashboard_cache(str(cycle.farm_profile.user_id))
 
 
 def invalidate_dashboard_cache(user_id: str) -> None:

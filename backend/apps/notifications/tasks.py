@@ -1,5 +1,5 @@
 """
-Celery tasks pour l'envoi asynchrone de notifications email et push.
+Celery tasks pour l'envoi asynchrone des notifications push.
 """
 from __future__ import annotations
 
@@ -8,32 +8,14 @@ from typing import Any, TypedDict
 
 import requests
 from celery import shared_task
-from django.conf import settings
-from django.core.mail import send_mail
-from django.template import TemplateDoesNotExist
-from django.template.loader import render_to_string
 from django.utils import timezone
-from django.utils.html import strip_tags
 
 from .models import Notification, PushToken
 
 logger = logging.getLogger(__name__)
 
-EMAIL_ERROR_RECIPIENT_MISSING = "EMAIL_RECIPIENT_MISSING"
-EMAIL_ERROR_SEND_FAILED = "EMAIL_SEND_FAILED"
 PUSH_ERROR_NO_VALID_TOKENS = "PUSH_NO_VALID_TOKENS"
 PUSH_ERROR_SEND_FAILED = "PUSH_SEND_FAILED"
-
-
-class EmailTemplateContext(TypedDict):
-    user: Any
-    notification: Notification
-    title: str
-    message: str
-    metadata: dict[str, Any]
-    notification_type: str
-    created_at: timezone.datetime
-    site_url: str
 
 
 class ExpoPayloadData(TypedDict):
@@ -57,39 +39,6 @@ class ExpoPushMessage(TypedDict, total=False):
 def _get_notification_with_user(notification_id: str) -> Notification:
     """Charge une notification avec son utilisateur en une seule requete."""
     return Notification.objects.select_related("user").get(id=notification_id)
-
-
-def _build_email_context(notification: Notification) -> EmailTemplateContext:
-    user = notification.user
-    return {
-        "user": user,
-        "notification": notification,
-        "title": notification.title,
-        "message": notification.message,
-        "metadata": notification.metadata,
-        "notification_type": notification.get_notification_type_display(),
-        "created_at": notification.created_at,
-        "site_url": settings.FRONTEND_URL if hasattr(settings, "FRONTEND_URL") else "https://aquacare.tech",
-    }
-
-
-def _render_fallback_email_html(notification: Notification) -> str:
-    return f"""
-            <html>
-            <body>
-                <h2>{notification.title}</h2>
-                <p>{notification.message}</p>
-                <hr>
-                <p style="color: gray; font-size: 12px;">
-                    AquaCare - Notifications
-                </p>
-            </body>
-            </html>
-            """
-
-
-def _save_email_error(notification_id: str, error_code: str) -> None:
-    Notification.objects.filter(id=notification_id).update(email_error=error_code)
 
 
 def _save_push_error(notification_id: str, error_code: str) -> None:
@@ -122,80 +71,6 @@ def _build_expo_messages(notification: Notification, tokens: list[PushToken]) ->
         messages.append(message)
 
     return messages
-
-
-@shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def send_email_notification_task(self, notification_id: str):
-    """
-    Envoie une notification par email.
-
-    Retry automatique 3x avec 60s de délai entre tentatives.
-    Utilise les templates HTML pour emails.
-
-    Args:
-        notification_id: UUID de la notification
-
-    Raises:
-        Exception: Si échec après 3 tentatives
-    """
-    try:
-        notification = _get_notification_with_user(notification_id)
-        user = notification.user
-
-        # Vérifier que l'utilisateur a un email
-        if not user.email:
-            logger.warning(
-                "Skipping email notification %s: recipient email missing",
-                notification_id,
-            )
-            notification.email_error = EMAIL_ERROR_RECIPIENT_MISSING
-            notification.save(update_fields=['email_error'])
-            return
-
-        # Préparer le contexte pour le template
-        context = _build_email_context(notification)
-
-        # Render email template
-        try:
-            html_message = render_to_string('notifications/email_notification.html', context)
-        except TemplateDoesNotExist:
-            # Fallback si template n'existe pas encore
-            html_message = _render_fallback_email_html(notification)
-
-        plain_message = strip_tags(html_message)
-
-        # Envoyer l'email
-        send_mail(
-            subject=f"[AquaCare] {notification.title}",
-            message=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            html_message=html_message,
-            fail_silently=False,
-        )
-
-        # Mettre à jour la notification
-        notification.email_sent_at = timezone.now()
-        notification.email_error = None  # Réinitialiser erreur si succès
-        notification.save(update_fields=['email_sent_at', 'email_error'])
-
-        logger.info("Email sent successfully for notification %s", notification_id)
-
-    except Notification.DoesNotExist:
-        logger.warning(
-            "Email notification %s is not visible yet; retrying delivery",
-            notification_id,
-        )
-        raise self.retry(exc=Notification.DoesNotExist(notification_id))
-
-    except Exception as exc:
-        logger.exception("Email delivery failed for notification %s", notification_id)
-
-        # Enregistrer une erreur neutre (pas de détails techniques en base)
-        _save_email_error(notification_id, EMAIL_ERROR_SEND_FAILED)
-
-        # Retry avec exponential backoff
-        raise self.retry(exc=exc)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
@@ -361,8 +236,6 @@ def send_scheduled_notifications():
 
         dispatched_ids = []
         for notification in pending_notifications[:500]:
-            if 'email' in notification.channels:
-                send_email_notification_task.delay(str(notification.id))
             if 'push' in notification.channels:
                 send_push_notification_task.delay(str(notification.id))
             dispatched_ids.append(notification.id)

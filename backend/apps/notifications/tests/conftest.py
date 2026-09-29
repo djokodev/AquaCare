@@ -74,9 +74,7 @@ def notification_preference(user):
     pref = NotificationPreference.objects.create(
         user=user,
         in_app_enabled=True,
-        email_enabled=True,
         push_enabled=True,
-        email_frequency='instant'
     )
     return pref
 

@@ -30,6 +30,7 @@ from .serializers import (
     NotificationSerializer,
     NotificationStatsSerializer,
     PushTokenSerializer,
+    PushTokenUnregisterSerializer,
 )
 from .throttles import NotificationBulkMutationThrottle, NotificationPushTokenThrottle
 
@@ -74,6 +75,11 @@ from .throttles import NotificationBulkMutationThrottle, NotificationPushTokenTh
         request=PushTokenSerializer,
         responses={200: PushTokenSerializer, 201: PushTokenSerializer},
     ),
+    unregister_push_token=extend_schema(
+        summary="Supprimer mon token push Expo (deconnexion)",
+        request=PushTokenUnregisterSerializer,
+        responses={204: OpenApiResponse(description="Token supprime")},
+    ),
 )
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -87,6 +93,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     - DELETE /api/notifications/{id}/     - Supprimer notification
     - POST   /api/notifications/delete_all_read/ - Supprimer toutes les lues
     - GET    /api/notifications/stats/    - Statistiques notifications
+    - POST   /api/notifications/register_push_token/   - Enregistrer token push
+    - POST   /api/notifications/unregister_push_token/ - Supprimer token push
     """
 
     permission_classes = [IsAuthenticated]
@@ -143,6 +151,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             return NotificationStatsSerializer
         if self.action == 'register_push_token':
             return PushTokenSerializer
+        if self.action == 'unregister_push_token':
+            return PushTokenUnregisterSerializer
         return NotificationSerializer
 
     @action(detail=True, methods=['post'])
@@ -267,8 +277,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             "unread_count": 12,
             "read_count": 33,
             "by_type": {
-                "feeding_reminder": 10,
                 "order_confirmed": 5,
+                "new_message": 3,
                 ...
             }
         }
@@ -335,6 +345,27 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             response_serializer.data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
         )
+
+    @action(
+        detail=False,
+        methods=['post'],
+        throttle_classes=[NotificationPushTokenThrottle],
+    )
+    def unregister_push_token(self, request: Request) -> Response:
+        """
+        Supprime le token push de l'utilisateur courant (a la deconnexion).
+
+        **POST** /api/notifications/unregister_push_token/
+        Body: {"expo_push_token": "ExponentPushToken[xxxxxx]"}
+        Idempotent : 204 meme si le token est inconnu ou appartient a un autre compte.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        NotificationInboxApplicationService.unregister_push_token(
+            request.user,
+            cast(dict[str, Any], serializer.validated_data)['expo_push_token'],
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema_view(

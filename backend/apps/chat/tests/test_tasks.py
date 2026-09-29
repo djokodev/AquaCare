@@ -35,10 +35,10 @@ class TestNotifyAdminsNewUserMessageTask:
             content="Réponse support",
         )
 
-        with patch("chat.tasks.mail_admins") as mail_admins_mock:
+        with patch("django.core.mail.EmailMessage.send") as send_mock:
             notify_admins_new_user_message_task.run(str(admin_message.id))
 
-        mail_admins_mock.assert_not_called()
+        send_mock.assert_not_called()
         assert Notification.objects.count() == 0
 
     def test_creates_admin_notifications_for_user_message(
@@ -49,7 +49,7 @@ class TestNotifyAdminsNewUserMessageTask:
         settings,
     ) -> None:
         second_admin = user_factory(is_staff=True, is_superuser=False)
-        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        ConversationService.get_or_create_conversation(authenticated_user)
         user_message = MessageService.send_user_message(
             user=authenticated_user,
             content="Bonjour support",
@@ -58,14 +58,11 @@ class TestNotifyAdminsNewUserMessageTask:
             client_uuid=None,
             created_offline=False,
         )
-        settings.SITE_URL = "https://aquacare.example"
-
-        with patch("chat.tasks.mail_admins") as mail_admins_mock:
+        with patch("django.core.mail.EmailMessage.send") as send_mock:
             notify_admins_new_user_message_task.run(str(user_message.id))
 
-        mail_admins_mock.assert_called_once()
-        _, kwargs = mail_admins_mock.call_args
-        assert str(conversation.id) in kwargs["message"]
+        # Plus aucun email : l'équipe est notifiée uniquement in-app.
+        send_mock.assert_not_called()
 
         notifications = Notification.objects.filter(notification_type="new_message").order_by("user_id")
         assert notifications.count() == 2
@@ -87,12 +84,8 @@ class TestNotifyAdminsNewUserMessageTask:
             sender_type="user",
             content="Aucun admin disponible",
         )
-        settings.SITE_URL = "https://aquacare.example"
+        notify_admins_new_user_message_task.run(str(user_message.id))
 
-        with patch("chat.tasks.mail_admins") as mail_admins_mock:
-            notify_admins_new_user_message_task.run(str(user_message.id))
-
-        mail_admins_mock.assert_called_once()
         assert Notification.objects.count() == 0
 
 
@@ -148,3 +141,25 @@ class TestNotifyUserAdminMessageTask:
             priority="medium",
             send_immediately=True,
         )
+
+    def test_notifies_user_in_english_when_language_is_english(
+        self,
+        authenticated_user,
+        aquacare_admin,
+    ) -> None:
+        authenticated_user.language_preference = "en"
+        authenticated_user.save(update_fields=["language_preference"])
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        admin_message = MessageService.send_admin_message(
+            conversation=conversation,
+            admin_user=aquacare_admin,
+            content="Support reply",
+        )
+
+        with patch("notifications.services.NotificationService.create_notification") as create_notification_mock:
+            notify_user_admin_message_task.run(str(admin_message.id))
+
+        kwargs = create_notification_mock.call_args.kwargs
+        assert kwargs["title"] == "New message from support"
+        assert kwargs["message"] == "Support has replied to your message."
+        assert kwargs["channels"] == ["in_app", "push"]

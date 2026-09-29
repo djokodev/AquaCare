@@ -11,7 +11,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from .constants import EMAIL_FREQUENCIES, NOTIFICATION_PRIORITIES, NOTIFICATION_TYPES
+from .constants import NOTIFICATION_PRIORITIES, NOTIFICATION_TYPES
 
 
 class NotificationQuerySet(models.QuerySet["Notification"]):
@@ -110,7 +110,7 @@ class Notification(models.Model):
         default=list,
         blank=True,
         verbose_name=_('Canaux de diffusion'),
-        help_text=_("Ex: ['in_app', 'email', 'push']")
+        help_text=_("Ex: ['in_app', 'push']")
     )
 
     # Scheduling
@@ -137,18 +137,6 @@ class Notification(models.Model):
         null=True,
         blank=True,
         verbose_name=_('Lue le')
-    )
-
-    # Email tracking
-    email_sent_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name=_('Email envoyé le')
-    )
-    email_error = models.TextField(
-        null=True,
-        blank=True,
-        verbose_name=_('Erreur email')
     )
 
     # Push tracking
@@ -211,7 +199,8 @@ class Notification(models.Model):
 class NotificationPreference(models.Model):
     """
     Préférences de notifications par utilisateur.
-    Permet opt-in/opt-out par canal et par type.
+
+    Canaux globaux et catégories réellement émises par le produit.
     """
 
     user = models.OneToOneField(
@@ -226,42 +215,12 @@ class NotificationPreference(models.Model):
         default=True,
         verbose_name=_('Notifications in-app activées')
     )
-    email_enabled = models.BooleanField(
-        default=True,
-        verbose_name=_('Notifications email activées')
-    )
     push_enabled = models.BooleanField(
         default=True,
         verbose_name=_('Notifications push activées')
     )
 
-    # Préférences par type - Aquaculture
-    feeding_reminders = models.BooleanField(
-        default=True,
-        verbose_name=_('Rappels nourrissage')
-    )
-    sampling_reminders = models.BooleanField(
-        default=True,
-        verbose_name=_('Rappels échantillonnage')
-    )
-    sanitary_alerts = models.BooleanField(
-        default=True,
-        verbose_name=_('Alertes sanitaires')
-    )
-    cycle_milestones = models.BooleanField(
-        default=True,
-        verbose_name=_('Étapes du cycle')
-    )
-    mortality_alerts = models.BooleanField(
-        default=True,
-        verbose_name=_('Alertes mortalité')
-    )
-    water_quality_alerts = models.BooleanField(
-        default=True,
-        verbose_name=_('Alertes qualité eau')
-    )
-
-    # Préférences par type - Commerce
+    # Catégories
     order_confirmations = models.BooleanField(
         default=True,
         verbose_name=_('Confirmations de commande')
@@ -270,60 +229,12 @@ class NotificationPreference(models.Model):
         default=True,
         verbose_name=_('Mises à jour statut commande')
     )
-    delivery_notifications = models.BooleanField(
-        default=True,
-        verbose_name=_('Notifications de livraison')
-    )
-    product_recommendations = models.BooleanField(
-        default=False,
-        verbose_name=_('Recommandations produits'),
-        help_text=_('Marketing opt-in')
-    )
-    price_alerts = models.BooleanField(
-        default=False,
-        verbose_name=_('Alertes de prix'),
-        help_text=_('Marketing opt-in')
-    )
-
-    # Préférences par type - Support (futur)
-    ticket_updates = models.BooleanField(
-        default=True,
-        verbose_name=_('Mises à jour tickets')
-    )
     support_messages = models.BooleanField(
         default=True,
         verbose_name=_('Messages support')
     )
 
-    # Préférences par type - Chat (futur)
-    chat_messages = models.BooleanField(
-        default=True,
-        verbose_name=_('Messages chat')
-    )
-    chat_mentions = models.BooleanField(
-        default=True,
-        verbose_name=_('Mentions chat')
-    )
-
-    # Préférences par type - System
-    system_alerts = models.BooleanField(
-        default=True,
-        verbose_name=_('Alertes système')
-    )
-    account_security = models.BooleanField(
-        default=True,
-        verbose_name=_('Sécurité compte')
-    )
-
-    # Fréquence email (digest)
-    email_frequency = models.CharField(
-        max_length=20,
-        choices=EMAIL_FREQUENCIES,
-        default='instant',
-        verbose_name=_('Fréquence email')
-    )
-
-    # Plage horaire pour notifications push (optionnel)
+    # Plage horaire sans push (optionnel)
     quiet_hours_start = models.TimeField(
         null=True,
         blank=True,
@@ -337,7 +248,6 @@ class NotificationPreference(models.Model):
         help_text=_('Ex: 07:00')
     )
 
-    # Audit
     created_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name=_('Créées le')
@@ -347,6 +257,13 @@ class NotificationPreference(models.Model):
         verbose_name=_('Modifiées le')
     )
 
+    TYPE_FIELD_MAP = {
+        'order_confirmed': 'order_confirmations',
+        'order_delivered': 'order_status_updates',
+        'order_ready_for_pickup': 'order_status_updates',
+        'new_message': 'support_messages',
+    }
+
     class Meta:
         verbose_name = _('Préférences de notifications')
         verbose_name_plural = _('Préférences de notifications')
@@ -355,87 +272,21 @@ class NotificationPreference(models.Model):
         return f"Préférences: {self.user.phone_number}"
 
     def is_in_quiet_hours(self) -> bool:
-        """
-        Vérifie si l'heure actuelle est dans les heures silencieuses.
-
-        Returns:
-            bool: True si dans les heures silencieuses, False sinon.
-        """
+        """Vérifie si l'heure actuelle est dans les heures silencieuses."""
         if not self.quiet_hours_start or not self.quiet_hours_end:
             return False
 
         now = timezone.localtime(timezone.now()).time()
 
         if self.quiet_hours_start < self.quiet_hours_end:
-            # Plage simple ne traversant pas minuit (ex: 08:00 → 20:00)
             return self.quiet_hours_start <= now <= self.quiet_hours_end
-        else:
-            # Plage qui traverse minuit
-            return now >= self.quiet_hours_start or now <= self.quiet_hours_end
+        return now >= self.quiet_hours_start or now <= self.quiet_hours_end
 
     def is_type_enabled(self, notification_type: str) -> bool:
-        """
-        Vérifie si un type de notification est activé.
-
-        Args:
-            notification_type: Type de notification (ex: 'feeding_reminder')
-
-        Returns:
-            bool: True si activé, False sinon.
-        """
-        # Mapping types → champs preferences
-        type_field_map = {
-            # Aquaculture
-            'feeding_reminder': 'feeding_reminders',
-            'sampling_reminder': 'sampling_reminders',
-            'treatment_reminder': 'sampling_reminders',  # Regroupe avec sampling pour l'instant
-            'mortality_alert': 'mortality_alerts',
-            'growth_alert': 'mortality_alerts',  # Regroupe avec mortality (alertes élevage)
-            'water_quality_alert': 'water_quality_alerts',
-            'cycle_milestone': 'cycle_milestones',
-            'harvest_reminder': 'cycle_milestones',  # Regroupe avec milestones
-            'alert': 'sanitary_alerts',  # Alerte générique sanitaire
-
-            # Commerce
-            'order_confirmed': 'order_confirmations',
-            'order_shipped': 'order_status_updates',
-            'order_delivered': 'order_status_updates',
-            'order_ready_for_pickup': 'order_status_updates',
-            'order_cancelled': 'order_status_updates',
-            'payment_received': 'order_confirmations',
-            'delivery_scheduled': 'delivery_notifications',
-            'product_recommendation': 'product_recommendations',  # ✅ CORRECTION CRITIQUE
-            'low_stock_alert': 'product_recommendations',
-            'price_drop': 'price_alerts',
-
-            # Support
-            'ticket_created': 'ticket_updates',
-            'ticket_reply': 'ticket_updates',
-            'ticket_resolved': 'ticket_updates',
-            'ticket_reopened': 'ticket_updates',
-            'ticket_assigned': 'ticket_updates',
-
-            # Chat
-            'new_message': 'chat_messages',
-            'message_reply': 'chat_messages',
-            'mention': 'chat_mentions',
-            'chat_invitation': 'chat_messages',
-            'group_created': 'chat_messages',
-
-            # Système
-            'system_update': 'system_alerts',
-            'maintenance': 'system_alerts',
-            'welcome': 'system_alerts',
-            'account_security': 'account_security',
-            'password_reset': 'account_security',
-            'email_verification': 'account_security',
-        }
-
-        field_name = type_field_map.get(notification_type)
+        """Vérifie si un type de notification est activé (autorisé si non mappé)."""
+        field_name = self.TYPE_FIELD_MAP.get(notification_type)
         if field_name:
             return getattr(self, field_name, True)
-
-        # Par défaut, autoriser si type non mappé
         return True
 
 

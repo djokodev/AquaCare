@@ -7,9 +7,7 @@ from __future__ import annotations
 import logging
 
 from celery import shared_task
-from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import mail_admins
 
 from .models import Message
 
@@ -29,22 +27,7 @@ def notify_admins_new_user_message_task(self, message_id: str):
     if message.sender_type != 'user':
         return
 
-
     conversation = message.conversation
-    site_url = getattr(settings, 'SITE_URL', '').rstrip('/')
-
-    mail_admins(
-        subject="[AquaCare Support] Nouveau message utilisateur",
-        message=f"""
-Un nouveau message utilisateur a été reçu dans le support AquaCare.
-
-Conversation: {conversation.id}
-Message: {message.id}
-
-Voir la conversation: {site_url}/admin/chat/conversation/{conversation.id}/change/
-        """.strip(),
-        fail_silently=True,
-    )
 
     from django.contrib.contenttypes.models import ContentType
     from django.utils import timezone
@@ -98,11 +81,17 @@ def notify_user_admin_message_task(self, message_id: str):
     from notifications.services import NotificationService
 
     conversation = message.conversation
+    language = getattr(conversation.user, 'language_preference', 'fr')
+    is_english = str(language).lower().startswith('en')
     NotificationService.create_notification(
         user=conversation.user,
         notification_type='new_message',
-        title="Nouveau message du support",
-        message="Vous avez reçu une réponse du support.",
+        title="New message from support" if is_english else "Nouveau message du support",
+        message=(
+            "Support has replied to your message."
+            if is_english
+            else "Vous avez reçu une réponse du support."
+        ),
         content_object=message,
         metadata={
             'conversation_id': str(conversation.id),

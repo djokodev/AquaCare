@@ -330,9 +330,6 @@ FRONTEND_URL = _env_str('FRONTEND_URL', 'http://localhost:8081')
 # staging/prod elle est fixee pour ne jamais dependre de l'en-tete Host.
 PUBLIC_API_BASE_URL = _env_str('PUBLIC_API_BASE_URL', '')
 
-# Notifications nourrissage : alarmes locales frontend prioritaires
-FEEDING_REMINDER_LOCAL_ALARM_ONLY = _env_bool('FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
-
 # Lot 2A écrit toujours les projections. Ce flag ne contrôlera que leur
 # exposition dans l'interface et les lectures, livrées au Lot 2B.
 ADMIN_ACTIVITY_CENTER_ENABLED = _env_bool('ADMIN_ACTIVITY_CENTER_ENABLED', False)

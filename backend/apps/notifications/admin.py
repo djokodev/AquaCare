@@ -14,7 +14,7 @@ from common.admin_mixins import SecuredModelAdmin
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.core.exceptions import PermissionDenied
-from django.utils.html import format_html
+from django.utils.html import format_html_join
 from django.utils.translation import gettext_lazy as _
 
 from .models import Notification, NotificationPreference, PushToken
@@ -121,7 +121,6 @@ class NotificationAdmin(NotificationsSecuredAdmin):
         'object_id',
         'sent_at',
         'read_at',
-        'email_sent_at',
         'push_sent_at',
         'created_at',
         'updated_at'
@@ -154,10 +153,6 @@ class NotificationAdmin(NotificationsSecuredAdmin):
                 'is_read',
                 'read_at',
             )
-        }),
-        (_('Email tracking'), {
-            'fields': ('email_sent_at', 'email_error'),
-            'classes': ('collapse',)
         }),
         (_('Push tracking'), {
             'fields': ('push_sent_at', 'push_error'),
@@ -199,23 +194,16 @@ class NotificationAdmin(NotificationsSecuredAdmin):
         if not obj.channels:
             return '-'
 
-        badges = []
         colors = {
             'in_app': '#3b82f6',
-            'email': '#10b981',
             'push': '#f59e0b',
-            'sms': '#8b5cf6'
         }
-
-        for channel in obj.channels:
-            color = colors.get(channel, '#6b7280')
-            badges.append(
-                f'<span style="background-color: {color}; color: white; '
-                f'padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-right: 3px;">'
-                f'{channel}</span>'
-            )
-
-        return format_html(''.join(badges))
+        return format_html_join(
+            '',
+            '<span style="background-color: {}; color: white; padding: 2px 6px; '
+            'border-radius: 3px; font-size: 10px; margin-right: 3px;">{}</span>',
+            ((colors.get(str(channel), '#6b7280'), channel) for channel in obj.channels),
+        )
     channels_display.short_description = _('Canaux')
 
     @admin.action(description=_("Marquer comme lu"))
@@ -254,17 +242,13 @@ class NotificationPreferenceAdmin(SuperuserTechnicalAdmin):
     list_display = [
         'user_display',
         'in_app_enabled',
-        'email_enabled',
         'push_enabled',
-        'email_frequency',
         'updated_at'
     ]
 
     list_filter = [
         'in_app_enabled',
-        'email_enabled',
         'push_enabled',
-        'email_frequency'
     ]
 
     search_fields = [
@@ -281,55 +265,18 @@ class NotificationPreferenceAdmin(SuperuserTechnicalAdmin):
         (_('Canaux globaux'), {
             'fields': (
                 'in_app_enabled',
-                'email_enabled',
                 'push_enabled',
             )
         }),
-        (_('Preferences Aquaculture'), {
-            'fields': (
-                'feeding_reminders',
-                'sampling_reminders',
-                'sanitary_alerts',
-                'cycle_milestones',
-                'mortality_alerts',
-                'water_quality_alerts',
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('Preferences Commerce'), {
+        (_('Catégories'), {
             'fields': (
                 'order_confirmations',
                 'order_status_updates',
-                'delivery_notifications',
-                'product_recommendations',
-                'price_alerts',
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('Preferences Support'), {
-            'fields': (
-                'ticket_updates',
                 'support_messages',
-            ),
-            'classes': ('collapse',)
+            )
         }),
-        (_('Preferences Chat'), {
+        (_('Heures silencieuses (push)'), {
             'fields': (
-                'chat_messages',
-                'chat_mentions',
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('Preferences Systeme'), {
-            'fields': (
-                'system_alerts',
-                'account_security',
-            ),
-            'classes': ('collapse',)
-        }),
-        (_('Configuration Email'), {
-            'fields': (
-                'email_frequency',
                 'quiet_hours_start',
                 'quiet_hours_end',
             )

@@ -915,6 +915,35 @@ class TestOrderService:
         with pytest.raises(InvalidOrderError, match="ne peut plus"):
             OrderService.mark_order_ready_for_customer_confirmation(order, commerce_operator)
 
+    @pytest.mark.parametrize(
+        ("language", "expected_title", "expected_fragment"),
+        [
+            ("fr", "Commande enregistrée", "a été enregistrée"),
+            ("en", "Order recorded", "has been recorded"),
+        ],
+    )
+    def test_order_recorded_notification_is_in_app_only_and_localized(
+        self, test_user, test_farm, test_product, language, expected_title, expected_fragment
+    ):
+        from notifications.models import Notification
+
+        test_user.language_preference = language
+        test_user.save(update_fields=["language_preference"])
+
+        with patch("notifications.tasks.send_push_notification_task.delay") as push_delay:
+            order = OrderService.create_order(
+                user=test_user,
+                items_data=[{"product_id": str(test_product.id), "quantity": 1}],
+                delivery_method="home",
+            )
+
+        notification = Notification.objects.get(user=test_user, notification_type="order_confirmed")
+        assert notification.channels == ["in_app"]
+        assert notification.title == expected_title
+        assert expected_fragment in notification.message
+        assert order.order_number in notification.message
+        push_delay.assert_not_called()
+
     def test_pickup_notification_contains_navigation_metadata(
         self, test_user, test_farm, test_product
     ):

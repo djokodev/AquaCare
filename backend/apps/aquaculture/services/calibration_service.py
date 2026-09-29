@@ -8,7 +8,6 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from notifications.services import NotificationService
 
 from ..constants import OPTIMAL_PARAMETERS, SAMPLING_TOLERANCE
 from ..domain.calibration import WEIGHT_DIFFERENCE_WARNING_THRESHOLD, biomass_for
@@ -199,24 +198,6 @@ class CalibrationService:
         operation.refresh_from_db()
         warnings = cls._warnings_for(operation, effective_weight)
 
-        NotificationService.create_notification(
-            user=user,
-            notification_type='alert',
-            title=_('Calibrage effectué'),
-            message=_(
-                '%(count)s poissons ont été transférés de %(source)s vers %(tank)s. '
-                'Le bac contient maintenant %(total)s poissons.'
-            )
-            % {
-                'count': transferred_count,
-                'source': source.production_unit.name,
-                'tank': destination_unit.name,
-                'total': destination.current_fish_count,
-            },
-            content_object=destination_cycle,
-            metadata={'calibration_operation_id': str(operation.id)},
-            channels=['in_app'],
-        )
         transaction.on_commit(lambda: invalidate_dashboard_cache(str(user.id)))
         record_calibration_completed(operation)
         return operation, warnings, True

@@ -33,14 +33,12 @@ class TestNotificationSerializers:
         request = APIRequestFactory().get('/api/notifications/')
         request.user = staff_user
 
-        notification.email_error = 'SMTP failure'
         notification.push_error = 'Expo failure'
         serializer = NotificationSerializer(
             notification,
             context={'request': request},
         )
 
-        assert serializer.data['email_error'] == 'SMTP failure'
         assert serializer.data['push_error'] == 'Expo failure'
 
     def test_notification_list_serializer_exposes_delivery_errors_to_superuser(
@@ -57,7 +55,6 @@ class TestNotificationSerializers:
         request = APIRequestFactory().get('/api/notifications/')
         request.user = superuser
 
-        notification.email_error = 'SMTP failure'
         notification.push_error = 'Expo failure'
 
         serializer = NotificationListSerializer(
@@ -65,7 +62,6 @@ class TestNotificationSerializers:
             context={'request': request},
         )
 
-        assert serializer.data['email_error'] == 'SMTP failure'
         assert serializer.data['push_error'] == 'Expo failure'
 
 

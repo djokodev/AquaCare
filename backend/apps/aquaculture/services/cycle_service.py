@@ -1929,8 +1929,6 @@ class ProductionCycleService(BaseService):
                 level='warning'
             )
 
-        # Notification de félicitations (géré par le signal check_cycle_completion)
-
     @staticmethod
     def _is_pond_infrastructure(infrastructure_types: Any) -> bool:
         """
