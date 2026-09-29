@@ -229,7 +229,8 @@ Deeper references:
 - Offline sync hardening, to confirm.
 - Support and chat improvements, to confirm.
 - Push notification completion, to confirm.
-- Deployment and release readiness, to confirm.
+- Production and store readiness, module by module (accounts done). Open
+  launch items are tracked in `docs/workflows/RELEASE.md`.
 - Documentation quality maintenance, confirmed.
 
 ## Known risks and cautions
