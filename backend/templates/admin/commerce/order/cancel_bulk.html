@@ -1,0 +1,45 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content_title %}{{ title }}{% endblock %}
+
+{% comment %}
+  Couleurs : uniquement les composants .aq-* de admin_custom.css (thème clair et sombre).
+{% endcomment %}
+{% block content %}
+<div id="content-main" class="col-12">
+  <article class="aq-panel">
+    <header class="aq-panel__header aq-panel__header--danger">
+      <h2>{{ title }}</h2>
+    </header>
+    <div class="aq-panel__body">
+      <p>{% trans "Ces commandes vont être annulées. Chaque client recevra une notification avec le motif. Cette action est définitive." %}</p>
+      <ul>
+        {% for order in orders %}
+          <li><strong>{{ order.order_number }}</strong> — {{ order.farm_profile.farm_name }} — {{ order.get_status_display }} — {{ order.total|floatformat:0 }} FCFA</li>
+        {% endfor %}
+      </ul>
+      {% if skipped %}
+        <p class="aq-alert aq-alert--warning">
+          {% trans "Ignorées (déjà reçues ou annulées) :" %}
+          {% for order in skipped %}{{ order.order_number }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        </p>
+      {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        {% for pk in selected_ids %}
+          <input type="hidden" name="{{ action_checkbox_name }}" value="{{ pk }}">
+        {% endfor %}
+        <input type="hidden" name="action" value="cancel_orders_action">
+        <input type="hidden" name="apply" value="1">
+        <label for="id_reason"><strong>{% trans "Motif (envoyé au client)" %}</strong></label>
+        <textarea id="id_reason" name="reason" rows="3" required maxlength="{{ reason_max_length }}" class="aq-textarea"></textarea>
+        <div class="aq-actions">
+          <button type="submit" class="btn aq-btn-danger">{% trans "Annuler ces commandes" %}</button>
+          <a class="btn aq-btn-secondary" href="{% url 'admin:commerce_order_changelist' %}">{% trans "Retour" %}</a>
+        </div>
+      </form>
+    </div>
+  </article>
+</div>
+{% endblock %}

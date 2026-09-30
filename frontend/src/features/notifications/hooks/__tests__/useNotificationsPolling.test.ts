@@ -14,6 +14,10 @@ jest.mock('@/features/notifications/store/notificationSlice', () => ({
   fetchNotificationsSilent: jest.fn(() => ({ type: 'notifications/fetchSilent' })),
 }));
 
+jest.mock('@/features/chat/store/chatSlice', () => ({
+  refreshSupportUnread: jest.fn(() => ({ type: 'chat/refreshSupportUnread' })),
+}));
+
 describe('features/notifications/hooks/useNotificationsPolling', () => {
   const mockDispatch = jest.fn(() => Promise.resolve({}));
   const mockUseSelector = useSelector as unknown as jest.Mock;
@@ -54,19 +58,19 @@ describe('features/notifications/hooks/useNotificationsPolling', () => {
     await act(async () => {});
 
     expect(fetchNotificationsSilent).toHaveBeenCalledTimes(1);
-    expect(mockDispatch).toHaveBeenCalledTimes(1);
+    expect(mockDispatch).toHaveBeenCalledTimes(2); // notifications + badge Support
 
     await act(async () => {
       jest.advanceTimersByTime(1000);
     });
     expect(fetchNotificationsSilent).toHaveBeenCalledTimes(2);
-    expect(mockDispatch).toHaveBeenCalledTimes(2);
+    expect(mockDispatch).toHaveBeenCalledTimes(4); // notifications + badge Support
 
     act(() => {
       appStateHandler?.('active');
     });
     expect(fetchNotificationsSilent).toHaveBeenCalledTimes(3);
-    expect(mockDispatch).toHaveBeenCalledTimes(3);
+    expect(mockDispatch).toHaveBeenCalledTimes(6); // notifications + badge Support
 
     const dispatchCountBeforeUnmount = mockDispatch.mock.calls.length;
     unmount();

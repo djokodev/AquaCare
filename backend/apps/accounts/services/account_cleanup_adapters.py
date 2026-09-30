@@ -61,9 +61,25 @@ class PushTokenCleanupAdapter:
         PushToken.objects.filter(user_id=user_id).delete()
 
 
+class SupportConversationCleanupAdapter:
+    """
+    Compte supprimé : l'historique support est conservé (traçabilité), mais ses
+    messages non lus ne doivent plus apparaître comme travail à faire.
+    """
+
+    def cleanup_for_user(self, user_id: object) -> None:
+        try:
+            from chat.models import Conversation
+        except ImportError:
+            return
+
+        Conversation.objects.filter(user_id=user_id).update(unread_count_admin=0)
+
+
 def get_default_account_cleanup_ports() -> tuple[AccountCleanupPort, ...]:
     """Composition par defaut des adapters de nettoyage accounts."""
     return (
         JwtTokenCleanupAdapter(),
         PushTokenCleanupAdapter(),
+        SupportConversationCleanupAdapter(),
     )

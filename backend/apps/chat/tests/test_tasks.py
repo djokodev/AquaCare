@@ -48,7 +48,19 @@ class TestNotifyAdminsNewUserMessageTask:
         user_factory,
         settings,
     ) -> None:
+        from django.contrib.auth.models import Permission
+
         second_admin = user_factory(is_staff=True, is_superuser=False)
+        second_admin.user_permissions.add(
+            Permission.objects.get_or_create(
+                codename='reply_conversation',
+                content_type=__import__('django.contrib.contenttypes.models', fromlist=['ContentType'])
+                .ContentType.objects.get(app_label='chat', model='conversation'),
+                defaults={'name': 'Can reply'},
+            )[0]
+        )
+        # Un staff sans rôle support (ex. commerce) ne doit PAS être prévenu.
+        user_factory(is_staff=True, is_superuser=False)
         ConversationService.get_or_create_conversation(authenticated_user)
         user_message = MessageService.send_user_message(
             user=authenticated_user,

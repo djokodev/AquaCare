@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 
 from celery import shared_task
-from django.contrib.auth import get_user_model
 
 from .models import Message
 
@@ -33,8 +32,9 @@ def notify_admins_new_user_message_task(self, message_id: str):
     from django.utils import timezone
     from notifications.models import Notification
 
-    User = get_user_model()
-    admin_users = list(User.objects.filter(is_staff=True, is_active=True))
+    from .policies import support_agents_queryset
+
+    admin_users = list(support_agents_queryset())
 
     if not admin_users:
         return

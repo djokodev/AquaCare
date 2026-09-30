@@ -377,7 +377,9 @@
             </div>
             <div class="conv-meta">
               <span><i class="fas fa-clock"></i> {{ conv.last_message_at|date:"d/m H:i" }}</span>
-              {% if conv.unread_count_admin > 0 %}
+              {% if not conv.user.is_active %}
+                <span class="inbox-chip">{% translate "Compte supprimé" %}</span>
+              {% elif conv.unread_count_admin > 0 %}
                 <span class="badge-unread">{% blocktrans count count=conv.unread_count_admin %}{{ count }} non lu{% plural %}{{ count }} non lus{% endblocktrans %}</span>
               {% endif %}
             </div>
@@ -458,6 +460,12 @@
         {% endfor %}
       </div>
 
+      {% if not selected_conversation.user.is_active %}
+      <div class="empty-state">
+        <i class="fas fa-lock"></i>
+        {% translate "Ce compte a été supprimé : l'historique est conservé pour le suivi, mais il n'est plus possible de répondre." %}
+      </div>
+      {% else %}
       <form method="post" class="reply-form">
         {% csrf_token %}
         <input type="hidden" name="conversation_id" value="{{ selected_conversation.id }}">
@@ -482,6 +490,7 @@
         <input type="hidden" name="action" value="mark_read">
         <button class="btn btn-outline-success" type="submit">{% translate "Marquer explicitement comme lu" %}</button>
       </form>
+      {% endif %}
       {% endif %}
     {% else %}
       <div class="empty-state">

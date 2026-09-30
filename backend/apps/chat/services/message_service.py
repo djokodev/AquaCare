@@ -22,6 +22,7 @@ from ..domain.exceptions import (
 from ..domain.value_objects import MediaAttachment, MediaKind, MessageContent
 from .admin_activity_projection_service import record_user_message_received
 from .conversation_service import ConversationService
+from .media_sanitizer import sanitize_media
 
 User = get_user_model()
 
@@ -221,6 +222,8 @@ class MessageService:
                 )
             return existing_message
 
+        if media_file and normalized_media_type:
+            media_file = sanitize_media(media_file, normalized_media_type)
         message = MessageService._create_message(
             conversation=conversation,
             sender_type='user',
@@ -266,6 +269,8 @@ class MessageService:
         """
         MessageService._validate_message_content(content)
         normalized_media_type = MessageService._validate_media_attachment(media_file, media_type)
+        if media_file and normalized_media_type:
+            media_file = sanitize_media(media_file, normalized_media_type)
         message = MessageService._create_message(
             conversation=conversation,
             sender_type='admin',

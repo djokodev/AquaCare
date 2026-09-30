@@ -1111,7 +1111,8 @@ class TestAccountDeletionEndpoint:
 
     def test_delete_account_keeps_query_budget(self, django_assert_max_num_queries):
         """La suppression est rare, mais son nettoyage doit rester plafonne."""
-        with django_assert_max_num_queries(16):
+        # +1 : les messages support non lus du compte sont remis à zéro.
+        with django_assert_max_num_queries(17):
             response = self.client.post(self.url, DELETE_PAYLOAD, format='json')
 
         assert response.status_code == status.HTTP_200_OK

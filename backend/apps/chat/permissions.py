@@ -9,6 +9,8 @@ from rest_framework import permissions
 from rest_framework.request import Request
 from rest_framework.views import View
 
+from .policies import can_view_all_conversations
+
 
 class IsConversationOwnerOrAdmin(permissions.BasePermission):
     """
@@ -36,8 +38,8 @@ class IsConversationOwnerOrAdmin(permissions.BasePermission):
         Returns:
             bool: True if permission granted, False otherwise
         """
-        # Admin can access any conversation
-        if request.user.is_staff:
+        # Agents support (permissions chat) et superusers : toutes les conversations
+        if can_view_all_conversations(request.user):
             return True
 
         # Check if object is Conversation or Message

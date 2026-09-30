@@ -143,10 +143,10 @@ def test_admin_workflow_action_visibility_follows_rbac(superuser):
     superuser_request = factory.get("/admin/commerce/order/")
     superuser_request.user = superuser
 
-    assert "workflow_action_link" in order_admin.get_list_display(commerce_request)
-    assert "workflow_action_link" not in order_admin.get_list_display(manager_request)
-    assert "workflow_action_link" not in order_admin.get_list_display(support_request)
-    assert "workflow_action_link" in order_admin.get_list_display(superuser_request)
+    assert "workflow_actions_column" in order_admin.get_list_display(commerce_request)
+    assert "workflow_actions_column" not in order_admin.get_list_display(manager_request)
+    assert "workflow_actions_column" not in order_admin.get_list_display(support_request)
+    assert "workflow_actions_column" in order_admin.get_list_display(superuser_request)
 
 
 @pytest.mark.django_db

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useSelector } from 'react-redux';
 
 import { colors } from '@/theme';
+import { selectUnreadCount } from '@/features/chat/store/chatSlice';
 import { useNotificationsPolling } from '@/features/notifications/hooks/useNotificationsPolling';
 import { useFeedingRemindersSync } from '@/features/notifications/reminders/useFeedingRemindersSync';
 import FeedingRemindersScreen from '@/features/notifications/screens/FeedingRemindersScreen';
@@ -267,6 +268,7 @@ function ProfileNavigator() {
 
 function MainTabNavigator() {
   const { t } = useTranslation();
+  const supportUnread = useSelector(selectUnreadCount);
 
   return (
     <Tab.Navigator
@@ -303,6 +305,8 @@ function MainTabNavigator() {
         component={ChatScreen}
         options={{
           tabBarLabel: t('chatTitle'),
+          tabBarBadge: supportUnread > 0 ? (supportUnread > 99 ? '99+' : supportUnread) : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.status.error, color: colors.text.inverse },
           headerShown: true,
           headerStyle: { backgroundColor: colors.brand.primary },
           headerTintColor: colors.text.inverse,

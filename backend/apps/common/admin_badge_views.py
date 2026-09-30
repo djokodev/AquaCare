@@ -51,7 +51,7 @@ def badge_counts_view(request):
         request.user, AdminCapability.MANAGE_SUPPORT, "chat.view_conversation"
     ):
         from chat.models import Conversation
-        result = Conversation.objects.aggregate(total=Sum('unread_count_admin'))
+        result = Conversation.objects.filter(user__is_active=True).aggregate(total=Sum('unread_count_admin'))
         chat = result['total'] or 0
     if has_capability_and_permission(
         request.user,

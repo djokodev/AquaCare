@@ -99,6 +99,12 @@ export const fetchConversation = createAsyncThunk<Conversation, void>(
   }
 );
 
+/** Rafraîchit silencieusement le compteur de non lus (badge onglet Support). */
+export const refreshSupportUnread = createAsyncThunk<Conversation | null, void>(
+  'chat/refreshSupportUnread',
+  async () => chatApi.fetchMyConversationSummary()
+);
+
 /**
  * Fetch messages for conversation (paginated)
  *
@@ -377,6 +383,16 @@ const chatSlice = createSlice({
         state.conversationLoading = false;
         state.conversationError = ERROR_KEYS.fetchConversation;
       });
+
+    builder.addCase(refreshSupportUnread.fulfilled, (state, action) => {
+      const summary = action.payload;
+      if (!summary) return;
+      if (!state.conversation || state.conversation.id === summary.id) {
+        state.conversation = state.conversation
+          ? { ...state.conversation, unread_count_user: summary.unread_count_user }
+          : summary;
+      }
+    });
 
     // Fetch messages
     builder

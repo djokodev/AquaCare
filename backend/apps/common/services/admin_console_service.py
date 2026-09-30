@@ -355,7 +355,11 @@ class AdminConsoleService:
     def _support_context(cls) -> dict:
         from chat.models import Conversation
 
-        unread = Conversation.objects.aggregate(total=Sum("unread_count_admin"))["total"] or 0
+        unread = (
+            Conversation.objects.filter(user__is_active=True)
+            .aggregate(total=Sum("unread_count_admin"))["total"]
+            or 0
+        )
         conversations = Conversation.objects.select_related("user__farm_profile").order_by(
             "-last_message_at"
         )[: cls.PREVIEW_LIMIT]
