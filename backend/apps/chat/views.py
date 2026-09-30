@@ -35,13 +35,13 @@ from .services import ChatApplicationService, SendMessageCommand
 
 
 class ChatMessageThrottle(UserRateThrottle):
-    """
-    Throttle for chat message sending.
-
-    Rate limit: 10 messages par minute par utilisateur
-    Prevents spam and DoS attacks.
-    """
+    """Envoi de messages : 10 par minute et par utilisateur (anti-spam)."""
     scope = 'chat_message'
+
+
+class ChatReadThrottle(UserRateThrottle):
+    """Lecture et « lu » : plus large, pour ne pas bloquer le rafraîchissement."""
+    scope = 'chat_read'
 
 
 @extend_schema_view(
@@ -113,8 +113,11 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_throttles(self) -> list[UserRateThrottle]:
         """Apply ChatMessageThrottle on write/read-heavy actions."""
-        if getattr(self, 'action', None) in ('send_message', 'mark_read', 'messages'):
+        action_name = getattr(self, 'action', None)
+        if action_name == 'send_message':
             return [ChatMessageThrottle()]
+        if action_name in ('mark_read', 'messages'):
+            return [ChatReadThrottle()]
         return super().get_throttles()
 
     @staticmethod
@@ -281,6 +284,8 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 validated_data=serializer.validated_data,
             )
             return self._serialize_message(message, request)
+        except UnauthorizedAccess:
+            return self._conversation_not_found_response()
         except (
             InvalidMessageContent,
             ClientUUIDConflict,

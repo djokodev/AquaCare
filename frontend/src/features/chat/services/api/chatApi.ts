@@ -68,7 +68,9 @@ export async function fetchMessages(
     }
   );
 
-  return response.data;
+  // Le serveur renvoie les messages du plus récent au plus ancien (page 1 =
+  // 50 derniers messages). On les remet dans l'ordre chronologique pour l'écran.
+  return { ...response.data, results: [...response.data.results].reverse() };
 }
 
 /**

@@ -13,6 +13,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import Conversation, Message
+from .policies import can_view_all_conversations
 
 User = get_user_model()
 
@@ -115,7 +116,7 @@ class MessageSerializer(serializers.ModelSerializer):
         """
         request = self.context.get('request')
         requester = getattr(request, 'user', None)
-        if requester and requester.is_authenticated and requester.is_staff:
+        if can_view_all_conversations(requester):
             if obj.sender_user_id is None:
                 return None
             return str(obj.sender_user_id)

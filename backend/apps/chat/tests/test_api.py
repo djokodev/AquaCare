@@ -230,8 +230,7 @@ class TestSendMessageAPI:
         """Test sending message with image attachment."""
         conversation = ConversationService.get_or_create_conversation(authenticated_user)
 
-        # Create small test image
-        image_content = b'fake image data'
+        image_content = _real_jpeg_with_gps()
         image_file = SimpleUploadedFile(
             name='test_image.jpg',
             content=image_content,
@@ -689,3 +688,17 @@ class TestBulkNotificationTask:
         assert len(bulk_create_calls) == 1
         # And created notifications for all admins in one shot
         assert Notification.objects.count() > initial_count
+
+
+def _real_jpeg_with_gps() -> bytes:
+    """Petite image JPEG réelle contenant une position GPS dans ses EXIF."""
+    import io
+
+    from PIL import Image
+
+    image = Image.new('RGB', (8, 8), color=(0, 128, 255))
+    exif = Image.Exif()
+    exif[0x8825] = {1: 'N', 2: (4.0, 3.0, 0.0), 3: 'E', 4: (9.0, 42.0, 0.0)}
+    output = io.BytesIO()
+    image.save(output, format='JPEG', exif=exif)
+    return output.getvalue()

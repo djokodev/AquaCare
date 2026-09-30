@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from django.core.files.uploadedfile import UploadedFile
 
 from ..models import Conversation, Message
+from ..policies import can_reply_as_support, can_view_all_conversations
 from .conversation_service import ConversationService
 from .message_service import MessageService
 
@@ -33,7 +34,7 @@ class ChatApplicationService:
     def get_conversation_queryset_for_user(user: ChatUser):
         """Retourne le scope de conversations visible pour un acteur donne."""
         queryset = Conversation.objects.with_api_annotations().order_by('-last_message_at', '-created_at', '-pk')
-        if user.is_staff:
+        if can_view_all_conversations(user):
             return queryset
         return queryset.filter(user=user)
 
@@ -62,7 +63,7 @@ class ChatApplicationService:
     @staticmethod
     def get_conversation_messages(conversation: Conversation):
         """Retourne le feed messages hydrate pour l'API."""
-        return Message.objects.for_feed().filter(conversation=conversation).order_by("created_at")
+        return Message.objects.for_feed().filter(conversation=conversation).order_by("-created_at", "-pk")
 
     @staticmethod
     def send_message(
@@ -71,7 +72,11 @@ class ChatApplicationService:
         command: SendMessageCommand,
     ) -> Message:
         """Use case d'envoi de message, user ou admin."""
-        if actor.is_staff:
+        if conversation.user_id != actor.id:
+            if not can_reply_as_support(actor):
+                from ..domain.exceptions import UnauthorizedAccess
+
+                raise UnauthorizedAccess('Seuls les agents support peuvent répondre.')
             return MessageService.send_admin_message(
                 conversation=conversation,
                 admin_user=actor,
@@ -97,6 +102,6 @@ class ChatApplicationService:
         """Use case de lecture des messages d'une conversation."""
         MessageService.mark_messages_as_read(
             conversation=conversation,
-            reader_is_admin=actor.is_staff,
+            reader_is_admin=conversation.user_id != actor.id,
         )
         return ChatApplicationService.refresh_conversation_for_api(conversation)

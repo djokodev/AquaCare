@@ -172,6 +172,7 @@ REST_FRAMEWORK = {
         "accounts_simulation": ACCOUNT_SIMULATION_THROTTLE_RATE,
         "accounts_password_forgot": "5/hour",
         "chat_message": "10/minute",
+        "chat_read": "60/minute",
         "commerce_simulation": "20/hour",
         "commerce_suggestions": "30/hour",
         "commerce_delivery_preview": "60/hour",

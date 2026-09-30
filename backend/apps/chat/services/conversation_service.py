@@ -86,7 +86,7 @@ class ConversationService:
 
         Permission rules:
         - Users can only access their own conversation
-        - Admins (is_staff=True) can access any conversation
+        - Support agents (chat permissions) and superusers can access any conversation
 
         Args:
             conversation_id: UUID string of conversation
@@ -99,18 +99,21 @@ class ConversationService:
             ConversationNotFound: If conversation doesn't exist
             UnauthorizedAccess: If user tries to access other user's conversation
         """
+        from django.core.exceptions import ValidationError
+
         from ..domain.exceptions import ConversationNotFound, UnauthorizedAccess
         from ..models import Conversation
+        from ..policies import can_view_all_conversations
 
         try:
             conversation = Conversation.objects.with_user().get(id=conversation_id)
-        except Conversation.DoesNotExist as err:
+        except (Conversation.DoesNotExist, ValidationError, ValueError) as err:
             raise ConversationNotFound(
                 f"Conversation {conversation_id} not found"
             ) from err
 
         # Permission check
-        if not requesting_user.is_staff and conversation.user != requesting_user:
+        if conversation.user_id != requesting_user.id and not can_view_all_conversations(requesting_user):
             raise UnauthorizedAccess(
                 f"User {requesting_user.id} cannot access conversation {conversation_id}"
             )

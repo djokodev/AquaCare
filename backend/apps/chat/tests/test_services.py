@@ -378,8 +378,7 @@ class TestMessageService:
         """Test sending message with image attachment."""
         ConversationService.get_or_create_conversation(authenticated_user)
 
-        # Create small test image
-        image_content = b'fake image data'
+        image_content = _real_jpeg_with_gps()
         image_file = SimpleUploadedFile(
             name='test_image.jpg',
             content=image_content,
@@ -397,7 +396,12 @@ class TestMessageService:
 
         assert message.media_type == 'image'
         assert message.media_file
-        assert 'test_image' in message.media_file.name
+        # Nom aléatoire (adresse non devinable) et métadonnées GPS supprimées.
+        assert 'test_image' not in message.media_file.name
+        from PIL import Image
+
+        with message.media_file.open('rb') as stored, Image.open(stored) as stored_image:
+            assert 0x8825 not in stored_image.getexif()
 
     def test_send_admin_message(self, authenticated_user, aquacare_admin):
         """Test sending admin response message."""
@@ -655,3 +659,17 @@ class TestUnreadCountFExpressions:
         ConversationService.reset_unread_count(conversation, for_user=True)
         conversation.refresh_from_db()
         assert conversation.unread_count_user == 0
+
+
+def _real_jpeg_with_gps() -> bytes:
+    """Petite image JPEG réelle contenant une position GPS dans ses EXIF."""
+    import io
+
+    from PIL import Image
+
+    image = Image.new('RGB', (8, 8), color=(0, 128, 255))
+    exif = Image.Exif()
+    exif[0x8825] = {1: 'N', 2: (4.0, 3.0, 0.0), 3: 'E', 4: (9.0, 42.0, 0.0)}
+    output = io.BytesIO()
+    image.save(output, format='JPEG', exif=exif)
+    return output.getvalue()

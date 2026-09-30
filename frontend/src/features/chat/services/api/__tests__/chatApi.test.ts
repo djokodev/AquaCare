@@ -55,6 +55,16 @@ describe('features/chat/services/api/chatApi', () => {
     });
   });
 
+  it('fetchMessages remet les derniers messages dans l ordre chronologique', async () => {
+    mockApi.get.mockResolvedValueOnce({
+      data: { results: [{ id: 'm3' }, { id: 'm2' }, { id: 'm1' }], next: 'page2', previous: null, count: 60 },
+    } as any);
+
+    const result = await chatApi.fetchMessages('conv-1');
+
+    expect(result.results.map((message: { id: string }) => message.id)).toEqual(['m1', 'm2', 'm3']);
+  });
+
   it('sendMessage construit FormData avec champs optionnels', async () => {
     mockApi.post.mockResolvedValueOnce({ data: { id: 'msg-1' } } as any);
 
