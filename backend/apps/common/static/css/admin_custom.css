@@ -816,7 +816,9 @@ body.app-commerce.model-order.change-list .date-hierarchy a.btn-outline-secondar
 /* Compteur d'elements */
 .paginator,
 .dataTables_info,
-.content-wrapper .content p {
+/* Paragraphes posés sur le fond de page (clair). Pas ceux des cartes et
+   panneaux : leur fond suit le thème, leur texte aussi (--aq-card-text). */
+.content-wrapper .content p:not(.card p):not(.aq-panel p) {
     color: var(--text-dark) !important;
 }
 
@@ -1183,6 +1185,9 @@ body.change-list #result_list td {
     color: var(--aq-card-text);
 }
 
+.content-wrapper .aq-panel__body p,
+.content-wrapper .aq-panel__body li,
+.content-wrapper .aq-panel__body label,
 .aq-panel__body p,
 .aq-panel__body li,
 .aq-panel__body label {
@@ -1199,13 +1204,15 @@ body.change-list #result_list td {
     border-radius: 0.375rem;
 }
 
-.aq-alert--warning {
+.aq-alert--warning,
+.content-wrapper .aq-panel__body .aq-alert--warning {
     color: var(--aq-warning-text) !important;
     background: var(--aq-warning-bg);
     border: 1px solid var(--aq-warning-text);
 }
 
-.aq-alert--danger {
+.aq-alert--danger,
+.content-wrapper .aq-panel__body .aq-alert--danger {
     color: var(--aq-danger-text) !important;
     background: var(--aq-danger-bg);
     border: 1px solid var(--aq-danger-text);

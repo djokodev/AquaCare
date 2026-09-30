@@ -30,3 +30,11 @@ Pour changer une couleur de l'admin, modifier le token, jamais un écran.
 
 `farm_map.html` et `support_inbox.html` datent d'avant cette règle (liste
 blanche du test). Les migrer vers les tokens à leur prochaine modification.
+
+## Vérifier les deux thèmes avant de livrer
+
+Une règle globale peut gagner en priorité sur un composant (par exemple une
+règle `!important` sur tous les paragraphes de la page). Avant de livrer un
+écran, vérifier le rendu réel en mode clair ET sombre : soit dans le
+navigateur (Réglages du Mac > Apparence), soit en calculant les couleurs
+avec un navigateur headless (Playwright, `colorScheme: 'dark'`).
