@@ -428,8 +428,8 @@ class FarmProfile(models.Model):
     
     class Meta:
         app_label = 'accounts'
-        verbose_name = _('Profil de ferme')
-        verbose_name_plural = _('Profils de fermes')
+        verbose_name = _('Ferme')
+        verbose_name_plural = _('Fermes')
         db_table = 'accounts_farm_profile'
         ordering = ['-created_at']
         indexes = [

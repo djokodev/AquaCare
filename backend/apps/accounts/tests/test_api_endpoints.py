@@ -291,13 +291,13 @@ class TestLoginEndpoint:
         assert user_data['account_type'] == "company"
 
     def test_login_by_name_uses_single_query(self, django_assert_num_queries):
-        """La connexion par login_name doit rester sur un seul acces ORM."""
+        """Connexion par login_name : une lecture ORM, plus la mise à jour de last_login."""
         data = {
             "login_name": self.individual_login_name,
             "password": "motdepasse123",
         }
 
-        with django_assert_num_queries(2):
+        with django_assert_num_queries(3):
             response = self.client.post(self.url, data, format='json')
 
         assert response.status_code == status.HTTP_200_OK

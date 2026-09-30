@@ -236,7 +236,11 @@ class TestFarmMapView:
 
         client = Client()
         client.force_login(admin)
-        response = client.get(FARM_MAP_ADMIN_DATA_URL)
+        from unittest.mock import patch
+
+        from accounts.admin import FarmProfileAdmin
+        with patch.object(FarmProfileAdmin, 'MAP_PAGE_SIZE', 50):
+            response = client.get(FARM_MAP_ADMIN_DATA_URL)
 
         assert response.status_code == 200
         data = response.json()

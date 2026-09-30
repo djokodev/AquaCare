@@ -201,7 +201,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": False,  # Avoid 1 DB write per token refresh
+    "UPDATE_LAST_LOGIN": False,  # La connexion AquaCare met à jour last_login elle-même (auth_application_service)
     "ALGORITHM": "HS256",
     "SIGNING_KEY": _env_str('JWT_SECRET_KEY', _env_str('DJANGO_SECRET_KEY')),
     "VERIFYING_KEY": None,

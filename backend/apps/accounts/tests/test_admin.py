@@ -33,8 +33,8 @@ class TestUserAdmin:
     def test_list_display_fields(self):
         """Test champs affichés dans la liste."""
         expected_fields = (
-            'phone_number', 'display_name', 'account_type', 'activity_type',
-            'region', 'is_verified', 'farm_certification_status', 'is_staff_display',
+            'user_workspace_link', 'phone_number', 'account_type', 'activity_type',
+            'region', 'account_status', 'farm_certification_status', 'is_staff_display',
             'date_joined'
         )
         assert self.admin.list_display == expected_fields
@@ -111,7 +111,7 @@ class TestUserAdmin:
         
         result = self.admin.farm_certification_status(user)
         
-        assert 'green' in result
+        assert 'aq-badge--ok' in result
         assert 'Certifiée' in result
     
     def test_farm_certification_status_display_pending(self):
@@ -126,7 +126,7 @@ class TestUserAdmin:
         
         result = self.admin.farm_certification_status(user)
         
-        assert 'orange' in result
+        assert 'aq-badge--warn' in result
         assert 'En attente' in result
     
     def test_farm_certification_status_no_farm_profile(self):
@@ -324,8 +324,8 @@ class TestFarmProfileAdmin:
     def test_list_display_fields(self):
         """Test champs affichés dans la liste."""
         expected_fields = (
-            'farm_workspace_link', 'user_display_name', 'farm_location',
-            'certification_status', 'active_unit_count', 'active_cycle_count',
+            'farm_workspace_link', 'user_display_name', 'farm_location', 'gps_status',
+            'certification_badge', 'active_unit_count', 'active_cycle_count',
             'unresolved_incident_count', 'last_operational_activity',
         )
         assert self.admin.list_display == expected_fields
@@ -402,27 +402,8 @@ class TestAdminIntegration:
     Tests d'intégration pour l'interface admin.
     """
     
-    def test_user_admin_inline_farm_profile(self):
-        """Test inline FarmProfile dans UserAdmin."""
-        site = AdminSite()
-        admin = UserAdmin(User, site)
-        
-        # Vérifier que l'inline est configuré
-        assert len(admin.inlines) == 1
-        from accounts.admin import FarmProfileInline
-        assert admin.inlines[0] == FarmProfileInline
-    
-    def test_farm_profile_inline_configuration(self):
-        """Test configuration de l'inline FarmProfile."""
-        from accounts.admin import FarmProfileInline
-        
-        inline = FarmProfileInline
-        assert inline.model == FarmProfile
-        assert inline.extra == 0
-        
-        expected_fields = (
-            'farm_name', 'certification_status',
-            'total_ponds', 'total_area_m2', 'water_source', 'main_species',
-            'annual_production_kg'
-        )
-        assert inline.fields == expected_fields
+    def test_user_admin_links_to_farm_instead_of_inline_form(self):
+        """La ferme se consulte et se modifie depuis sa fiche, pas en ligne sur l'utilisateur."""
+        admin = UserAdmin(User, AdminSite())
+        assert not admin.inlines
+        assert 'farm_link' in admin.readonly_fields

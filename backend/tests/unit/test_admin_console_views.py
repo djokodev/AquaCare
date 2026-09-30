@@ -261,8 +261,8 @@ def test_final_harvest_activity_is_visible_only_with_aquaculture_capability():
 @pytest.mark.parametrize(
     ("language", "expected_title", "expected_search"),
     [
-        ("fr", "Console de supervision", "Rechercher une ferme ou un utilisateur"),
-        ("en", "Supervision Console", "Search for a farm or user"),
+        ("fr", "Tableau de bord", "Rechercher une ferme ou un utilisateur"),
+        ("en", "Dashboard", "Search for a farm or user"),
     ],
 )
 def test_console_uses_gettext_in_french_and_english(language, expected_title, expected_search):

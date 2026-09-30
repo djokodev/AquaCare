@@ -1,93 +1,71 @@
 /**
- * AquaCare Admin - Custom Styles
+ * AquaCare Admin — feuille de style unique.
  *
- * Architecture:
- * 1. Variables (couleurs, espacements)
- * 2. Base (reset, typographie)
- * 3. Layout (navbar, sidebar, content)
- * 4. Components (boutons, badges, cards, formulaires)
- * 5. Pages specifiques (dashboard, listes, formulaires)
- * 6. Utilitaires
+ * Règle d'or : toutes les couleurs viennent des tokens « --aq-* » ci-dessous
+ * (valeur claire, puis valeur sombre dans le bloc media). Jazzmin charge deux
+ * thèmes (« default » en clair, « darkly » en sombre selon le réglage du
+ * système) ; cette feuille recouvre les deux pour que chaque écran ait le même
+ * rendu, lisible, quel que soit le mode.
+ *
+ * Plan :
+ *   1. Tokens (clair / sombre)
+ *   2. Structure : barre du haut, menu latéral, fond de page
+ *   3. Texte, liens, titres, fil d'Ariane
+ *   4. Cartes et formulaires d'édition
+ *   5. Champs de saisie, select2
+ *   6. Boutons
+ *   7. Listes (tableaux, filtres, actions, pagination)
+ *   8. Messages, menus déroulants, connexion
+ *   9. Composants AquaCare « .aq-* »
  */
 
-/* =============================================================================
-   1. VARIABLES CSS - Theme AquaCare
-   ============================================================================= */
-
-:root {
-    /* Couleurs principales AquaCare */
-    --aqua-primary: #059669;
-    --aqua-primary-hover: #047857;
-    --aqua-primary-light: #10b981;
-    --aqua-primary-lighter: #34d399;
-
-    /* Couleurs de fond (dark mode admin) */
-    --bg-dark: #1e293b;
-    --bg-darker: #0f172a;
-    --bg-card: #1f2937;
-    --bg-input: #1e293b;
-    --bg-table-odd: #262626;
-    --bg-table-even: #303030;
-
-    /* Couleurs de texte */
-    --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-    --text-dark: #1e293b;
-    --text-body: #374151;
-
-    /* Bordures */
-    --border-color: #334155;
-    --border-light: #d1d5db;
-
-    /* Etats */
-    --color-success: #059669;
-    --color-warning: #f59e0b;
-    --color-danger: #dc2626;
-    --color-info: #0ea5e9;
-
-    /* Ombres */
-    --shadow-focus: 0 0 0 3px rgba(5, 150, 105, 0.15);
-}
-
-/*
- * TOKENS SÉMANTIQUES « --aq-* » : SOURCE UNIQUE DES COULEURS DE CONTENU.
- *
- * L'admin a deux thèmes Jazzmin : clair (« default ») et sombre (« darkly »),
- * ce dernier chargé avec media="(prefers-color-scheme: dark)". Les tokens
- * ci-dessous suivent EXACTEMENT la même règle : clair par défaut, sombre dans
- * le bloc media. Tout nouvel écran (template, carte, alerte, formulaire)
- * utilise ces tokens ou les composants « .aq-* » plus bas — jamais de couleur
- * en dur dans un template (un test le vérifie).
- */
+/* ============================================================================
+   1. TOKENS
+   ============================================================================ */
 :root {
     --aq-card-bg: #ffffff;
+    --aq-page-bg: #f3f5f7;
     --aq-card-text: #1f2937;
     --aq-card-muted: #4b5563;
-    --aq-card-border: #d1d5db;
-    --aq-subtle-bg: #f8fafc;
+    --aq-card-border: #dde2e8;
+    --aq-subtle-bg: #f6f8fa;
+    --aq-row-hover: #eef6f2;
+    --aq-input-bg: #ffffff;
+    --aq-input-text: #111827;
+    --aq-input-border: #c3cad3;
     --aq-accent: #047857;
+    --aq-focus: rgba(4, 120, 87, 0.28);
     --aq-danger: #b91c1c;
     --aq-danger-bg: #fef2f2;
     --aq-danger-text: #991b1b;
     --aq-warning-bg: #fff7ed;
     --aq-warning-text: #92400e;
-    --aq-on-strong: #ffffff; /* texte sur fond vert ou rouge */
-    --aq-brand-strong: #047857; /* fond vert sous texte blanc (identique en sombre) */
     --aq-success-bg: #ecfdf5;
     --aq-success-text: #065f46;
     --aq-info-bg: #eff6ff;
     --aq-info-text: #1e40af;
+    --aq-neutral-strong: #475569;
+    --aq-warning-strong: #d97706;
+    --aq-on-strong: #ffffff; /* texte sur fond vert, rouge ou gris fort */
+    --aq-brand-strong: #047857; /* fond vert sous texte blanc (identique en sombre) */
+    --aq-sidebar-bg: #1f2a30;
+    --aq-sidebar-text: #d7dee3;
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --aq-card-bg: #303030;
+        --aq-card-bg: #262a2f;
+        --aq-page-bg: #1a1d21;
         --aq-card-text: #f1f5f9;
-        --aq-card-muted: #cbd5e1;
-        --aq-card-border: #4b5563;
-        --aq-subtle-bg: #1f2937;
+        --aq-card-muted: #c3ccd6;
+        --aq-card-border: #3c434c;
+        --aq-subtle-bg: #2e3339;
+        --aq-row-hover: #2f3a36;
+        --aq-input-bg: #1f2327;
+        --aq-input-text: #f1f5f9;
+        --aq-input-border: #4d5561;
         --aq-accent: #34d399;
+        --aq-focus: rgba(52, 211, 153, 0.35);
         --aq-danger-bg: #450a0a;
         --aq-danger-text: #fecaca;
         --aq-warning-bg: #431407;
@@ -96,1045 +74,442 @@
         --aq-success-text: #bbf7d0;
         --aq-info-bg: #172554;
         --aq-info-text: #bfdbfe;
+        --aq-neutral-strong: #4b5563;
+        --aq-warning-strong: #d97706;
+        --aq-sidebar-bg: #15191c;
+        --aq-sidebar-text: #d7dee3;
     }
 }
 
-/* Console Lot 1, la structure AdminLTE reste intacte pour PushMenu et mobile. */
-.aquacare-dashboard-card {
-    color: inherit;
-    min-height: 96px;
-    text-decoration: none;
+/* ============================================================================
+   2. STRUCTURE
+   ============================================================================ */
+body,
+.wrapper,
+.content-wrapper,
+.main-footer {
+    background-color: var(--aq-page-bg) !important;
+    color: var(--aq-card-text);
 }
 
-.aquacare-dashboard-card:hover {
-    color: inherit;
-    text-decoration: none;
-    box-shadow: var(--shadow-focus);
+.main-footer {
+    border-top: 1px solid var(--aq-card-border) !important;
+    color: var(--aq-card-muted) !important;
 }
 
-.aquacare-search-results .list-group-item {
-    overflow-wrap: anywhere;
+.main-footer a {
+    color: var(--aq-card-muted) !important;
 }
 
-body.app-accounts.model-farmprofile.change-list .aquacare-responsive-table,
-body.app-accounts.model-user.change-list .aquacare-responsive-table,
-body.app-aquaculture.model-productioncycle.change-list .aquacare-responsive-table,
-body.app-aquaculture.model-cyclelog.change-list .aquacare-responsive-table,
-body.app-aquaculture.model-sanitarylog.change-list .aquacare-responsive-table,
-body.app-aquaculture.model-productionreport.change-list .aquacare-responsive-table,
-.farm-supervision,
-.inbox-layout {
-    max-width: 100%;
-    overflow-x: auto;
+/* Barre du haut et logo : vert soutenu, texte blanc lisible. */
+.main-header.navbar,
+.brand-link,
+.main-sidebar .brand-link {
+    background-color: var(--aq-brand-strong) !important;
+    border-bottom: 0 !important;
 }
 
-body.app-accounts.model-farmprofile.change-list .aquacare-responsive-table #result_list,
-body.app-accounts.model-user.change-list .aquacare-responsive-table #result_list,
-body.app-aquaculture.model-productioncycle.change-list .aquacare-responsive-table #result_list,
-body.app-aquaculture.model-cyclelog.change-list .aquacare-responsive-table #result_list,
-body.app-aquaculture.model-sanitarylog.change-list .aquacare-responsive-table #result_list,
-body.app-aquaculture.model-productionreport.change-list .aquacare-responsive-table #result_list {
-    min-width: 720px;
+.main-header .navbar-nav .nav-link,
+.main-header .navbar-nav .nav-link:hover,
+.brand-link .brand-text {
+    color: var(--aq-on-strong) !important;
+}
+
+/* Menu latéral : seul endroit avec des icônes. */
+.main-sidebar,
+.main-sidebar .sidebar {
+    background-color: var(--aq-sidebar-bg) !important;
+}
+
+.main-sidebar .user-panel {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.main-sidebar .user-panel .info span {
+    color: var(--aq-sidebar-text) !important;
+}
+
+.nav-sidebar .nav-link {
+    color: var(--aq-sidebar-text) !important;
+    border-radius: 0.375rem;
+}
+
+.nav-sidebar .nav-link .nav-icon {
+    width: 1.6rem;
+    text-align: center;
+    opacity: 0.9;
+}
+
+.nav-sidebar .nav-link:hover {
+    color: var(--aq-on-strong) !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.nav-sidebar .nav-link.active,
+.nav-sidebar .nav-link.active:hover {
+    color: var(--aq-on-strong) !important;
+    background-color: var(--aq-brand-strong) !important;
+    box-shadow: none !important;
+    font-weight: 600;
+}
+
+#jazzy-sidebar .form-control-navbar {
+    color: var(--aq-input-text) !important;
+    background-color: var(--aq-input-bg) !important;
+    border: 1px solid var(--aq-input-border) !important;
+}
+
+#jazzy-sidebar .btn-navbar {
+    color: var(--aq-sidebar-text) !important;
+    background: transparent !important;
+    border: 0 !important;
 }
 
 @media (max-width: 767.98px) {
     #jazzy-sidebar .form-inline {
         display: block;
     }
-
-    .aquacare-dashboard-card {
-        min-height: 82px;
-    }
 }
 
-/* =============================================================================
-   2. BASE - Reset et typographie
-   ============================================================================= */
-
-/* Labels de formulaires */
+/* ============================================================================
+   3. TEXTE, LIENS, TITRES
+   ============================================================================ */
+.content-wrapper,
+.content-wrapper p,
+.content-wrapper li,
+.content-wrapper dd,
+.content-wrapper td,
 .content-wrapper label,
-.tab-content label,
-form label {
-    color: var(--text-secondary);
-    font-weight: 500;
+.content-wrapper legend {
+    color: var(--aq-card-text);
 }
 
-/* Texte d'aide sous les champs */
+.content-wrapper .content-header h1,
+.content-wrapper h1,
+.content-wrapper h2,
+.content-wrapper h3,
+.content-wrapper h4,
+.content-wrapper h5 {
+    color: var(--aq-card-text) !important;
+}
+
+.content-wrapper .content-header h1 {
+    font-weight: 700;
+}
+
+.content-wrapper .text-muted,
+.content-wrapper small,
+.content-wrapper time {
+    color: var(--aq-card-muted) !important;
+}
+
+/* Spécificité volontairement basse (:where) : les composants (en-tête vert,
+   alertes, petits boutons) redéfinissent la couleur de leurs liens. */
+.content-wrapper a:where(:not(.btn, .nav-link, .page-link, .dropdown-item, .aq-link-btn, .aq-kpi, .conv-item)) {
+    color: var(--aq-accent) !important;
+}
+
+.content-wrapper a:where(:not(.btn, .nav-link, .page-link, .dropdown-item, .aq-link-btn, .aq-kpi, .conv-item)):hover {
+    text-decoration: underline;
+}
+
+.content-wrapper .breadcrumb {
+    background: transparent !important;
+}
+
+.content-wrapper .breadcrumb-item,
+.content-wrapper .breadcrumb-item.active,
+.content-wrapper .breadcrumb-item + .breadcrumb-item::before {
+    color: var(--aq-card-muted) !important;
+}
+
+/* ============================================================================
+   4. CARTES ET FORMULAIRES D'ÉDITION
+   ============================================================================ */
+.content-wrapper .card {
+    color: var(--aq-card-text);
+    background-color: var(--aq-card-bg) !important;
+    border: 1px solid var(--aq-card-border) !important;
+    border-radius: 0.5rem;
+    box-shadow: none !important;
+}
+
+.content-wrapper .card-header {
+    color: var(--aq-card-text) !important;
+    background-color: transparent !important;
+    border-bottom: 1px solid var(--aq-card-border) !important;
+}
+
+.content-wrapper .card-header .card-title {
+    color: var(--aq-card-text) !important;
+    font-weight: 700;
+}
+
+.content-wrapper .card-body,
+.content-wrapper .card-footer {
+    color: var(--aq-card-text);
+    background-color: transparent !important;
+}
+
+/* Onglets des formulaires. */
+.content-wrapper .nav-tabs {
+    border-bottom: 1px solid var(--aq-card-border) !important;
+}
+
+.content-wrapper .nav-tabs .nav-link {
+    color: var(--aq-card-muted) !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+}
+
+.content-wrapper .nav-tabs .nav-link.active {
+    color: var(--aq-accent) !important;
+    border-bottom-color: var(--aq-accent) !important;
+    font-weight: 600;
+}
+
+.content-wrapper .nav-tabs .nav-link:hover:not(.active) {
+    color: var(--aq-card-text) !important;
+}
+
+.content-wrapper .form-group label,
+.content-wrapper .card-body > .form-group > label,
+.content-wrapper .field-box label {
+    color: var(--aq-card-text) !important;
+    font-weight: 600;
+}
+
+.content-wrapper .readonly,
+.content-wrapper div.readonly {
+    color: var(--aq-card-text) !important;
+}
+
 .helptext,
 .help-block,
 .form-text,
 p.help,
-span.helptext {
-    color: var(--text-muted) !important;
-    font-style: italic;
-    font-size: 0.875rem;
+.content-wrapper .help {
+    color: var(--aq-card-muted) !important;
+    font-size: 0.85rem;
+    font-style: normal;
 }
 
-/* Titres de page dans le contenu */
-.content-wrapper h1:not(.navbar-brand):not(.brand-text),
-.content-wrapper .content h1,
-.content-wrapper .h4 {
-    color: var(--text-dark) !important;
-    font-weight: 600;
+.content-wrapper .errorlist,
+.content-wrapper .text-red,
+.content-wrapper .help-block.red {
+    color: var(--aq-danger-text) !important;
 }
 
-/* =============================================================================
-   3. LAYOUT - Navbar, Sidebar, Content
-   ============================================================================= */
-
-/* --- Navbar --- */
-.main-header .navbar-nav .nav-link,
-.navbar-dark .navbar-nav .nav-link {
-    color: #ffffff !important;
+.content-wrapper .errornote,
+.content-wrapper .errors input {
+    border-color: var(--aq-danger) !important;
 }
 
-.navbar .form-control-navbar {
-    background-color: rgba(255, 255, 255, 0.2) !important;
-    border-color: rgba(255, 255, 255, 0.3) !important;
-    color: #ffffff !important;
+/* Groupes en ligne (inlines). */
+.content-wrapper .inline-group .card-header,
+.content-wrapper .inline-related h3 {
+    color: var(--aq-card-text) !important;
+    background: var(--aq-subtle-bg) !important;
 }
 
-.navbar .form-control-navbar::placeholder {
-    color: rgba(255, 255, 255, 0.7) !important;
-}
-
-/* --- Sidebar --- */
-.nav-sidebar .nav-link {
-    color: rgba(255, 255, 255, 0.85) !important;
-    padding: 0.5rem 1rem;
-}
-
-.nav-sidebar .nav-link:hover {
-    color: #ffffff !important;
-    background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.nav-sidebar .nav-link.active {
-    background-color: var(--aqua-primary) !important;
-    color: #ffffff !important;
-    font-weight: 500;
-}
-
-.nav-sidebar .nav-header {
-    color: rgba(255, 255, 255, 0.5) !important;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-/* --- Breadcrumb --- */
-/* Liens dans le breadcrumb (ex: "Accueil") */
-.content-wrapper .breadcrumb a,
-.content-wrapper .breadcrumb-item a {
-    color: var(--aqua-primary) !important;
-}
-
-/* Texte non-lien dans le breadcrumb (élément actif/courant) */
-.content-wrapper .breadcrumb-item,
-.content-wrapper .breadcrumb-item.active,
-.content-wrapper .breadcrumb > li:last-child {
-    color: var(--text-body) !important;
-}
-
-/* Séparateur entre les éléments */
-.content-wrapper .breadcrumb-item + .breadcrumb-item::before {
-    color: var(--text-muted) !important;
-}
-
-/* =============================================================================
-   4. COMPONENTS - Boutons, Badges, Cards, Formulaires
-   ============================================================================= */
-
-/* --- Boutons primaires (IMPORTANT: texte blanc par defaut ET au hover) --- */
-.btn-success,
-.btn-primary,
-.btn-info,
-.btn.bg-success,
-.btn.bg-primary,
-.btn.addlink,
-.btn.changelink,
-a.addlink.btn,
-a.changelink.btn {
-    color: #ffffff !important;
-}
-
-.btn-success,
-.btn-primary,
-.btn.addlink,
-a.addlink.btn {
-    background-color: var(--aqua-primary) !important;
-    border-color: var(--aqua-primary) !important;
-}
-
-.btn-success:hover,
-.btn-primary:hover,
-.btn.addlink:hover {
-    background-color: var(--aqua-primary-hover) !important;
-    border-color: var(--aqua-primary-hover) !important;
-    color: #ffffff !important;
-}
-
-.btn-info,
-.btn.changelink,
-a.changelink.btn {
-    background-color: var(--aqua-primary-light) !important;
-    border-color: var(--aqua-primary-light) !important;
-}
-
-.btn-info:hover,
-.btn.changelink:hover {
-    background-color: var(--aqua-primary) !important;
-    border-color: var(--aqua-primary) !important;
-    color: #ffffff !important;
-}
-
-/* Boutons outline */
-.btn-outline-success {
-    color: var(--aqua-primary) !important;
-    border-color: var(--aqua-primary) !important;
-}
-
-.btn-outline-success:hover {
-    background-color: var(--aqua-primary) !important;
-    color: #ffffff !important;
-}
-
-/* Boutons secondaires */
-.btn-secondary,
-.btn-outline-secondary {
-    background-color: transparent !important;
-    border: 1px solid #64748b !important;
-    color: #64748b !important;
-}
-
-.btn-secondary:hover,
-.btn-outline-secondary:hover {
-    background-color: #64748b !important;
-    color: #ffffff !important;
-}
-
-/* --- Liens dans les boutons (CRUCIAL pour le dashboard) --- */
-.btn a,
-.btn-success a,
-.btn-primary a,
-.btn-info a,
-a.btn,
-.model-links a.btn,
-.card-body .btn a,
-.card-body a.btn {
-    color: #ffffff !important;
-}
-
-/* --- Badges --- */
-.badge-success,
-.badge.bg-success,
-.badge-primary,
-.badge.bg-primary {
-    background-color: var(--aqua-primary) !important;
-    color: #ffffff !important;
-}
-
-.badge-info,
-.badge.bg-info {
-    background-color: var(--aqua-primary-light) !important;
-    color: #ffffff !important;
-}
-
-.badge-warning,
-.badge.bg-warning {
-    background-color: var(--color-warning) !important;
-    color: var(--text-dark) !important;
-}
-
-.badge-danger,
-.badge.bg-danger {
-    background-color: var(--color-danger) !important;
-    color: #ffffff !important;
-}
-
-/* --- Cards --- */
-.card-header,
-.card-header .card-title,
-.card[class*="card-"] > .card-header,
-.card[class*="bg-"] > .card-header {
-    color: #ffffff !important;
-}
-
-.card-body {
-    /* Suit le thème (clair/sombre) : avant, gris foncé fixe illisible en sombre. */
-    color: var(--aq-card-text);
-}
-
-.card-tools .btn,
-.card-tools a,
-.card-header .btn {
-    color: #ffffff !important;
-}
-
-/* --- Formulaires: Inputs et Selects (UNIFORMES) --- */
+/* ============================================================================
+   5. CHAMPS DE SAISIE
+   ============================================================================ */
 .content-wrapper input[type="text"],
 .content-wrapper input[type="email"],
 .content-wrapper input[type="password"],
 .content-wrapper input[type="number"],
 .content-wrapper input[type="url"],
 .content-wrapper input[type="tel"],
+.content-wrapper input[type="search"],
 .content-wrapper input[type="date"],
+.content-wrapper input[type="time"],
 .content-wrapper input[type="datetime-local"],
 .content-wrapper select,
 .content-wrapper textarea,
-.tab-content input,
-.tab-content select,
-.tab-content textarea,
-.tab-pane input,
-.tab-pane select,
-.tab-pane textarea,
-form.change-form input,
-form.change-form select,
-form.change-form textarea,
-.fieldBox input,
-.fieldBox select,
-.fieldBox textarea {
-    background-color: var(--bg-input) !important;
-    color: var(--text-primary) !important;
-    border: 1px solid var(--border-color) !important;
+.content-wrapper .form-control:not(.btn) {
+    color: var(--aq-input-text) !important;
+    background-color: var(--aq-input-bg) !important;
+    border: 1px solid var(--aq-input-border) !important;
     border-radius: 0.375rem;
 }
 
-/* Focus state uniforme */
 .content-wrapper input:focus,
 .content-wrapper select:focus,
 .content-wrapper textarea:focus,
-.tab-content input:focus,
-.tab-content select:focus,
-.tab-content textarea:focus {
-    border-color: var(--aqua-primary) !important;
-    box-shadow: var(--shadow-focus) !important;
+.content-wrapper .form-control:not(.btn):focus {
+    border-color: var(--aq-accent) !important;
+    box-shadow: 0 0 0 3px var(--aq-focus) !important;
     outline: none !important;
 }
 
-/* Placeholder */
 .content-wrapper input::placeholder,
 .content-wrapper textarea::placeholder {
-    color: #64748b !important;
+    color: var(--aq-card-muted) !important;
+    opacity: 0.8;
 }
 
-/* Exception: Champs de recherche/filtres dans les listes (fond blanc) */
-#changelist-search input,
-.changelist-filter input,
-#changelist .actions select,
-form[action=""] input[name="q"],
-.content-wrapper .content > .container-fluid > form[action=""] input,
-.content-wrapper .content > .container-fluid > form[action=""] select {
-    background-color: #ffffff !important;
-    color: var(--text-dark) !important;
-    border: 1px solid var(--border-light) !important;
-}
-
-/* --- Onglets de formulaire --- */
-.nav-tabs .nav-link {
-    color: var(--text-muted) !important;
-    border: none !important;
-    border-bottom: 2px solid transparent !important;
-    background: transparent !important;
-}
-
-.nav-tabs .nav-link.active {
-    color: var(--aqua-primary-light) !important;
-    border-bottom: 2px solid var(--aqua-primary-light) !important;
-    font-weight: 500;
-}
-
-.nav-tabs .nav-link:hover:not(.active) {
-    color: var(--text-primary) !important;
-    border-bottom: 2px solid #475569 !important;
-}
-
-/* =============================================================================
-   5. PAGES SPECIFIQUES
-   ============================================================================= */
-
-/* --- Dashboard --- */
-.model-links .btn,
-.model-links a.btn,
-.card .model-links a,
-.card-body .model-links a.btn,
-.card-outline-success .btn,
-.card-outline-primary .btn {
-    color: #ffffff !important;
-}
-
-/* =============================================================================
-   SECTION "ACTIONS RECENTES" - Contraste et lisibilité
-   ============================================================================= */
-
-/* Titre principal de la section */
-#recent-actions-module h4,
-#recent-actions-module h3,
-#recent-actions-module h5,
-#recent-actions-module .card-title,
-.col-lg-3 .module h4,
-.col-lg-3 .module h3 {
-    color: var(--text-dark) !important;
-    font-weight: 600 !important;
-}
-
-/* Liens dans les actions récentes */
-#recent-actions-module a,
-.actionlist a,
-.col-lg-3 .card-body a,
-.content-wrapper aside .card-body a {
-    color: var(--aqua-primary) !important;
-    font-weight: 500;
-}
-
-#recent-actions-module a:hover,
-.actionlist a:hover {
-    color: var(--aqua-primary-hover) !important;
-    text-decoration: underline !important;
-}
-
-/* Titres des items d'action (ex: "Test Support") */
-#recent-actions-module h5,
-#recent-actions-module .timeline h5,
-#recent-actions-module .action-row h5 {
-    color: var(--text-dark) !important;
-    font-weight: 500 !important;
-}
-
-/* Timestamps et descriptions */
-#recent-actions-module time,
-#recent-actions-module .text-muted,
-#recent-actions-module small,
-#recent-actions-module .timeline-footer,
-.col-lg-3 .module time,
-.col-lg-3 .module small {
-    color: var(--text-muted) !important;
-    font-size: 0.8rem;
-}
-
-/* Texte descriptif des actions (ex: "Added 'Test Support'.") */
-#recent-actions-module p,
-#recent-actions-module span:not(.badge),
-#recent-actions-module .action-description,
-.col-lg-3 .module p {
-    color: var(--text-body) !important;
-}
-
-/* Timeline items (points et lignes) */
-#recent-actions-module .timeline-item,
-#recent-actions-module .action-row {
-    border-left-color: var(--aqua-primary) !important;
-}
-
-#recent-actions-module .timeline-badge,
-#recent-actions-module .action-icon {
-    background-color: var(--aqua-primary) !important;
-    border-color: var(--aqua-primary) !important;
-}
-
-/* --- Tableaux / Listes --- */
-.table thead th,
-.table thead th a,
-.table thead th * {
-    color: #ffffff !important;
-    font-weight: 600;
-}
-
-.table-striped tbody tr:nth-of-type(odd) {
-    background-color: var(--bg-table-odd) !important;
-}
-
-.table-striped tbody tr:nth-of-type(even) {
-    background-color: var(--bg-table-even) !important;
-}
-
-.table tbody td {
-    color: var(--text-secondary) !important;
-}
-
-.table td a,
-#result_list td a {
-    color: var(--aq-accent) !important;
-}
-
-.table td a:hover,
-#result_list td a:hover {
-    color: var(--aqua-primary-lighter) !important;
-    text-decoration: underline !important;
-}
-
-/* Actions PDF : le lien global des tableaux ne doit pas écraser le texte blanc. */
-body.app-aquaculture.model-productionreport.change-list
-    #result_list td.field-pdf_download_link .aquacare-pdf-action,
-body.app-aquaculture.model-productionreport.change-list
-    #result_list td.field-pdf_download_link .aquacare-pdf-action:hover {
-    color: #ffffff !important;
-    text-decoration: none !important;
-}
-
-/* Rôles Admin : badges pleins et libellés métier, sans bleu/violet peu lisible. */
-.aquacare-role-badge {
-    display: inline-block;
-    margin: 0.1rem 0.15rem 0.1rem 0;
-    padding: 0.2rem 0.5rem;
-    border-radius: 999px;
-    color: #ffffff !important;
-    font-size: 0.78rem;
-    font-weight: 700;
-    line-height: 1.25;
-    white-space: nowrap;
-}
-
-.aquacare-role-badge--manager {
-    background: var(--aqua-primary-hover);
-}
-
-.aquacare-role-badge--commerce {
-    background: var(--aqua-primary-hover);
-}
-
-.aquacare-role-badge--support {
-    background: var(--aqua-primary-light);
-    color: var(--bg-darker) !important;
-}
-
-.aquacare-role-badge--owner {
-    background: var(--color-danger);
-}
-
-.aquacare-role-badge--staff {
-    background: var(--text-muted);
-    color: var(--bg-darker) !important;
-}
-
-.aquacare-role-empty {
-    color: var(--text-muted);
-}
-
-/* --- Commerce orders changelist --- */
-body.app-commerce.model-order.change-list #changelist .card-body.table-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-body.app-commerce.model-order.change-list #result_list {
-    width: max-content;
-    min-width: 100%;
-    table-layout: auto;
-}
-
-body.app-commerce.model-order.change-list #result_list th,
-body.app-commerce.model-order.change-list #result_list td {
-    min-width: max-content;
-    padding: 0.55rem 0.6rem;
-    vertical-align: top;
-    white-space: nowrap;
-    overflow-wrap: normal;
-    word-break: normal;
-}
-
-body.app-commerce.model-order.change-list #result_list thead th {
-    white-space: nowrap;
-    overflow-wrap: normal;
-    font-size: 0.9rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th.djn-checkbox-select-all,
-body.app-commerce.model-order.change-list #result_list td.action-checkbox {
-    min-width: 3rem;
-    width: 3rem;
-    padding-left: 0.75rem;
-    padding-right: 0.35rem;
-}
-
-body.app-commerce.model-order.change-list #result_list .field-order_column a,
-body.app-commerce.model-order.change-list #result_list .field-order_column strong,
-body.app-commerce.model-order.change-list #result_list .field-farm_cycle_column strong {
-    white-space: nowrap;
-}
-
-body.app-commerce.model-order.change-list #result_list .order-secondary {
-    margin-left: 0.25rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(2),
-body.app-commerce.model-order.change-list #result_list td.field-order_column {
-    min-width: 15rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(3),
-body.app-commerce.model-order.change-list #result_list td.field-farm_cycle_column {
-    min-width: 16rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(4),
-body.app-commerce.model-order.change-list #result_list td.field-status_badge {
-    min-width: 13rem;
-}
-
-body.app-commerce.model-order.change-list #result_list td.field-status_badge span {
-    white-space: nowrap;
-    font-size: 0.9rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(5),
-body.app-commerce.model-order.change-list #result_list td.field-delivery_summary {
-    min-width: 13rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(6),
-body.app-commerce.model-order.change-list #result_list td.field-total_bags_display {
-    min-width: 7rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(7),
-body.app-commerce.model-order.change-list #result_list td.field-total_display {
-    min-width: 10rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(8),
-body.app-commerce.model-order.change-list #result_list td.field-created_at_compact {
-    min-width: 11rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(9),
-body.app-commerce.model-order.change-list #result_list td.field-workflow_action_link {
-    min-width: 10rem;
-}
-
-body.app-commerce.model-order.change-list #result_list th:nth-child(10),
-body.app-commerce.model-order.change-list #result_list td.field-documents_compact {
-    min-width: 8rem;
-}
-
-body.app-commerce.model-order.change-list #result_list td.field-workflow_action_link .button {
-    display: inline-block;
-    white-space: nowrap;
-    line-height: 1.25;
-}
-
-body.app-commerce.model-order.change-list #result_list td.field-documents_compact {
-    font-size: 0.85rem;
-    white-space: nowrap;
-}
-
-/* --- Commerce products changelist --- */
-body.app-commerce.model-product.change-list #changelist .card-body.table-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-body.app-commerce.model-product.change-list #result_list {
-    width: max-content;
-    min-width: 100%;
-    table-layout: auto;
-}
-
-body.app-commerce.model-product.change-list #result_list th,
-body.app-commerce.model-product.change-list #result_list td {
-    min-width: max-content;
-    padding: 0.55rem 0.6rem;
-    vertical-align: top;
-    white-space: nowrap;
-    overflow-wrap: normal;
-    word-break: normal;
-}
-
-body.app-commerce.model-product.change-list #result_list thead th {
-    white-space: nowrap;
-    overflow-wrap: normal;
-    font-size: 0.9rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th.djn-checkbox-select-all,
-body.app-commerce.model-product.change-list #result_list td.action-checkbox {
-    min-width: 3rem;
-    width: 3rem;
-    padding-left: 0.75rem;
-    padding-right: 0.35rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(2),
-body.app-commerce.model-product.change-list #result_list td.field-name {
-    min-width: 13rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(3),
-body.app-commerce.model-product.change-list #result_list td.field-brand_badge {
-    min-width: 9rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(4),
-body.app-commerce.model-product.change-list #result_list td.field-species_badge {
-    min-width: 10rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(5),
-body.app-commerce.model-product.change-list #result_list td.field-phase {
-    min-width: 12rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(6),
-body.app-commerce.model-product.change-list #result_list td.field-pellet_size_mm {
-    min-width: 8rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(7),
-body.app-commerce.model-product.change-list #result_list td.field-protein_percentage {
-    min-width: 10rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(8),
-body.app-commerce.model-product.change-list #result_list td.field-package_weight_kg {
-    min-width: 12rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(9),
-body.app-commerce.model-product.change-list #result_list td.field-price_display {
-    min-width: 10rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(10),
-body.app-commerce.model-product.change-list #result_list td.field-availability_badge {
-    min-width: 10rem;
-}
-
-body.app-commerce.model-product.change-list #result_list th:nth-child(11),
-body.app-commerce.model-product.change-list #result_list td.field-updated_at {
-    min-width: 12rem;
-}
-
-/* Navigation de date Jazzmin : le bouton secondaire doit rester lisible
-   sur le fond clair de la zone de contenu. */
-body.app-commerce.model-order.change-list .date-hierarchy a.btn-secondary,
-body.app-commerce.model-order.change-list .date-hierarchy a.btn-outline-secondary {
-    color: var(--text-dark) !important;
-    background-color: transparent !important;
-    border-color: #64748b !important;
-}
-
-body.app-commerce.model-order.change-list .date-hierarchy a.btn-secondary:hover,
-body.app-commerce.model-order.change-list .date-hierarchy a.btn-outline-secondary:hover {
-    color: #ffffff !important;
-    background-color: #64748b !important;
-    border-color: #64748b !important;
-}
-
-/* Compteur d'elements */
-.paginator,
-.dataTables_info,
-/* Paragraphes posés sur le fond de page (clair). Pas ceux des cartes et
-   panneaux : leur fond suit le thème, leur texte aussi (--aq-card-text). */
-.content-wrapper .content p:not(.card p):not(.aq-panel p) {
-    color: var(--text-dark) !important;
-}
-
-/* Actions de masse */
-.actions span,
-.actions label,
-.actions select {
-    color: var(--text-dark) !important;
-}
-
-.actions .btn,
-.actions button {
-    background-color: var(--aqua-primary) !important;
-    border-color: var(--aqua-primary) !important;
-    color: #ffffff !important;
-}
-
-/* --- Formulaires d'edition --- */
-.submit-row input[type="submit"],
-.submit-row button[type="submit"],
-input[name="_save"],
-input[name="_addanother"],
-input[name="_continue"] {
-    background-color: var(--aqua-primary) !important;
-    border-color: var(--aqua-primary) !important;
-    color: #ffffff !important;
-    font-weight: 500;
-}
-
-.submit-row input[type="submit"]:hover,
-.submit-row button[type="submit"]:hover {
-    background-color: var(--aqua-primary-hover) !important;
-}
-
-/* Object-tools (View/History en haut) */
-.object-tools a,
-.object-tools li a {
-    color: #ffffff !important;
-}
-
-.object-tools .historylink,
-.object-tools a[href*="history"] {
-    background-color: #475569 !important;
-    border-color: #475569 !important;
-}
-
-/* Liens dans le contenu */
-.content-wrapper a:not(.btn):not(.nav-link):not(.breadcrumb-item),
-.tab-content a:not(.btn) {
-    /* Token lié au thème : vert foncé en clair, vert vif en sombre (lisible dans les deux). */
-    color: var(--aq-accent) !important;
-}
-
-.content-wrapper a:not(.btn):not(.nav-link):hover {
-    color: var(--aqua-primary) !important;
-    text-decoration: underline !important;
-}
-
-/* =============================================================================
-   6. UTILITAIRES
-   ============================================================================= */
-
-/* Alerts */
-.alert-success {
-    background-color: #d1fae5 !important;
-    border-color: var(--aqua-primary) !important;
-    color: #065f46 !important;
-}
-
-.alert-info {
-    color: #0c4a6e !important;
-}
-
-/* Pagination */
-.page-link {
-    color: var(--aqua-primary) !important;
-}
-
-.page-item.active .page-link {
-    background-color: var(--aqua-primary) !important;
-    border-color: var(--aqua-primary) !important;
-    color: #ffffff !important;
-}
-
-/* Select2 - Style uniforme avec les inputs (fond bleu sombre) */
 .content-wrapper .select2-container--default .select2-selection--single,
-.tab-content .select2-container--default .select2-selection--single,
-.tab-pane .select2-container--default .select2-selection--single {
-    background-color: var(--bg-input) !important;
-    border: 1px solid var(--border-color) !important;
+.content-wrapper .select2-container--default .select2-selection--multiple {
+    min-height: calc(1.5em + 0.75rem + 2px);
+    color: var(--aq-input-text) !important;
+    background-color: var(--aq-input-bg) !important;
+    border: 1px solid var(--aq-input-border) !important;
     border-radius: 0.375rem !important;
-    height: auto !important;
-    padding: 0.375rem 0.5rem !important;
 }
 
-.content-wrapper .select2-container--default .select2-selection--single .select2-selection__rendered,
-.tab-content .select2-container--default .select2-selection--single .select2-selection__rendered,
-.tab-pane .select2-container--default .select2-selection--single .select2-selection__rendered {
-    color: var(--text-primary) !important;
-    line-height: 1.5 !important;
-    padding-left: 0 !important;
+.content-wrapper .select2-container--default .select2-selection__rendered,
+.content-wrapper .select2-container--default .select2-selection__choice {
+    color: var(--aq-input-text) !important;
+    line-height: 2 !important;
 }
 
-.content-wrapper .select2-container--default .select2-selection--single .select2-selection__arrow,
-.tab-content .select2-container--default .select2-selection--single .select2-selection__arrow {
-    height: 100% !important;
+.content-wrapper .select2-container--default .select2-selection__choice {
+    background: var(--aq-subtle-bg) !important;
+    border-color: var(--aq-card-border) !important;
 }
 
-.content-wrapper .select2-container--default .select2-selection--single .select2-selection__arrow b,
-.tab-content .select2-container--default .select2-selection--single .select2-selection__arrow b {
-    border-color: var(--text-muted) transparent transparent transparent !important;
-}
-
-/* Select2 focus state */
-.content-wrapper .select2-container--default.select2-container--focus .select2-selection--single,
-.content-wrapper .select2-container--default.select2-container--open .select2-selection--single {
-    border-color: var(--aqua-primary) !important;
-    box-shadow: var(--shadow-focus) !important;
-}
-
-/* Select2 dropdown */
 .select2-dropdown {
-    background-color: var(--bg-input) !important;
-    border-color: var(--border-color) !important;
+    color: var(--aq-input-text) !important;
+    background-color: var(--aq-input-bg) !important;
+    border-color: var(--aq-input-border) !important;
 }
 
 .select2-search--dropdown .select2-search__field {
-    background-color: var(--bg-darker) !important;
-    color: var(--text-primary) !important;
-    border-color: var(--border-color) !important;
+    color: var(--aq-input-text) !important;
+    background-color: var(--aq-subtle-bg) !important;
+    border-color: var(--aq-input-border) !important;
 }
 
 .select2-results__option {
-    color: var(--text-primary) !important;
+    color: var(--aq-input-text) !important;
 }
 
-.select2-results__option--highlighted {
-    background-color: var(--aqua-primary) !important;
-    color: #ffffff !important;
-}
-
+.select2-results__option--highlighted,
 .select2-results__option--selected {
-    background-color: var(--aqua-primary-hover) !important;
-    color: #ffffff !important;
+    color: var(--aq-on-strong) !important;
+    background-color: var(--aq-brand-strong) !important;
 }
 
-/* =============================================================================
-   NAVBAR DROPDOWNS - Language & User Menu (FIX: Contraste illisible)
-   ============================================================================= */
-
-/* Dropdown menu container (fond clair pour lisibilité) */
-.navbar .dropdown-menu,
-.main-header .dropdown-menu,
-.navbar-nav .dropdown-menu {
-    background-color: #ffffff !important;
-    border: 1px solid var(--border-light) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-}
-
-/* Dropdown items - texte foncé sur fond clair */
-.navbar .dropdown-menu .dropdown-item,
-.main-header .dropdown-menu .dropdown-item,
-.navbar-nav .dropdown-menu .dropdown-item {
-    color: var(--text-dark) !important;
-    padding: 0.5rem 1rem;
-    transition: all 0.2s ease;
-}
-
-/* Dropdown items - hover state */
-.navbar .dropdown-menu .dropdown-item:hover,
-.main-header .dropdown-menu .dropdown-item:hover,
-.navbar-nav .dropdown-menu .dropdown-item:hover {
-    background-color: #f1f5f9 !important;
-    color: var(--aqua-primary) !important;
-}
-
-/* Dropdown header (ex: "Account") */
-.navbar .dropdown-menu .dropdown-header,
-.main-header .dropdown-menu .dropdown-header,
-.navbar-nav .dropdown-menu .dropdown-header {
-    color: var(--text-muted) !important;
+/* ============================================================================
+   6. BOUTONS
+   ============================================================================ */
+.btn {
+    border-radius: 0.375rem;
     font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    padding: 0.5rem 1rem;
 }
 
-/* Dropdown divider */
-.navbar .dropdown-menu .dropdown-divider,
-.main-header .dropdown-menu .dropdown-divider,
-.navbar-nav .dropdown-menu .dropdown-divider {
-    border-top-color: var(--border-light) !important;
+.btn-success,
+.btn-primary,
+.btn-info,
+.btn.addlink,
+.submit-row input[type="submit"],
+input[name="_save"],
+input[name="_addanother"],
+input[name="_continue"],
+#changelist .actions .btn,
+#changelist .actions button,
+.aq-btn-primary {
+    color: var(--aq-on-strong) !important;
+    background-color: var(--aq-brand-strong) !important;
+    border: 1px solid var(--aq-brand-strong) !important;
 }
 
-/* Boutons dans les dropdowns (langue) */
-.navbar .dropdown-menu button,
-.main-header .dropdown-menu button,
-.navbar-nav .dropdown-menu button {
-    color: var(--text-dark) !important;
-    background: transparent !important;
-    border: none !important;
-    text-align: left;
-    width: 100%;
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
+.btn-success:hover,
+.btn-primary:hover,
+.btn-info:hover,
+.btn.addlink:hover,
+input[name="_save"]:hover,
+input[name="_addanother"]:hover,
+input[name="_continue"]:hover,
+.aq-btn-primary:hover {
+    color: var(--aq-on-strong) !important;
+    filter: brightness(0.92);
 }
 
-.navbar .dropdown-menu button:hover,
-.main-header .dropdown-menu button:hover,
-.navbar-nav .dropdown-menu button:hover {
-    background-color: #f1f5f9 !important;
-    color: var(--aqua-primary) !important;
+.btn-danger,
+.deletelink,
+a.deletelink,
+.aq-btn-danger {
+    color: var(--aq-on-strong) !important;
+    background-color: var(--aq-danger) !important;
+    border: 1px solid var(--aq-danger) !important;
 }
 
-/* Liens dans les dropdowns */
-.navbar .dropdown-menu a:not(.dropdown-item),
-.main-header .dropdown-menu a:not(.dropdown-item),
-.navbar-nav .dropdown-menu a:not(.dropdown-item) {
-    color: var(--text-dark) !important;
+.btn-secondary,
+.btn-default,
+.object-tools a,
+.object-tools .historylink {
+    color: var(--aq-on-strong) !important;
+    background-color: var(--aq-neutral-strong) !important;
+    border: 1px solid var(--aq-neutral-strong) !important;
 }
 
-/* =============================================================================
-   AUTRES DROPDOWNS (dans le contenu)
-   ============================================================================= */
-
-/* Dropdown (dans le contenu principal) */
-.dropdown-menu .dropdown-item {
-    color: var(--text-dark) !important;
+.btn-outline-success,
+.btn-outline-secondary,
+a.btn.aq-btn-secondary,
+.btn.aq-btn-secondary,
+.aq-btn-secondary {
+    color: var(--aq-accent) !important;
+    background-color: transparent !important;
+    border: 1px solid var(--aq-accent) !important;
 }
 
-.dropdown-menu .dropdown-item:hover {
-    background-color: #f1f5f9 !important;
-    color: var(--aqua-primary) !important;
+.btn-outline-success:hover,
+.btn-outline-secondary:hover,
+a.btn.aq-btn-secondary:hover,
+.aq-btn-secondary:hover {
+    color: var(--aq-on-strong) !important;
+    background-color: var(--aq-brand-strong) !important;
+    border-color: var(--aq-brand-strong) !important;
 }
 
-/* Progress bars */
-.progress-bar.bg-success,
-.progress-bar.bg-primary {
-    background-color: var(--aqua-primary) !important;
+/* ============================================================================
+   7. LISTES
+   ============================================================================ */
+#result_list,
+.content-wrapper .table {
+    color: var(--aq-card-text);
+    background-color: var(--aq-card-bg) !important;
 }
 
-/* Small-box (dashboard stats) */
-.small-box a,
-.small-box .small-box-footer,
-.info-box a {
-    color: #ffffff !important;
+#result_list thead th,
+.content-wrapper .table thead th {
+    color: var(--aq-card-muted) !important;
+    background-color: var(--aq-subtle-bg) !important;
+    border-bottom: 1px solid var(--aq-card-border) !important;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: none;
 }
 
-.small-box .inner h3,
-.small-box .inner p {
-    color: var(--text-dark) !important;
+#result_list thead th a,
+.content-wrapper .table thead th a {
+    color: var(--aq-card-muted) !important;
 }
 
-/* Console metier: conserver un contraste lisible avec le theme sombre Jazzmin. */
-.aquacare-console {
-    width: 100%;
+#result_list tbody tr,
+.content-wrapper .table tbody tr,
+.content-wrapper .table-striped tbody tr:nth-of-type(odd),
+.content-wrapper .table-striped tbody tr:nth-of-type(even) {
+    background-color: var(--aq-card-bg) !important;
 }
 
-.aquacare-console .card-header .card-title,
-.farm-supervision .card-header .card-title {
-    color: var(--text-primary) !important;
+#result_list tbody tr:hover,
+.content-wrapper .table-hover tbody tr:hover {
+    background-color: var(--aq-row-hover) !important;
 }
 
-.aquacare-console .card-body a.btn.btn-outline-success {
-    color: var(--aqua-primary-lighter) !important;
+#result_list td,
+#result_list th,
+.content-wrapper .table td,
+.content-wrapper .table th {
+    color: var(--aq-card-text) !important;
+    border-color: var(--aq-card-border) !important;
+    vertical-align: middle;
 }
 
-.aquacare-console .card-body a.btn.btn-outline-success:hover {
-    color: #ffffff !important;
-}
-
-/* Les longs libelles ne doivent ni comprimer ni couper les icones des cartes. */
-.aquacare-dashboard-card .info-box-icon {
-    flex: 0 0 5.5rem;
-    flex-shrink: 0;
-    min-width: 5.5rem;
-    width: 5.5rem;
-}
-
-.aquacare-dashboard-card .info-box-content {
-    min-width: 0;
-    overflow: visible;
-}
-
-.aquacare-dashboard-card .info-box-text {
-    line-height: 1.25;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-}
-
-/* Login Jazzmin: theme default clair, puis darkly via la media query du package. */
-.jazzmin-login-page .login-box-msg,
-.jazzmin-login-page .text-center {
-    color: var(--text-dark) !important;
-}
-
-@media (prefers-color-scheme: dark) {
-    .jazzmin-login-page .login-box-msg,
-    .jazzmin-login-page .text-center {
-        color: var(--text-primary) !important;
-    }
-}
-
-/* Toutes les listes Admin gardent une ligne par objet et scrollent horizontalement. */
 body.change-list #changelist .card-body.table-responsive,
 body.change-list .aquacare-responsive-table {
     display: block;
@@ -1144,28 +519,176 @@ body.change-list .aquacare-responsive-table {
 }
 
 body.change-list #result_list {
-    table-layout: auto;
     width: max-content;
     min-width: 100%;
+    table-layout: auto;
 }
 
 body.change-list #result_list th,
 body.change-list #result_list td {
-    overflow-wrap: normal;
-    vertical-align: middle;
     white-space: nowrap;
+    overflow-wrap: normal;
     word-break: normal;
 }
 
-.aquacare-console > .clearfix {
-    clear: both;
+/* Barre d'actions de masse et compteur. */
+#changelist .actions,
+#changelist .actions label,
+#changelist .actions span,
+.paginator,
+.content-wrapper .paginator {
+    color: var(--aq-card-text) !important;
 }
 
+/* Filtres (colonne ou barre Jazzmin). */
+#changelist-filter,
+#changelist-filter h2,
+#changelist-filter h3,
+#changelist-filter li,
+.content-wrapper .card .form-inline label {
+    color: var(--aq-card-text) !important;
+}
 
-/* =============================================================================
-   COMPOSANTS .aq-* (pages d'action : confirmation, annulation…)
-   Couleurs uniquement via les tokens --aq-* ci-dessus.
-   ============================================================================= */
+#changelist-filter li.selected a {
+    color: var(--aq-accent) !important;
+    font-weight: 700;
+}
+
+.date-hierarchy .btn,
+.date-hierarchy a {
+    color: var(--aq-accent) !important;
+    background: transparent !important;
+    border: 1px solid var(--aq-card-border) !important;
+}
+
+.page-link {
+    color: var(--aq-accent) !important;
+    background-color: var(--aq-card-bg) !important;
+    border-color: var(--aq-card-border) !important;
+}
+
+.page-item.active .page-link {
+    color: var(--aq-on-strong) !important;
+    background-color: var(--aq-brand-strong) !important;
+    border-color: var(--aq-brand-strong) !important;
+}
+
+.order-secondary {
+    margin-left: 0.25rem;
+    color: var(--aq-card-muted) !important;
+    white-space: nowrap;
+}
+
+/* ============================================================================
+   8. MESSAGES, MENUS DÉROULANTS, CONNEXION
+   ============================================================================ */
+.content-wrapper .alert-success {
+    color: var(--aq-success-text) !important;
+    background-color: var(--aq-success-bg) !important;
+    border-color: var(--aq-success-text) !important;
+}
+
+.content-wrapper .alert-info {
+    color: var(--aq-info-text) !important;
+    background-color: var(--aq-info-bg) !important;
+    border-color: var(--aq-info-text) !important;
+}
+
+.content-wrapper .alert-warning {
+    color: var(--aq-warning-text) !important;
+    background-color: var(--aq-warning-bg) !important;
+    border-color: var(--aq-warning-text) !important;
+}
+
+.content-wrapper .alert-danger,
+.content-wrapper .alert-error {
+    color: var(--aq-danger-text) !important;
+    background-color: var(--aq-danger-bg) !important;
+    border-color: var(--aq-danger-text) !important;
+}
+
+.content-wrapper .alert a {
+    color: inherit !important;
+    text-decoration: underline;
+}
+
+.dropdown-menu {
+    color: var(--aq-card-text) !important;
+    background-color: var(--aq-card-bg) !important;
+    border: 1px solid var(--aq-card-border) !important;
+}
+
+.dropdown-menu .dropdown-item,
+.dropdown-menu .dropdown-header,
+.dropdown-menu button,
+.dropdown-menu a {
+    color: var(--aq-card-text) !important;
+    background: transparent !important;
+}
+
+.dropdown-menu .dropdown-item:hover,
+.dropdown-menu button:hover {
+    color: var(--aq-card-text) !important;
+    background-color: var(--aq-subtle-bg) !important;
+}
+
+.dropdown-menu .dropdown-divider {
+    border-top-color: var(--aq-card-border) !important;
+}
+
+.login-page,
+.jazzmin-login-page {
+    background-color: var(--aq-page-bg) !important;
+}
+
+.login-page .card,
+.jazzmin-login-page .card {
+    background-color: var(--aq-card-bg) !important;
+    border: 1px solid var(--aq-card-border) !important;
+}
+
+.jazzmin-login-page .login-box-msg,
+.jazzmin-login-page .text-center,
+.login-page .login-box-msg {
+    color: var(--aq-card-text) !important;
+}
+
+.login-page input,
+.jazzmin-login-page input {
+    color: var(--aq-input-text) !important;
+    background-color: var(--aq-input-bg) !important;
+    border: 1px solid var(--aq-input-border) !important;
+}
+
+.login-page .input-group-text,
+.jazzmin-login-page .input-group-text {
+    color: var(--aq-card-muted) !important;
+    background-color: var(--aq-subtle-bg) !important;
+    border: 1px solid var(--aq-input-border) !important;
+}
+
+/* ============================================================================
+   9. COMPOSANTS AQUACARE « .aq-* »
+   ============================================================================ */
+/* Jazzmin place le contenu dans une ligne flex (.row) : nos pages prennent
+   toute la largeur disponible au lieu de se réduire à leur contenu. */
+.content-wrapper section.content > .row > .aq-workspace,
+.content-wrapper section.content > .row > .inbox-layout,
+.content-wrapper section.content > .row > .support-inbox-intro {
+    flex: 0 0 100%;
+    width: 100%;
+    margin-left: 7.5px;
+    margin-right: 7.5px;
+    max-width: calc(100% - 15px);
+}
+
+.aq-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 100%;
+}
+
 .aq-panel {
     overflow: hidden;
     color: var(--aq-card-text);
@@ -1175,7 +698,7 @@ body.change-list #result_list td {
 }
 
 .aq-panel__header {
-    padding: 1rem 1.25rem;
+    padding: 0.9rem 1.25rem;
     color: var(--aq-on-strong);
     background: var(--aq-brand-strong);
 }
@@ -1184,10 +707,18 @@ body.change-list #result_list td {
     background: var(--aq-danger);
 }
 
-.aq-panel__header h2 {
+.aq-panel__header h2,
+.content-wrapper .aq-panel__header h2 {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     color: var(--aq-on-strong) !important;
+}
+
+.aq-panel__header p,
+.content-wrapper .aq-panel__header p {
+    margin: 0.25rem 0 0;
+    color: var(--aq-on-strong) !important;
+    opacity: 0.9;
 }
 
 .aq-panel__body {
@@ -1195,86 +726,23 @@ body.change-list #result_list td {
     color: var(--aq-card-text);
 }
 
-.content-wrapper .aq-panel__body p,
-.content-wrapper .aq-panel__body li,
-.content-wrapper .aq-panel__body label,
 .aq-panel__body p,
 .aq-panel__body li,
 .aq-panel__body label {
     color: var(--aq-card-text) !important;
 }
 
-.aq-muted {
+.aq-muted,
+.content-wrapper .aq-muted {
     color: var(--aq-card-muted) !important;
 }
 
-.aq-alert {
-    margin: 1rem 0;
-    padding: 0.75rem 1rem;
-    border-radius: 0.375rem;
-}
-
-.aq-alert--warning,
-.content-wrapper .aq-panel__body .aq-alert--warning {
-    color: var(--aq-warning-text) !important;
-    background: var(--aq-warning-bg);
-    border: 1px solid var(--aq-warning-text);
-}
-
-.aq-alert--danger,
-.content-wrapper .aq-panel__body .aq-alert--danger {
-    color: var(--aq-danger-text) !important;
-    background: var(--aq-danger-bg);
-    border: 1px solid var(--aq-danger-text);
-}
-
-.aq-textarea {
-    width: 100%;
-    margin: 0.5rem 0;
-    padding: 0.6rem;
-    color: var(--aq-card-text);
-    background: var(--aq-subtle-bg);
-    border: 1px solid var(--aq-card-border);
-    border-radius: 0.375rem;
-}
-
-.aq-actions {
+.aq-page-head {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
     align-items: center;
-    margin-top: 1rem;
-}
-
-.aq-btn-danger {
-    color: var(--aq-on-strong) !important;
-    background: var(--aq-danger) !important;
-    border: 1px solid var(--aq-danger) !important;
-}
-
-.aq-btn-primary {
-    color: var(--aq-on-strong) !important;
-    background: var(--aq-brand-strong) !important;
-    border: 1px solid var(--aq-brand-strong) !important;
-}
-
-a.btn.aq-btn-secondary,
-.btn.aq-btn-secondary,
-.aq-btn-secondary {
-    color: var(--aq-accent) !important;
-    background: transparent !important;
-    border: 1px solid var(--aq-accent) !important;
-}
-
-
-/* =============================================================================
-   FICHES (ferme, unité) : en-tête, indicateurs, badges, tableaux
-   ============================================================================= */
-.aq-workspace {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    max-width: 100%;
+    justify-content: space-between;
+    gap: 0.75rem;
 }
 
 .aq-page-meta {
@@ -1287,45 +755,61 @@ a.btn.aq-btn-secondary,
 
 .aq-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
     gap: 1rem;
+}
+
+.aq-grid--wide {
+    grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
 }
 
 .aq-kpis {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 0.75rem;
 }
 
 .aq-kpi {
-    padding: 0.75rem 1rem;
-    background: var(--aq-subtle-bg);
+    display: block;
+    padding: 0.8rem 1rem;
+    color: var(--aq-card-text);
+    background: var(--aq-card-bg);
     border: 1px solid var(--aq-card-border);
     border-radius: 0.5rem;
+    text-decoration: none !important;
+}
+
+.aq-panel .aq-kpi {
+    background: var(--aq-subtle-bg);
+}
+
+a.aq-kpi:hover {
+    border-color: var(--aq-accent);
 }
 
 .aq-kpi__label {
     display: block;
     font-size: 0.8rem;
     font-weight: 600;
-    color: var(--aq-card-muted);
+    color: var(--aq-card-muted) !important;
 }
 
 .aq-kpi__value {
     display: block;
     margin-top: 0.15rem;
-    font-size: 1.35rem;
+    font-size: 1.5rem;
     font-weight: 700;
-    color: var(--aq-card-text);
+    color: var(--aq-card-text) !important;
 }
 
 .aq-kpi__sub {
     display: block;
     font-size: 0.8rem;
-    color: var(--aq-card-muted);
+    color: var(--aq-card-muted) !important;
 }
 
-.aq-section-title {
+.aq-section-title,
+.content-wrapper .aq-section-title {
     margin: 0 0 0.75rem;
     font-size: 1.1rem;
     font-weight: 700;
@@ -1338,17 +822,38 @@ a.btn.aq-btn-secondary,
     border-radius: 999px;
     font-size: 0.8rem;
     font-weight: 600;
+    line-height: 1.5;
     white-space: nowrap;
 }
 
-.aq-badge--ok { color: var(--aq-success-text); background: var(--aq-success-bg); }
-.aq-badge--warn { color: var(--aq-warning-text); background: var(--aq-warning-bg); }
-.aq-badge--danger { color: var(--aq-danger-text); background: var(--aq-danger-bg); }
-.aq-badge--info { color: var(--aq-info-text); background: var(--aq-info-bg); }
-.aq-badge--muted { color: var(--aq-card-muted); background: var(--aq-subtle-bg); }
+.aq-badge--ok { color: var(--aq-success-text) !important; background: var(--aq-success-bg); }
+.aq-badge--warn { color: var(--aq-warning-text) !important; background: var(--aq-warning-bg); }
+.aq-badge--danger { color: var(--aq-danger-text) !important; background: var(--aq-danger-bg); }
+.aq-badge--info { color: var(--aq-info-text) !important; background: var(--aq-info-bg); }
+.aq-badge--muted { color: var(--aq-card-muted) !important; background: var(--aq-subtle-bg); }
+
+.aq-alert {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    border-radius: 0.375rem;
+}
+
+.aq-alert--warning,
+.content-wrapper .aq-alert--warning {
+    color: var(--aq-warning-text) !important;
+    background: var(--aq-warning-bg);
+    border: 1px solid var(--aq-warning-text);
+}
+
+.aq-alert--danger,
+.content-wrapper .aq-alert--danger {
+    color: var(--aq-danger-text) !important;
+    background: var(--aq-danger-bg);
+    border: 1px solid var(--aq-danger-text);
+}
 
 .aq-alert--info,
-.content-wrapper .aq-panel__body .aq-alert--info {
+.content-wrapper .aq-alert--info {
     color: var(--aq-info-text) !important;
     background: var(--aq-info-bg);
     border: 1px solid var(--aq-info-text);
@@ -1367,10 +872,31 @@ a.btn.aq-btn-secondary,
     margin: 0;
 }
 
-.aq-alert a {
+.content-wrapper .aq-alert a:not(.btn) {
     color: inherit !important;
     font-weight: 600;
     text-decoration: underline;
+}
+
+.aq-textarea {
+    width: 100%;
+    margin: 0.5rem 0;
+    padding: 0.6rem;
+    color: var(--aq-input-text);
+    background: var(--aq-input-bg);
+    border: 1px solid var(--aq-input-border);
+    border-radius: 0.375rem;
+}
+
+.aq-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.aq-actions--spaced {
+    margin-top: 1rem;
 }
 
 .aq-table-wrap {
@@ -1380,23 +906,25 @@ a.btn.aq-btn-secondary,
 
 .aq-table {
     width: 100%;
+    margin: 0;
     border-collapse: collapse;
     color: var(--aq-card-text);
 }
 
 .aq-table th,
-.aq-table td {
+.aq-table td,
+.content-wrapper .aq-table td {
     padding: 0.5rem 0.65rem;
     border-bottom: 1px solid var(--aq-card-border);
     text-align: left;
     vertical-align: top;
-    color: var(--aq-card-text);
+    color: var(--aq-card-text) !important;
 }
 
 .aq-table th {
     font-size: 0.8rem;
     font-weight: 700;
-    color: var(--aq-card-muted);
+    color: var(--aq-card-muted) !important;
     background: var(--aq-subtle-bg);
     white-space: nowrap;
 }
@@ -1407,18 +935,15 @@ a.btn.aq-btn-secondary,
     white-space: nowrap;
 }
 
-.aq-panel a:not(.btn):not(.button) {
-    color: var(--aq-accent);
-}
-
-.aq-panel__header a {
-    color: var(--aq-on-strong) !important;
+.aq-table--compact td,
+.aq-table--compact th {
+    padding: 0.35rem 0.5rem;
 }
 
 .aq-dl {
     display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.35rem 1rem;
+    grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+    gap: 0.4rem 1.25rem;
     margin: 0;
 }
 
@@ -1429,18 +954,464 @@ a.btn.aq-btn-secondary,
 
 .aq-dl dd {
     margin: 0;
+    min-width: 0;
     color: var(--aq-card-text);
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
 }
 
+.aq-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
 
-/* Liens posés sur un fond coloré (en-tête vert, alertes) : ils prennent la
-   couleur du texte de leur zone. Sélecteurs volontairement aussi précis que
-   la règle globale des liens ci-dessus, et placés après elle. */
-.content-wrapper .aq-panel__header a:not(.btn):not(.nav-link) {
+.aq-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.aq-strong {
+    font-weight: 700;
+}
+
+.aq-text-danger { color: var(--aq-danger-text) !important; }
+.aq-text-warn { color: var(--aq-warning-text) !important; }
+.aq-text-ok { color: var(--aq-success-text) !important; }
+
+/* Petits boutons dans les tableaux (voir, télécharger, traiter). */
+.aq-link-btn,
+.content-wrapper a.aq-link-btn {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    color: var(--aq-accent) !important;
+    border: 1px solid var(--aq-accent);
+    border-radius: 0.375rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none !important;
+    white-space: nowrap;
+}
+
+.aq-link-btn:hover,
+.content-wrapper a.aq-link-btn:hover {
+    color: var(--aq-on-strong) !important;
+    background: var(--aq-brand-strong);
+    border-color: var(--aq-brand-strong);
+}
+
+.aq-link-btn--strong,
+.content-wrapper a.aq-link-btn--strong {
+    color: var(--aq-on-strong) !important;
+    background: var(--aq-brand-strong);
+    border-color: var(--aq-brand-strong);
+}
+
+.aq-link-btn--danger,
+.content-wrapper a.aq-link-btn--danger {
+    color: var(--aq-danger-text) !important;
+    border-color: var(--aq-danger-text);
+}
+
+.aq-link-btn--danger:hover,
+.content-wrapper a.aq-link-btn--danger:hover {
+    color: var(--aq-on-strong) !important;
+    background: var(--aq-danger);
+    border-color: var(--aq-danger);
+}
+
+/* Liens posés sur un fond coloré : ils prennent la couleur du texte. */
+.content-wrapper .aq-panel__header a:not(.btn) {
     color: var(--aq-on-strong) !important;
 }
 
-.content-wrapper .aq-alert a:not(.btn):not(.nav-link) {
-    color: inherit !important;
+/* Rôles d'administration (liste des utilisateurs). */
+.aquacare-role-badge {
+    display: inline-block;
+    margin: 0.1rem 0.15rem 0.1rem 0;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.aquacare-role-badge--manager,
+.aquacare-role-badge--commerce { color: var(--aq-success-text) !important; background: var(--aq-success-bg); }
+.aquacare-role-badge--support { color: var(--aq-info-text) !important; background: var(--aq-info-bg); }
+.aquacare-role-badge--owner { color: var(--aq-danger-text) !important; background: var(--aq-danger-bg); }
+.aquacare-role-badge--staff { color: var(--aq-card-muted) !important; background: var(--aq-subtle-bg); }
+.aquacare-role-empty { color: var(--aq-card-muted); }
+
+/* Contenu des lignes de détail HTML générées par les admins (récapitulatifs). */
+.aq-summary {
+    max-width: 820px;
+    overflow: hidden;
+    border: 1px solid var(--aq-card-border);
+    border-radius: 0.5rem;
+}
+
+.aq-summary__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.7rem 1rem;
+    color: var(--aq-on-strong);
+    background: var(--aq-brand-strong);
+}
+
+.aq-summary__head *:not(.aq-badge) {
+    color: var(--aq-on-strong) !important;
+}
+
+.aq-summary__cells {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    border-bottom: 1px solid var(--aq-card-border);
+}
+
+.aq-summary__cell {
+    padding: 0.6rem 1rem;
+    border-right: 1px solid var(--aq-card-border);
+}
+
+.aq-summary__cell:last-child {
+    border-right: 0;
+}
+
+.aq-summary__body {
+    padding: 0.6rem 1rem;
+    background: var(--aq-subtle-bg);
+}
+.aq-media-preview { max-width: 240px; border-radius: 0.5rem; border: 1px solid var(--aq-card-border); }
+
+/* ============================================================================
+   MESSAGERIE SUPPORT : pleine hauteur, taille fixe, seul le fil défile.
+   ============================================================================ */
+.support-inbox-intro {
+    margin-bottom: 0.75rem;
+}
+
+.inbox-layout {
+    display: grid;
+    grid-template-columns: minmax(260px, 340px) 1fr;
+    height: calc(100vh - 13rem);
+    min-height: 460px;
+    overflow: hidden;
+    color: var(--aq-card-text);
+    background: var(--aq-card-bg);
+    border: 1px solid var(--aq-card-border);
+    border-radius: 0.5rem;
+}
+
+.inbox-sidebar {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--aq-card-border);
+}
+
+.conv-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.content-wrapper a.conv-item,
+.conv-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.7rem 0.9rem;
+    color: var(--aq-card-text) !important;
+    border-bottom: 1px solid var(--aq-card-border);
+    border-left: 3px solid transparent;
+    text-decoration: none !important;
+}
+
+.conv-item:hover {
+    background: var(--aq-row-hover);
+}
+
+.conv-item.active {
+    background: var(--aq-subtle-bg);
+    border-left-color: var(--aq-accent);
+}
+
+.conv-item.unread .conv-title {
+    font-weight: 800;
+}
+
+.conv-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.conv-title {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.conv-date,
+.conv-preview {
+    font-size: 0.82rem;
+    color: var(--aq-card-muted);
+}
+
+.conv-date {
+    white-space: nowrap;
+}
+
+.conv-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inbox-pages {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-top: 1px solid var(--aq-card-border);
+}
+
+.inbox-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.inbox-main-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--aq-card-border);
+}
+
+.inbox-contact {
+    font-size: 1.05rem;
+}
+
+.messages-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1rem;
+    overflow-y: auto;
+    background: var(--aq-subtle-bg);
+}
+
+.msg-bubble {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-width: 72%;
+    padding: 0.6rem 0.8rem;
+    color: var(--aq-card-text);
+    background: var(--aq-card-bg);
+    border: 1px solid var(--aq-card-border);
+    border-radius: 0.6rem;
+}
+
+.msg-bubble--support {
+    align-self: flex-end;
+    background: var(--aq-success-bg);
+    border-color: var(--aq-success-bg);
+}
+
+.msg-bubble--user {
+    align-self: flex-start;
+}
+
+.msg-sender {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--aq-card-muted);
+}
+
+.msg-bubble--support .msg-sender,
+.msg-bubble--support .msg-content,
+.msg-bubble--support .msg-meta {
+    color: var(--aq-success-text);
+}
+
+.msg-content {
+    overflow-wrap: anywhere;
+}
+
+.msg-media img {
+    max-width: 260px;
+    max-height: 260px;
+    border-radius: 0.4rem;
+}
+
+.msg-meta {
+    align-self: flex-end;
+    font-size: 0.75rem;
+    color: var(--aq-card-muted);
+}
+
+.reply-form {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--aq-card-border);
+}
+
+.reply-form textarea {
+    width: 100%;
+    min-height: 3.2rem;
+    max-height: 9rem;
+    padding: 0.6rem;
+    resize: vertical;
+}
+
+.reply-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.inbox-empty,
+.inbox-closed {
+    margin: 0;
+    padding: 1rem;
+    color: var(--aq-card-muted) !important;
+}
+
+.inbox-closed {
+    border-top: 1px solid var(--aq-card-border);
+}
+
+.inbox-empty--center {
+    margin: auto;
+    text-align: center;
+}
+
+@media (max-width: 767.98px) {
+    .inbox-layout {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+
+    .inbox-sidebar {
+        max-height: 40vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--aq-card-border);
+    }
+
+    .messages-container {
+        max-height: 60vh;
+    }
+
+    .msg-bubble {
+        max-width: 90%;
+    }
+}
+
+/* ============================================================================
+   CARTE DES FERMES : liste à gauche, carte pleine hauteur.
+   ============================================================================ */
+.map-controls label {
+    margin: 0;
+    font-weight: 600;
+}
+
+.map-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 320px) 1fr;
+    height: calc(100vh - 15rem);
+    min-height: 460px;
+    overflow: hidden;
+    background: var(--aq-card-bg);
+    border: 1px solid var(--aq-card-border);
+    border-radius: 0.5rem;
+}
+
+.map-list {
+    min-height: 0;
+    overflow-y: auto;
+    border-right: 1px solid var(--aq-card-border);
+}
+
+.map-list__item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    width: 100%;
+    padding: 0.6rem 0.85rem;
+    color: var(--aq-card-text);
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--aq-card-border);
+    text-align: left;
+}
+
+.map-list__item:hover,
+.map-list__item:focus {
+    background: var(--aq-row-hover);
+    outline: none;
+}
+
+.map-list__name {
+    font-weight: 700;
+}
+
+.map-list__empty {
+    padding: 1rem;
+}
+
+#farm-map {
+    width: 100%;
+    height: 100%;
+}
+
+.map-dot__inner {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--aq-on-strong);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--aq-neutral-strong);
+}
+
+.leaflet-popup-content .map-popup p {
+    margin: 0.3rem 0;
+}
+
+@media (max-width: 767.98px) {
+    .map-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: 35vh 55vh;
+        height: auto;
+    }
+
+    .map-list {
+        border-right: 0;
+        border-bottom: 1px solid var(--aq-card-border);
+    }
+}
+
+/* Pas d'icônes dans le contenu : elles restent réservées au menu latéral.
+   Exceptions : les petits liens « ajouter / modifier » des champs liés et
+   les raccourcis de date, qui ne sont que des icônes. */
+.content-wrapper i.fa:not(.related-widget-wrapper i):not(.datetimeshortcuts i),
+.content-wrapper i.fas:not(.related-widget-wrapper i):not(.datetimeshortcuts i),
+.content-wrapper i.far:not(.related-widget-wrapper i):not(.datetimeshortcuts i) {
+    display: none !important;
 }

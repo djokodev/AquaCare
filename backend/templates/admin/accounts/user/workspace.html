@@ -1,0 +1,130 @@
+{% extends "admin/base_site.html" %}
+{% load i18n humanize %}
+{% comment %}
+  Fiche utilisateur : l'essentiel d'un compte sur une page, avec les actions
+  courantes. Couleurs : composants .aq-* uniquement (admin_custom.css).
+{% endcomment %}
+{% block bodyclass %}{{ block.super }} aquacare-user-workspace{% endblock %}
+{% block content_title %}{{ title }}{% endblock %}
+{% block breadcrumbs %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="{% url 'admin:accounts_user_changelist' %}">{% translate "Utilisateurs" %}</a></li>
+  <li class="breadcrumb-item active">{{ title }}</li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="aq-workspace" data-admin-i18n-native>
+  <section class="aq-panel">
+    <div class="aq-panel__body">
+      <div class="aq-page-head">
+        <div class="aq-inline">
+          {% if target.is_active %}
+            {% if target.is_verified %}<span class="aq-badge aq-badge--ok">{% translate "Compte actif · téléphone vérifié" %}</span>
+            {% else %}<span class="aq-badge aq-badge--warn">{% translate "Compte actif · téléphone non vérifié" %}</span>{% endif %}
+          {% else %}<span class="aq-badge aq-badge--danger">{% translate "Compte désactivé" %}</span>{% endif %}
+          <span class="aq-badge aq-badge--muted">{{ target.get_account_type_display }}</span>
+          {% if target.is_superuser %}<span class="aquacare-role-badge aquacare-role-badge--owner">{% translate "Superadministrateur" %}</span>{% endif %}
+          {% for role in roles %}
+            <span class="aquacare-role-badge aquacare-role-badge--{{ role }}">{% if role == "manager" %}{% translate "Manager aquacole" %}{% elif role == "commerce" %}{% translate "Commerce" %}{% else %}{% translate "Support" %}{% endif %}</span>
+          {% endfor %}
+        </div>
+        <div class="aq-actions">
+          {% if change_url %}<a class="btn aq-btn-primary btn-sm" href="{{ change_url }}">{% translate "Modifier" %}</a>{% endif %}
+          {% if password_url %}<a class="btn aq-btn-secondary btn-sm" href="{{ password_url }}">{% translate "Nouveau mot de passe" %}</a>{% endif %}
+          {% if can_manage and not target.is_superuser and target.pk != request.user.pk %}
+            <form method="post" class="aq-inline">{% csrf_token %}
+              {% if not target.is_verified %}<button class="btn aq-btn-secondary btn-sm" name="op" value="verify">{% translate "Marquer vérifié" %}</button>{% endif %}
+              {% if target.is_active %}<button class="btn aq-btn-secondary btn-sm" name="op" value="deactivate">{% translate "Désactiver le compte" %}</button>
+              {% else %}<button class="btn aq-btn-secondary btn-sm" name="op" value="reactivate">{% translate "Réactiver le compte" %}</button>{% endif %}
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="aq-grid aq-grid--wide">
+    <section class="aq-panel">
+      <div class="aq-panel__header"><h2>{% translate "Identité et contact" %}</h2></div>
+      <div class="aq-panel__body">
+        <dl class="aq-dl">
+          {% if target.account_type == "company" %}
+            <dt>{% translate "Entreprise" %}</dt><dd>{{ target.business_name|default:"—" }}</dd>
+            <dt>{% translate "Statut juridique" %}</dt><dd>{{ target.get_legal_status_display|default:"—" }}</dd>
+            <dt>{% translate "Promoteur" %}</dt><dd>{{ target.promoter_name|default:"—" }}</dd>
+          {% else %}
+            <dt>{% translate "Nom" %}</dt><dd>{{ target.first_name }} {{ target.last_name }}</dd>
+            <dt>{% translate "Tranche d'âge" %}</dt><dd>{{ target.get_age_group_display|default:"—" }}</dd>
+          {% endif %}
+          <dt>{% translate "Téléphone" %}</dt><dd>{{ phone }}</dd>
+          <dt>{% translate "E-mail" %}</dt><dd>{{ target.email|default:"—" }}</dd>
+          <dt>{% translate "Langue" %}</dt><dd>{{ target.get_language_preference_display|default:"—" }}</dd>
+          <dt>{% translate "Inscrit le" %}</dt><dd>{{ target.date_joined|date:"d/m/Y" }}</dd>
+          <dt>{% translate "Dernière connexion" %}</dt><dd>{% if target.last_login %}{{ target.last_login|date:"d/m/Y H:i" }}{% else %}{% translate "Jamais" %}{% endif %}</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="aq-panel">
+      <div class="aq-panel__header"><h2>{% translate "Activité et localisation" %}</h2></div>
+      <div class="aq-panel__body">
+        <dl class="aq-dl">
+          <dt>{% translate "Activité" %}</dt><dd>{{ target.get_activity_type_display|default:"—" }}</dd>
+          <dt>{% translate "Zone d'intervention" %}</dt><dd>{{ target.intervention_zone|default:"—" }}</dd>
+          <dt>{% translate "Localisation" %}</dt><dd>{% if location %}{{ location|join:" · " }}{% else %}—{% endif %}</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="aq-panel">
+      <div class="aq-panel__header"><h2>{% translate "Ferme" %}</h2></div>
+      <div class="aq-panel__body">
+        {% if farm %}
+          <dl class="aq-dl">
+            <dt>{% translate "Ferme" %}</dt><dd><a href="{{ farm.url }}">{{ farm.name }}</a></dd>
+            <dt>{% translate "Certification" %}</dt><dd><span class="aq-badge {% if farm.certification_status == 'certified' %}aq-badge--ok{% elif farm.certification_status == 'pending' %}aq-badge--warn{% else %}aq-badge--danger{% endif %}">{{ farm.certification }}</span></dd>
+            <dt>{% translate "Cycles en cours" %}</dt><dd>{{ farm.active_cycles }}</dd>
+            <dt>{% translate "Unités" %}</dt><dd>{{ farm.units }}</dd>
+            <dt>{% translate "Position GPS" %}</dt><dd>{% if farm.has_gps %}<span class="aq-badge aq-badge--ok">{% translate "Disponible" %}</span>{% else %}<span class="aq-badge aq-badge--muted">{% translate "Non renseignée" %}</span>{% endif %}</dd>
+          </dl>
+          <div class="aq-actions aq-actions--spaced"><a class="btn aq-btn-secondary btn-sm" href="{{ farm.url }}">{% translate "Ouvrir la fiche ferme" %}</a></div>
+        {% else %}
+          <p class="aq-muted">{% translate "Aucune ferme rattachée à ce compte." %}</p>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if orders or support %}
+    <section class="aq-panel">
+      <div class="aq-panel__header"><h2>{% translate "Commandes et support" %}</h2></div>
+      <div class="aq-panel__body">
+        <dl class="aq-dl">
+          {% if orders %}
+            <dt>{% translate "Commandes" %}</dt><dd><a href="{{ orders.url }}">{% blocktranslate count count=orders.total %}{{ count }} commande{% plural %}{{ count }} commandes{% endblocktranslate %}</a>{% if orders.open %} · <span class="aq-badge aq-badge--warn">{% blocktranslate count count=orders.open %}{{ count }} en cours{% plural %}{{ count }} en cours{% endblocktranslate %}</span>{% endif %}</dd>
+            <dt>{% translate "Dernière commande" %}</dt><dd>{% if orders.last %}{{ orders.last|date:"d/m/Y" }}{% else %}—{% endif %}</dd>
+          {% endif %}
+          <dt>{% translate "Support" %}</dt>
+          <dd>{% if support %}<a href="{{ support.url }}">{% translate "Ouvrir la conversation" %}</a>{% if support.unread %} · <span class="aq-badge aq-badge--warn">{% blocktranslate count count=support.unread %}{{ count }} non lu{% plural %}{{ count }} non lus{% endblocktranslate %}</span>{% endif %}{% else %}{% translate "Aucune conversation" %}{% endif %}</dd>
+        </dl>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  {% if can_anonymize %}
+  <section class="aq-panel">
+    <div class="aq-panel__header aq-panel__header--danger"><h2>{% translate "Supprimer le compte" %}</h2></div>
+    <div class="aq-panel__body">
+      <p>{% translate "Même traitement que « Supprimer mon compte » dans l'application : nom, téléphone, e-mail et position de la ferme sont effacés, la connexion est coupée. Les commandes et rapports restent pour la comptabilité, rattachés à un compte anonyme. Action définitive." %}</p>
+      <form method="post" class="aq-inline">{% csrf_token %}
+        <input type="hidden" name="op" value="anonymize">
+        <label for="id_confirm">{% translate "Pour confirmer, saisissez les 4 derniers chiffres du numéro :" %}</label>
+        <input id="id_confirm" name="confirm" type="text" inputmode="numeric" maxlength="4" size="6" required autocomplete="off">
+        <button type="submit" class="btn aq-btn-danger btn-sm">{% translate "Supprimer définitivement" %}</button>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

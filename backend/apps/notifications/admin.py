@@ -11,6 +11,7 @@ Roles:
 
 from common.admin_capabilities import AdminCapability, has_capability
 from common.admin_mixins import SecuredModelAdmin
+from common.admin_ui import badge
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.core.exceptions import PermissionDenied
@@ -190,19 +191,12 @@ class NotificationAdmin(NotificationsSecuredAdmin):
     title_truncated.short_description = _('Titre')
 
     def channels_display(self, obj):
-        """Affiche les canaux avec des badges colores."""
         if not obj.channels:
             return '-'
-
-        colors = {
-            'in_app': '#3b82f6',
-            'push': '#f59e0b',
-        }
         return format_html_join(
-            '',
-            '<span style="background-color: {}; color: white; padding: 2px 6px; '
-            'border-radius: 3px; font-size: 10px; margin-right: 3px;">{}</span>',
-            ((colors.get(str(channel), '#6b7280'), channel) for channel in obj.channels),
+            ' ',
+            '{}',
+            ((badge(channel, 'info' if str(channel) == 'in_app' else 'warn'),) for channel in obj.channels),
         )
     channels_display.short_description = _('Canaux')
 

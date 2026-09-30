@@ -1,22 +1,25 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
-
+{% comment %}Écrans hors menu, regroupés par usage. Composants .aq-* uniquement.{% endcomment %}
+{% block breadcrumbs %}{% endblock %}
 {% block content %}
-<div data-admin-i18n-native class="aquacare-system-tools">
-    <div class="row">
-        {% for tool in tools %}
-        <div class="col-lg-4 col-md-6 col-12">
-            <a class="info-box aquacare-dashboard-card" href="{% url tool.url %}">
-                <span class="info-box-icon bg-secondary"><i class="fas fa-cog" aria-hidden="true"></i></span>
-                <span class="info-box-content">
-                    <span class="info-box-text">{{ tool.label }}</span>
-                    <small>{{ tool.app_label }}</small>
-                </span>
-            </a>
+<div data-admin-i18n-native class="aq-workspace aquacare-system-tools">
+  <p class="aq-muted">{% translate "Données détaillées et réglages techniques. Le suivi quotidien se fait depuis le menu principal." %}</p>
+  <div class="aq-grid">
+    {% for group in groups %}
+      <section class="aq-panel">
+        <div class="aq-panel__body">
+          <h2 class="aq-section-title">{{ group.label }}</h2>
+          <table class="aq-table aq-table--compact"><tbody>
+            {% for tool in group.tools %}
+              <tr><td><a href="{% url tool.url %}">{{ tool.label|capfirst }}</a><br><span class="aq-muted">{{ tool.description }}</span></td></tr>
+            {% endfor %}
+          </tbody></table>
         </div>
-        {% empty %}
-        <div class="col-12"><p>{% translate "Aucun outil technique enregistre." %}</p></div>
-        {% endfor %}
-    </div>
+      </section>
+    {% empty %}
+      <p>{% translate "Aucun outil technique enregistre." %}</p>
+    {% endfor %}
+  </div>
 </div>
 {% endblock %}

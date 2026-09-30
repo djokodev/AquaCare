@@ -29,10 +29,8 @@ JAZZMIN_SETTINGS = {
     "search_model": None,
 
     # Top menu links
-    "topmenu_links": [
-        {"name": _("Accueil"), "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": _("Messagerie Support"), "url": "admin:chat_support_inbox", "permissions": ["chat.view_conversation"]},
-    ],
+    # Pas de liens en doublon du menu latéral dans la barre du haut.
+    "topmenu_links": [],
 
     # Side menu configuration
     "show_sidebar": True,
@@ -106,21 +104,13 @@ JAZZMIN_SETTINGS = {
     ],
 
     # Custom links par app
-    "custom_links": {
-        "chat": [{
-            "name": "Support Inbox",
-            "url": "admin:chat_support_inbox",
-            "icon": "fas fa-inbox",
-            "permissions": ["chat.view_conversation"],
-        }],
-    },
+    "custom_links": {},
 
     # Change form layout
-    "changeform_format": "horizontal_tabs",
-    "changeform_format_overrides": {
-        "accounts.user": "horizontal_tabs",
-        "aquaculture.productioncycle": "horizontal_tabs",
-    },
+    # Formulaires sur une seule page, sections empilées : tout est visible
+    # sans chercher dans des onglets.
+    "changeform_format": "single",
+    "changeform_format_overrides": {},
 
     # Language chooser (FR/EN)
     "language_chooser": True,

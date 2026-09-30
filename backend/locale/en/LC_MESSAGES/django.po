@@ -9,8 +9,8 @@ msgstr ""
 "POT-Creation-Date: 2025-01-22 12:00+0000\n"
 "PO-Revision-Date: 2025-01-22 12:00+0000\n"
 "Last-Translator: AquaCare Team\n"
-"Language: en\n"
 "Language-Team: English\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -19,7 +19,6 @@ msgstr ""
 # =============================================================================
 # APP NAMES (apps.py verbose_name)
 # =============================================================================
-
 msgid "Comptes Utilisateurs"
 msgstr "User Accounts"
 
@@ -41,7 +40,6 @@ msgstr "Common Utilities"
 # =============================================================================
 # MODEL NAMES (verbose_name / verbose_name_plural)
 # =============================================================================
-
 # Accounts
 msgid "Utilisateur"
 msgstr "User"
@@ -149,7 +147,6 @@ msgstr "Support Inbox"
 # =============================================================================
 # JAZZMIN UI ELEMENTS
 # =============================================================================
-
 msgid "Tableau de bord"
 msgstr "Dashboard"
 
@@ -168,7 +165,6 @@ msgstr "Choose language"
 # =============================================================================
 # ADMIN BUTTONS AND ACTIONS
 # =============================================================================
-
 msgid "Ajouter"
 msgstr "Add"
 
@@ -202,7 +198,6 @@ msgstr "Save and add another"
 # =============================================================================
 # ADMIN FIELDSETS (UserAdmin, etc.)
 # =============================================================================
-
 msgid "Informations de base"
 msgstr "Basic Information"
 
@@ -324,7 +319,6 @@ msgstr "Production"
 # =============================================================================
 # ADMIN LIST DISPLAY COLUMNS
 # =============================================================================
-
 msgid "Role"
 msgstr "Role"
 
@@ -385,7 +379,6 @@ msgstr "Stage"
 # =============================================================================
 # ADMIN ACTIONS
 # =============================================================================
-
 msgid "Verifier les telephones selectionnes"
 msgstr "Verify selected phone numbers"
 
@@ -407,7 +400,6 @@ msgstr "Mark as completed"
 # =============================================================================
 # ADMIN MESSAGES
 # =============================================================================
-
 msgid "Elevation vers superuser non autorisee."
 msgstr "Elevation to superuser not authorized."
 
@@ -447,7 +439,6 @@ msgstr "{} cycle(s) marked as completed."
 # =============================================================================
 # DJANGO-CELERY-BEAT (Periodic Tasks)
 # =============================================================================
-
 msgid "Tâches périodiques"
 msgstr "Periodic Tasks"
 
@@ -481,7 +472,6 @@ msgstr "Solar Events"
 # =============================================================================
 # AUTHENTICATION AND AUTHORIZATION
 # =============================================================================
-
 msgid "Authentification et Autorisations"
 msgstr "Authentication and Authorization"
 
@@ -497,7 +487,6 @@ msgstr "Group"
 # =============================================================================
 # JWT TOKEN MANAGEMENT
 # =============================================================================
-
 msgid "Gestion des tokens"
 msgstr "Token Management"
 
@@ -510,14 +499,12 @@ msgstr "Outstanding Tokens"
 # =============================================================================
 # MISC USER MESSAGES
 # =============================================================================
-
 msgid "Trop de tentatives de connexion. Veuillez patienter."
 msgstr "Too many login attempts. Please wait."
 
 # =============================================================================
 # MODEL FIELD LABELS
 # =============================================================================
-
 msgid "Numéro de téléphone"
 msgstr "Phone Number"
 
@@ -554,7 +541,6 @@ msgstr "Neighborhood"
 # =============================================================================
 # HELP TEXTS
 # =============================================================================
-
 msgid "Format : +237XXXXXXXXX ou format international"
 msgstr "Format: +237XXXXXXXXX or international format"
 
@@ -616,19 +602,25 @@ msgstr "An allocation references an unknown unit."
 msgid "L'espèce du plan doit correspondre à celle du cycle."
 msgstr "The plan species must match the cycle species."
 
-msgid "La somme des allocations doit correspondre à l'effectif initial du cycle."
+msgid ""
+"La somme des allocations doit correspondre à l'effectif initial du cycle."
 msgstr "The allocation total must match the cycle initial fish count."
 
 msgid "La capacité recommandée de l'unité est dépassée."
 msgstr "The unit recommended capacity is exceeded."
 
-msgid "Ce lancement existe déjà avec un contenu différent ou appartient à une autre ferme."
-msgstr "This launch already exists with different content or belongs to another farm."
+msgid ""
+"Ce lancement existe déjà avec un contenu différent ou appartient à une autre"
+" ferme."
+msgstr ""
+"This launch already exists with different content or belongs to another "
+"farm."
 
 msgid "L'effectif courant du cycle ne correspond pas aux allocations."
 msgstr "The cycle current fish count does not match its allocations."
 
-msgid "Un nouveau cycle doit être lancé avec au moins une unité de production."
+msgid ""
+"Un nouveau cycle doit être lancé avec au moins une unité de production."
 msgstr "A new cycle must be launched with at least one production unit."
 
 msgid "Une unité existante ne peut pas contenir des champs de création."
@@ -643,7 +635,9 @@ msgstr "A new unit cannot reference an existing production unit."
 msgid "Une même unité ne peut être sélectionnée deux fois."
 msgstr "The same production unit cannot be selected twice."
 
-msgid "Le mode de lancement ne correspond pas à l'état de configuration de la ferme."
+msgid ""
+"Le mode de lancement ne correspond pas à l'état de configuration de la "
+"ferme."
 msgstr "The launch mode does not match the farm setup state."
 
 msgid "Le plan de production est obligatoire pour le setup initial."
@@ -890,7 +884,9 @@ msgstr "Select a feed available in your stock."
 msgid ""
 "Le stock enregistré est déjà dépassé. Corrigez l’historique avant de "
 "continuer."
-msgstr "Recorded consumption already exceeds this stock. Correct the history before continuing."
+msgstr ""
+"Recorded consumption already exceeds this stock. Correct the history before "
+"continuing."
 
 #: apps/aquaculture/services/cycle_store_service.py:623
 msgid "Entrée de stock introuvable."
@@ -908,13 +904,17 @@ msgstr "This feed is not compatible with the cycle."
 msgid ""
 "Plusieurs stocks historiques correspondent à ces consommations. Précisez "
 "d’abord le reliquat physique."
-msgstr "Several historical stock entries match these consumptions. Specify the physical remainder first."
+msgstr ""
+"Several historical stock entries match these consumptions. Specify the "
+"physical remainder first."
 
 #: apps/aquaculture/services/cycle_store_service.py:664
 msgid ""
 "Les consommations historiques dépassent cette entrée de stock. Corrigez le "
 "reliquat physique avant la classification."
-msgstr "Historical consumption exceeds this stock entry. Correct the physical remainder before classification."
+msgstr ""
+"Historical consumption exceeds this stock entry. Correct the physical "
+"remainder before classification."
 
 #: apps/aquaculture/services/cycle_store_service.py:691
 msgid "La commande ne correspond pas au cycle indiqué."
@@ -1017,8 +1017,8 @@ msgstr "Logistics transition completed through the business service."
 #: apps/commerce/admin.py:507
 #, python-brace-format
 msgid ""
-"La commande {} a été mise à jour. La notification client a été traitée selon "
-"ses préférences."
+"La commande {} a été mise à jour. La notification client a été traitée selon"
+" ses préférences."
 msgstr ""
 "Order {} was updated. The customer notification was handled according to "
 "their preferences."
@@ -1098,8 +1098,8 @@ msgid ""
 "Aucun cycle associé — cette commande ne générera pas d'entrée automatique "
 "dans un magasin de cycle."
 msgstr ""
-"No associated cycle — this order will not automatically create an entry in a "
-"cycle store."
+"No associated cycle — this order will not automatically create an entry in a"
+" cycle store."
 
 #: apps/commerce/admin.py:628
 msgid "Magasin du cycle"
@@ -1313,8 +1313,8 @@ msgid ""
 "La commande passera à l'état prête au retrait et le client pourra confirmer "
 "son retrait."
 msgstr ""
-"The order will move to ready-for-pickup status and the customer will be able "
-"to confirm pickup."
+"The order will move to ready-for-pickup status and the customer will be able"
+" to confirm pickup."
 
 #: templates/admin/commerce/order/fulfil_confirmation.html:340
 msgid "Annuler"
@@ -1366,14 +1366,20 @@ msgstr "No Business Access Assigned"
 msgid "Aucune donnee accessible avec vos permissions actuelles."
 msgstr "No data is available with your current permissions."
 
-msgid "Utilisez les compteurs ci-dessus pour ouvrir les listes de supervision filtrees."
+msgid ""
+"Utilisez les compteurs ci-dessus pour ouvrir les listes de supervision "
+"filtrees."
 msgstr "Use the counters above to open filtered supervision lists."
 
 msgid "Console vide"
 msgstr "Empty Console"
 
-msgid "Aucun role metier AquaCare ne vous a ete attribue. Contactez un superadministrateur."
-msgstr "No AquaCare business role has been assigned to you. Contact a super administrator."
+msgid ""
+"Aucun role metier AquaCare ne vous a ete attribue. Contactez un "
+"superadministrateur."
+msgstr ""
+"No AquaCare business role has been assigned to you. Contact a super "
+"administrator."
 
 #, python-format
 msgid "Saisissez au moins %(count)s caracteres."
@@ -1734,11 +1740,1335 @@ msgstr "Aquaculture Manager"
 msgid "Staff sans role"
 msgstr "Staff Without a Role"
 
-msgid "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page."
-msgstr "Select a conversation, review its history, then reply without leaving the page."
+msgid ""
+"Selectionnez une conversation, consultez son historique puis repondez sans "
+"quitter la page."
+msgstr ""
+"Select a conversation, review its history, then reply without leaving the "
+"page."
 
 msgid "Visualiser"
 msgstr "View"
 
 msgid "Télécharger"
 msgstr "Download"
+
+#, python-format
+msgid "%(count)s commande"
+msgid_plural "%(count)s commandes"
+msgstr[0] "%(count)s order"
+msgstr[1] "%(count)s orders"
+
+#, python-format
+msgid "%(count)s commande(s) en attente de confirmation du client"
+msgstr "%(count)s order(s) awaiting customer confirmation"
+
+#, python-format
+msgid "%(count)s commande(s) à livrer ou préparer"
+msgstr "%(count)s order(s) to prepare or deliver"
+
+#, python-format
+msgid "%(count)s conversation(s) support avec messages non lus"
+msgstr "%(count)s support conversation(s) with unread messages"
+
+#, python-format
+msgid "%(count)s en cours"
+msgid_plural "%(count)s en cours"
+msgstr[0] "%(count)s in progress"
+msgstr[1] "%(count)s in progress"
+
+#, python-format
+msgid "%(count)s ferme(s) en cycle sans saisie depuis %(days)s jours ou plus"
+msgstr ""
+"%(count)s farm(s) with an active cycle and no log for %(days)s days or more"
+
+#, python-format
+msgid "%(count)s incident(s) sanitaire(s) non résolu(s)"
+msgstr "%(count)s unresolved health incident(s)"
+
+#, python-format
+msgid "%(count)s indisponible"
+msgid_plural "%(count)s indisponibles"
+msgstr[0] "%(count)s unavailable"
+msgstr[1] "%(count)s unavailable"
+
+#, python-format
+msgid "%(count)s message(s) support non lu(s)"
+msgstr "%(count)s unread support message(s)"
+
+#, python-format
+msgid "%(count)s problème sanitaire en cours"
+msgid_plural "%(count)s problèmes sanitaires en cours"
+msgstr[0] "%(count)s ongoing health issue"
+msgstr[1] "%(count)s ongoing health issues"
+
+#, python-format
+msgid "%(count)s produit disponible à la commande"
+msgid_plural "%(count)s produits disponibles à la commande"
+msgstr[0] "%(count)s product available to order"
+msgstr[1] "%(count)s products available to order"
+
+#, python-format
+msgid "%(cycle)s : %(count)s unité(s) sans saisie aujourd'hui"
+msgstr "%(cycle)s: %(count)s unit(s) without a log today"
+
+#, python-format
+msgid ""
+"%(cycle)s : %(count)s unité(s) sans saisie depuis %(days)s jours ou plus"
+msgstr "%(cycle)s: %(count)s unit(s) without a log for %(days)s days or more"
+
+#, python-format
+msgid "%(days)s jour"
+msgid_plural "%(days)s jours"
+msgstr[0] "%(days)s day"
+msgstr[1] "%(days)s days"
+
+#, python-format
+msgid "%(days)s jours restants"
+msgstr "%(days)s days left"
+
+#, python-format
+msgid "%(unit)s — %(farm)s"
+msgstr "%(unit)s — %(farm)s"
+
+msgid "Accès et sécurité"
+msgstr "Access and security"
+
+msgid "Accès à l'administration"
+msgstr "Admin access"
+
+msgid "Actif · non vérifié"
+msgstr "Active · not verified"
+
+msgid "Actif · vérifié"
+msgstr "Active · verified"
+
+msgid "Activer les tokens"
+msgstr "Activate tokens"
+
+msgid "Activité"
+msgstr "Activity"
+
+msgid "Activité et localisation"
+msgstr "Activity and location"
+
+msgid "Administration"
+msgstr "Administration"
+
+msgid "Adresse"
+msgstr "Address"
+
+msgid "Adresse GPS"
+msgstr "GPS address"
+
+msgid "Adresse lisible issue du reverse geocoding (ex: Mbalmayo, Centre)"
+msgstr "Readable address from reverse geocoding (e.g. Mbalmayo, Centre)"
+
+msgid "Ajouter un produit"
+msgstr "Add a product"
+
+msgid "Aliment"
+msgstr "Feed"
+
+msgid "Aliment (kg)"
+msgstr "Feed (kg)"
+
+msgid "Aliment (période)"
+msgstr "Feed (period)"
+
+msgid "Aliment consommé"
+msgstr "Feed consumed"
+
+msgid "Allocation"
+msgstr "Allocation"
+
+msgid "Annuler la commande"
+msgstr "Cancel order"
+
+msgid "Annuler les commandes sélectionnées"
+msgstr "Cancel selected orders"
+
+msgid "Annulée"
+msgstr "Cancelled"
+
+msgid "Annulée le"
+msgstr "Cancelled on"
+
+msgid "Annulée par"
+msgstr "Cancelled by"
+
+msgid "Annulées ce mois"
+msgstr "Cancelled this month"
+
+msgid "Apercu media"
+msgstr "Media preview"
+
+msgid "Aperçu de la commande"
+msgstr "Order overview"
+
+msgid "Aperçu du contenu"
+msgstr "Content preview"
+
+msgid "Aperçu du rapport"
+msgstr "Report preview"
+
+msgid "Appareils enregistrés pour les notifications push."
+msgstr "Devices registered for push notifications."
+
+msgid "AquaCare Admin"
+msgstr "AquaCare Admin"
+
+msgid "Aquaculture — données détaillées"
+msgstr "Aquaculture — detailed data"
+
+msgid "Attente"
+msgstr "Waiting"
+
+msgid "Aucun compte n'est associé à ce nom de connexion."
+msgstr "No account is linked to this login name."
+
+msgid "Aucun compte n'est associé à ce numéro de téléphone."
+msgstr "No account is linked to this phone number."
+
+msgid "Aucun compte supprimable dans la sélection."
+msgstr "No deletable account in the selection."
+
+msgid "Aucun cycle actif sur cette période."
+msgstr "No active cycle over this period."
+
+msgid "Aucun cycle en cours pour cette ferme."
+msgstr "No active cycle for this farm."
+
+msgid "Aucun incident ouvert."
+msgstr "No open incident."
+
+msgid "Aucun media"
+msgstr "No media"
+
+msgid "Aucun mot de passe : l'utilisateur ne peut pas se connecter."
+msgstr "No password: the user cannot sign in."
+
+msgid "Aucun événement sanitaire."
+msgstr "No health event."
+
+msgid "Aucune"
+msgstr "None"
+
+msgid "Aucune commande en attente."
+msgstr "No pending order."
+
+msgid ""
+"Aucune commande sélectionnée ne peut être annulée (déjà reçue ou annulée)."
+msgstr ""
+"None of the selected orders can be cancelled (already received or "
+"cancelled)."
+
+msgid "Aucune commande à préparer."
+msgstr "No order to prepare."
+
+msgid "Aucune commande."
+msgstr "No orders."
+
+msgid "Aucune conversation"
+msgstr "No conversation"
+
+msgid "Aucune donnée — générez d'abord le rapport."
+msgstr "No data — generate the report first."
+
+msgid "Aucune ferme"
+msgstr "No farm"
+
+msgid "Aucune ferme géolocalisée pour ces filtres."
+msgstr "No geolocated farm for these filters."
+
+msgid "Aucune ferme rattachée à ce compte."
+msgstr "No farm linked to this account."
+
+msgid "Aucune saisie"
+msgstr "No log"
+
+msgid "Aucune saisie pour cette unité."
+msgstr "No log for this unit."
+
+msgid "Aucune saisie récente."
+msgstr "No recent log."
+
+msgid "Audit"
+msgstr "Audit"
+
+msgid "Avancement"
+msgstr "Progress"
+
+msgid "Biomasse estimée"
+msgstr "Estimated biomass"
+
+msgid "Bon"
+msgstr "Good"
+
+msgid "Bon de commande PDF"
+msgstr "Purchase order PDF"
+
+msgid "Boîte de réception"
+msgstr "Inbox"
+
+msgid "Canaux"
+msgstr "Channels"
+
+msgid "Canaux globaux"
+msgstr "Global channels"
+
+msgid "Capacité conseillée"
+msgstr "Recommended capacity"
+
+msgid "Caracteristiques techniques"
+msgstr "Technical specifications"
+
+msgid "Carte"
+msgstr "Map"
+
+msgid "Carte de toutes les fermes"
+msgstr "Map of all farms"
+
+msgid "Carte des fermes"
+msgstr "Farm map"
+
+msgid "Catalogue"
+msgstr "Catalogue"
+
+msgid "Catégories"
+msgstr "Categories"
+
+msgid "Ce compte a été désactivé. Contactez AquaCare pour obtenir de l'aide."
+msgstr "This account has been disabled. Contact AquaCare for help."
+
+msgid ""
+"Ce compte a été supprimé : l'historique est conservé pour le suivi, mais il "
+"n'est plus possible de répondre."
+msgstr ""
+"This account was deleted: the history is kept for follow-up, but replying is"
+" no longer possible."
+
+msgid "Ce compte a été supprimé : la conversation est en lecture seule."
+msgstr "This account was deleted: the conversation is read-only."
+
+msgid "Certifier les fermes sélectionnées"
+msgstr "Certify selected farms"
+
+msgid "Certifiée"
+msgstr "Certified"
+
+msgid ""
+"Ces comptes vont être anonymisés (nom, téléphone, e-mail, position de la "
+"ferme effacés, connexion coupée). Les commandes et rapports restent, "
+"rattachés à un compte anonyme. Action définitive."
+msgstr ""
+"These accounts will be anonymised (name, phone, email and farm position "
+"erased, sign-in cut off). Orders and reports remain, linked to an anonymous "
+"account. This cannot be undone."
+
+msgid "Cette commande ne peut plus être annulée."
+msgstr "This order can no longer be cancelled."
+
+msgid "Cette unité n'a encore jamais été utilisée."
+msgstr "This unit has never been used yet."
+
+msgid "Cette unité n'est utilisée dans aucun cycle en cours."
+msgstr "This unit is not used in any active cycle."
+
+msgid "Chaque saisie journalière (mortalité, aliment, poids)."
+msgstr "Every daily log (mortality, feed, weight)."
+
+msgid "Chargement des fermes..."
+msgstr "Loading farms..."
+
+msgid "Chiffre d'affaires du mois"
+msgstr "Revenue this month"
+
+msgid "Classe d'âge"
+msgstr "Age group"
+
+msgid "Commande annulée : {}"
+msgstr "Order cancelled: {}"
+
+msgid "Commande annulée."
+msgstr "Order cancelled."
+
+msgid "Commandes et support"
+msgstr "Orders and support"
+
+msgid "Commandes récentes"
+msgstr "Recent orders"
+
+msgid "Commandes à préparer ou livrer"
+msgstr "Orders to prepare or deliver"
+
+msgid "Commerce et support"
+msgstr "Commerce and support"
+
+msgid "Compte"
+msgstr "Account"
+
+msgid "Compte actif · téléphone non vérifié"
+msgstr "Active account · phone not verified"
+
+msgid "Compte actif · téléphone vérifié"
+msgstr "Active account · phone verified"
+
+msgid "Compte désactivé"
+msgstr "Account disabled"
+
+msgid "Compte désactivé : l'utilisateur ne peut plus se connecter."
+msgstr "Account disabled: the user can no longer sign in."
+
+msgid "Compte réactivé."
+msgstr "Account reactivated."
+
+msgid "Compte supprimé"
+msgstr "Deleted account"
+
+msgid "Comptes et fermes"
+msgstr "Accounts and farms"
+
+msgid "Conditionnement & Prix"
+msgstr "Packaging & price"
+
+msgid "Confirmation incorrecte : saisissez les 4 derniers chiffres du numéro."
+msgstr "Incorrect confirmation: enter the last 4 digits of the phone number."
+
+msgid "Connexion et contact"
+msgstr "Sign-in and contact"
+
+msgid "Contenu"
+msgstr "Content"
+
+msgid "Conversations support (lecture seule)."
+msgstr "Support conversations (read-only)."
+
+msgid "Coordonnée GPS latitude de la ferme (WGS84)"
+msgstr "Farm GPS latitude (WGS84)"
+
+msgid "Coordonnée GPS longitude de la ferme (WGS84)"
+msgstr "Farm GPS longitude (WGS84)"
+
+msgid "Coordonnées"
+msgstr "Coordinates"
+
+msgid "Coût direct"
+msgstr "Direct cost"
+
+msgid "Cycle en cours mais aucune saisie depuis au moins 2 jours."
+msgstr "Active cycle but no log for at least 2 days."
+
+msgid "Cycles en cours"
+msgstr "Active cycles"
+
+msgid "Cycles précédents"
+msgstr "Previous cycles"
+
+msgid "Date"
+msgstr "Date"
+
+msgid "Date de création"
+msgstr "Created on"
+
+msgid "Date de création automatique du profil"
+msgstr "Automatic profile creation date"
+
+msgid "Date de dernière modification du profil"
+msgstr "Profile last modified"
+
+msgid ""
+"Date de la dernière capture de la position (ne change pas avec les autres "
+"champs)"
+msgstr ""
+"Date the position was last captured (does not change with other fields)"
+
+msgid "Date inconnue (position antérieure au suivi)"
+msgstr "Unknown date (position recorded before tracking)"
+
+msgid "Dates"
+msgstr "Dates"
+
+msgid "Dernier message"
+msgstr "Last message"
+
+msgid "Dernière commande"
+msgstr "Last order"
+
+msgid "Dernière connexion"
+msgstr "Last sign-in"
+
+msgid "Dernière modification"
+msgstr "Last modified"
+
+msgid "Dernière saisie"
+msgstr "Last log"
+
+msgid "Dernières saisies"
+msgstr "Latest logs"
+
+msgid "Desactiver les tokens"
+msgstr "Deactivate tokens"
+
+msgid "Device Info"
+msgstr "Device info"
+
+msgid "Diffusion Email"
+msgstr "Email delivery"
+
+msgid "Dimension"
+msgstr "Size"
+
+msgid "Dimensions"
+msgstr "Dimensions"
+
+msgid "Disponibilite"
+msgstr "Availability"
+
+msgid "Données JSON brutes"
+msgstr "Raw JSON data"
+
+msgid ""
+"Données détaillées et réglages techniques. Le suivi quotidien se fait depuis"
+" le menu principal."
+msgstr ""
+"Detailed data and technical settings. Day-to-day follow-up is done from the "
+"main menu."
+
+msgid "Début"
+msgstr "Start"
+
+msgid "Déclaré le"
+msgstr "Reported on"
+
+msgid "Définir un mot de passe"
+msgstr "Set a password"
+
+msgid "Définir un nouveau mot de passe"
+msgstr "Set a new password"
+
+msgid "Désactiver le compte"
+msgstr "Disable account"
+
+msgid "Désactiver les comptes sélectionnés"
+msgstr "Disable selected accounts"
+
+msgid "Désactivé"
+msgstr "Disabled"
+
+msgid "E-mail"
+msgstr "Email"
+
+msgid "Eau (°C / O₂ / pH)"
+msgstr "Water (°C / O₂ / pH)"
+
+msgid "En attente"
+msgstr "Pending"
+
+msgid "En attente de confirmation du client"
+msgstr "Awaiting customer confirmation"
+
+msgid "En attente du client"
+msgstr "Awaiting customer"
+
+msgid "En cours"
+msgstr "Ongoing"
+
+#, python-format
+msgid "En cours depuis %(days)s j"
+msgstr "Open for %(days)s d"
+
+msgid "Envoyer"
+msgstr "Send"
+
+msgid "Erreur de chargement"
+msgstr "Loading error"
+
+msgid "Erreur interne lors de l'envoi de la réponse."
+msgstr "Internal error while sending the reply."
+
+msgid "Erreur interne lors de la génération de l'archive ZIP."
+msgstr "Internal error while generating the ZIP archive."
+
+msgid "Espèce"
+msgstr "Species"
+
+msgid "Espèce principale"
+msgstr "Main species"
+
+msgid "Etat"
+msgstr "Status"
+
+msgid "Expediteur"
+msgstr "Sender"
+
+msgid "Exécutions à date fixe."
+msgstr "Runs at a fixed date."
+
+msgid "Faible"
+msgstr "Poor"
+
+msgid "Ferme et cycle"
+msgstr "Farm and cycle"
+
+msgid "Fermes géolocalisées"
+msgstr "Geolocated farms"
+
+msgid "Fermes à relancer"
+msgstr "Farms to follow up"
+
+msgid "Filtrer"
+msgstr "Filter"
+
+msgid "Generate purchase orders in English"
+msgstr "Generate purchase orders in English"
+
+msgid "Générer les bons de commande en français"
+msgstr "Generate purchase orders in French"
+
+msgid "Géolocalisée"
+msgstr "Geolocated"
+
+msgid "Gérer le catalogue"
+msgstr "Manage catalogue"
+
+msgid "Heures silencieuses (push)"
+msgstr "Quiet hours (push)"
+
+msgid "Historique des cycles dans cette unité"
+msgstr "Cycle history in this unit"
+
+msgid "Historique des envois de rapports."
+msgstr "Report delivery history."
+
+msgid "Horaires de type cron."
+msgstr "Cron-style schedules."
+
+msgid "Horaires solaires."
+msgstr "Solar schedules."
+
+msgid "Identifiant unique UUID pour la synchronisation mobile"
+msgstr "Unique UUID for mobile sync"
+
+msgid "Identification"
+msgstr "Identification"
+
+msgid "Identité"
+msgstr "Identity"
+
+msgid "Identité et contact"
+msgstr "Identity and contact"
+
+msgid "Ignorées (déjà reçues ou annulées) : {}"
+msgstr "Skipped (already received or cancelled): {}"
+
+msgid "Ignorés (administrateurs ou votre propre compte) :"
+msgstr "Skipped (administrators or your own account):"
+
+msgid "Image"
+msgstr "Image"
+
+msgid "Image envoyée"
+msgstr "Image sent"
+
+msgid "Incidents ouverts"
+msgstr "Open incidents"
+
+msgid "Incidents sanitaires ouverts"
+msgstr "Open health incidents"
+
+msgid "Indicateurs calculés des cycles."
+msgstr "Computed cycle indicators."
+
+msgid "Indiquez le motif : il sera envoyé au client."
+msgstr "Enter the reason: it will be sent to the customer."
+
+msgid "Indisponibles :"
+msgstr "Unavailable:"
+
+msgid "Informations principales"
+msgstr "Main information"
+
+msgid "Inscrit le"
+msgstr "Joined on"
+
+msgid "Inscrite le"
+msgstr "Registered on"
+
+msgid "Intervalles de répétition."
+msgstr "Repeat intervals."
+
+msgid "Itinéraire"
+msgstr "Directions"
+
+msgid "Jamais"
+msgstr "Never"
+
+msgid "Journal quotidien (30 dernières saisies)"
+msgstr "Daily log (last 30 entries)"
+
+msgid ""
+"L'annulation est définitive. La commande ne pourra plus être livrée ni "
+"confirmée."
+msgstr ""
+"Cancellation is final. The order can no longer be delivered or confirmed."
+
+msgid "La commande {} a été annulée. Le client a été notifié."
+msgstr "Order {} was cancelled. The customer was notified."
+
+msgid "La commande {} était déjà annulée."
+msgstr "Order {} was already cancelled."
+
+msgid "Langue"
+msgstr "Language"
+
+msgid "Latitude GPS"
+msgstr "GPS latitude"
+
+msgid "Le compte a été supprimé (anonymisé)."
+msgstr "The account was deleted (anonymised)."
+
+msgid "Le contenu du message est requis."
+msgstr "Message content is required."
+
+msgid "Le mot de passe est requis."
+msgstr "Password is required."
+
+msgid "Le pisciculteur n'a jamais écrit au support."
+msgstr "The farmer has never written to support."
+
+msgid ""
+"Le pisciculteur n'a pas encore enregistré la position de sa ferme dans "
+"l'application."
+msgstr "The farmer has not yet saved the farm position in the app."
+
+msgid "Liaison objet"
+msgstr "Linked object"
+
+msgid "Lignes de commande, produit par produit."
+msgstr "Order lines, product by product."
+
+msgid "Livraison à domicile"
+msgstr "Home delivery"
+
+msgid ""
+"Livrées ou prêtes au retrait : le pisciculteur doit confirmer la réception "
+"dans l'application."
+msgstr ""
+"Delivered or ready for pickup: the farmer must confirm receipt in the app."
+
+msgid "Localisation GPS"
+msgstr "GPS location"
+
+msgid "Longitude GPS"
+msgstr "GPS longitude"
+
+msgid "Marquer comme envoye"
+msgstr "Mark as sent"
+
+msgid "Marquer comme lu"
+msgstr "Mark as read"
+
+msgid "Marquer livrée"
+msgstr "Mark delivered"
+
+msgid "Marquer vérifié"
+msgstr "Mark verified"
+
+msgid "Marqueur de suppression pour la synchronisation mobile"
+msgstr "Deletion marker for mobile sync"
+
+msgid "Media"
+msgstr "Media"
+
+msgid "Messages support un par un."
+msgstr "Support messages one by one."
+
+msgid "Metadonnees et canaux"
+msgstr "Metadata and channels"
+
+msgid "Modifier l'unité"
+msgstr "Edit unit"
+
+msgid "Modifier la fiche"
+msgstr "Edit record"
+
+msgid "Montants"
+msgstr "Amounts"
+
+msgid "Mortalité"
+msgstr "Mortality"
+
+msgid "Mortalité (période)"
+msgstr "Mortality (period)"
+
+msgid "Mortalité cumulée"
+msgstr "Cumulative mortality"
+
+msgid "Morts"
+msgstr "Dead"
+
+msgid "Mot de passe défini (jamais affiché ni stocké en clair)."
+msgstr "Password set (never shown or stored in plain text)."
+
+msgid "Mot de passe incorrect."
+msgstr "Incorrect password."
+
+msgid "Motif"
+msgstr "Reason"
+
+msgid "Motif (envoyé au client)"
+msgstr "Reason (sent to the customer)"
+
+msgid "Moyen"
+msgstr "Average"
+
+msgid "Métadonnées"
+msgstr "Metadata"
+
+msgid ""
+"Même traitement que « Supprimer mon compte » dans l'application : nom, "
+"téléphone, e-mail et position de la ferme sont effacés, la connexion est "
+"coupée. Les commandes et rapports restent pour la comptabilité, rattachés à "
+"un compte anonyme. Action définitive."
+msgstr ""
+"Same as “Delete my account” in the app: name, phone, email and farm position"
+" are erased and sign-in is cut off. Orders and reports stay for accounting, "
+"linked to an anonymous account. This cannot be undone."
+
+msgid "Nom"
+msgstr "Name"
+
+msgid "Nom commercial ou descriptif de l'exploitation"
+msgstr "Trade or descriptive name of the farm"
+
+msgid "Nom de la ferme"
+msgstr "Farm name"
+
+msgid "Nom du promoteur"
+msgstr "Promoter name"
+
+msgid "Nom du promoteur ou dirigeant de l'entreprise"
+msgstr "Name of the company's promoter or manager"
+
+msgid "Nom entreprise normalisé"
+msgstr "Normalised company name"
+
+msgid "Nom normalisé"
+msgstr "Normalised last name"
+
+msgid "Nombre total de bassins"
+msgstr "Total number of ponds"
+
+msgid "Nombre total de bassins d'élevage disponibles"
+msgstr "Total number of rearing ponds available"
+
+msgid "Non localisée"
+msgstr "Not located"
+
+msgid "Non lus"
+msgstr "Unread"
+
+msgid "Non renseignée"
+msgstr "Not provided"
+
+msgid "Notifications envoyées aux pisciculteurs."
+msgstr "Notifications sent to farmers."
+
+msgid "Nouveau mot de passe"
+msgstr "New password"
+
+msgid "Ouvert depuis"
+msgstr "Open for"
+
+msgid "Ouvrir"
+msgstr "Open"
+
+msgid "Ouvrir la conversation"
+msgstr "Open conversation"
+
+msgid "Ouvrir la fiche"
+msgstr "Open record"
+
+msgid "Ouvrir la fiche ferme"
+msgstr "Open farm record"
+
+msgid "Ouvrir la video"
+msgstr "Open video"
+
+msgid "PDF"
+msgstr "PDF"
+
+msgid "PDF genere avec succes pour commande {}"
+msgstr "PDF generated for order {}"
+
+msgid "PDF non généré"
+msgstr "PDF not generated"
+
+msgid "Passée le"
+msgstr "Placed on"
+
+msgid "Permissions techniques (lecture)."
+msgstr "Technical permissions (read-only)."
+
+msgid "Planification"
+msgstr "Scheduling"
+
+msgid "Plans d'alimentation calculés."
+msgstr "Computed feeding plans."
+
+msgid "Poids moyen"
+msgstr "Average weight"
+
+msgid "Points d'attention"
+msgstr "Points of attention"
+
+msgid "Poissons"
+msgstr "Fish"
+
+msgid "Poissons (départ → actuel)"
+msgstr "Fish (start → current)"
+
+msgid "Poissons actuels"
+msgstr "Current fish"
+
+msgid "Poissons en élevage"
+msgstr "Fish in production"
+
+msgid "Poissons touchés"
+msgstr "Fish affected"
+
+msgid "Position GPS"
+msgstr "GPS position"
+
+msgid "Position GPS enregistrée le"
+msgstr "GPS position saved on"
+
+msgid "Position enregistrée le"
+msgstr "Position saved on"
+
+msgid "Pour confirmer, saisissez les 4 derniers chiffres du numéro :"
+msgstr "To confirm, enter the last 4 digits of the phone number:"
+
+msgid "Principale espèce de poisson élevée"
+msgstr "Main fish species raised"
+
+msgid "Principale source d'approvisionnement en eau"
+msgstr "Main water source"
+
+msgid "Prix"
+msgstr "Price"
+
+msgid "Problème sanitaire"
+msgstr "Health issue"
+
+msgid "Production annuelle (kg)"
+msgstr "Annual production (kg)"
+
+msgid "Production annuelle estimée en kilogrammes"
+msgstr "Estimated annual production in kilograms"
+
+msgid "Promoteur"
+msgstr "Promoter"
+
+msgid "Promoteur :"
+msgstr "Promoter:"
+
+msgid "Préférences de notification par utilisateur."
+msgstr "Notification preferences per user."
+
+msgid "Prénom normalisé"
+msgstr "Normalised first name"
+
+msgid "Push tracking"
+msgstr "Push tracking"
+
+msgid "Période"
+msgstr "Period"
+
+msgid "ROI estimé"
+msgstr "Estimated ROI"
+
+msgid "Rapport"
+msgstr "Report"
+
+#, python-format
+msgid "Rapport %(report)s : échec de régénération."
+msgstr "Report %(report)s: regeneration failed."
+
+#, python-format
+msgid "Rapport %(report)s : échec de validation."
+msgstr "Report %(report)s: validation failed."
+
+msgid "Rapports et rappels automatiques."
+msgstr "Automatic reports and reminders."
+
+msgid "Rejetée"
+msgstr "Rejected"
+
+msgid "Rendre disponibles à la commande"
+msgstr "Make available for ordering"
+
+msgid "Reponse envoyee."
+msgstr "Reply sent."
+
+msgid "Retirer de la vente (indisponibles)"
+msgstr "Withdraw from sale (unavailable)"
+
+msgid "Retour"
+msgstr "Back"
+
+msgid "Reçues ce mois"
+msgstr "Received this month"
+
+msgid ""
+"Rien en attente : aucune commande à traiter, aucun message non lu, aucun "
+"incident ouvert."
+msgstr ""
+"Nothing pending: no order to handle, no unread message, no open incident."
+
+msgid ""
+"Rien à signaler : pas d'incident ouvert, saisies à jour, aucune action en "
+"attente."
+msgstr ""
+"Nothing to report: no open incident, logs up to date, no pending action."
+
+msgid "Réactiver le compte"
+msgstr "Reactivate account"
+
+msgid "Réactiver les comptes sélectionnés"
+msgstr "Reactivate selected accounts"
+
+msgid "Récoltes déclarées."
+msgstr "Declared harvests."
+
+msgid "Référentiel nutritionnel utilisé par les calculs."
+msgstr "Nutrition reference used by the calculations."
+
+msgid "Régénérer rapport(s) — nouveau PDF"
+msgstr "Regenerate report(s) — new PDF"
+
+msgid "Réinitialiser"
+msgstr "Reset"
+
+msgid "Répartition des poissons par unité et par cycle."
+msgstr "Fish distribution per unit and cycle."
+
+msgid "Résolu"
+msgstr "Resolved"
+
+#, python-format
+msgid "Résolu %(date)s"
+msgstr "Resolved %(date)s"
+
+msgid "Rôles de l'équipe (gestion, commerce, support)."
+msgstr "Team roles (management, commerce, support)."
+
+msgid "Sacs"
+msgstr "Bags"
+
+msgid "Saisie du jour faite"
+msgstr "Today's log done"
+
+msgid "Saisie du jour à faire"
+msgstr "Today's log to do"
+
+msgid "Saisie en retard"
+msgstr "Log overdue"
+
+msgid "Saisies"
+msgstr "Logs"
+
+msgid "Saisies (période)"
+msgstr "Logs (period)"
+
+msgid "Saisies et incidents"
+msgstr "Logs and incidents"
+
+msgid ""
+"Selection limitee a 10 commandes maximum. Veuillez reduire votre selection."
+msgstr "Selection limited to 10 orders. Please reduce your selection."
+
+msgid "Sessions de connexion de l'application."
+msgstr "App sign-in sessions."
+
+msgid "Sessions révoquées."
+msgstr "Revoked sessions."
+
+msgid "Seul le superuser peut valider les rapports."
+msgstr "Only the superuser can validate reports."
+
+msgid "Source d'eau"
+msgstr "Water source"
+
+msgid "Statut de certification"
+msgstr "Certification status"
+
+msgid "Statut de certification géré par les administrateurs"
+msgstr "Certification status managed by administrators"
+
+msgid "Statut juridique"
+msgstr "Legal status"
+
+msgid "Statut juridique de l'entreprise (SARL, SCOOP, etc.)"
+msgstr "Company legal status (SARL, SCOOP, etc.)"
+
+msgid "Suivant"
+msgstr "Next"
+
+msgid "Suivi sanitaire"
+msgstr "Health follow-up"
+
+msgid "Superficie totale (m²)"
+msgstr "Total area (m²)"
+
+msgid "Superficie totale de l'exploitation en mètres carrés"
+msgstr "Total farm area in square metres"
+
+msgid "Support"
+msgstr "Support"
+
+msgid "Supprimer ces comptes"
+msgstr "Delete these accounts"
+
+msgid "Supprimer des comptes"
+msgstr "Delete accounts"
+
+msgid "Supprimer définitivement"
+msgstr "Delete permanently"
+
+msgid "Supprimer le compte"
+msgstr "Delete account"
+
+msgid "Supprimer les comptes (anonymisation définitive)"
+msgstr "Delete accounts (permanent anonymisation)"
+
+msgid "Supprimé"
+msgstr "Deleted"
+
+msgid "Survie"
+msgstr "Survival"
+
+msgid "Suspendre la certification des fermes sélectionnées"
+msgstr "Suspend certification of selected farms"
+
+msgid "Suspendue"
+msgstr "Suspended"
+
+msgid "Titre"
+msgstr "Title"
+
+msgid "Token"
+msgstr "Token"
+
+msgid "Tous les cycles, toutes fermes confondues."
+msgstr "All cycles, across all farms."
+
+msgid "Tous les incidents"
+msgstr "All incidents"
+
+msgid "Tous les statuts"
+msgstr "All statuses"
+
+msgid "Tous les éléments de la ferme"
+msgstr "All farm records"
+
+msgid "Tous les événements sanitaires, résolus ou non."
+msgstr "All health events, resolved or not."
+
+msgid "Toutes les commandes"
+msgstr "All orders"
+
+msgid "Toutes les régions"
+msgstr "All regions"
+
+msgid "Toutes les saisies"
+msgstr "All logs"
+
+msgid "Toutes les unités de production."
+msgstr "All production units."
+
+msgid "Tranche d'âge"
+msgstr "Age group"
+
+msgid "Tranche d'âge de la personne"
+msgstr "Person's age group"
+
+msgid "Transferts de poissons entre unités."
+msgstr "Fish transfers between units."
+
+msgid "Tâches planifiées"
+msgstr "Scheduled tasks"
+
+msgid "Télécharger PDF(s) sélectionnés"
+msgstr "Download selected PDF(s)"
+
+msgid "Téléphone"
+msgstr "Phone"
+
+msgid "Téléphone marqué comme vérifié."
+msgstr "Phone marked as verified."
+
+msgid "Unité"
+msgstr "Unit"
+
+msgid "Unités"
+msgstr "Units"
+
+msgid "Unités de production"
+msgstr "Production units"
+
+msgid "Utilisateur propriétaire de cette ferme"
+msgstr "User who owns this farm"
+
+msgid "Valeur estimée"
+msgstr "Estimated value"
+
+msgid "Valeur marchande estimée"
+msgstr "Estimated market value"
+
+msgid "Valeur technique pour les recherches de connexion indexées"
+msgstr "Technical value for indexed sign-in lookups"
+
+msgid "Validation"
+msgstr "Validation"
+
+msgid "Valider rapport(s)"
+msgstr "Validate report(s)"
+
+msgid "Veuillez fournir soit le nom de connexion soit le numéro de téléphone."
+msgstr "Please provide either the login name or the phone number."
+
+msgid "Vidéo"
+msgstr "Video"
+
+msgid "Voir la fiche"
+msgstr "View record"
+
+msgid "Voir sur OpenStreetMap"
+msgstr "View on OpenStreetMap"
+
+msgid "Voir sur la carte"
+msgstr "View on map"
+
+msgid "Vous :"
+msgstr "You:"
+
+msgid "Vous n'avez pas acces a la boite de support."
+msgstr "You do not have access to the support inbox."
+
+msgid "Vous n'avez pas la permission de désactiver des comptes."
+msgstr "You do not have permission to disable accounts."
+
+msgid "Vous n'avez pas la permission de modifier la certification."
+msgstr "You do not have permission to change certification."
+
+msgid "Vous n'avez pas la permission de modifier les notifications."
+msgstr "You do not have permission to change notifications."
+
+msgid "Vous n'avez pas la permission de modifier les tokens."
+msgstr "You do not have permission to change tokens."
+
+msgid "Vous n'avez pas la permission de repondre."
+msgstr "You do not have permission to reply."
+
+msgid "Vous n'avez pas la permission de réactiver des comptes."
+msgstr "You do not have permission to reactivate accounts."
+
+msgid ""
+"Vérifiez la commande avant de l'annuler. Le client recevra une notification "
+"avec le motif."
+msgstr ""
+"Check the order before cancelling it. The customer will receive a "
+"notification with the reason."
+
+msgid "WhatsApp"
+msgstr "WhatsApp"
+
+msgid "Zone d'intervention"
+msgstr "Operating area"
+
+msgid "Zone géographique d'intervention de l'activité"
+msgstr "Geographic operating area of the activity"
+
+msgid "fermes géolocalisées"
+msgstr "geolocated farms"
+
+msgid "hors ligne"
+msgstr "offline"
+
+msgid "sans position GPS"
+msgstr "without GPS position"
+
+#, python-format
+msgid "sur %(initial)s au départ"
+msgstr "out of %(initial)s at start"
+
+msgid "{count} certification(s) suspendue(s)."
+msgstr "{count} certification(s) suspended."
+
+msgid "{count} compte(s) désactivé(s)."
+msgstr "{count} account(s) disabled."
+
+msgid "{count} compte(s) réactivé(s)."
+msgstr "{count} account(s) reactivated."
+
+msgid "{count} compte(s) supprimé(s) (anonymisés)."
+msgstr "{count} account(s) deleted (anonymised)."
+
+msgid "{count} ferme(s) certifiee(s)."
+msgstr "{count} farm(s) certified."
+
+msgid "{count} ferme(s) certifiée(s)."
+msgstr "{count} farm(s) certified."
+
+msgid "{count} produit(s) rendu(s) disponible(s)."
+msgstr "{count} product(s) made available."
+
+msgid "{count} produit(s) retiré(s) de la vente."
+msgstr "{count} product(s) withdrawn from sale."
+
+msgid "{count} utilisateur(s) verifie(s)."
+msgstr "{count} user(s) verified."
+
+msgid "{} PDFs generes avec succes et archives dans un ZIP"
+msgstr "{} PDFs generated and bundled in a ZIP"
+
+msgid "{} notification(s) marquee(s) comme envoyee(s)."
+msgstr "{} notification(s) marked as sent."
+
+msgid "{} notification(s) marquee(s) comme lue(s)."
+msgstr "{} notification(s) marked as read."
+
+msgid "{} rapport(s) régénéré(s)."
+msgstr "{} report(s) regenerated."
+
+msgid "{} rapport(s) validé(s)."
+msgstr "{} report(s) validated."
+
+msgid "{} token(s) active(s)."
+msgstr "{} token(s) activated."
+
+msgid "{} token(s) desactive(s)."
+msgstr "{} token(s) deactivated."
+
+msgid "À préparer"
+msgstr "To prepare"
+
+msgid "À préparer / livrer"
+msgstr "To prepare / deliver"
+
+msgid "À traiter maintenant"
+msgstr "To handle now"
+
+msgid "État"
+msgstr "Status"
+
+msgid "État actuel"
+msgstr "Current status"
+
+msgid "Événement"
+msgstr "Event"
+
+msgid "Événements sanitaires"
+msgstr "Health events"

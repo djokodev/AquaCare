@@ -84,12 +84,20 @@ class AccountDeletionService:
         )
         cleanup_ports = cleanup_ports or get_default_account_cleanup_ports()
 
-        if user.is_active:
+        # Idempotent : un compte déjà anonymisé garde son numéro factice. Un
+        # compte simplement désactivé par un administrateur (is_active=False)
+        # doit, lui, être réellement anonymisé.
+        already_anonymized = (
+            not user.is_active
+            and user.first_name == "Compte"
+            and user.last_name == "Supprimé"
+        )
+        if already_anonymized:
+            anonymized_phone = user.phone_number
+        else:
             user.set_unusable_password()
             user.save(update_fields=["password"])
             anonymized_phone = AccountDeletionService._generate_anonymized_phone(user.id)
-        else:
-            anonymized_phone = user.phone_number
 
         deleted_farm_name = AccountDeletionService._resolve_deleted_farm_name(
             user.id,

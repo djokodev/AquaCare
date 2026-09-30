@@ -15,8 +15,6 @@ ADMIN_CSS = BASE_DIR / 'apps' / 'common' / 'static' / 'css' / 'admin_custom.css'
 # Écrans antérieurs à cette règle, à migrer vers les tokens lors de leur
 # prochaine modification. Ne pas allonger cette liste.
 LEGACY_ALLOWLIST = {
-    'apps/accounts/templates/admin/accounts/farm_map.html',
-    'apps/chat/templates/chat/support_inbox.html',
 }
 
 
@@ -47,3 +45,13 @@ def test_every_semantic_token_has_a_dark_theme_value():
     # Couleurs identiques dans les deux thèmes (fonds forts avec texte blanc).
     same_in_both = {'--aq-danger', '--aq-on-strong', '--aq-brand-strong'}
     assert light_tokens - same_in_both <= dark_tokens
+
+
+def test_admin_python_files_render_without_inline_styles():
+    """Les colonnes et aperçus générés en Python utilisent aussi les classes .aq-*."""
+    offenders = []
+    for path in sorted(BASE_DIR.glob('apps/*/admin.py')):
+        text = path.read_text(encoding='utf-8')
+        if 'style=' in text or HEX_COLOR.search(text):
+            offenders.append(path.relative_to(BASE_DIR).as_posix())
+    assert offenders == [], f'Styles en ligne dans : {offenders} (utilisez common.admin_ui)'

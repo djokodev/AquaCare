@@ -23,23 +23,51 @@ from common.admin_mixins import (
     SecuredModelAdmin,
 )
 from common.admin_policies import RBACConstants
+from common.admin_ui import badge, muted
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.forms import ReadOnlyPasswordHashWidget
+from django.contrib.auth.hashers import UNUSABLE_PASSWORD_PREFIX
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count, DateTimeField, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
-from django.http import JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 
 from .admin_serializers import FarmMapSerializer
 from .models import FarmProfile, User
+from .services.account_deletion_service import AccountDeletionService
 from .services.farm_supervision_service import FarmSupervisionService
 from .services.farm_workspace_service import FarmWorkspaceService
+from .services.user_workspace_service import UserWorkspaceService
+
+
+class PasswordStatusWidget(ReadOnlyPasswordHashWidget):
+    """Affiche seulement si un mot de passe existe, jamais l'empreinte."""
+
+    template_name = 'accounts/widgets/password_status.html'
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        context['summary'] = []
+        context['has_password'] = bool(value) and not value.startswith(UNUSABLE_PASSWORD_PREFIX)
+        return context
+
+
+def revoke_user_sessions(user) -> None:
+    """Coupe les sessions de l'application (jetons de rafraîchissement)."""
+    try:
+        from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+    except ImportError:  # pragma: no cover - dépendance optionnelle
+        return
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
 
 
 class AccountsAdminRoleMixin:
@@ -49,6 +77,8 @@ class AccountsAdminRoleMixin:
         'verify_users',
         'certify_farms',
         'suspend_certifications',
+        'deactivate_users',
+        'reactivate_users',
     )
 
     def _is_superuser(self, request) -> bool:
@@ -75,34 +105,6 @@ class AccountsAdminRoleMixin:
         return False
 
 
-class FarmProfileInline(admin.StackedInline):
-    """
-    Inline pour editer le FarmProfile directement depuis la page User.
-    """
-    model = FarmProfile
-    extra = 0
-    fields = (
-        'farm_name', 'certification_status',
-        'total_ponds', 'total_area_m2', 'water_source', 'main_species',
-        'annual_production_kg'
-    )
-    readonly_fields = ('id', 'created_at', 'updated_at')
-
-    def has_change_permission(self, request, obj=None):
-        """Seuls managers et superusers peuvent modifier."""
-        if request.user.is_superuser:
-            return True
-        return has_capability_and_permission(
-            request.user,
-            AdminCapability.MANAGE_ACCOUNTS,
-            "accounts.change_farmprofile",
-        )
-
-    def has_delete_permission(self, request, obj=None):
-        """Seul superuser peut supprimer."""
-        return request.user.is_superuser
-
-
 @admin.register(User)
 class UserAdmin(
     AccountsAdminRoleMixin,
@@ -123,8 +125,8 @@ class UserAdmin(
     change_list_template = "admin/change_list_responsive.html"
 
     list_display = (
-        'phone_number', 'display_name', 'account_type', 'activity_type',
-        'region', 'is_verified', 'farm_certification_status', 'is_staff_display',
+        'user_workspace_link', 'phone_number', 'account_type', 'activity_type',
+        'region', 'account_status', 'farm_certification_status', 'is_staff_display',
         'date_joined'
     )
     list_filter = (
@@ -138,41 +140,39 @@ class UserAdmin(
     ordering = ('-date_joined',)
 
     # Actions admin
-    actions = ['verify_users', 'certify_farms', 'suspend_certifications']
+    actions = [
+        'verify_users', 'deactivate_users', 'reactivate_users',
+        'certify_farms', 'suspend_certifications', 'anonymize_accounts',
+    ]
 
     fieldsets = (
-        (_('Informations de base'), {
-            'fields': ('phone_number', 'email', 'password')
-        }),
-        (_('Informations personnelles'), {
+        (_('Identité'), {
             'fields': (
-                'first_name', 'last_name', 'business_name', 'account_type',
-                'language_preference', 'is_verified'
+                'first_name', 'last_name', 'account_type', 'business_name',
+                'legal_status', 'promoter_name', 'age_group',
             )
         }),
-        (_('Activite aquacole'), {
-            'fields': ('activity_type', 'intervention_zone')
+        (_('Connexion et contact'), {
+            'fields': ('phone_number', 'is_verified', 'email', 'password', 'language_preference')
         }),
-        (_('Localisation'), {
-            'fields': ('region', 'department', 'district', 'city', 'neighborhood'),
-            'classes': ('collapse',)
+        (_('Activité et localisation'), {
+            'fields': (
+                'activity_type', 'intervention_zone',
+                'region', 'department', 'district', 'city', 'neighborhood',
+            )
         }),
-        (_('Entreprise'), {
-            'fields': ('legal_status', 'promoter_name'),
-            'classes': ('collapse',)
+        (_('Ferme'), {
+            'fields': ('farm_link',)
         }),
-        (_('Personne physique'), {
-            'fields': ('age_group',),
-            'classes': ('collapse',)
-        }),
-        (_('Permissions'), {
+        (_("Accès à l'administration"), {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
-            'classes': ('collapse',),
-            'description': _('Seul le superuser peut modifier ces champs.')
+            'description': _(
+                "Le rôle (gestion, commerce, support) se donne par le groupe. "
+                "Seul le superadministrateur peut modifier ces champs."
+            ),
         }),
-        (_('Dates importantes'), {
-            'fields': ('last_login', 'date_joined'),
-            'classes': ('collapse',)
+        (_('Dates'), {
+            'fields': ('date_joined', 'last_login')
         }),
     )
 
@@ -192,7 +192,7 @@ class UserAdmin(
         }),
     )
 
-    inlines = [FarmProfileInline]
+    readonly_fields = ('farm_link', 'date_joined', 'last_login')
 
     # Champs proteges pour non-superusers
     protected_fields = ['is_staff', 'is_superuser', 'groups', 'user_permissions']
@@ -342,18 +342,17 @@ class UserAdmin(
 
     def has_delete_permission(self, request, obj=None):
         """
-        Seul superuser peut supprimer des utilisateurs.
-        Impossible de supprimer un autre superuser ou soi-meme.
+        Pas de suppression brute : elle casserait les commandes, rapports et
+        journaux liés. La suppression d'un compte passe par l'anonymisation
+        (même traitement que « Supprimer mon compte » dans l'application).
         """
+        return False
+
+    def _can_anonymize(self, request, target=None) -> bool:
         if not self._is_superuser(request):
             return False
-
-        if obj:
-            if obj.is_superuser:
-                return False
-            if obj.pk == request.user.pk:
-                return False
-
+        if target is not None and (target.is_superuser or target.is_staff or target.pk == request.user.pk):
+            return False
         return True
 
     def get_actions(self, request):
@@ -364,6 +363,7 @@ class UserAdmin(
 
         if not self._is_superuser(request):
             actions.pop('delete_selected', None)
+            actions.pop('anonymize_accounts', None)
 
             if not self._is_manager(request):
                 for action_name in self.manager_actions:
@@ -430,20 +430,10 @@ class UserAdmin(
     is_staff_display.admin_order_field = 'is_staff'
 
     def farm_certification_status(self, obj):
-        """Affiche le statut de certification avec couleur."""
         if hasattr(obj, 'farm_profile'):
             status = obj.farm_profile.certification_status
-            colors = {
-                'certified': 'green',
-                'pending': 'orange',
-                'suspended': 'red',
-                'rejected': 'darkred'
-            }
-            return format_html(
-                '<span style="color: {};">{}</span>',
-                colors.get(status, 'black'),
-                obj.farm_profile.get_certification_status_display()
-            )
+            tones = {'certified': 'ok', 'pending': 'warn', 'suspended': 'danger', 'rejected': 'danger'}
+            return badge(obj.farm_profile.get_certification_status_display(), tones.get(status, 'muted'))
         return '-'
     farm_certification_status.short_description = _('Certification')
     farm_certification_status.admin_order_field = 'farm_profile__certification_status'
@@ -460,6 +450,157 @@ class UserAdmin(
         )
     support_context_link.short_description = _('Utilisateur')
     support_context_link.admin_order_field = 'first_name'
+
+    # --- Fiche utilisateur ---
+
+    def get_urls(self):
+        custom = [
+            path(
+                '<uuid:object_id>/fiche/',
+                self.admin_site.admin_view(self.workspace_view),
+                name='accounts_user_workspace',
+            ),
+        ]
+        return custom + super().get_urls()
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if 'password' in form.base_fields:
+            form.base_fields['password'].widget = PasswordStatusWidget()
+            form.base_fields['password'].help_text = ''
+        return form
+
+    def workspace_view(self, request, object_id):
+        target = get_object_or_404(self.get_queryset(request), pk=object_id)
+        if not self.has_view_permission(request, target):
+            raise PermissionDenied
+        if request.method == 'POST':
+            return self._workspace_post(request, target)
+        can_change = self.has_change_permission(request, target)
+        context = {
+            **self.admin_site.each_context(request),
+            **UserWorkspaceService.build(
+                user=request.user,
+                target=target,
+                can_view_phone=self._can_view_phone_number(request),
+            ),
+            'opts': self.model._meta,
+            'title': target.display_name or target.phone_number,
+            'change_url': reverse('admin:accounts_user_change', args=[target.pk]) if can_change else '',
+            'password_url': (
+                reverse('admin:auth_user_password_change', args=[target.pk])
+                if self._is_superuser(request) or (can_change and not target.is_staff) else ''
+            ),
+            'can_manage': self._can_manage_accounts(request) and can_change,
+            'can_anonymize': self._can_anonymize(request, target),
+        }
+        return render(request, 'admin/accounts/user/workspace.html', context)
+
+    def _workspace_post(self, request, target):
+        operation = request.POST.get('op')
+        fiche_url = reverse('admin:accounts_user_workspace', args=[target.pk])
+        if operation == 'anonymize':
+            if not self._can_anonymize(request, target):
+                raise PermissionDenied
+            if request.POST.get('confirm') != target.phone_number[-4:]:
+                messages.error(request, _("Confirmation incorrecte : saisissez les 4 derniers chiffres du numéro."))
+                return HttpResponseRedirect(fiche_url)
+            AccountDeletionService.anonymize_user_account(target)
+            self.log_change(request, target, "Compte anonymisé depuis l'admin")
+            messages.success(request, _("Le compte a été supprimé (anonymisé)."))
+            return HttpResponseRedirect(reverse('admin:accounts_user_changelist'))
+        if not (self._can_manage_accounts(request) and self.has_change_permission(request, target)):
+            raise PermissionDenied
+        if target.is_superuser or target.pk == request.user.pk:
+            raise PermissionDenied
+        updates = {
+            'verify': ({'is_verified': True}, _("Téléphone marqué comme vérifié.")),
+            'deactivate': ({'is_active': False}, _("Compte désactivé : l'utilisateur ne peut plus se connecter.")),
+            'reactivate': ({'is_active': True}, _("Compte réactivé.")),
+        }
+        if operation not in updates:
+            return HttpResponseRedirect(fiche_url)
+        fields, message = updates[operation]
+        User.objects.filter(pk=target.pk).update(**fields)
+        if operation == 'deactivate':
+            revoke_user_sessions(target)
+        self.log_change(request, target, f"Fiche utilisateur : {operation}")
+        messages.success(request, message)
+        return HttpResponseRedirect(fiche_url)
+
+    def user_workspace_link(self, obj):
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:accounts_user_workspace', args=[obj.pk]),
+            obj.display_name or obj.phone_number,
+        )
+    user_workspace_link.short_description = _('Utilisateur')
+    user_workspace_link.admin_order_field = 'first_name'
+
+    def account_status(self, obj):
+        if not obj.is_active:
+            return badge(_('Désactivé'), 'danger')
+        if obj.is_verified:
+            return badge(_('Actif · vérifié'), 'ok')
+        return badge(_('Actif · non vérifié'), 'warn')
+    account_status.short_description = _('Compte')
+    account_status.admin_order_field = 'is_active'
+
+    def farm_link(self, obj):
+        farm = getattr(obj, 'farm_profile', None) if obj and obj.pk else None
+        if farm is None or farm.is_deleted:
+            return _('Aucune ferme')
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:accounts_farmprofile_supervision', args=[farm.pk]),
+            farm.farm_name,
+        )
+    farm_link.short_description = _('Ferme')
+
+    @admin.action(description=_("Désactiver les comptes sélectionnés"))
+    def deactivate_users(self, request, queryset):
+        if not self._ensure_manager_access(request, _("Vous n'avez pas la permission de désactiver des comptes.")):
+            return
+        targets = list(queryset.filter(is_superuser=False, is_active=True).exclude(pk=request.user.pk))
+        if not self._is_superuser(request):
+            targets = [user for user in targets if not user.is_staff]
+        User.objects.filter(pk__in=[user.pk for user in targets]).update(is_active=False)
+        for user in targets:
+            revoke_user_sessions(user)
+        self._log_bulk_change(request, targets, "Compte désactivé via action admin")
+        messages.success(request, _('{count} compte(s) désactivé(s).').format(count=len(targets)))
+
+    @admin.action(description=_("Réactiver les comptes sélectionnés"))
+    def reactivate_users(self, request, queryset):
+        if not self._ensure_manager_access(request, _("Vous n'avez pas la permission de réactiver des comptes.")):
+            return
+        targets = list(queryset.filter(is_active=False).exclude(last_name='Supprimé', first_name='Compte'))
+        if not self._is_superuser(request):
+            targets = [user for user in targets if not user.is_staff]
+        User.objects.filter(pk__in=[user.pk for user in targets]).update(is_active=True)
+        self._log_bulk_change(request, targets, "Compte réactivé via action admin")
+        messages.success(request, _('{count} compte(s) réactivé(s).').format(count=len(targets)))
+
+    @admin.action(description=_("Supprimer les comptes (anonymisation définitive)"))
+    def anonymize_accounts(self, request, queryset):
+        if not self._is_superuser(request):
+            raise PermissionDenied
+        targets = [user for user in queryset if self._can_anonymize(request, user)]
+        if request.POST.get('apply') == '1':
+            for user in targets:
+                AccountDeletionService.anonymize_user_account(user)
+                self.log_change(request, user, "Compte anonymisé via action admin")
+            messages.success(request, _('{count} compte(s) supprimé(s) (anonymisés).').format(count=len(targets)))
+            return None
+        return render(request, 'admin/accounts/user/anonymize_confirmation.html', {
+            **self.admin_site.each_context(request),
+            'opts': self.model._meta,
+            'title': _('Supprimer des comptes'),
+            'targets': targets,
+            'skipped': [user for user in queryset if user not in targets],
+            'selected_ids': [str(user.pk) for user in queryset],
+            'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
+        })
 
     # --- Actions securisees ---
 
@@ -518,10 +659,14 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
     change_list_template = "admin/change_list_responsive.html"
 
     list_display = (
-        'farm_workspace_link', 'user_display_name', 'farm_location',
-        'certification_status', 'active_unit_count', 'active_cycle_count',
+        'farm_workspace_link', 'user_display_name', 'farm_location', 'gps_status',
+        'certification_badge', 'active_unit_count', 'active_cycle_count',
         'unresolved_incident_count', 'last_operational_activity',
     )
+    actions = ['certify_selected_farms', 'suspend_selected_farms']
+    # La carte affiche toutes les fermes d'un coup (liste + marqueurs), dans
+    # une limite qui garde la réponse légère.
+    MAP_PAGE_SIZE = 500
     list_filter = (
         'certification_status', 'created_at', 'user__region',
         'user__activity_type'
@@ -574,9 +719,9 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
         return True
 
     def has_add_permission(self, request):
-        return request.user.is_superuser or (
-            self._is_manager(request) and request.user.has_perm("accounts.add_farmprofile")
-        )
+        # La ferme naît avec le compte du pisciculteur (inscription ou
+        # « Utilisateurs > Ajouter ») : pas de ferme orpheline créée ici.
+        return False
 
     def has_change_permission(self, request, obj=None):
         return request.user.is_superuser or (
@@ -584,12 +729,44 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
         )
 
     def has_delete_permission(self, request, obj=None):
-        return request.user.is_superuser
+        # Une ferme ne se supprime pas seule : on supprime (anonymise) le
+        # compte du pisciculteur depuis sa fiche utilisateur.
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not self._can_manage_accounts(request):
+            actions.pop('certify_selected_farms', None)
+            actions.pop('suspend_selected_farms', None)
+        return actions
+
+    def _set_certification(self, request, queryset, status, message):
+        if not self._ensure_manager_access(request, _("Vous n'avez pas la permission de modifier la certification.")):
+            return
+        farms = list(queryset.exclude(certification_status=status))
+        FarmProfile.objects.filter(pk__in=[farm.pk for farm in farms]).update(certification_status=status)
+        for farm in farms:
+            self.log_change(request, farm, f"Certification : {status}")
+        messages.success(request, message.format(count=len(farms)))
+
+    @admin.action(description=_("Certifier les fermes sélectionnées"))
+    def certify_selected_farms(self, request, queryset):
+        self._set_certification(request, queryset, 'certified', _('{count} ferme(s) certifiée(s).'))
+
+    @admin.action(description=_("Suspendre la certification des fermes sélectionnées"))
+    def suspend_selected_farms(self, request, queryset):
+        self._set_certification(request, queryset, 'suspended', _('{count} certification(s) suspendue(s).'))
+
+    def certification_badge(self, obj):
+        tones = {'certified': 'ok', 'pending': 'warn', 'suspended': 'danger', 'rejected': 'danger'}
+        return badge(obj.get_certification_status_display(), tones.get(obj.certification_status, 'muted'))
+    certification_badge.short_description = _('Certification')
+    certification_badge.admin_order_field = 'certification_status'
 
     def get_list_display(self, request):
         if request.user.is_superuser or self._is_manager(request):
             return super().get_list_display(request)
-        return ("farm_workspace_link", "user_display_name", "certification_status", "created_at")
+        return ("farm_workspace_link", "user_display_name", "certification_badge", "created_at")
 
     def get_list_display_links(self, request, list_display):
         # Le lien fonctionnel principal est rendu par ``farm_workspace_link``.
@@ -686,25 +863,26 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
     farm_workspace_link.admin_order_field = 'farm_name'
 
     def farm_location(self, obj):
-        region = obj.user.get_region_display() or _("Inconnue")
-        city = obj.user.city or _("Ville inconnue")
-        return _("%(region)s, %(city)s") % {"region": region, "city": city}
-    farm_location.short_description = _("Region et ville")
+        parts = [obj.user.get_region_display() if obj.user.region else "", obj.user.city]
+        return " · ".join(part for part in parts if part) or "—"
+    farm_location.short_description = _("Localisation")
     farm_location.admin_order_field = "user__region"
 
     def active_unit_count(self, obj):
         return obj._active_unit_count
-    active_unit_count.short_description = _("Unites non archivees")
+    active_unit_count.short_description = _("Unités")
     active_unit_count.admin_order_field = "_active_unit_count"
 
     def active_cycle_count(self, obj):
         return obj._active_cycle_count
-    active_cycle_count.short_description = _("Cycles actifs")
+    active_cycle_count.short_description = _("Cycles en cours")
     active_cycle_count.admin_order_field = "_active_cycle_count"
 
     def unresolved_incident_count(self, obj):
-        return obj._unresolved_incident_count
-    unresolved_incident_count.short_description = _("Incidents non resolus")
+        if obj._unresolved_incident_count:
+            return badge(obj._unresolved_incident_count, 'danger')
+        return 0
+    unresolved_incident_count.short_description = _("Incidents ouverts")
     unresolved_incident_count.admin_order_field = "_unresolved_incident_count"
 
     def last_operational_activity(self, obj):
@@ -720,14 +898,16 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
             )
         ]
         known_values = [value for value in values if value is not None]
-        return max(known_values) if known_values else _("Inconnue")
+        if not known_values:
+            return muted(_("Aucune"))
+        return timezone.localtime(max(known_values)).strftime('%d/%m/%Y')
     last_operational_activity.short_description = _("Derniere activite")
 
     def gps_status(self, obj):
         """Affiche si la ferme est géolocalisée."""
         if obj.latitude and obj.longitude:
-            return format_html('<span style="color: green;">📍 Géolocalisée</span>')
-        return format_html('<span style="color: #aaa;">— Non localisée</span>')
+            return badge(_('Géolocalisée'), 'ok')
+        return badge(_('Non localisée'), 'muted')
     gps_status.short_description = _('GPS')
 
     def get_urls(self):
@@ -765,8 +945,10 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
 
         context = {
             **self.admin_site.each_context(request),
-            'title': 'Carte des fermes',
+            'title': _('Carte des fermes'),
             'opts': self.model._meta,
+            'region_choices': User._meta.get_field('region').choices,
+            'status_choices': FarmProfile._meta.get_field('certification_status').choices,
         }
         return render(request, 'admin/accounts/farm_map.html', context)
 
@@ -800,12 +982,16 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
         if certification_status:
             queryset = queryset.filter(certification_status=certification_status)
 
-        paginator = Paginator(queryset, 50)
+        paginator = Paginator(queryset.order_by('farm_name'), self.MAP_PAGE_SIZE)
         page = paginator.get_page(request.GET.get('page') or 1)
         serializer = FarmMapSerializer(page.object_list, many=True)
+        without_gps = FarmProfile.objects.filter(is_deleted=False).filter(
+            Q(latitude__isnull=True) | Q(longitude__isnull=True)
+        ).count()
 
         return JsonResponse({
             'count': paginator.count,
+            'without_gps': without_gps,
             'next': page.next_page_number() if page.has_next() else None,
             'previous': page.previous_page_number() if page.has_previous() else None,
             'results': serializer.data,

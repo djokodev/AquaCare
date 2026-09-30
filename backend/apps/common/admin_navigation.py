@@ -71,8 +71,8 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
             append(
                 _item(
                     "activity",
-                    _("Activites et alertes"),
-                    "fas fa-bell",
+                    _("Saisies et incidents"),
+                    "fas fa-clipboard-list",
                     "admin:aquacare_activity_center",
                     "activity_alerts",
                 )
@@ -84,19 +84,21 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
                 _item(
                     "reports",
                     _("Rapports"),
-                    "fas fa-chart-line",
+                    "fas fa-file-alt",
                     "admin:aquaculture_productionreport_changelist",
                     "reports",
                 )
             )
 
-    if commerce:
+    if commerce and has_capability_and_permission(
+        user, AdminCapability.VIEW_COMMERCE, "commerce.view_order"
+    ):
         append(
             _item(
-                "commerce_dashboard",
-                _("Tableau de bord commerce"),
-                "fas fa-chart-pie",
-                "admin:index",
+                "commerce",
+                _("Commerce"),
+                "fas fa-store",
+                "admin:aquacare_commerce",
             )
         )
         if has_capability_and_permission(user, AdminCapability.VIEW_COMMERCE, "commerce.view_order"):
@@ -107,7 +109,6 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
     if support:
         if has_capability_and_permission(user, AdminCapability.MANAGE_SUPPORT, "chat.view_conversation"):
             append(_item("support", _("Boite de reception"), "fas fa-inbox", "admin:chat_support_inbox", "chat"))
-            append(_item("conversations", _("Conversations"), "fas fa-comments", "admin:chat_conversation_changelist"))
         if has_capability_and_permission(user, AdminCapability.VIEW_USERS, "accounts.view_user"):
             append(_item("users", _("Utilisateurs"), "fas fa-users", "admin:accounts_user_changelist"))
         if has_capability_and_permission(
@@ -119,3 +120,54 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
         append(_item("system", _("Outils systeme"), "fas fa-cogs", "admin:aquacare_system_tools"))
 
     return items
+
+
+# Écrans hors menu rattachés à l'entrée qui les contient logiquement.
+NAVIGATION_ALIASES = {
+    "activity": ("admin:aquaculture_sanitarylog_changelist", "admin:aquaculture_cyclelog_changelist"),
+    "farms": (
+        "admin:aquaculture_productionunit_changelist",
+        "admin:aquaculture_productioncycle_changelist",
+        "admin:aquaculture_cycleunitallocation_changelist",
+    ),
+    "reports": ("admin:aquaculture_reportdispatchlog_changelist",),
+    "orders": ("admin:commerce_orderitem_changelist",),
+    "support": ("admin:chat_conversation_changelist", "admin:chat_message_changelist"),
+}
+
+
+def _alias_prefixes(key: str) -> list[str]:
+    prefixes = []
+    for url_name in NAVIGATION_ALIASES.get(key, ()):
+        try:
+            prefixes.append(reverse(url_name))
+        except NoReverseMatch:
+            continue
+    return prefixes
+
+
+def active_navigation_key(items: list[AdminNavigationItem], path: str) -> str | None:
+    """
+    Élément du menu à surligner : celui dont l'adresse est le plus long préfixe
+    de la page courante (une fiche ferme surligne « Fermes », la carte surligne
+    « Carte des fermes »). Le tableau de bord n'est actif que sur sa propre page.
+    Les écrans hors menu surlignent l'entrée qui les contient, sinon « Outils
+    système » pour le superadministrateur.
+    """
+    best_key, best_length = None, -1
+    for item in items:
+        for base in [item.url.split("#", 1)[0], *_alias_prefixes(item.key)]:
+            if base == path or (base.count("/") > 2 and path.startswith(base)):
+                if len(base) > best_length:
+                    best_key, best_length = item.key, len(base)
+    if best_key is None and any(item.key == "system" for item in items):
+        index = reverse("admin:index")
+        excluded = []
+        for url_name in ("admin:aquacare_global_search", "admin:password_change", "admin:logout"):
+            try:
+                excluded.append(reverse(url_name))
+            except NoReverseMatch:
+                continue
+        if path != index and path.startswith(index) and not any(path.startswith(url) for url in excluded):
+            best_key = "system"
+    return best_key

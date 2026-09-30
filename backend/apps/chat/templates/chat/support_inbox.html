@@ -1,510 +1,119 @@
 {% extends "admin/base_site.html" %}
 {% load static i18n %}
+{% comment %}
+  Messagerie support : liste des conversations à gauche, fil à droite.
+  La zone occupe toute la hauteur disponible et garde la même taille d'une
+  conversation à l'autre (seul le fil défile). Composants et tokens .aq-*
+  uniquement (admin_custom.css), aucune couleur en dur.
+{% endcomment %}
 
 {% block title %}{% translate "Boite Support" %} - {{ site_header }}{% endblock %}
-
-{% block extrahead %}
-{{ block.super }}
-<style>
-  :root {
-    --green-primary: #059669;
-    --green-dark: #047857;
-    --cream: #f8fafc;
-    --gray-dark: #0f172a;
-    --gray-light: #cbd5e1;
-  }
-
-  .inbox-layout {
-    display: grid;
-    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-    gap: 16px;
-    min-height: 560px;
-  }
-
-  .inbox-sidebar {
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 12px;
-    padding: 16px;
-    overflow-y: auto;
-    max-height: min(680px, calc(100vh - 230px));
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-  }
-
-  .inbox-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #cbd5e1;
-  }
-
-  .inbox-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--gray-dark);
-  }
-
-  .inbox-chip {
-    background: var(--green-primary);
-    color: #fff;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .conv-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .conv-item {
-    display: block;
-    border: 1px solid #cbd5e1;
-    border-radius: 10px;
-    padding: 12px;
-    background: #f8fafc;
-    cursor: pointer;
-    text-decoration: none;
-    color: inherit;
-    transition: all 0.15s ease;
-  }
-
-  .conv-item:hover {
-    border-color: var(--green-primary);
-    background: #fff;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
-  }
-
-  .conv-item.active {
-    border-color: var(--green-primary);
-    background: rgba(5, 150, 105, 0.08);
-    box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.3);
-  }
-
-  .conversation-summary {
-    min-width: 0;
-  }
-
-  .conv-item .conv-title {
-    font-weight: 600;
-    color: var(--gray-dark);
-    margin-bottom: 4px;
-    font-size: 14px;
-  }
-
-  .conv-item .conv-meta {
-    font-size: 11px;
-    color: #475569;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .conv-item .conv-preview {
-    font-size: 12px;
-    color: #475569;
-    margin-top: 6px;
-    line-height: 1.4;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .badge-unread {
-    background: #dc2626;
-    color: #fff;
-    padding: 2px 6px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 700;
-  }
-
-  .inbox-main {
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 12px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    height: min(680px, calc(100vh - 230px));
-    min-height: 560px;
-    overflow: hidden;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-  }
-
-  .inbox-main-header {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #cbd5e1;
-    margin-bottom: 16px;
-  }
-
-  .inbox-main-header h2 {
-    margin: 0;
-    color: var(--gray-dark);
-    font-size: 18px;
-    font-weight: 700;
-  }
-
-  .messages-container {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding-right: 8px;
-  }
-
-  .msg-bubble {
-    max-width: 80%;
-    border-radius: 12px;
-    padding: 12px 14px;
-  }
-
-  .msg-bubble.admin {
-    background: linear-gradient(135deg, var(--green-primary), var(--green-dark));
-    color: #fff;
-    align-self: flex-end;
-    margin-left: auto;
-  }
-
-  .msg-bubble.user {
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
-    color: var(--gray-dark);
-    align-self: flex-start;
-  }
-
-  .msg-sender {
-    font-size: 11px;
-    font-weight: 700;
-    margin-bottom: 4px;
-    opacity: 0.8;
-  }
-
-  .msg-content {
-    font-size: 14px;
-    line-height: 1.5;
-    white-space: pre-wrap;
-  }
-
-  .msg-meta {
-    margin-top: 6px;
-    font-size: 10px;
-    opacity: 0.7;
-    display: flex;
-    gap: 8px;
-  }
-
-  .msg-media img {
-    max-width: 100%;
-    max-height: 300px;
-    border-radius: 8px;
-    margin-top: 8px;
-  }
-
-  .reply-form {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid #cbd5e1;
-  }
-
-  .reply-form label {
-    font-weight: 600;
-    color: var(--gray-dark);
-    margin-bottom: 8px;
-    display: block;
-    font-size: 13px;
-  }
-
-  .reply-form textarea {
-    width: 100%;
-    min-height: 80px;
-    background: #fff;
-    color: var(--gray-dark);
-    border: 1px solid #94a3b8;
-    border-radius: 8px;
-    padding: 10px;
-    font-size: 14px;
-    resize: vertical;
-  }
-
-  .reply-form textarea:focus {
-    outline: none;
-    border-color: var(--green-primary);
-  }
-
-  .reply-actions {
-    margin-top: 10px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
-
-  .btn-send {
-    background: var(--green-primary);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 20px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 13px;
-    transition: background 0.15s;
-  }
-
-  .btn-send:hover {
-    background: var(--green-dark);
-  }
-
-  .empty-state {
-    color: #475569;
-    text-align: center;
-    padding: 40px;
-    font-size: 14px;
-  }
-
-  .inbox-main > .empty-state {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .empty-state i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    display: block;
-    opacity: 0.5;
-  }
-
-  .support-inbox-intro {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 16px;
-    padding: 14px 18px;
-    border-left: 4px solid var(--green-primary);
-    border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
-  }
-
-  .support-inbox-intro h1 {
-    margin: 0 0 2px;
-    color: var(--gray-dark);
-    font-size: 1.15rem;
-  }
-
-  .support-inbox-intro p {
-    margin: 0;
-    color: #475569;
-  }
-
-  .reply-note {
-    color: #475569;
-    font-size: 11px;
-  }
-
-  @media (max-width: 991.98px) {
-    .inbox-layout {
-      grid-template-columns: 1fr;
-    }
-
-    .inbox-sidebar {
-      max-height: 50vh;
-    }
-
-    .inbox-main {
-      height: auto;
-      max-height: none;
-      min-height: 520px;
-      overflow: visible;
-    }
-
-    .support-inbox-intro {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-  }
-</style>
-{% endblock %}
-
-{% block breadcrumbs %}
-<nav aria-label="breadcrumb">
-  <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="{% url 'admin:index' %}">{% translate "Accueil" %}</a></li>
-    <li class="breadcrumb-item"><a href="{% url 'admin:app_list' app_label='chat' %}">{% translate "Support Client" %}</a></li>
-    <li class="breadcrumb-item active">{% translate "Boite Support" %}</li>
-  </ol>
-</nav>
-{% endblock %}
+{% block bodyclass %}{{ block.super }} aquacare-support-inbox{% endblock %}
+{% block content_title %}{% translate "Boîte de réception" %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
 
 {% block content %}
-<section class="support-inbox-intro">
-  <div>
-    <h1><i class="fas fa-headset" aria-hidden="true"></i> {% translate "Messagerie Support" %}</h1>
-    <p>{% translate "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page." %}</p>
-  </div>
-  <span class="inbox-chip">{% blocktrans count count=conversation_count %}{{ count }} conversation{% plural %}{{ count }} conversations{% endblocktrans %}</span>
+<section class="support-inbox-intro aq-page-head">
+  <p class="aq-muted">{% translate "Selectionnez une conversation, consultez son historique puis repondez sans quitter la page." %}</p>
+  <span class="aq-badge aq-badge--muted">{% blocktrans count count=conversation_count %}{{ count }} conversation{% plural %}{{ count }} conversations{% endblocktrans %}</span>
 </section>
-<div class="inbox-layout" data-admin-i18n-native data-aquacare-responsive-list="true">
-  <!-- Sidebar: Liste des conversations -->
-  <div class="inbox-sidebar">
-    <div class="inbox-header">
-      <span class="inbox-title"><i class="fas fa-inbox"></i> {% translate "Boite Support" %}</span>
-      <span class="inbox-chip">{% blocktrans count count=conversation_count %}{{ count }} conversation{% plural %}{{ count }} conversations{% endblocktrans %}</span>
-    </div>
 
+<div class="inbox-layout" data-admin-i18n-native data-aquacare-responsive-list="true">
+  <aside class="inbox-sidebar" aria-label="{% translate 'Conversations' %}">
     <div class="conv-list">
       {% for conv in conversations %}
-        <a class="conv-item {% if selected_conversation and conv.id == selected_conversation.id %}active{% endif %}"
-           href="?conversation={{ conv.id }}">
-          <div class="conversation-summary">
-            <div class="conv-title">
-              <i class="fas fa-user"></i>
-              {{ conv.user.display_name|default:conv.user.id }}
-            </div>
-            <div class="conv-meta">
-              <span><i class="fas fa-clock"></i> {{ conv.last_message_at|date:"d/m H:i" }}</span>
-              {% if not conv.user.is_active %}
-                <span class="inbox-chip">{% translate "Compte supprimé" %}</span>
-              {% elif conv.unread_count_admin > 0 %}
-                <span class="badge-unread">{% blocktrans count count=conv.unread_count_admin %}{{ count }} non lu{% plural %}{{ count }} non lus{% endblocktrans %}</span>
-              {% endif %}
-            </div>
-            {% if conv.last_message_content_ann %}
-              <div class="conv-preview">
-                {% if conv.last_message_sender_type_ann == "user" %}
-                  <i class="fas fa-user"></i>
-                {% elif conv.last_message_sender_type_ann == "admin" %}
-                  <i class="fas fa-headset"></i>
-                {% else %}
-                  <i class="fas fa-info-circle"></i>
-                {% endif %}
-                {{ conv.last_message_content_ann|truncatechars:60 }}
-              </div>
+        <a class="conv-item{% if selected_conversation and conv.id == selected_conversation.id %} active{% endif %}{% if conv.user.is_active and conv.unread_count_admin > 0 %} unread{% endif %}"
+           href="?conversation={{ conv.id }}{% if conversations_page.number > 1 %}&page={{ conversations_page.number }}{% endif %}">
+          <span class="conv-top">
+            <span class="conv-title">{{ conv.user.display_name|default:conv.user.id }}</span>
+            <span class="conv-date">{{ conv.last_message_at|date:"d/m H:i" }}</span>
+          </span>
+          {% if conv.last_message_content_ann %}
+            <span class="conv-preview">{% if conv.last_message_sender_type_ann == "admin" %}{% translate "Vous :" %} {% endif %}{{ conv.last_message_content_ann|truncatechars:70 }}</span>
+          {% endif %}
+          <span class="conv-tags">
+            {% if not conv.user.is_active %}
+              <span class="aq-badge aq-badge--muted">{% translate "Compte supprimé" %}</span>
+            {% elif conv.unread_count_admin > 0 %}
+              <span class="aq-badge aq-badge--warn">{% blocktrans count count=conv.unread_count_admin %}{{ count }} non lu{% plural %}{{ count }} non lus{% endblocktrans %}</span>
             {% endif %}
-          </div>
+          </span>
         </a>
       {% empty %}
-        <div class="empty-state">
-          <i class="fas fa-comments"></i>
-          {% translate "Aucune conversation." %}
-        </div>
+        <p class="inbox-empty">{% translate "Aucune conversation." %}</p>
       {% endfor %}
     </div>
-  </div>
+    {% if conversations_page.paginator.num_pages > 1 %}
+    <nav class="inbox-pages" aria-label="{% translate 'Pagination des conversations' %}">
+      {% if conversations_page.has_previous %}<a class="aq-link-btn" href="?page={{ conversations_page.previous_page_number }}">{% translate "Precedent" %}</a>{% endif %}
+      <span class="aq-muted">{% blocktrans with current=conversations_page.number total=conversations_page.paginator.num_pages %}Page {{ current }} sur {{ total }}{% endblocktrans %}</span>
+      {% if conversations_page.has_next %}<a class="aq-link-btn" href="?page={{ conversations_page.next_page_number }}">{% translate "Suivant" %}</a>{% endif %}
+    </nav>
+    {% endif %}
+  </aside>
 
-  <!-- Main: Messages de la conversation selectionnee -->
-  <div class="inbox-main">
+  <section class="inbox-main">
     {% if selected_conversation %}
-      <div class="inbox-main-header">
-        <h2>
-          <i class="fas fa-user-circle"></i>
-          {{ selected_conversation.user.display_name|default:selected_conversation.user.id }}
-        </h2>
-        <span class="inbox-chip">
-          <i class="fas fa-clock"></i> {{ selected_conversation.last_message_at|date:"d/m/Y H:i" }}
-        </span>
-      </div>
+      <header class="inbox-main-header">
+        <div class="aq-stack">
+          <strong class="inbox-contact">{{ selected_conversation.user.display_name|default:selected_conversation.user.id }}</strong>
+          {% with farm=selected_conversation.user.farm_profile %}
+            {% if farm and not farm.is_deleted %}<a href="{% url 'admin:accounts_farmprofile_supervision' farm.pk %}">{{ farm.farm_name }}</a>{% endif %}
+          {% endwith %}
+        </div>
+        <div class="aq-actions">
+          {% if selected_conversation.unread_count_admin and selected_conversation.user.is_active %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="conversation_id" value="{{ selected_conversation.id }}">
+            <input type="hidden" name="action" value="mark_read">
+            <button class="btn aq-btn-secondary btn-sm" type="submit">{% translate "Marquer explicitement comme lu" %}</button>
+          </form>
+          {% endif %}
+        </div>
+      </header>
 
-      <div class="messages-container">
+      <div class="messages-container" id="messages">
         {% for msg in messages %}
-          <div class="msg-bubble {% if msg.sender_type in 'admin system' %}admin{% else %}user{% endif %}">
-            <div class="msg-sender">
-              {% if msg.sender_type == 'user' %}
-                <i class="fas fa-user"></i> {% translate "Utilisateur" %}
-              {% elif msg.sender_type == 'admin' %}
-                <i class="fas fa-headset"></i> {% translate "Support" %}
-              {% else %}
-                <i class="fas fa-robot"></i> {% translate "Systeme" %}
-              {% endif %}
-            </div>
-            <div class="msg-content">{{ msg.content|linebreaksbr }}</div>
+          <div class="msg-bubble {% if msg.sender_type in 'admin system' %}msg-bubble--support{% else %}msg-bubble--user{% endif %}">
+            <span class="msg-sender">{% if msg.sender_type == 'user' %}{% translate "Utilisateur" %}{% elif msg.sender_type == 'admin' %}{% translate "Support" %}{% else %}{% translate "Systeme" %}{% endif %}</span>
+            {% if msg.content %}<div class="msg-content">{{ msg.content|linebreaksbr }}</div>{% endif %}
             {% if msg.media_type == 'image' and msg.media_file %}
-              <div class="msg-media">
-                <a href="{{ msg.media_file.url }}" target="_blank">
-                  <img src="{{ msg.media_file.url }}" alt="media">
-                </a>
-              </div>
+              <a class="msg-media" href="{{ msg.media_file.url }}" target="_blank" rel="noopener"><img src="{{ msg.media_file.url }}" alt="{% translate 'Image envoyée' %}"></a>
             {% elif msg.media_type == 'video' and msg.media_file %}
-              <div class="msg-media">
-                <a href="{{ msg.media_file.url }}" target="_blank" class="btn-send">
-                  <i class="fas fa-play"></i> {% translate "Voir la video" %}
-                </a>
-              </div>
+              <a class="aq-link-btn" href="{{ msg.media_file.url }}" target="_blank" rel="noopener">{% translate "Voir la video" %}</a>
             {% endif %}
-            <div class="msg-meta">
-              <span>{{ msg.created_at|date:"d/m H:i" }}</span>
-              {% if msg.media_type != 'none' %}
-                <span><i class="fas fa-paperclip"></i> {{ msg.get_media_type_display }}</span>
-              {% endif %}
-            </div>
+            <span class="msg-meta">{{ msg.created_at|date:"d/m/Y H:i" }}</span>
           </div>
         {% empty %}
-          <div class="empty-state">
-            <i class="fas fa-comment-slash"></i>
-            {% translate "Aucun message dans cette conversation." %}
-          </div>
+          <p class="inbox-empty">{% translate "Aucun message dans cette conversation." %}</p>
         {% endfor %}
       </div>
 
       {% if not selected_conversation.user.is_active %}
-      <div class="empty-state">
-        <i class="fas fa-lock"></i>
-        {% translate "Ce compte a été supprimé : l'historique est conservé pour le suivi, mais il n'est plus possible de répondre." %}
-      </div>
+        <p class="inbox-closed">{% translate "Ce compte a été supprimé : l'historique est conservé pour le suivi, mais il n'est plus possible de répondre." %}</p>
       {% else %}
       <form method="post" class="reply-form">
         {% csrf_token %}
         <input type="hidden" name="conversation_id" value="{{ selected_conversation.id }}">
         <input type="hidden" name="action" value="reply">
-        <label for="reply_content">
-          <i class="fas fa-reply"></i> {% translate "Repondre en tant que Support" %}
-        </label>
-        <textarea id="reply_content" name="reply_content" placeholder="{% translate 'Ecrivez votre reponse...' %}"></textarea>
+        <label class="sr-only" for="reply_content">{% translate "Repondre en tant que Support" %}</label>
+        <textarea id="reply_content" name="reply_content" rows="2" placeholder="{% translate 'Ecrivez votre reponse...' %}"></textarea>
         <div class="reply-actions">
-          <button class="btn-send" type="submit">
-            <i class="fas fa-paper-plane"></i> {% translate "Envoyer" %}
-          </button>
-          <span class="reply-note">
-            <i class="fas fa-info-circle"></i> {% translate "Envoye en tant qu'Administration" %}
-          </span>
+          <span class="aq-muted">{% translate "Envoye en tant qu'Administration" %}</span>
+          <button class="btn aq-btn-primary" type="submit">{% translate "Envoyer" %}</button>
         </div>
       </form>
-      {% if selected_conversation.unread_count_admin %}
-      <form method="post" class="mt-2">
-        {% csrf_token %}
-        <input type="hidden" name="conversation_id" value="{{ selected_conversation.id }}">
-        <input type="hidden" name="action" value="mark_read">
-        <button class="btn btn-outline-success" type="submit">{% translate "Marquer explicitement comme lu" %}</button>
-      </form>
-      {% endif %}
       {% endif %}
     {% else %}
-      <div class="empty-state">
-        <i class="fas fa-hand-pointer"></i>
-        {% translate "Selectionnez une conversation pour voir les messages." %}
-      </div>
+      <p class="inbox-empty inbox-empty--center">{% translate "Selectionnez une conversation pour voir les messages." %}</p>
     {% endif %}
-  </div>
+  </section>
 </div>
-{% if conversations_page.paginator.num_pages > 1 %}
-<nav class="mt-3" aria-label="{% translate 'Pagination des conversations' %}">
-  {% if conversations_page.has_previous %}<a class="btn btn-outline-secondary" href="?page={{ conversations_page.previous_page_number }}">{% translate "Precedent" %}</a>{% endif %}
-  <span class="mx-2">{% blocktrans with current=conversations_page.number total=conversations_page.paginator.num_pages %}Page {{ current }} sur {{ total }}{% endblocktrans %}</span>
-  {% if conversations_page.has_next %}<a class="btn btn-outline-secondary" href="?page={{ conversations_page.next_page_number }}">{% translate "Suivant" %}</a>{% endif %}
-</nav>
-{% endif %}
+<script>
+  (function () {
+    var box = document.getElementById('messages');
+    if (box) { box.scrollTop = box.scrollHeight; }
+  })();
+</script>
 {% endblock %}

@@ -285,12 +285,13 @@ class TestSecuredModelAdmin:
 class TestDeletePermissions:
     """Tests pour les permissions de suppression."""
 
-    def test_superuser_can_delete_regular_user(self, mock_request, superuser, regular_user):
-        """Le superuser peut supprimer un utilisateur normal."""
+    def test_superuser_deletes_regular_user_by_anonymisation_only(self, mock_request, superuser, regular_user):
+        """Pas de suppression brute : le superuser anonymise le compte (commandes et rapports préservés)."""
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
-        assert admin.has_delete_permission(request, regular_user) is True
+        assert admin.has_delete_permission(request, regular_user) is False
+        assert admin._can_anonymize(request, regular_user) is True
 
     def test_superuser_cannot_delete_self(self, mock_request, superuser):
         """Le superuser ne peut pas se supprimer lui-meme."""
@@ -468,14 +469,15 @@ class TestQuerysetFiltering:
 class TestActionsFiltering:
     """Tests pour le filtrage des actions admin."""
 
-    def test_superuser_has_delete_action(self, mock_request, superuser):
-        """Le superuser a l'action delete_selected."""
+    def test_superuser_has_anonymize_action_instead_of_raw_delete(self, mock_request, superuser):
+        """Le superuser supprime des comptes par anonymisation, jamais par delete_selected."""
         admin = UserAdmin(User, AdminSite())
         request = mock_request(superuser)
 
         actions = admin.get_actions(request)
 
-        assert 'delete_selected' in actions
+        assert 'anonymize_accounts' in actions
+        assert 'delete_selected' not in actions
 
     def test_manager_has_verify_action(self, mock_request, manager_user):
         """Le manager a l'action verify_users."""
