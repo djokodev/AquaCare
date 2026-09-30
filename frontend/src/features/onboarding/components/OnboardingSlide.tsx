@@ -1,530 +1,170 @@
 /**
- * Composant générique pour un slide d'onboarding
- * Supporte 5 types de layouts différents pour activation utilisateur
+ * Page d'introduction : visuel de marque en haut, feuille blanche arrondie
+ * avec le contenu en bas (même structure sur toutes les pages).
  * @module features/onboarding/components
  */
 
 import React from 'react';
-import { View, StyleSheet, Dimensions, TextStyle } from 'react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+
 import { OnboardingSlideProps } from '../types/onboarding';
-import { AppText, Card } from '@/components/ui';
-import { colors, radii, spacing, typography } from '@/theme';
+import { AppText } from '@/components/ui';
+import { colors, radii, shadows, spacing, typography } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const APP_NAME = 'AquaCare';
 
-/**
- * Slide individuel d'onboarding
- * Layout adaptatif selon le type de slide
- */
 export default function OnboardingSlide({ slide }: OnboardingSlideProps) {
   const { t } = useTranslation();
 
-  /**
-   * Rend un texte avec "AquaCare" coloré en vert
-   */
-  const renderTextWithAppName = (text: string, baseStyle: TextStyle) => {
-    const appName = 'AquaCare';
-    const parts = text.split(appName);
-
+  /** Met le nom de l'app en vert dans le titre. */
+  const renderTitle = () => {
+    const title = t(slide.titleKey);
+    const parts = title.split(APP_NAME);
     if (parts.length === 1) {
-      // Pas de "AquaCare" dans le texte
-      return <AppText style={baseStyle}>{text}</AppText>;
+      return <AppText style={styles.title}>{title}</AppText>;
     }
-
     return (
-      <AppText style={baseStyle}>
+      <AppText style={styles.title}>
         {parts.map((part, index) => (
           <React.Fragment key={index}>
             {part}
-            {index < parts.length - 1 && (
-              <AppText style={styles.appNameHighlight}>{appName}</AppText>
-            )}
+            {index < parts.length - 1 ? <AppText style={styles.titleAccent}>{APP_NAME}</AppText> : null}
           </React.Fragment>
         ))}
       </AppText>
     );
   };
 
-  const renderContent = () => {
-    switch (slide.type) {
-      case 'problem':
-        return renderProblemSlide();
-      case 'solution':
-        return renderSolutionSlide();
-      case 'how':
-        return renderHowSlide();
-      case 'social_proof':
-        return renderSocialProofSlide();
-      case 'action':
-        return renderActionSlide();
-      default:
-        return null;
-    }
-  };
-
-  /**
-   * Slide 1: Problème (reconnaissance)
-   * Icône + titre uniquement
-   */
-  const renderProblemSlide = () => (
-    <View style={styles.contentContainer}>
-      {slide.iconName && (
-        <View style={styles.iconContainer}>
-          <Ionicons
-            name={slide.iconName as any}
-            size={80}
-            color={colors.status.error}
-          />
-        </View>
-      )}
-
-      <AppText style={styles.title}>{t(slide.titleKey)}</AppText>
-    </View>
-  );
-
-  /**
-   * Slide 2: Solution (promesse)
-   * Icône + titre avec AquaCare en vert + liste avec checkmarks
-   */
-  const renderSolutionSlide = () => {
-    // Filtrer les bullet items non-vides
-    const nonEmptyItems = slide.bulletItems?.filter(item => t(item.textKey) !== '') || [];
-
-    return (
-      <View style={styles.contentContainer}>
-        {slide.iconName && (
-          <View style={styles.iconContainer}>
-            <Ionicons
-              name={slide.iconName as any}
-              size={80}
-              color={colors.brand.primary}
-            />
-          </View>
-        )}
-
-        {renderTextWithAppName(t(slide.titleKey), styles.title)}
-
-        {nonEmptyItems.length > 0 && (
-          <View style={styles.bulletList}>
-            {nonEmptyItems.map((item, index) => (
-              <View key={index} style={styles.bulletItem}>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={22}
-                  color={colors.brand.primary}
-                  style={styles.bulletIcon}
-                />
-                <AppText style={styles.bulletText}>{t(item.textKey)}</AppText>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  /**
-   * Slide 3: Comment (demo rapide)
-   * Titre + 3 étapes avec icônes et flèches
-   */
-  const renderHowSlide = () => (
-    <View style={styles.contentContainer}>
-      <AppText style={styles.title}>{t(slide.titleKey)}</AppText>
-
-      {slide.howSteps && (
-        <View style={styles.stepsContainer}>
-          {slide.howSteps.map((step, index) => {
-            const hasDescription = t(step.descKey) !== '';
-            return (
-              <React.Fragment key={index}>
-                <Card variant="outlined" style={styles.stepItem}>
-                  <View style={styles.stepNumber}>
-                    <AppText style={styles.stepNumberText}>{index + 1}</AppText>
-                  </View>
-                  <View style={styles.stepIconContainer}>
-                    <Ionicons
-                      name={step.iconName as any}
-                      size={32}
-                      color={colors.brand.primary}
-                    />
-                  </View>
-                  <View style={[
-                    styles.stepTextContainer,
-                    !hasDescription && styles.stepTextContainerCentered,
-                  ]}>
-                    <AppText style={
-                      hasDescription
-                        ? [styles.stepTitle]
-                        : [styles.stepTitle, styles.stepTitleCentered]
-                    }>
-                      {t(step.titleKey)}
-                    </AppText>
-                    {hasDescription && (
-                      <AppText style={styles.stepDesc}>{t(step.descKey)}</AppText>
-                    )}
-                  </View>
-                </Card>
-
-                {index < (slide.howSteps?.length || 0) - 1 && (
-                  <View style={styles.arrowContainer}>
-                    <Ionicons
-                      name="arrow-down"
-                      size={24}
-                      color={colors.text.muted}
-                    />
-                  </View>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </View>
-      )}
-    </View>
-  );
-
-  /**
-   * Slide 4: Preuve sociale (confiance)
-   * Version minimaliste: Titre + stat principale en gros
-   */
-  const renderSocialProofSlide = () => {
-    // Filtrer les stats non-vides
-    const nonEmptyStats = slide.stats?.filter(stat => t(stat.textKey) !== '') || [];
-    const hasTestimonial = slide.testimonialNameKey &&
-                           slide.testimonialTextKey &&
-                           t(slide.testimonialNameKey) !== '' &&
-                           t(slide.testimonialTextKey) !== '';
-    const hasTitle = t(slide.titleKey) !== '';
-
-    // Mode minimaliste: une seule stat sans témoignage
-    const isMinimalist = nonEmptyStats.length === 1 && !hasTestimonial;
-
-    return (
-      <View style={styles.socialProofContainer}>
-        {hasTitle && (
-          <AppText style={styles.socialProofTitle}>{t(slide.titleKey)}</AppText>
-        )}
-
-        {/* Mode minimaliste: afficher la stat principale en gros */}
-        {isMinimalist && (
-          <View style={styles.mainStatContainer}>
-            <Ionicons
-              name="people"
-              size={80}
-              color={colors.brand.primary}
-            />
-            <AppText style={styles.mainStatTextBlack}>
-              <AppText style={styles.mainStatNumber}>+200</AppText>
-              {' '}{t(nonEmptyStats[0].textKey).replace(/^\+200\s*/, '')}
-            </AppText>
-          </View>
-        )}
-
-        {/* Mode normal: Témoignage */}
-        {!isMinimalist && hasTestimonial && (
-          <Card variant="outlined" style={styles.testimonialCard}>
-            <View style={styles.testimonialHeader}>
-              <Ionicons
-                name="person-circle"
-                size={36}
-                color={colors.brand.primary}
-              />
-              <AppText style={styles.testimonialName}>{t(slide.testimonialNameKey!)}</AppText>
-            </View>
-            <AppText style={styles.testimonialText}>"{t(slide.testimonialTextKey!)}"</AppText>
-          </Card>
-        )}
-
-        {/* Mode normal: Statistiques */}
-        {!isMinimalist && nonEmptyStats.length > 0 && (
-          <View style={styles.statsContainer}>
-            {nonEmptyStats.map((stat, index) => (
-              <View key={index} style={styles.statItem}>
-                <Ionicons
-                  name={stat.iconName as any}
-                  size={22}
-                  color={colors.brand.primary}
-                />
-                <AppText style={styles.statText}>{t(stat.textKey)}</AppText>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  /**
-   * Slide 5: Action (call to action)
-   * Titre + sous-titre + icône
-   */
-  const renderActionSlide = () => (
-    <View style={styles.contentContainer}>
-      <View style={styles.iconContainer}>
-        <Ionicons
-          name="rocket"
-          size={80}
-          color={colors.brand.primary}
-        />
-      </View>
-
-      <AppText style={styles.title}>{t(slide.titleKey)}</AppText>
-
-      {slide.subtitleKey && (
-        <AppText style={styles.subtitle}>{t(slide.subtitleKey)}</AppText>
-      )}
-    </View>
-  );
-
   return (
-    <View style={styles.container}>
-      {renderContent()}
+    <View style={styles.page}>
+      <View style={styles.hero}>
+        <View style={styles.ringOuter}>
+          <View style={styles.ringInner}>
+            <View style={styles.iconDisc}>
+              <Ionicons name={slide.iconName as never} size={52} color={colors.brand.primary} />
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.sheet}>
+        {renderTitle()}
+
+        {slide.subtitleKey ? <AppText style={styles.subtitle}>{t(slide.subtitleKey)}</AppText> : null}
+
+        {slide.bulletItems?.map((item) => (
+          <View key={item.textKey} style={styles.row}>
+            <View style={styles.rowIcon}>
+              <Ionicons name={item.iconName as never} size={18} color={colors.brand.primary} />
+            </View>
+            <AppText style={styles.rowText}>{t(item.textKey)}</AppText>
+          </View>
+        ))}
+
+        {slide.howSteps?.map((step, index) => (
+          <View key={step.titleKey} style={styles.stepCard}>
+            <View style={styles.stepNumber}>
+              <AppText style={styles.stepNumberText}>{index + 1}</AppText>
+            </View>
+            <AppText style={styles.stepText}>{t(step.titleKey)}</AppText>
+            <Ionicons name={step.iconName as never} size={24} color={colors.brand.primary} />
+          </View>
+        ))}
+
+        {slide.chips && slide.chips.length > 0 ? (
+          <View style={styles.chips}>
+            {slide.chips.map((chip) => (
+              <View key={chip.textKey} style={styles.chip}>
+                <Ionicons name={chip.iconName as never} size={20} color={colors.brand.primary} />
+                <AppText style={styles.chipText}>{t(chip.textKey)}</AppText>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    width: SCREEN_WIDTH,
-    justifyContent: 'center',
+  page: { width: SCREEN_WIDTH, flex: 1 },
+  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 170 },
+  ringOuter: {
+    width: 190,
+    height: 190,
+    borderRadius: radii.full,
+    backgroundColor: 'rgba(255,255,255,0.10)',
     alignItems: 'center',
-    paddingHorizontal: spacing[6],
+    justifyContent: 'center',
+  },
+  ringInner: {
+    width: 150,
+    height: 150,
+    borderRadius: radii.full,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconDisc: {
+    width: 108,
+    height: 108,
+    borderRadius: radii.full,
     backgroundColor: colors.surface.card,
-  },
-
-  contentContainer: {
-    width: '100%',
-    alignItems: 'center',
-    paddingVertical: spacing[5],
-  },
-
-  iconContainer: {
-    marginBottom: spacing[6],
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.large,
   },
-
-  title: {
-    ...typography.screenTitle,
-    textAlign: 'center',
-    marginBottom: spacing[6],
-    paddingHorizontal: spacing[2],
+  sheet: {
+    backgroundColor: colors.surface.card,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: spacing[6],
+    paddingTop: spacing[8],
+    paddingBottom: spacing[2],
   },
-
-  subtitle: {
-    ...typography.body,
-    color: colors.text.muted,
-    textAlign: 'center',
-    paddingHorizontal: spacing[4],
-    marginTop: spacing[2],
-  },
-
-  // Bullet list styles
-  bulletList: {
-    width: '100%',
-    paddingHorizontal: spacing[2],
-  },
-
-  bulletItem: {
-    flexDirection: 'row',
+  title: { ...typography.display, fontSize: 28, lineHeight: 36, color: colors.text.primary, marginBottom: spacing[4] },
+  titleAccent: { ...typography.display, fontSize: 28, lineHeight: 36, color: colors.brand.primary },
+  subtitle: { ...typography.body, color: colors.text.muted, marginBottom: spacing[2] },
+  row: { flexDirection: 'row', alignItems: 'center', marginTop: spacing[3] },
+  rowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.full,
+    backgroundColor: colors.brand.subtle,
     alignItems: 'center',
-    marginBottom: spacing[4],
-    paddingHorizontal: spacing[2],
-  },
-
-  bulletIcon: {
+    justifyContent: 'center',
     marginRight: spacing[3],
-    width: 24,
   },
-
-  bulletText: {
-    flex: 1,
-    ...typography.body,
-    color: colors.text.primary,
-  },
-
-  // How steps styles
-  stepsContainer: {
-    width: '100%',
-    paddingHorizontal: spacing[2],
-  },
-
-  stepItem: {
+  rowText: { ...typography.bodyStrong, flex: 1, color: colors.text.primary },
+  stepCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface.page,
-    borderRadius: radii.lg,
+    marginTop: spacing[3],
     padding: spacing[4],
-    marginBottom: spacing[2],
+    borderRadius: radii.xl,
+    backgroundColor: colors.surface.page,
   },
-
   stepNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: radii.full,
     backgroundColor: colors.brand.primary,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: spacing[3],
   },
-
-  stepNumberText: {
-    ...typography.caption,
-    color: colors.text.inverse,
-    fontWeight: '700',
-  },
-
-  stepIconContainer: {
-    marginRight: spacing[3],
-  },
-
-  stepTextContainer: {
-    flex: 1,
-  },
-
-  stepTitle: {
-    ...typography.label,
-    color: colors.text.primary,
-    marginBottom: 2,
-  },
-
-  stepDesc: {
-    ...typography.caption,
-    color: colors.text.muted,
-  },
-
-  arrowContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing[1],
-  },
-
-  // Social proof specific styles
-  socialProofContainer: {
-    width: '100%',
-    alignItems: 'center',
-    paddingVertical: spacing[2],
-  },
-
-  socialProofTitle: {
-    ...typography.screenTitle,
-    color: colors.text.primary,
-    textAlign: 'center',
-    marginBottom: spacing[4],
-    paddingHorizontal: spacing[2],
-  },
-
-  // Testimonial styles
-  testimonialCard: {
-    width: '100%',
-    backgroundColor: colors.surface.page,
-    borderRadius: radii.lg,
-    padding: spacing[4],
-    marginBottom: spacing[4],
-    borderLeftWidth: 4,
-    borderLeftColor: colors.brand.primary,
-  },
-
-  testimonialHeader: {
+  stepNumberText: { ...typography.label, color: colors.text.inverse },
+  stepText: { ...typography.bodyStrong, flex: 1, color: colors.text.primary },
+  chips: { marginTop: spacing[4], gap: spacing[2] },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing[2],
+    padding: spacing[3],
+    borderRadius: radii.xl,
+    backgroundColor: colors.brand.subtle,
   },
-
-  testimonialName: {
-    ...typography.label,
-    color: colors.text.primary,
-    marginLeft: spacing[2],
-  },
-
-  testimonialText: {
-    ...typography.helper,
-    color: colors.text.primary,
-    fontStyle: 'italic',
-  },
-
-  // Stats styles
-  statsContainer: {
-    width: '100%',
-  },
-
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing[2],
-    paddingHorizontal: spacing[2],
-  },
-
-  statText: {
-    ...typography.helper,
-    color: colors.text.primary,
-    marginLeft: spacing[2],
-    fontWeight: '500',
-  },
-
-  // Centered step text (when no description)
-  stepTextContainerCentered: {
-    justifyContent: 'center',
-  },
-
-  stepTitleCentered: {
-    marginBottom: 0,
-  },
-
-  // Main stat (minimalist social proof)
-  mainStatContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing[10],
-    marginBottom: spacing[5],
-  },
-
-  mainStatText: {
-    ...typography.display,
-    color: colors.brand.primary,
-    textAlign: 'center',
-    marginTop: spacing[5],
-  },
-
-  mainStatTextBlack: {
-    ...typography.screenTitle,
-    color: colors.text.primary,
-    textAlign: 'center',
-    marginTop: spacing[5],
-  },
-
-  mainStatNumber: {
-    ...typography.display,
-    color: colors.brand.primary,
-  },
-
-  // AquaCare highlighted in green
-  appNameHighlight: {
-    ...typography.screenTitle,
-    color: colors.brand.primary,
-  },
-
-  // Guarantee section (Slide 1)
-  guaranteeContainer: {
-    marginTop: spacing[8],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[4],
-    backgroundColor: colors.surface.page,
-    borderRadius: radii.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.brand.primary,
-    width: '100%',
-  },
-
-  guaranteeIcon: {
-    marginBottom: spacing[2],
-    alignSelf: 'center',
-  },
-
-  guaranteeText: {
-    ...typography.helper,
-    color: colors.text.primary,
-    textAlign: 'center',
-  },
+  chipText: { ...typography.label, flex: 1, color: colors.brand.dark, marginLeft: spacing[3] },
 });
