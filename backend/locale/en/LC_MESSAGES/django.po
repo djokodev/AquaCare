@@ -3072,3 +3072,265 @@ msgstr "Event"
 
 msgid "Événements sanitaires"
 msgstr "Health events"
+
+msgid "Adresse complète"
+msgstr "Full address"
+
+msgid "Adresse complète de livraison (région, département, ville, quartier)"
+msgstr "Full delivery address (region, department, city, neighbourhood)"
+
+msgid "Aquaculteur ayant passé la commande"
+msgstr "Farmer who placed the order"
+
+msgid "Changer le thème (automatique suit le réglage de votre ordinateur)"
+msgstr "Change theme (automatic follows your computer setting)"
+
+msgid "Commande parente"
+msgstr "Parent order"
+
+msgid "Créé le"
+msgstr "Created on"
+
+msgid "Créée hors ligne"
+msgstr "Created offline"
+
+msgid "Cycle de production pour lequel cette commande est passée"
+msgstr "Production cycle this order is for"
+
+msgid "Date/heure de synchronisation avec le serveur"
+msgstr "Server sync date/time"
+
+msgid "Diamètre du granulé en millimètres"
+msgstr "Pellet diameter in millimetres"
+
+msgid "Espèce de poisson visée"
+msgstr "Target fish species"
+
+msgid "Espèce figée"
+msgstr "Species snapshot"
+
+msgid "Ex: CLARIAS FLOAT 3MM, TIL-PRO SANA 2MM"
+msgstr "E.g. CLARIAS FLOAT 3MM, TIL-PRO SANA 2MM"
+
+msgid "Ferme associée à la commande"
+msgstr "Farm linked to the order"
+
+msgid "Format: ORD-YYYYMMDD-XXXX (généré automatiquement)"
+msgstr "Format: ORD-YYYYMMDD-XXXX (generated automatically)"
+
+msgid "Frais de livraison (FCFA)"
+msgstr "Delivery fee (FCFA)"
+
+msgid "Frais de livraison calculés automatiquement"
+msgstr "Delivery fee computed automatically"
+
+msgid "Granulométrie figée (mm)"
+msgstr "Pellet size snapshot (mm)"
+
+msgid "Identifiant unique UUID pour synchronisation mobile"
+msgstr "Unique UUID for mobile sync"
+
+msgid "L'adresse complète est requise pour la livraison à domicile"
+msgstr "The full address is required for home delivery"
+
+msgid "La taille du granulé doit être supérieure à 0"
+msgstr "Pellet size must be greater than 0"
+
+msgid "Le lieu de retrait est requis pour le retrait en magasin"
+msgstr "The pickup point is required for store pickup"
+
+msgid "Le poids du conditionnement doit être supérieur à 0"
+msgstr "Bag weight must be greater than 0"
+
+msgid "Le prix doit être supérieur à 0"
+msgstr "Price must be greater than 0"
+
+msgid "Le sous-total doit être positif"
+msgstr "Subtotal must be positive"
+
+msgid "Le taux de lipides doit être entre 1% et 20%"
+msgstr "Fat content must be between 1% and 20%"
+
+msgid "Le taux de protéines doit être entre 20% et 50%"
+msgstr "Protein content must be between 20% and 50%"
+
+msgid "Le total doit être strictement positif"
+msgstr "Total must be greater than 0"
+
+msgid "Les frais de livraison doivent être positifs"
+msgstr "Delivery fee must be positive"
+
+msgid "Libellé anglais du point de retrait figé"
+msgstr "Pickup point English label snapshot"
+
+msgid "Libellé français du point de retrait figé"
+msgstr "Pickup point French label snapshot"
+
+msgid "Livraison à domicile ou retrait en magasin"
+msgstr "Home delivery or store pickup"
+
+msgid "Marché Ndokoti ou Ndogpasi (si retrait)"
+msgstr "Ndokoti or Ndogpasi market (if pickup)"
+
+msgid "Marque de l'aliment"
+msgstr "Feed brand"
+
+msgid "Marque figée"
+msgstr "Brand snapshot"
+
+msgid "Mode de livraison"
+msgstr "Delivery method"
+
+msgid "Modifié le"
+msgstr "Modified on"
+
+msgid "Modifiée le"
+msgstr "Modified on"
+
+msgid "Montant total = sous-total + frais de livraison"
+msgstr "Total = subtotal + delivery fee"
+
+msgid "Motif d'annulation"
+msgstr "Cancellation reason"
+
+msgid "Nom commercial"
+msgstr "Product name"
+
+msgid "Nom complet du destinataire"
+msgstr "Recipient's full name"
+
+msgid "Nom de ferme figé"
+msgstr "Farm name snapshot"
+
+msgid "Nom destinataire"
+msgstr "Recipient name"
+
+msgid "Nom du cycle figé"
+msgstr "Cycle name snapshot"
+
+msgid "Nom du produit au moment de la commande"
+msgstr "Product name at order time"
+
+msgid "Nom produit"
+msgstr "Product name"
+
+msgid "Nombre de sacs commandés"
+msgstr "Number of bags ordered"
+
+msgid "Numéro de commande"
+msgstr "Order number"
+
+msgid "Numéro de téléphone pour contact livraison"
+msgstr "Phone number for delivery contact"
+
+msgid "Origine de l'annulation"
+msgstr "Cancellation source"
+
+msgid "Partenaire figé"
+msgstr "Partner snapshot"
+
+msgid "Phase d'élevage"
+msgstr "Rearing phase"
+
+msgid "Phase de croissance du poisson (optionnel si non-vérifié)"
+msgstr "Fish growth phase (optional if unverified)"
+
+msgid "Phase figée"
+msgstr "Phase snapshot"
+
+msgid "Poids conditionnement (kg)"
+msgstr "Bag weight (kg)"
+
+msgid "Poids conditionnement figé (kg)"
+msgstr "Bag weight snapshot (kg)"
+
+msgid "Poids d'un sac en kilogrammes"
+msgstr "Weight of one bag in kilograms"
+
+msgid "Point de retrait"
+msgstr "Pickup point"
+
+msgid "Pourcentage de matières grasses (optionnel si non-vérifié)"
+msgstr "Fat percentage (optional if unverified)"
+
+msgid "Pourcentage de protéines brutes (optionnel si non-vérifié)"
+msgstr "Crude protein percentage (optional if unverified)"
+
+msgid "Prix du sac au moment de la commande"
+msgstr "Bag price at order time"
+
+msgid "Prix par sac (FCFA)"
+msgstr "Price per bag (FCFA)"
+
+msgid "Prix unitaire (FCFA)"
+msgstr "Unit price (FCFA)"
+
+msgid "Prix unitaire d'un sac en Francs CFA"
+msgstr "Price of one bag in CFA francs"
+
+msgid "Référence produit (lien vers catalogue)"
+msgstr "Product reference (catalogue link)"
+
+msgid "Région Cameroun (ex: Littoral, Centre)"
+msgstr "Cameroon region (e.g. Littoral, Centre)"
+
+msgid "Si False, produit retiré temporairement du catalogue"
+msgstr "If unchecked, the product is temporarily withdrawn from the catalogue"
+
+msgid "Somme des articles avant frais de livraison"
+msgstr "Items total before delivery fee"
+
+msgid "Sous-total (FCFA)"
+msgstr "Subtotal (FCFA)"
+
+msgid "Statut de la commande"
+msgstr "Order status"
+
+msgid "Synchronisée le"
+msgstr "Synced on"
+
+msgid "Taille granulé (mm)"
+msgstr "Pellet size (mm)"
+
+msgid "Thème : automatique"
+msgstr "Theme: automatic"
+
+msgid "Thème : clair"
+msgstr "Theme: light"
+
+msgid "Thème : sombre"
+msgstr "Theme: dark"
+
+msgid "Total (FCFA)"
+msgstr "Total (FCFA)"
+
+msgid "Total de la ligne = prix unitaire × quantité"
+msgstr "Line total = unit price × quantity"
+
+msgid "Total ligne (FCFA)"
+msgstr "Line total (FCFA)"
+
+msgid "True si commande créée en mode offline mobile"
+msgstr "True if the order was created offline on mobile"
+
+msgid "Téléphone destinataire"
+msgstr "Recipient phone"
+
+msgid "UUID généré côté mobile pour déduplication lors de la sync"
+msgstr "UUID generated on mobile for de-duplication during sync"
+
+msgid "Version documentaire"
+msgstr "Document version"
+
+msgid "Ville de livraison"
+msgstr "Delivery city"
+
+msgid "Émetteur figé"
+msgstr "Issuer snapshot"
+
+msgid ""
+"Ce produit existe déjà (même marque, même nom, même poids de sac). Modifiez "
+"le produit existant au lieu d'en créer un second."
+msgstr ""
+"This product already exists (same brand, name and bag weight). Edit the "
+"existing product instead of creating a second one."

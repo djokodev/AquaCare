@@ -212,3 +212,39 @@ class TestAdminActions:
         assert response.status_code == 200
         assert reverse('admin:chat_conversation_changelist') in html
         assert reverse('admin:aquaculture_cyclemetrics_changelist') in html
+
+
+class TestProductCatalogueAdmin:
+    def _data(self, **overrides):
+        data = {
+            'brand': 'dibaq', 'name': 'Dibaq Test 2mm', 'species': 'tilapia', 'phase': 'grossissement',
+            'pellet_size_mm': '2.0', 'protein_percentage': '35', 'lipid_percentage': '8',
+            'package_weight_kg': '20', 'price_per_package': '25000', 'is_available': 'on',
+        }
+        data.update(overrides)
+        return data
+
+    def test_add_page_opens_and_creates_a_product(self):
+        owner = _staff(superuser=True)
+        client = _client(owner)
+        url = reverse('admin:commerce_product_add')
+
+        page = client.get(url)
+        assert page.status_code == 200  # plus d'erreur sur le prix au kg vide
+        assert 'value="larvae"' not in page.content.decode()  # anciennes phases masquées
+
+        response = client.post(url, self._data())
+        assert response.status_code == 302
+        assert Product.objects.filter(name='Dibaq Test 2mm').exists()
+
+    def test_duplicate_product_is_refused(self):
+        owner = _staff(superuser=True)
+        client = _client(owner)
+        url = reverse('admin:commerce_product_add')
+        client.post(url, self._data())
+
+        response = client.post(url, self._data(name='dibaq test 2MM', price_per_package='26000'))
+
+        assert response.status_code == 200
+        assert 'Ce produit existe déjà' in response.content.decode()
+        assert Product.objects.filter(name__iexact='Dibaq Test 2mm').count() == 1

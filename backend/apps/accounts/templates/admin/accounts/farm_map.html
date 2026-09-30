@@ -23,11 +23,6 @@
       <option value="">{% translate "Toutes les régions" %}</option>
       {% for value, label in region_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
     </select>
-    <label for="filter-status">{% translate "Certification" %}</label>
-    <select id="filter-status">
-      <option value="">{% translate "Tous les statuts" %}</option>
-      {% for value, label in status_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-    </select>
     <button type="submit" class="btn aq-btn-primary btn-sm">{% translate "Filtrer" %}</button>
     <button type="button" class="btn aq-btn-secondary btn-sm" onclick="resetFilters()">{% translate "Réinitialiser" %}</button>
     <span class="aq-muted" id="map-stats">{% translate "Chargement des fermes..." %}</span>
@@ -55,22 +50,13 @@
   };
   const css = getComputedStyle(document.documentElement);
   const token = name => css.getPropertyValue(name).trim();
-  const CERT_TONES = { certified: 'ok', pending: 'warn', suspended: 'danger', rejected: 'danger' };
-  const CERT_COLORS = {
-    certified: token('--aq-brand-strong'),
-    pending: token('--aq-warning-strong'),
-    suspended: token('--aq-danger'),
-    rejected: token('--aq-neutral-strong'),
-  };
+  // Première version : pas de certification, un seul type de marqueur.
+  const MARKER_COLOR = token('--aq-brand-strong');
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;',
     }[char]));
-  }
-
-  function knownCertificationStatus(value) {
-    return Object.prototype.hasOwnProperty.call(CERT_COLORS, value) ? value : 'pending';
   }
 
   function makeDot(color) {
@@ -96,10 +82,8 @@
 
   function loadFarms(page = 1) {
     const region = document.getElementById('filter-region').value;
-    const status = document.getElementById('filter-status').value;
     let url = `../map-data/?page=${page}`;
     if (region) url += `&region=${encodeURIComponent(region)}`;
-    if (status) url += `&certification_status=${encodeURIComponent(status)}`;
 
     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'include' })
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -115,18 +99,16 @@
           const lat = parseFloat(farm.latitude);
           const lng = parseFloat(farm.longitude);
           if (isNaN(lat) || isNaN(lng)) return;
-          const status = knownCertificationStatus(farm.certification_status);
           const fiche = FICHE_URL.replace('00000000-0000-0000-0000-000000000000', encodeURIComponent(farm.id));
           const phone = farm.owner_phone || '';
           const phoneHtml = phone
             ? `<a href="tel:${escapeHtml(phone.replace(/[^\d+]/g, ''))}">${escapeHtml(phone)}</a>` : '—';
           const locationHtml = farm.location_address ? `<p>${escapeHtml(farm.location_address)}</p>` : '';
-          const marker = L.marker([lat, lng], { icon: makeDot(CERT_COLORS[status]) });
+          const marker = L.marker([lat, lng], { icon: makeDot(MARKER_COLOR) });
           marker.bindPopup(`
             <div class="map-popup">
               <strong>${escapeHtml(farm.farm_name)}</strong>
               <p>${escapeHtml(farm.owner_name)} · ${phoneHtml}</p>
-              <p><span class="aq-badge aq-badge--${CERT_TONES[status]}">${escapeHtml(farm.certification_status_display)}</span></p>
               ${locationHtml}
               <div class="aq-actions">
                 <a class="aq-link-btn aq-link-btn--strong" href="${fiche}">${TEXT.fiche}</a>
@@ -140,7 +122,7 @@
           item.className = 'map-list__item';
           item.innerHTML = `<span class="map-list__name">${escapeHtml(farm.farm_name)}</span>
             <span class="aq-muted">${escapeHtml(farm.owner_name)}</span>
-            <span class="aq-badge aq-badge--${CERT_TONES[status]}">${escapeHtml(farm.certification_status_display)}</span>`;
+            ${farm.location_address ? `<span class="aq-muted">${escapeHtml(farm.location_address)}</span>` : ''}`;
           item.addEventListener('click', () => { map.setView([lat, lng], 14); marker.openPopup(); });
           list.appendChild(item);
         });
@@ -157,7 +139,6 @@
 
   function resetFilters() {
     document.getElementById('filter-region').value = '';
-    document.getElementById('filter-status').value = '';
     loadFarms(1);
   }
 

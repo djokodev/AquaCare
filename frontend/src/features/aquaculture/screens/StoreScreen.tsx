@@ -623,19 +623,21 @@ export default function StoreScreen() {
             </View>
                 {store?.pending_orders.length ? store.pending_orders.map((order) => (
               <Card key={order.id} variant="outlined" style={styles.orderCard}>
+                {/* Numéro et montant sur une ligne (le numéro ne se coupe jamais),
+                    statut en dessous : lisible même sur un petit écran. */}
                 <View style={styles.orderHeader}>
-                  <View style={styles.flex}>
-                    <AppText variant="label">{order.order_number}</AppText>
-                  </View>
-                  <View style={styles.orderAmount}>
-                    <AppText variant="label" color="link">
-                      {formatDashboardCurrency(order.total_fcfa, locale)} {t('dashboardDirectProductionCostUnit')}
-                    </AppText>
-                    <Badge
-                      label={t(getOrderStatusLabelKey(order.status, order.delivery_method))}
-                      tone={getOrderStatusTone(order)}
-                    />
-                  </View>
+                  <AppText variant="label" numberOfLines={1} style={styles.orderNumber}>
+                    {order.order_number}
+                  </AppText>
+                  <AppText variant="label" color="link" numberOfLines={1}>
+                    {formatDashboardCurrency(order.total_fcfa, locale)} {t('dashboardDirectProductionCostUnit')}
+                  </AppText>
+                </View>
+                <View style={styles.orderStatusRow}>
+                  <Badge
+                    label={t(getOrderStatusLabelKey(order.status, order.delivery_method))}
+                    tone={getOrderStatusTone(order)}
+                  />
                 </View>
                 {canConfirmOrderReceipt(order) ? (
                   <View style={styles.pendingOrderAction}>
@@ -855,9 +857,10 @@ const styles = StyleSheet.create({
   tracking: { marginTop: -spacing[2] },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   orderCard: { padding: spacing[3] },
-  orderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing[3] },
+  orderHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
   pendingOrderAction: { marginTop: spacing[3], gap: spacing[2] },
-  orderAmount: { alignItems: 'flex-end', gap: spacing[1] },
+  orderNumber: { flexShrink: 1 },
+  orderStatusRow: { flexDirection: 'row', marginTop: spacing[2] },
   productOptionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], width: '100%' },
   stockItem: { flexDirection: 'row', alignItems: 'center', gap: spacing[3], paddingVertical: spacing[2] },
   actionList: { gap: spacing[3] },

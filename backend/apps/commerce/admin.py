@@ -22,6 +22,7 @@ from common.admin_mixins import (
     SecuredModelAdmin,
 )
 from common.admin_ui import badge, link_button
+from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.core.exceptions import PermissionDenied
@@ -99,11 +100,54 @@ class OrderItemInline(admin.TabularInline):
         return False
 
 
+class ProductAdminForm(forms.ModelForm):
+    """
+    Saisie d'un produit du catalogue depuis l'admin.
+
+    - Seules les trois phases actuelles sont proposées (les anciennes valeurs
+      restent affichées pour un produit qui les porte déjà).
+    - Pas de doublon : même marque, même nom et même poids de sac.
+    """
+
+    CURRENT_PHASES = ('alevinage', 'pre_grossissement', 'grossissement')
+
+    class Meta:
+        model = Product
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        phase = self.fields.get('phase')
+        if phase is not None:
+            keep = set(self.CURRENT_PHASES)
+            if self.instance and self.instance.pk and self.instance.phase:
+                keep.add(self.instance.phase)
+            phase.choices = [choice for choice in phase.choices if choice[0] in keep or choice[0] == '']
+
+    def clean(self):
+        cleaned = super().clean()
+        name = (cleaned.get('name') or '').strip()
+        duplicates = Product.objects.filter(
+            brand=cleaned.get('brand'),
+            name__iexact=name,
+            package_weight_kg=cleaned.get('package_weight_kg'),
+        )
+        if self.instance and self.instance.pk:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if name and duplicates.exists():
+            raise forms.ValidationError(
+                _("Ce produit existe déjà (même marque, même nom, même poids de sac). "
+                  "Modifiez le produit existant au lieu d'en créer un second.")
+            )
+        return cleaned
+
+
 @admin.register(Product)
 class ProductAdmin(CommerceSecuredAdmin):
     """
     Administration securisee du catalogue produits AquaCare.
     """
+    form = ProductAdminForm
     list_display = [
         'name', 'brand_badge', 'species_badge', 'phase',
         'pellet_size_mm', 'protein_percentage', 'package_weight_kg',

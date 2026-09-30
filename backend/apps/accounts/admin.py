@@ -948,7 +948,6 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
             'title': _('Carte des fermes'),
             'opts': self.model._meta,
             'region_choices': User._meta.get_field('region').choices,
-            'status_choices': FarmProfile._meta.get_field('certification_status').choices,
         }
         return render(request, 'admin/accounts/farm_map.html', context)
 

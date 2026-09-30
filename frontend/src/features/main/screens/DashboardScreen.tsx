@@ -5,7 +5,6 @@ import {
   View,
   ScrollView,
   RefreshControl,
-  Alert,
   StyleSheet,
 } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -21,7 +20,6 @@ import {
 import { fetchNotifications } from "@/features/notifications/store/notificationSlice";
 import {
   clearOrderContext,
-  confirmOrderReceipt,
   fetchOrderStatistics,
   fetchOrders,
 } from "@/features/commerce/store/commerceSlice";
@@ -36,11 +34,7 @@ import DashboardHeader from "../components/DashboardHeader";
 import QuickActionsPreview from "../components/QuickActionsPreview";
 import QuickActionsSheet from "../components/QuickActionsSheet";
 import { CycleDashboard, ProductionCycle } from "@/types/aquaculture";
-import type { Order } from "@/types/commerce";
-import {
-  canConfirmOrderReceipt,
-  getOrderReceiptActionLabelKey,
-} from "@/features/commerce/utils/orderStatus";
+import { canConfirmOrderReceipt } from "@/features/commerce/utils/orderStatus";
 import { useAuth } from "@/hooks/useAuth";
 import { aquacultureService } from "@/features/aquaculture/services/aquacultureService";
 import {
@@ -116,10 +110,6 @@ export default function DashboardScreen({ navigation }: any) {
     null,
   );
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
-  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(
-    null,
-  );
-  const confirmationLock = useRef(false);
   const [currentCycleUnitCount, setCurrentCycleUnitCount] = useState<
     number | null
   >(null);
@@ -455,46 +445,6 @@ export default function DashboardScreen({ navigation }: any) {
     });
   };
 
-  const handleConfirmOrderReceipt = (order: Order) => {
-    if (!primaryActiveCycleId) return;
-    const isPickup = order.delivery_method === "pickup";
-    Alert.alert(
-      t(isPickup ? "confirmPickupTitle" : "confirmReceiptTitle"),
-      t(isPickup ? "confirmPickupMessage" : "confirmReceiptMessage", {
-        orderNumber: order.order_number,
-      }),
-      [
-        { text: t("cancel"), style: "cancel" },
-        {
-          text: t("confirm"),
-          onPress: async () => {
-            if (confirmationLock.current) return;
-            try {
-              confirmationLock.current = true;
-              setConfirmingOrderId(order.id);
-              await dispatch(confirmOrderReceipt(order.id)).unwrap();
-              await Promise.all([
-                dispatch(fetchOrders({ productionCycleId: primaryActiveCycleId })),
-                dispatch(fetchOrderStatistics({ productionCycleId: primaryActiveCycleId })),
-              ]);
-              Alert.alert(t("success"), t(isPickup ? "confirmPickupSuccess" : "confirmReceiptSuccess"));
-            } catch (caughtError) {
-              Alert.alert(
-                t("error"),
-                typeof caughtError === "string" && caughtError.trim()
-                  ? caughtError
-                  : t("confirmReceiptError"),
-              );
-            } finally {
-              confirmationLock.current = false;
-              setConfirmingOrderId(null);
-            }
-          },
-        },
-      ],
-    );
-  };
-
   if (error && !dashboardData) {
     return (
       <ScrollView
@@ -801,69 +751,35 @@ export default function DashboardScreen({ navigation }: any) {
 
         {primaryActiveCycleId && pendingDeliveryConfirmations.length > 0 && (
           <View className="px-5 pb-2">
-            <Card variant="elevated" style={{ marginBottom: 8 }}>
-              <View className="flex-row items-center justify-between mb-3">
-                <View className="flex-1 mr-3">
-                  <AppText variant="bodyStrong">
-                    {t("ordersPendingConfirmationTitle", {
-                      count: pendingDeliveryConfirmations.length,
-                    })}
-                  </AppText>
-                  <AppText
-                    variant="caption"
-                    color="muted"
-                    style={{ marginTop: 4 }}
-                  >
-                    {t("ordersPendingConfirmationDescription")}
-                  </AppText>
-                </View>
-                <Button
-                  label={t("cycleOrders")}
-                  onPress={() => navigation.navigate("OrdersHistory", {
-                    cycleId: primaryActiveCycleId,
-                  })}
-                  variant="outline"
-                  size="small"
-                  fullWidth={false}
-                />
-              </View>
-
-              {pendingDeliveryConfirmations.slice(0, 2).map((order) => {
-                const total = Number.parseFloat(order.total || "0");
-                const isConfirming = confirmingOrderId === order.id;
-                return (
-                  <Card
-                    key={order.id}
-                    variant="outlined"
-                    style={{ padding: 12, marginBottom: 8 }}
-                  >
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-1 mr-3">
-                        <AppText variant="label">{order.order_number}</AppText>
-                        <AppText
-                          variant="caption"
-                          color="muted"
-                          style={{ marginTop: 4 }}
-                        >
-                          {Number.isFinite(total)
-                            ? `${total.toLocaleString()} FCFA`
-                            : order.total}
-                        </AppText>
-                      </View>
-                      <Button
-                        label={t(getOrderReceiptActionLabelKey(order))}
-                        size="small"
-                        fullWidth={false}
-                        loading={isConfirming}
-                        onPress={() =>
-                          handleConfirmOrderReceipt(order)
-                        }
-                      />
-                    </View>
-                  </Card>
-                );
+            <InteractiveCard
+              testID="dashboard-pending-receipt-alert"
+              accessibilityLabel={t("ordersPendingConfirmationTitle", {
+                count: pendingDeliveryConfirmations.length,
               })}
-            </Card>
+              onPress={handleStorePress}
+              style={styles.pendingReceiptAlert}
+            >
+              <Ionicons
+                name="cube-outline"
+                size={22}
+                color={colors.status.warning}
+              />
+              <View style={styles.pendingReceiptText}>
+                <AppText variant="label">
+                  {t("ordersPendingConfirmationTitle", {
+                    count: pendingDeliveryConfirmations.length,
+                  })}
+                </AppText>
+                <AppText variant="helper" color="muted">
+                  {t("dashboardPendingReceiptHint")}
+                </AppText>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.text.muted}
+              />
+            </InteractiveCard>
           </View>
         )}
 
@@ -956,6 +872,12 @@ export default function DashboardScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  pendingReceiptAlert: {
+    alignItems: "center",
+    gap: spacing[3],
+    backgroundColor: colors.status.warningSurface,
+  },
+  pendingReceiptText: { flex: 1, gap: spacing[1] },
   dashboardRoot: { flex: 1, backgroundColor: colors.surface.dashboard },
   dashboardSectionContainer: { paddingHorizontal: spacing[5], paddingVertical: spacing[5] },
   dashboardGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },

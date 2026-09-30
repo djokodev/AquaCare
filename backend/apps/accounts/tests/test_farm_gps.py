@@ -256,4 +256,3 @@ class TestFarmMapView:
         assert '${escapeHtml(farm.farm_name)}' in template
         assert '${escapeHtml(farm.owner_name)}' in template
         assert '${escapeHtml(farm.location_address)}' in template
-        assert 'knownCertificationStatus(farm.certification_status)' in template
