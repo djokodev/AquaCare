@@ -759,11 +759,6 @@ export default function DashboardScreen({ navigation }: any) {
               onPress={handleStorePress}
               style={styles.pendingReceiptAlert}
             >
-              <Ionicons
-                name="cube-outline"
-                size={22}
-                color={colors.status.warning}
-              />
               <View style={styles.pendingReceiptText}>
                 <AppText variant="label">
                   {t("ordersPendingConfirmationTitle", {

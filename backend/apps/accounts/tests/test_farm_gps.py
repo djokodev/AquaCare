@@ -256,3 +256,9 @@ class TestFarmMapView:
         assert '${escapeHtml(farm.farm_name)}' in template
         assert '${escapeHtml(farm.owner_name)}' in template
         assert '${escapeHtml(farm.location_address)}' in template
+
+
+def test_farm_map_pins_leaflet_with_subresource_integrity():
+    """Leaflet vient d'un CDN : le navigateur refuse un fichier modifié (SRI)."""
+    template = FARM_MAP_TEMPLATE.read_text(encoding='utf-8')
+    assert template.count('integrity="sha256-') == 2

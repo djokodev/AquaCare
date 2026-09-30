@@ -19,7 +19,7 @@ from common.admin_capabilities import (
     has_capability,
     has_capability_and_permission,
 )
-from common.admin_mixins import SecuredModelAdmin
+from common.admin_mixins import CertificationFeatureMixin, SecuredModelAdmin
 from common.admin_ui import badge, link_button, muted
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
@@ -235,7 +235,9 @@ class FinalHarvestOperationAdmin(AquacultureSecuredAdmin):
 
 
 @admin.register(ProductionCycle)
-class ProductionCycleAdmin(AquacultureSecuredAdmin):
+class ProductionCycleAdmin(CertificationFeatureMixin, AquacultureSecuredAdmin):
+    certification_fields = ('farm_profile__certification_status',)
+
     """
     Administration securisee des cycles de production.
 

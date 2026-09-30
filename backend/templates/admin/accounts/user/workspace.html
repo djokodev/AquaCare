@@ -83,7 +83,9 @@
         {% if farm %}
           <dl class="aq-dl">
             <dt>{% translate "Ferme" %}</dt><dd><a href="{{ farm.url }}">{{ farm.name }}</a></dd>
+            {% if certification_enabled %}
             <dt>{% translate "Certification" %}</dt><dd><span class="aq-badge {% if farm.certification_status == 'certified' %}aq-badge--ok{% elif farm.certification_status == 'pending' %}aq-badge--warn{% else %}aq-badge--danger{% endif %}">{{ farm.certification }}</span></dd>
+            {% endif %}
             <dt>{% translate "Cycles en cours" %}</dt><dd>{{ farm.active_cycles }}</dd>
             <dt>{% translate "Unités" %}</dt><dd>{{ farm.units }}</dd>
             <dt>{% translate "Position GPS" %}</dt><dd>{% if farm.has_gps %}<span class="aq-badge aq-badge--ok">{% translate "Disponible" %}</span>{% else %}<span class="aq-badge aq-badge--muted">{% translate "Non renseignée" %}</span>{% endif %}</dd>

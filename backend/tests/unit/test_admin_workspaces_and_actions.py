@@ -193,7 +193,17 @@ class TestAdminActions:
         product.refresh_from_db()
         assert product.is_available is True
 
-    def test_farms_can_be_certified_from_the_farm_list(self):
+    def test_certification_is_hidden_in_first_release(self):
+        farm = FarmProfileFactory(certification_status='pending')
+        manager = _staff(RBACConstants.GROUP_MANAGERS)
+        response = _client(manager).get(reverse('admin:accounts_farmprofile_changelist'))
+        html = response.content.decode()
+        assert 'certify_selected_farms' not in html
+        assert 'Certification' not in html
+        assert farm.farm_name in html
+
+    def test_farms_can_be_certified_from_the_farm_list(self, settings):
+        settings.AQUACARE_CERTIFICATION_ENABLED = True
         farm = FarmProfileFactory(certification_status='pending')
         manager = _staff(RBACConstants.GROUP_MANAGERS)
 

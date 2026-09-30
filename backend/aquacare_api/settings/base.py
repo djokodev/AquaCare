@@ -136,6 +136,11 @@ CSRF_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_REFERRER_POLICY = "same-origin"
+
+# Certification des fermes : pas utilisée dans la première version. Tant que
+# ce drapeau est faux, l'admin masque colonnes, filtres, actions et champs de
+# certification (les données restent en base, rien n'est supprimé).
+AQUACARE_CERTIFICATION_ENABLED = _env_bool("AQUACARE_CERTIFICATION_ENABLED", False)
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 
 # Django REST Framework

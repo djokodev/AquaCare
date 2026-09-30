@@ -65,6 +65,9 @@ class AquaCareAdminSite(AdminSite):
         navigation = navigation_for_user(request.user)
         context["aquacare_navigation"] = navigation
         context["aquacare_active_nav"] = active_navigation_key(navigation, request.path)
+        from django.conf import settings
+
+        context["certification_enabled"] = getattr(settings, "AQUACARE_CERTIFICATION_ENABLED", False)
         context["aquacare_can_search"] = has_capability(
             request.user, AdminCapability.USE_GLOBAL_SEARCH
         )

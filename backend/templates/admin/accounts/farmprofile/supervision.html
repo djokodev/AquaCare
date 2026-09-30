@@ -22,8 +22,10 @@
           <dt>{% translate "Téléphone" %}</dt><dd>{{ workspace.identity.phone|default:"—" }}</dd>
           <dt>{% translate "Region et ville" %}</dt>
           <dd>{{ farm.user.get_region_display|default:"—" }}, {% if farm.user.city %}{{ farm.user.city }}{% else %}{% translate "Ville inconnue" %}{% endif %}{% if farm.user.neighborhood %} · {{ farm.user.neighborhood }}{% endif %}</dd>
+          {% if certification_enabled %}
           <dt>{% translate "Certification" %}</dt>
           <dd><span class="aq-badge {% if workspace.identity.is_certified %}aq-badge--ok{% else %}aq-badge--muted{% endif %}">{{ farm.get_certification_status_display }}</span></dd>
+          {% endif %}
           <dt>{% translate "Inscrite le" %}</dt><dd>{{ workspace.identity.member_since|date:"d/m/Y" }}</dd>
         </dl>
         {% if change_url %}<div class="aq-actions"><a class="btn aq-btn-secondary" href="{{ change_url }}">{% translate "Modifier la fiche" %}</a></div>{% endif %}

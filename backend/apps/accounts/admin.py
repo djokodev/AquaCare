@@ -18,6 +18,7 @@ from common.admin_capabilities import (
 )
 from common.admin_mixins import (
     AuditLogMixin,
+    CertificationFeatureMixin,
     ManagerMixin,
     PIIMaskingMixin,
     SecuredModelAdmin,
@@ -107,6 +108,7 @@ class AccountsAdminRoleMixin:
 
 @admin.register(User)
 class UserAdmin(
+    CertificationFeatureMixin,
     AccountsAdminRoleMixin,
     ManagerMixin,
     PIIMaskingMixin,
@@ -193,6 +195,9 @@ class UserAdmin(
     )
 
     readonly_fields = ('farm_link', 'date_joined', 'last_login')
+
+    certification_fields = ('farm_certification_status', 'farm_profile__certification_status')
+    certification_actions = ('certify_farms', 'suspend_certifications')
 
     # Champs proteges pour non-superusers
     protected_fields = ['is_staff', 'is_superuser', 'groups', 'user_permissions']
@@ -652,7 +657,9 @@ class UserAdmin(
 
 
 @admin.register(FarmProfile)
-class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, SecuredModelAdmin):
+class FarmProfileAdmin(
+    CertificationFeatureMixin, AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, SecuredModelAdmin
+):
     """
     Administration securisee des profils de ferme.
     """
@@ -664,6 +671,8 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
         'unresolved_incident_count', 'last_operational_activity',
     )
     actions = ['certify_selected_farms', 'suspend_selected_farms']
+    certification_fields = ('certification_badge', 'certification_status')
+    certification_actions = ('certify_selected_farms', 'suspend_selected_farms')
     # La carte affiche toutes les fermes d'un coup (liste + marqueurs), dans
     # une limite qui garde la réponse légère.
     MAP_PAGE_SIZE = 500

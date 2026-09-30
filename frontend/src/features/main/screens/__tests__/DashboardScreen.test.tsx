@@ -588,8 +588,8 @@ describe("features/main/screens/DashboardScreen", () => {
   });
 
   it("affiche une alerte simple qui ouvre le Magasin pour confirmer une commande livrée", async () => {
-    const baseSelector = (useSelector as jest.Mock).getMockImplementation();
-    (useSelector as jest.Mock).mockImplementation((selector: any) =>
+    const baseSelector = mockUseSelector.getMockImplementation();
+    mockUseSelector.mockImplementation((selector: any) =>
       baseSelector?.((state: any) =>
         selector({
           ...state,

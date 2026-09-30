@@ -353,3 +353,49 @@ class PIIMaskingMixin(RoleAwareAdminMixin):
                     list_display[idx] = 'phone_masked'
 
         return list_display
+
+
+class CertificationFeatureMixin:
+    """
+    Masque tout ce qui concerne la certification des fermes quand
+    ``settings.AQUACARE_CERTIFICATION_ENABLED`` est faux (première version).
+    """
+
+    certification_fields: tuple[str, ...] = ()
+    certification_actions: tuple[str, ...] = ()
+
+    @staticmethod
+    def certification_enabled() -> bool:
+        from django.conf import settings
+
+        return getattr(settings, "AQUACARE_CERTIFICATION_ENABLED", False)
+
+    def _without_certification(self, names):
+        if self.certification_enabled():
+            return names
+        return type(names)(name for name in names if name not in self.certification_fields) \
+            if isinstance(names, (list, tuple)) else names
+
+    def get_list_display(self, request):
+        return self._without_certification(super().get_list_display(request))
+
+    def get_list_filter(self, request):
+        return self._without_certification(super().get_list_filter(request))
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if not self.certification_enabled():
+            for name in self.certification_actions:
+                actions.pop(name, None)
+        return actions
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if self.certification_enabled():
+            return fieldsets
+        cleaned = []
+        for title, options in fieldsets:
+            fields = tuple(field for field in options.get("fields", ()) if field not in self.certification_fields)
+            if fields:
+                cleaned.append((title, {**options, "fields": fields}))
+        return cleaned

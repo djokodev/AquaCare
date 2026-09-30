@@ -479,8 +479,9 @@ class TestActionsFiltering:
         assert 'anonymize_accounts' in actions
         assert 'delete_selected' not in actions
 
-    def test_manager_has_verify_action(self, mock_request, manager_user):
-        """Le manager a l'action verify_users."""
+    def test_manager_has_verify_action(self, mock_request, manager_user, settings):
+        """Le manager a l'action verify_users (et la certification quand elle est activée)."""
+        settings.AQUACARE_CERTIFICATION_ENABLED = True
         admin = UserAdmin(User, AdminSite())
         request = mock_request(manager_user)
 

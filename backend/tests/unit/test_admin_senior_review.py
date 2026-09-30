@@ -262,7 +262,7 @@ def test_manager_farm_list_uses_real_relations_and_workspace_as_primary_link():
     assert response.status_code == 200
     assert list_display[:2] == ("farm_workspace_link", "user_display_name")
     assert "farm_location" in list_display
-    assert "certification_badge" in list_display
+    assert "certification_badge" not in list_display  # certification masquée en V1
     assert "gps_status" in list_display
     assert "active_unit_count" in list_display
     assert "active_cycle_count" in list_display
@@ -330,7 +330,7 @@ def test_farm_workspace_has_complete_role_scoped_sections(role, expected_keys):
     assert farm.user.display_name in html
     assert farm.user.get_region_display() in html
     assert farm.user.city in html
-    assert farm.get_certification_status_display() in html
+    assert farm.get_certification_status_display() not in html  # certification masquée en V1
     assert "GPS disponible" in html
     if role == RBACConstants.GROUP_MANAGERS:
         assert "Support" not in [section["key"] for section in response.context["sections"]]
