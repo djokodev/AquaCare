@@ -1381,7 +1381,7 @@ export const fr = {
   onboardingFeedMockAlarm: 'Il est l\'heure de nourrir vos poissons',
   onboardingShopTitle: 'Intrants et conseils sans vous déplacer',
   onboardingShopText: 'Commandez votre aliment en livraison ou en retrait, et posez vos questions au support directement dans l\'app.',
-  onboardingShopMockProduct: 'Aliment 3 mm · 2 sacs',
+  onboardingShopMockProduct: 'DIBAQ Catfish 2 mm · 2 sacs',
   onboardingShopMockStatus: 'Prête pour le retrait',
   onboardingShopMockChat: 'Bonjour, votre commande vous attend au dépôt.',
   onboardingShopMockSupport: 'Support AquaCare',

@@ -1382,7 +1382,7 @@
   onboardingFeedMockAlarm: 'Time to feed your fish',
   onboardingShopTitle: 'Inputs and advice without travelling',
   onboardingShopText: 'Order your feed for delivery or pickup, and ask the support team your questions right in the app.',
-  onboardingShopMockProduct: 'Feed 3 mm · 2 bags',
+  onboardingShopMockProduct: 'DIBAQ Catfish 2 mm · 2 bags',
   onboardingShopMockStatus: 'Ready for pickup',
   onboardingShopMockChat: 'Hello, your order is waiting for you at the depot.',
   onboardingShopMockSupport: 'AquaCare support',

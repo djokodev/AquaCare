@@ -34,7 +34,7 @@ function WelcomeVisual() {
     <View style={styles.center}>
       <View style={styles.logoDisc}>
         <Image
-          source={require('../../../../assets/brand/aquacare-logo.png')}
+          source={require('../../../../assets/brand/aquacare-mark.png')}
           style={styles.logo}
           accessibilityIgnoresInvertColors
         />
@@ -104,7 +104,11 @@ function ShopVisual() {
       <View style={styles.card}>
         <View style={styles.orderRow}>
           <View style={styles.bagIcon}>
-            <Ionicons name="cube-outline" size={22} color={colors.brand.primary} />
+            <Image
+              source={require('../../../../assets/products/DIBAQ.png')}
+              style={styles.bagImage}
+              accessibilityIgnoresInvertColors
+            />
           </View>
           <View style={styles.flex}>
             <AppText style={styles.cardTitle}>{t('onboardingShopMockProduct')}</AppText>
@@ -150,7 +154,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.large,
   },
-  logo: { width: 78, height: 60, resizeMode: 'contain' },
+  logo: { width: 64, height: 64, resizeMode: 'contain' },
   brandName: { ...typography.display, color: colors.text.inverse, marginTop: spacing[4] },
   tagline: { ...typography.body, color: 'rgba(255,255,255,0.85)', marginTop: spacing[1] },
   card: {
@@ -202,14 +206,15 @@ const styles = StyleSheet.create({
   mealTime: { ...typography.body, flex: 1, color: colors.text.primary },
   orderRow: { flexDirection: 'row', alignItems: 'center' },
   bagIcon: {
-    width: 48,
-    height: 48,
+    width: 52,
+    height: 56,
     borderRadius: radii.lg,
-    backgroundColor: colors.brand.subtle,
+    backgroundColor: colors.surface.page,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing[3],
   },
+  bagImage: { width: 36, height: 44, resizeMode: 'contain' },
   statusBadge: {
     alignSelf: 'flex-start',
     marginTop: spacing[1],

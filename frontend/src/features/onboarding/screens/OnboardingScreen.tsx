@@ -123,7 +123,7 @@ export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps)
   const buttonAction = isLastSlide ? handleStart : handleNext;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
         <View style={styles.circleLarge} pointerEvents="none" />
         <View style={styles.circleSmall} pointerEvents="none" />
@@ -176,10 +176,10 @@ export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps)
           })}
         />
 
-        <View style={styles.footer}>
+        <SafeAreaView edges={['bottom']} style={styles.footer}>
           <SlideIndicators currentIndex={currentIndex} totalSlides={SLIDES.length} />
           <OnboardingButton title={buttonTitle} onPress={buttonAction} disabled={isProcessing} />
-        </View>
+        </SafeAreaView>
       </View>
     </SafeAreaView>
   );
