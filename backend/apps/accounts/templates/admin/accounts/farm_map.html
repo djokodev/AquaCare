@@ -86,6 +86,11 @@
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 18,
+    // Le site envoie « Referrer-Policy: same-origin » : sans ce réglage, le
+    // navigateur n'envoie aucun Referer aux serveurs OpenStreetMap, qui
+    // refusent alors les tuiles (« Access blocked »). On n'envoie que
+    // l'origine du site, jamais l'adresse complète de la page.
+    referrerPolicy: 'strict-origin-when-cross-origin',
   }).addTo(map);
   const markersLayer = L.layerGroup().addTo(map);
 
