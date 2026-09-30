@@ -32,7 +32,6 @@ function WelcomeVisual() {
   const { t } = useTranslation();
   return (
     <View style={styles.center}>
-      <AppText style={styles.brandName}>AquaCare</AppText>
       <AppText style={styles.tagline}>{t('onboardingWelcomeTagline')}</AppText>
     </View>
   );
@@ -138,8 +137,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { alignItems: 'center' },
   stack: { width: '100%', maxWidth: 320, gap: spacing[3] },
-  brandName: { ...typography.display, fontSize: 44, lineHeight: 52, color: colors.text.inverse },
-  tagline: { ...typography.body, fontSize: 18, lineHeight: 26, color: 'rgba(255,255,255,0.85)', marginTop: spacing[2] },
+  tagline: { ...typography.display, color: colors.text.inverse, textAlign: 'center' },
   card: {
     width: '100%',
     maxWidth: 320,
