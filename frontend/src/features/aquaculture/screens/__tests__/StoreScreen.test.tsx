@@ -259,8 +259,9 @@ describe('StoreScreen', () => {
       status: 'low', pending_orders: [], stock_tracking_started_at: '2026-06-01',
       stock_items: [],
     });
-    const { getByText } = render(<StoreScreen />);
-    await waitFor(() => expect(getByText('storeReplenishmentRequired')).toBeTruthy());
+    const { getAllByText } = render(<StoreScreen />);
+    // Le besoin non couvert met « Commander selon le besoin » en bouton principal, une seule fois.
+    await waitFor(() => expect(getAllByText('storeOrderCycleNeed')).toHaveLength(1));
   });
 
   it('n affiche jamais un besoin couvert lorsque le calcul est indisponible', async () => {
@@ -318,12 +319,13 @@ describe('StoreScreen', () => {
       stock_tracking_started_at: null,
     });
 
-    const { getByText } = render(<StoreScreen />);
+    const { getByText, queryByText } = render(<StoreScreen />);
 
     await waitFor(() => {
-      expect(getByText('storePendingOrdersEmptyTitle')).toBeTruthy();
-      expect(getByText('storePendingOrdersEmptyDescription')).toBeTruthy();
+      expect(getByText('storeManualSubmit')).toBeTruthy();
     });
+    // Sans commande en attente, la carte vide n'est plus affichée (moins de bruit).
+    expect(queryByText('storePendingOrdersTitle')).toBeNull();
   });
 
   it('explique une commande legacy incompatible sans proposer une classification dangereuse', async () => {
@@ -486,7 +488,7 @@ describe('StoreScreen', () => {
       stock_tracking_started_at: null,
     });
     fireEvent.press(getByText('retry'));
-    await waitFor(() => expect(getByText('storePendingOrdersEmptyTitle')).toBeTruthy());
+    await waitFor(() => expect(getByText('storeManualSubmit')).toBeTruthy());
   });
 
   it('affiche un état approprié sans cycle de session', async () => {

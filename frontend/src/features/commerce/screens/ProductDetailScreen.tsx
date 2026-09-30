@@ -10,6 +10,7 @@ import { AppDispatch, RootState } from '@/store/store';
 import { fetchProductDetail, addToCart } from '@/features/commerce/store/commerceSlice';
 import { Product } from '@/types/commerce';
 import { RootStackParamList } from '@/navigation/MainNavigator';
+import { MAX_BAGS_PER_LINE } from '@/features/commerce/constants';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 import { AppHeader, AppText, Badge, Button, Card, Divider, ErrorState, IconButton, LoadingState, TextField } from '@/components/ui';
 import { colors, radii, sizing, spacing } from '@/theme';
@@ -51,7 +52,7 @@ export default function ProductDetailScreen() {
   const cartItemsCount = useMemo(() => cart.items.reduce((sum, item) => sum + item.quantity, 0), [cart.items]);
   const displayName = product ? getProductDisplayName(product.name, t('catfish')) : '';
   const updateQuantity = (nextQuantity: number) => {
-    const validQuantity = Math.max(1, nextQuantity);
+    const validQuantity = Math.min(MAX_BAGS_PER_LINE, Math.max(1, nextQuantity));
     setQuantity(validQuantity);
     setQuantityInput(String(validQuantity));
   };
@@ -90,7 +91,7 @@ export default function ProductDetailScreen() {
             {product.protein_percentage !== null || product.lipid_percentage !== null ? <Card variant="outlined" style={styles.section}><AppText variant="sectionTitle">{t('nutritionalComposition')}</AppText><View style={styles.nutrients}>{product.protein_percentage !== null ? <Nutrient label={t('protein')} value={`${product.protein_percentage}%`} icon="nutrition" /> : null}{product.lipid_percentage !== null ? <Nutrient label={t('lipids')} value={`${product.lipid_percentage}%`} icon="water" /> : null}</View></Card> : null}
             <Card variant="outlined" style={styles.section}>
               <AppText variant="sectionTitle">{t('quantity')}</AppText>
-              <View style={styles.stepper}><IconButton icon="remove" variant="surface" accessibilityLabel={t('decreaseQuantity')} onPress={() => updateQuantity(quantity - 1)} disabled={quantity === 1} /><View style={styles.quantity}><TextField value={quantityInput} onChangeText={handleQuantityInput} onBlur={() => { if (!quantityInput) setQuantityInput(String(quantity)); }} keyboardType="number-pad" accessibilityLabel={t('quantity')} style={styles.quantityInput} /><AppText variant="caption" color="muted">{t(quantity > 1 ? 'bags' : 'bag')}</AppText></View><IconButton icon="add" variant="surface" accessibilityLabel={t('increaseQuantity')} onPress={() => updateQuantity(quantity + 1)} /></View>
+              <View style={styles.stepper}><IconButton icon="remove" variant="surface" accessibilityLabel={t('decreaseQuantity')} onPress={() => updateQuantity(quantity - 1)} disabled={quantity === 1} /><View style={styles.quantity}><TextField value={quantityInput} onChangeText={handleQuantityInput} onBlur={() => { if (!quantityInput) setQuantityInput(String(quantity)); }} keyboardType="number-pad" accessibilityLabel={t('quantity')} style={styles.quantityInput} /><AppText variant="caption" color="muted">{t(quantity > 1 ? 'bags' : 'bag')}</AppText></View><IconButton icon="add" variant="surface" accessibilityLabel={t('increaseQuantity')} onPress={() => updateQuantity(quantity + 1)} disabled={quantity >= MAX_BAGS_PER_LINE} /></View>
               <Divider /><AppText variant="caption" color="muted">{t('total')}</AppText><AppText variant="metric" color="link">{(Number(product.price_per_package) * quantity).toLocaleString()} FCFA</AppText>
             </Card>
           </ScrollView>

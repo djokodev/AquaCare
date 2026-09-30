@@ -26,6 +26,7 @@ import SelectField from '@/components/SelectField';
 import logger from '@/utils/logger';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { RouteProp, useRoute } from '@react-navigation/native';
+import { MAX_BAGS_PER_LINE } from '@/features/commerce/constants';
 import { getProductBrandAsset } from '@/features/commerce/utils/productBrandAssets';
 import { getProductDisplayName } from '@/features/commerce/utils/productPresentation';
 import { parseApiError, sanitizeUserFacingErrorMessage } from '@/utils/errorParser';
@@ -338,7 +339,7 @@ export default function CartScreen() {
           <View style={styles.quantityRow}>
             <IconButton icon="remove" accessibilityLabel={t('decreaseQuantity')} disabled={quantity <= 1} onPress={() => handleUpdateQuantity(product.id, quantity - 1)} />
             <AppText variant="bodyStrong" style={styles.quantity}>{quantity}</AppText>
-            <IconButton icon="add" accessibilityLabel={t('increaseQuantity')} onPress={() => handleUpdateQuantity(product.id, quantity + 1)} />
+            <IconButton icon="add" accessibilityLabel={t('increaseQuantity')} onPress={() => handleUpdateQuantity(product.id, quantity + 1)} disabled={quantity >= MAX_BAGS_PER_LINE} />
           </View>
           <AppText variant="cardTitle" color="link">{lineTotal.toLocaleString()} FCFA</AppText>
         </View>

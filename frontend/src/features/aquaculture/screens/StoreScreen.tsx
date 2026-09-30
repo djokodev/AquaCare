@@ -24,9 +24,7 @@ import {
   DashboardHeroCard,
   DashboardMetricCard,
   DashboardSection,
-  DashboardStatus,
   Divider,
-  EmptyState,
   ErrorState,
   IconButton,
   InlineAlert,
@@ -449,13 +447,16 @@ export default function StoreScreen() {
   const feedToSecureKg = parseDashboardNumber(store?.summary.feed_to_secure_kg ?? null);
   const requiresReplenishment = feedToSecureKg !== null && feedToSecureKg > 0;
 
+  // Quand il manque de l'aliment, « Commander selon le besoin » devient le bouton
+  // principal sous le chiffre clé ; la liste ne garde que les actions secondaires.
   const actionRows = [
+    ...(requiresReplenishment ? [] : [{ label: t('storeOrderCycleNeed'), onPress: handleOrderCycleNeed }]),
     { label: t('storeManualSubmit'), onPress: openManualModal },
     { label: t('storeViewProducts'), onPress: handleOpenProducts },
     { label: t('storeViewCart'), onPress: handleOpenCart },
     { label: t('storeViewOrders'), onPress: handleOpenOrders },
-    { label: t('storeOrderCycleNeed'), onPress: handleOrderCycleNeed },
   ];
+  const hasPendingOrders = Boolean(store?.pending_orders.length);
 
   return (
     <View style={styles.root}>
@@ -507,6 +508,13 @@ export default function StoreScreen() {
                     unavailableLabel={t('dashboardDataUnavailable')}
                   />
                 )}
+                {requiresReplenishment ? (
+                  <Button
+                    label={t('storeOrderCycleNeed')}
+                    iconLeft="cart-outline"
+                    onPress={handleOrderCycleNeed}
+                  />
+                ) : null}
                 <View style={styles.metrics}>
                   <DashboardMetricCard
                     label={t('storeCurrentStock')}
@@ -530,23 +538,24 @@ export default function StoreScreen() {
                     layout="fullWidthCompact"
                     unavailableLabel={t('dashboardDataUnavailable')}
                   />
-                  <DashboardMetricCard
-                    label={t('trackedFeedExpenses')}
-                    value={formatDashboardCurrency(store.summary.tracked_feed_expenses_fcfa, locale)}
-                    unit={t('dashboardDirectProductionCostUnit')}
-                    tone="attention"
-                    unavailableLabel={t('dashboardDataUnavailable')}
-                  />
-                  <DashboardMetricCard
-                    label={t('unknownCostEntries')}
-                    value={formatDashboardNumber(store.summary.unknown_cost_entries_count, locale, { maximumFractionDigits: 0 })}
-                    tone="slate"
-                    unavailableLabel={t('dashboardDataUnavailable')}
-                  />
+                  {store.summary.tracked_feed_expenses_fcfa != null ? (
+                    <DashboardMetricCard
+                      label={t('trackedFeedExpenses')}
+                      value={formatDashboardCurrency(store.summary.tracked_feed_expenses_fcfa, locale)}
+                      unit={t('dashboardDirectProductionCostUnit')}
+                      tone="attention"
+                      unavailableLabel={t('dashboardDataUnavailable')}
+                    />
+                  ) : null}
+                  {Number(store.summary.unknown_cost_entries_count ?? 0) > 0 ? (
+                    <DashboardMetricCard
+                      label={t('unknownCostEntries')}
+                      value={formatDashboardNumber(store.summary.unknown_cost_entries_count, locale, { maximumFractionDigits: 0 })}
+                      tone="slate"
+                      unavailableLabel={t('dashboardDataUnavailable')}
+                    />
+                  ) : null}
                 </View>
-                {requiresReplenishment ? (
-                  <DashboardStatus title={t('storeReplenishmentRequired')} tone="warning" />
-                ) : null}
                 {pendingStockCount > 0 ? (
                   <InlineAlert tone="info" message={t('storePendingSyncMessage', { count: pendingStockCount })} />
                 ) : null}
@@ -601,6 +610,7 @@ export default function StoreScreen() {
               ))}
             </>
           ) : null}
+          {hasPendingOrders ? (
           <Card variant="outlined" style={styles.section}>
             <View style={styles.sectionHeader}>
               <AppText variant="cardTitle">{t('storePendingOrdersTitle')}</AppText>
@@ -641,8 +651,9 @@ export default function StoreScreen() {
                   </View>
                 ) : null}
               </Card>
-            )) : <EmptyState compact title={t('storePendingOrdersEmptyTitle')} message={t('storePendingOrdersEmptyDescription')} />}
+            )) : null}
           </Card>
+          ) : null}
           <View style={styles.actionList}>
             {actionRows.map((action) => (
               <InteractiveCard key={action.label} onPress={action.onPress} accessibilityLabel={action.label} primaryBorder>

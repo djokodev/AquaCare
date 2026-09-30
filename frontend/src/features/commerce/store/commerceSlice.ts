@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { MAX_BAGS_PER_LINE } from '@/features/commerce/constants';
 import {
   CommerceState,
   DeliveryAddressIncompleteError,
@@ -286,7 +287,7 @@ const commerceSlice = createSlice({
       const existingItem = state.cart.items.find((item) => item.product.id === product.id);
 
       if (existingItem) {
-        existingItem.quantity += quantity;
+        existingItem.quantity = Math.min(existingItem.quantity + quantity, MAX_BAGS_PER_LINE);
         if (recommendation) {
           existingItem.recommendation_breakdown = [
             ...(existingItem.recommendation_breakdown ?? []),
@@ -296,11 +297,33 @@ const commerceSlice = createSlice({
       } else {
         state.cart.items.push({
           product,
-          quantity,
+          quantity: Math.min(quantity, MAX_BAGS_PER_LINE),
           recommendation_breakdown: recommendation ? [recommendation] : undefined,
         });
       }
 
+      state.cart.deliveryPreview = null;
+    },
+    /**
+     * Fixe la quantité d'un produit depuis un besoin calculé (commande par phase).
+     * Remplace au lieu d'additionner : rejouer l'action ne double jamais le panier.
+     */
+    setCartItemFromRecommendation: (state, action: PayloadAction<{
+      product: Product;
+      quantity: number;
+      recommendation_breakdown: Array<{ phase_name: string; pellet_size_mm: string; suggested_bags: number }>;
+    }>) => {
+      const { product, quantity, recommendation_breakdown } = action.payload;
+      const safeQuantity = Math.min(Math.max(0, Math.floor(quantity)), MAX_BAGS_PER_LINE);
+      const existingItem = state.cart.items.find((item) => item.product.id === product.id);
+      if (safeQuantity <= 0) {
+        state.cart.items = state.cart.items.filter((item) => item.product.id !== product.id);
+      } else if (existingItem) {
+        existingItem.quantity = safeQuantity;
+        existingItem.recommendation_breakdown = recommendation_breakdown;
+      } else {
+        state.cart.items.push({ product, quantity: safeQuantity, recommendation_breakdown });
+      }
       state.cart.deliveryPreview = null;
     },
     removeFromCart: (state, action: PayloadAction<string>) => {
@@ -318,7 +341,7 @@ const commerceSlice = createSlice({
         if (quantity <= 0) {
           state.cart.items = state.cart.items.filter((entry) => entry.product.id !== productId);
         } else {
-          item.quantity = quantity;
+          item.quantity = Math.min(quantity, MAX_BAGS_PER_LINE);
         }
       }
 
@@ -518,6 +541,7 @@ export const {
   applyFilters,
   resetFilters,
   addToCart,
+  setCartItemFromRecommendation,
   removeFromCart,
   updateCartQuantity,
   clearCart,
