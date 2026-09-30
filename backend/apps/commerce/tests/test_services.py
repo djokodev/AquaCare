@@ -56,7 +56,7 @@ class TestProductService:
     @pytest.fixture
     def tilapia_products(self):
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 2MM 20KG",
+            name="DIBAQ TILAPIA 2MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="alevinage",
@@ -67,7 +67,7 @@ class TestProductService:
             price_per_package=Decimal("35000.00")
         )
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 3MM 20KG",
+            name="DIBAQ TILAPIA 3MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="grossissement",
@@ -116,7 +116,7 @@ class TestProductService:
 
     def test_get_products_by_ids_raises_not_available_for_missing_or_unavailable_product(self, tilapia_products):
         unavailable_product = Product.objects.create(
-            name="ALLER AQUA TILAPIA 5MM 20KG",
+            name="DIBAQ TILAPIA 5MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="grossissement",
@@ -178,7 +178,7 @@ class TestProductService:
         assert ProductService.search_products("a").count() == 0
 
     def test_search_products_matches_brand_and_name(self, tilapia_products):
-        assert ProductService.search_products("aller").count() == 2
+        assert ProductService.search_products("dibaq").count() == 2
         assert ProductService.search_products("3MM").count() == 1
 
     def test_get_recommended_product_does_not_use_nearest_size(
@@ -344,7 +344,7 @@ class TestCatalogApplicationService:
     @pytest.fixture
     def tilapia_products(self):
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 2MM 20KG",
+            name="DIBAQ TILAPIA 2MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="alevinage",
@@ -355,7 +355,7 @@ class TestCatalogApplicationService:
             price_per_package=Decimal("35000.00"),
         )
         Product.objects.create(
-            name="ALLER AQUA TILAPIA 3MM 20KG",
+            name="DIBAQ TILAPIA 3MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="grossissement",

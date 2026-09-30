@@ -17,7 +17,7 @@ class TestProductModel:
     def test_create_product_success(self):
         """Test creation produit avec donnees valides."""
         product = Product.objects.create(
-            name="ALLER AQUA TILAPIA 3MM 20KG",
+            name="DIBAQ TILAPIA 3MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="grossissement",
@@ -28,7 +28,7 @@ class TestProductModel:
             price_per_package=Decimal("30000.00")
         )
 
-        assert product.name == "ALLER AQUA TILAPIA 3MM 20KG"
+        assert product.name == "DIBAQ TILAPIA 3MM 20KG"
         assert product.brand == "dibaq"
         assert product.species == "tilapia"
         assert product.is_available is True
@@ -103,7 +103,7 @@ class TestProductModel:
 
     def test_product_string_representation(self):
         product = Product.objects.create(
-            name="ALLER AQUA TILAPIA 3MM 20KG",
+            name="DIBAQ TILAPIA 3MM 20KG",
             brand="dibaq",
             species="tilapia",
             phase="grossissement",
@@ -114,7 +114,7 @@ class TestProductModel:
             price_per_package=Decimal("30000.00"),
         )
 
-        assert str(product) == "ALLER AQUA TILAPIA 3MM 20KG (20.0kg)"
+        assert str(product) == "DIBAQ TILAPIA 3MM 20KG (20.0kg)"
 
 
 @pytest.mark.django_db

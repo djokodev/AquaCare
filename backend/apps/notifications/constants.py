@@ -13,6 +13,7 @@ NOTIFICATION_TYPES = [
     ('order_confirmed', _('Commande enregistrée')),
     ('order_delivered', _('Commande livrée')),
     ('order_ready_for_pickup', _('Commande prête au retrait')),
+    ('order_cancelled', _('Commande annulée')),
     # ===== SUPPORT =====
     ('new_message', _('Nouveau message')),
 ]
@@ -33,6 +34,7 @@ DEFAULT_CHANNELS_BY_TYPE = {
     'order_confirmed': ['in_app'],
     'order_delivered': ['in_app', 'push'],
     'order_ready_for_pickup': ['in_app', 'push'],
+    'order_cancelled': ['in_app', 'push'],
     'new_message': ['in_app', 'push'],
 }
 
@@ -40,5 +42,6 @@ DEFAULT_PRIORITY_BY_TYPE = {
     'order_confirmed': 'medium',
     'order_delivered': 'high',
     'order_ready_for_pickup': 'high',
+    'order_cancelled': 'high',
     'new_message': 'medium',
 }

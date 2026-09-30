@@ -22,18 +22,21 @@ def build_order_activity_command(
         'commerce.order.delivered',
         'commerce.order.ready_for_pickup',
         'commerce.order.received',
+        'commerce.order.cancelled',
     ],
     origin: ProjectionOrigin = 'live',
 ) -> AdminActivityProjectionCommand:
-    occurred_at = {
-        'commerce.order.created': order.created_at,
-        'commerce.order.delivered': order.delivered_at,
-        'commerce.order.ready_for_pickup': order.ready_for_pickup_at,
-        'commerce.order.received': order.received_at,
+    timestamp_field = {
+        'commerce.order.created': 'created_at',
+        'commerce.order.delivered': 'delivered_at',
+        'commerce.order.ready_for_pickup': 'ready_for_pickup_at',
+        'commerce.order.received': 'received_at',
+        'commerce.order.cancelled': 'cancelled_at',
     }[event_type]
+    occurred_at = getattr(order, timestamp_field)
     level = (
         AdminActivityEvent.Level.ATTENTION
-        if event_type == 'commerce.order.ready_for_pickup'
+        if event_type in ('commerce.order.ready_for_pickup', 'commerce.order.cancelled')
         else AdminActivityEvent.Level.INFO
     )
     return AdminActivityProjectionCommand(
@@ -63,6 +66,7 @@ def record_order_activity(
         'commerce.order.delivered',
         'commerce.order.ready_for_pickup',
         'commerce.order.received',
+        'commerce.order.cancelled',
     ],
 ) -> bool:
     return safely_prepare_and_schedule_admin_activity_projection(

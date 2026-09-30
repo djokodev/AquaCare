@@ -40,6 +40,7 @@ from .serializers import (
     DeliveryFeePreviewResponseSerializer,
     DeliveryFeePreviewSerializer,
     FeedingSuggestionsQuerySerializer,
+    OrderCancelSerializer,
     OrderCreateSerializer,
     OrderSerializer,
     OrderStatisticsSerializer,
@@ -58,6 +59,7 @@ from .services import (
 )
 from .throttles import (
     CommerceDeliveryPreviewThrottle,
+    CommerceOrderCreateThrottle,
     CommerceSimulationThrottle,
     CommerceSuggestionThrottle,
 )
@@ -125,7 +127,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     Filtres disponibles :
     - ?species=tilapia|catfish
     - ?phase=alevinage|pre_grossissement|grossissement
-    - ?brand=aller_aqua|dibaq
+    - ?brand=dibaq
     - ?search=CLARIAS
     """
     serializer_class = ProductSerializer
@@ -199,6 +201,10 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             cycle_id: UUID du cycle
         """
         try:
+            cycle_id = str(UUIDField().run_validation(cycle_id))
+        except ValidationError:
+            return self._error_response('Cycle introuvable', status.HTTP_404_NOT_FOUND)
+        try:
             products = CatalogApplicationService.get_products_for_user_cycle(
                 request.user,
                 cycle_id,
@@ -267,23 +273,23 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                     "products": [
                         {
                             "product_id": "uuid",
-                            "product_name": "ALLER AQUA TILAPIA 3MM 20KG",
+                            "product_name": "DIBAQ TILAPIA 3MM 20KG",
                             "package_weight_kg": 20.0,
                             "quantity_bags": 7,
                             "total_kg": 140.0,
                             "unit_price": 30000.0,
                             "total_price": 210000.0,
-                            "brand": "aller_aqua"
+                            "brand": "dibaq"
                         },
                         {
                             "product_id": "uuid",
-                            "product_name": "ALLER AQUA TILAPIA 3MM 1KG",
+                            "product_name": "DIBAQ TILAPIA 3.5MM 15KG",
                             "package_weight_kg": 1.0,
                             "quantity_bags": 11,
                             "total_kg": 11.0,
                             "unit_price": 1500.0,
                             "total_price": 16500.0,
-                            "brand": "aller_aqua"
+                            "brand": "dibaq"
                         }
                     ],
                     "summary": {
@@ -367,13 +373,13 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
                     "products": [
                         {
                             "product_id": "uuid",
-                            "product_name": "ALLER AQUA TILAPIA 2MM 20KG",
+                            "product_name": "DIBAQ TILAPIA 2MM 20KG",
                             "package_weight_kg": 20.0,
                             "quantity_bags": 7,
                             "total_kg": 140.0,
                             "unit_price": 30000.0,
                             "total_price": 210000.0,
-                            "brand": "aller_aqua"
+                            "brand": "dibaq"
                         }
                     ],
                     "total_bags": 7,
@@ -470,6 +476,18 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
             400: OpenApiResponse(description="Transition de statut invalide"),
         },
     ),
+    cancel=extend_schema(
+        summary="Annuler ma commande",
+        description=(
+            "Annulation par le client, possible uniquement tant que la commande "
+            "est au statut confirmed. Idempotent si la commande est déjà annulée."
+        ),
+        request=OrderCancelSerializer,
+        responses={
+            200: OrderSerializer,
+            400: OpenApiResponse(description="Commande déjà en livraison ou reçue"),
+        },
+    ),
     preview_delivery_fee=extend_schema(
         summary="Previsualiser les frais de livraison",
         request=DeliveryFeePreviewSerializer,
@@ -493,6 +511,7 @@ class OrderViewSet(
     - GET /api/commerce/orders/ : Liste mes commandes
     - GET /api/commerce/orders/{id}/ : Détail commande
     - POST /api/commerce/orders/{id}/confirm_receipt/ : Confirmer réception commande
+    - POST /api/commerce/orders/{id}/cancel/ : Annuler (client, tant que non préparée)
     - GET /api/commerce/orders/statistics/ : Mes statistiques
     - POST /api/commerce/orders/preview_delivery_fee/ : Preview frais livraison
     """
@@ -531,8 +550,16 @@ class OrderViewSet(
         )
         return Response(serializer.data)
 
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.action in ('create', 'cancel'):
+            throttles.append(CommerceOrderCreateThrottle())
+        return throttles
+
     def get_serializer_class(self) -> type[OrderCreateSerializer] | type[OrderSerializer]:
         """Serializer selon action."""
+        if self.action == 'cancel':
+            return OrderCancelSerializer
         if self.action == 'create':
             return OrderCreateSerializer
         if self.action == 'preview_delivery_fee':
@@ -651,6 +678,28 @@ class OrderViewSet(
         order = self.get_object()
         try:
             updated_order = OrderApplicationService.confirm_order_receipt(order, request.user)
+        except InvalidOrderError as exc:
+            self._raise_service_validation_error(exc)
+
+        return self._serialize_order_response(updated_order, status_code=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request: Request, pk: str | None = None) -> Response:
+        """
+        Annule une commande du client tant qu'elle n'est pas préparée
+        (statut 'confirmed'). Idempotent si déjà annulée.
+
+        Body (JSON, optionnel) : {"reason": "Commande passée par erreur"}
+        """
+        order = self.get_object()
+        serializer = OrderCancelSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            updated_order = OrderApplicationService.cancel_order_by_customer(
+                order,
+                request.user,
+                serializer.validated_data.get('reason', ''),
+            )
         except InvalidOrderError as exc:
             self._raise_service_validation_error(exc)
 

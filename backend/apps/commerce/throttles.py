@@ -19,3 +19,9 @@ class CommerceDeliveryPreviewThrottle(UserRateThrottle):
     """Throttle for delivery fee preview requests."""
 
     scope = "commerce_delivery_preview"
+
+
+class CommerceOrderCreateThrottle(UserRateThrottle):
+    """Throttle for order creation and cancellation (per user)."""
+
+    scope = "commerce_order_write"
