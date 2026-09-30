@@ -76,6 +76,7 @@ services:
       - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
       - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-AquaCare <no-reply@aquacare.tech>}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EXPO_ACCESS_TOKEN=${EXPO_ACCESS_TOKEN:-}
       - DJANGO_SUPERUSER_PHONE=${DJANGO_SUPERUSER_PHONE:-}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD:-}
       - DJANGO_SUPERUSER_FIRST_NAME=${DJANGO_SUPERUSER_FIRST_NAME:-Admin}
@@ -124,6 +125,7 @@ services:
       - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
       - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-AquaCare <no-reply@aquacare.tech>}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EXPO_ACCESS_TOKEN=${EXPO_ACCESS_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -161,6 +163,7 @@ services:
       - EMAIL_BACKEND=${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
       - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-AquaCare <no-reply@aquacare.tech>}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EXPO_ACCESS_TOKEN=${EXPO_ACCESS_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy

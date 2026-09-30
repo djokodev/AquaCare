@@ -51,6 +51,10 @@ first production deployment and store submission.
       notification types and drops email preference fields).
 - [ ] Push credentials in EAS: FCM V1 service account key (Android) and APNs
       key (iOS). Without them no remote push reaches a store or dev build.
+- [ ] Expo push security: on expo.dev enable "Enhanced push security" for
+      the project, create an access token and set `EXPO_ACCESS_TOKEN` in the
+      server `.env` (staging and prod). Without it, anyone holding a device
+      push token can send notifications that look like AquaCare.
 - [ ] Remote push cannot be tested with Expo Go on Android (removed since
       SDK 53): test order and support push on a dev build or TestFlight.
 - [ ] Local dev build: after any change to `app.json` plugins (sound,

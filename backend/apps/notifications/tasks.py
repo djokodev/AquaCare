@@ -8,6 +8,7 @@ from typing import Any, TypedDict
 
 import requests
 from celery import shared_task
+from django.conf import settings
 from django.utils import timezone
 
 from .models import Notification, PushToken
@@ -16,6 +17,18 @@ logger = logging.getLogger(__name__)
 
 PUSH_ERROR_NO_VALID_TOKENS = "PUSH_NO_VALID_TOKENS"
 PUSH_ERROR_SEND_FAILED = "PUSH_SEND_FAILED"
+
+
+def _expo_headers() -> dict[str, str]:
+    """En-têtes de l'API Expo, avec l'access token s'il est configuré."""
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+    }
+    access_token = getattr(settings, 'EXPO_ACCESS_TOKEN', '')
+    if access_token:
+        headers['Authorization'] = f'Bearer {access_token}'
+    return headers
 
 
 class ExpoPayloadData(TypedDict):
@@ -115,10 +128,7 @@ def send_push_notification_task(self, notification_id: str):
         response = requests.post(
             'https://exp.host/--/api/v2/push/send',
             json=expo_messages,
-            headers={
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-            },
+            headers=_expo_headers(),
             timeout=10
         )
         response.raise_for_status()

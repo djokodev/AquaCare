@@ -57,6 +57,25 @@ class TestPushNotificationTask:
             call_args = mock_post.call_args
             assert 'exp.host/--/api/v2/push/send' in str(call_args)
 
+    def test_send_push_includes_expo_access_token_when_configured(self, notification, push_token, settings):
+        """Avec EXPO_ACCESS_TOKEN, chaque envoi porte l'en-tête Authorization."""
+        settings.EXPO_ACCESS_TOKEN = 'expo-test-token'
+        with patch('requests.post') as mock_post:
+            ok_body = {'data': [{'status': 'ok'}]}
+            mock_post.return_value = MagicMock(status_code=200, json=MagicMock(return_value=ok_body))
+            send_push_notification_task(str(notification.id))
+            headers = mock_post.call_args.kwargs['headers']
+            assert headers['Authorization'] == 'Bearer expo-test-token'
+
+    def test_send_push_without_expo_access_token_sends_no_authorization(self, notification, push_token, settings):
+        """Sans token configuré (dev), aucun en-tête Authorization vide n'est envoyé."""
+        settings.EXPO_ACCESS_TOKEN = ''
+        with patch('requests.post') as mock_post:
+            ok_body = {'data': [{'status': 'ok'}]}
+            mock_post.return_value = MagicMock(status_code=200, json=MagicMock(return_value=ok_body))
+            send_push_notification_task(str(notification.id))
+            assert 'Authorization' not in mock_post.call_args.kwargs['headers']
+
     def test_send_push_notification_task_no_active_tokens(self, notification, user):
         """User sans tokens actifs -> Aucune erreur, push_sent_at reste None."""
         # Setup: Desactiver tous les tokens

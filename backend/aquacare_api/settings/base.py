@@ -269,6 +269,15 @@ SPECTACULAR_SETTINGS = {
 }
 
 # =============================================================================
+# PUSH NOTIFICATIONS (Expo)
+# =============================================================================
+
+# Access token Expo envoyé avec chaque push. Avec "Enhanced push security"
+# activé sur expo.dev, Expo refuse tout envoi sans ce token : un token de
+# téléphone volé ne suffit plus pour envoyer une fausse notification AquaCare.
+EXPO_ACCESS_TOKEN = _env_str('EXPO_ACCESS_TOKEN', '')
+
+# =============================================================================
 # CELERY CONFIGURATION
 # =============================================================================
 
