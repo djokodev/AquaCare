@@ -1,5 +1,7 @@
 import {
+  canCancelOrder,
   canConfirmOrderReceipt,
+  isOrderOpen,
   getOrderReceiptActionLabelKey,
   getOrderStatusLabelKey,
   getOrderStatusTone,
@@ -32,6 +34,17 @@ describe('orderStatus workflow helpers', () => {
     expect(getOrderReceiptActionLabelKey(pickup)).toBe('confirmPickupAction');
     expect(getOrderStatusTone(home)).toBe('warning');
     expect(getOrderStatusTone({ status: 'received', delivery_method: 'pickup' })).toBe('success');
+  });
+
+  it('handles cancelled orders and customer cancellation rules', () => {
+    expect(getOrderStatusLabelKey('cancelled', 'home')).toBe('orderStatusCancelled');
+    expect(getOrderStatusTone({ status: 'cancelled', delivery_method: 'home' })).toBe('error');
+    expect(canCancelOrder({ status: 'confirmed' })).toBe(true);
+    expect(canCancelOrder({ status: 'ready_for_pickup' })).toBe(false);
+    expect(canCancelOrder({ status: 'cancelled' })).toBe(false);
+    expect(isOrderOpen({ status: 'cancelled' })).toBe(false);
+    expect(isOrderOpen({ status: 'received' })).toBe(false);
+    expect(isOrderOpen({ status: 'delivered' })).toBe(true);
   });
 
   it('keeps the contextual workflow copy aligned in French and English', () => {

@@ -77,6 +77,11 @@ export const confirmOrderReceipt = async (orderId: string) => {
   return response.data;
 };
 
+export const cancelOrder = async (orderId: string, reason?: string) => {
+  const response = await api.post<Order>(`/commerce/orders/${orderId}/cancel/`, reason ? { reason } : {});
+  return response.data;
+};
+
 export const getOrderStatistics = async ({ productionCycleId }: CycleOrderQuery) => {
   const response = await api.get<OrderStatistics>('/commerce/orders/statistics/', {
     params: { production_cycle: productionCycleId },
@@ -102,6 +107,7 @@ const commerceApi = {
   getOrderDetail,
   createOrder,
   confirmOrderReceipt,
+  cancelOrder,
   getOrderStatistics,
   previewDeliveryFee,
 };

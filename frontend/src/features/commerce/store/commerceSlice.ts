@@ -228,6 +228,17 @@ export const confirmOrderReceipt = createAsyncThunk(
   }
 );
 
+export const cancelOrder = createAsyncThunk(
+  'commerce/cancelOrder',
+  async (options: { orderId: string; reason?: string }, { rejectWithValue }) => {
+    try {
+      return await commerceApi.cancelOrder(options.orderId, options.reason);
+    } catch (error) {
+      return rejectWithValue(extractApiErrorMessage(error, 'Erreur annulation commande'));
+    }
+  }
+);
+
 export const fetchOrderStatistics = createAsyncThunk(
   'commerce/fetchOrderStatistics',
   async (
@@ -459,6 +470,12 @@ const commerceSlice = createSlice({
       .addCase(confirmOrderReceipt.rejected, (state, action) => {
         state.orders.loading = false;
         state.orders.error = action.payload as string;
+      })
+      .addCase(cancelOrder.fulfilled, (state, action) => {
+        const existingIndex = state.orders.items.findIndex((order) => order.id === action.payload.id);
+        if (existingIndex >= 0) {
+          state.orders.items[existingIndex] = action.payload;
+        }
       });
 
     builder
