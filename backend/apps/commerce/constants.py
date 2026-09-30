@@ -35,7 +35,26 @@ ORDER_STATUS_CHOICES = [
     ('delivered', _('Livrée — confirmation attendue')),
     ('ready_for_pickup', _('Prête au retrait')),
     ('received', _('Réception confirmée')),
+    ('cancelled', _('Annulée')),
 ]
+
+# Statuts où le client peut encore annuler lui-même (rien n'est encore préparé).
+CUSTOMER_CANCELLABLE_STATUSES = ('confirmed',)
+# Statuts où l'équipe AquaCare peut annuler (tout sauf reçue ou déjà annulée).
+OPERATOR_CANCELLABLE_STATUSES = ('confirmed', 'delivered', 'ready_for_pickup')
+
+# Origine d'une annulation
+CANCELLATION_SOURCE_CHOICES = [
+    ('customer', _('Client')),
+    ('operator', _('Équipe AquaCare')),
+]
+CANCELLATION_REASON_MAX_LENGTH = 300
+
+# Limites d'une commande : protègent les montants (base de données) et évitent
+# les saisies aberrantes. Largement au-dessus des besoins d'une ferme.
+MAX_ORDER_LINES = 20
+MAX_BAGS_PER_LINE = 500
+MAX_BAGS_PER_ORDER = 1000
 
 # Méthodes de livraison
 DELIVERY_METHOD_CHOICES = [

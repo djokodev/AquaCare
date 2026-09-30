@@ -62,7 +62,7 @@ export interface DeliveryFeePreview {
 }
 
 // Orders
-export type OrderStatus = 'confirmed' | 'delivered' | 'ready_for_pickup' | 'received';
+export type OrderStatus = 'confirmed' | 'delivered' | 'ready_for_pickup' | 'received' | 'cancelled';
 
 export interface OrderItem {
   id: string;
@@ -84,6 +84,9 @@ export interface Order {
   ready_for_pickup_at?: string | null;
   ready_for_pickup_by?: string | null;
   received_at?: string | null;
+  cancelled_at?: string | null;
+  cancellation_source?: 'customer' | 'operator' | '';
+  cancellation_reason?: string;
   user: string;
   user_name: string;
   farm_profile: string;

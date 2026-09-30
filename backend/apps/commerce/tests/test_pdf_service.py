@@ -51,7 +51,7 @@ def test_generate_order_pdf_returns_bytes():
     farm.total_ponds = 2
     farm.save()
     product = Product.objects.create(
-        name="ALLER AQUA TILAPIA 3MM 20KG",
+        name="DIBAQ TILAPIA 3MM 20KG",
         brand="dibaq",
         species="tilapia",
         phase="grossissement",

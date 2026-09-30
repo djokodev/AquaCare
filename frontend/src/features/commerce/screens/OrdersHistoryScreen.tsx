@@ -7,13 +7,16 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { AppDispatch, RootState } from '@/store/store';
 import {
+  cancelOrder,
   clearOrderContext,
   confirmOrderReceipt,
   fetchOrders,
   fetchOrderStatistics,
 } from '@/features/commerce/store/commerceSlice';
 import {
+  canCancelOrder,
   canConfirmOrderReceipt,
+  isOrderOpen,
   getOrderReceiptActionLabelKey,
   getOrderStatusLabelKey,
   getOrderStatusTone,
@@ -136,7 +139,7 @@ export default function OrdersHistoryScreen() {
   }, [loadOrders]);
 
   const sacksToReceive = useMemo(
-    () => displayItems.reduce((sum, order) => order.status === 'received' ? sum : sum + order.total_bags, 0),
+    () => displayItems.reduce((sum, order) => (isOrderOpen(order) ? sum + order.total_bags : sum), 0),
     [displayItems]
   );
 
@@ -175,6 +178,33 @@ export default function OrdersHistoryScreen() {
           Alert.alert(t('error'), message);
         }
         finally {
+          confirmingOrderRef.current = null;
+          setConfirmingOrderId(null);
+        }
+      } },
+    ]);
+  }, [dispatch, loadOrders, t]);
+
+  const handleCancelOrder = useCallback((order: Order) => {
+    Alert.alert(t('cancelOrderTitle'), t('cancelOrderMessage', { orderNumber: order.order_number }), [
+      { text: t('cancelOrderKeep'), style: 'cancel' },
+      { text: t('cancelOrderConfirm'), style: 'destructive', onPress: async () => {
+        if (confirmingOrderRef.current) return;
+        try {
+          confirmingOrderRef.current = order.id;
+          setConfirmingOrderId(order.id);
+          const updatedOrder = await dispatch(cancelOrder({ orderId: order.id })).unwrap();
+          setDisplayItems((current) => current.map((item) => (
+            item.id === updatedOrder.id ? updatedOrder : item
+          )));
+          await loadOrders('refresh');
+          Alert.alert(t('success'), t('cancelOrderSuccess'));
+        } catch (caughtError) {
+          const message = typeof caughtError === 'string' && caughtError.trim()
+            ? caughtError
+            : t('cancelOrderError');
+          Alert.alert(t('error'), message);
+        } finally {
           confirmingOrderRef.current = null;
           setConfirmingOrderId(null);
         }
@@ -224,6 +254,19 @@ export default function OrdersHistoryScreen() {
           </View>
         ) : null}
 
+        {order.status === 'cancelled' ? (
+          <View style={styles.cancelledInfo}>
+            <AppText variant="helper" color="error">
+              {t(order.cancellation_source === 'operator' ? 'orderCancelledByTeam' : 'orderCancelledByYou')}
+            </AppText>
+            {order.cancellation_reason ? (
+              <AppText variant="helper" color="muted">
+                {t('orderCancellationReason', { reason: order.cancellation_reason })}
+              </AppText>
+            ) : null}
+          </View>
+        ) : null}
+
         {expanded ? (
           <View style={styles.details}>
             <Divider />
@@ -256,11 +299,23 @@ export default function OrdersHistoryScreen() {
                 <AppText color="link">{t('pickupLocationPrefix')} {order.pickup_location === 'ndokoti' ? 'Ndokoti' : 'Ndogpasi'}</AppText>
               </Card>
             ) : null}
+            {canCancelOrder(order) ? (
+              <View style={styles.confirmationAction}>
+                <AppText variant="caption" color="muted">{t('cancelOrderHelp')}</AppText>
+                <Button
+                  label={t('cancelOrderAction')}
+                  variant="danger"
+                  loading={confirmingOrderId === order.id}
+                  disabled={Boolean(confirmingOrderId) && confirmingOrderId !== order.id}
+                  onPress={() => handleCancelOrder(order)}
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
       </Card>
     );
-  }, [expandedOrderId, confirmingOrderId, formatDateTime, handleConfirmReceipt, t]);
+  }, [expandedOrderId, confirmingOrderId, formatDateTime, handleCancelOrder, handleConfirmReceipt, t]);
 
   const listHeader = (
     <View style={styles.listHeader}>
@@ -343,6 +398,7 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing[3] },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] },
   confirmationAction: { gap: spacing[2] },
+  cancelledInfo: { gap: spacing[1] },
   details: { gap: spacing[3] },
   address: { backgroundColor: colors.surface.selected, gap: spacing[1] },
   listHeader: { gap: spacing[3], marginBottom: spacing[4] },

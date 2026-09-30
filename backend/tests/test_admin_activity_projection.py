@@ -175,8 +175,8 @@ def _launch_payload() -> dict[str, object]:
 
 @pytest.mark.django_db
 class TestAdminActivityProjection:
-    def test_registry_is_closed_over_the_fifteen_lot_2a_events(self):
-        assert len(ADMIN_ACTIVITY_REGISTRY) == 15
+    def test_registry_is_closed_over_the_sixteen_known_events(self):
+        assert len(ADMIN_ACTIVITY_REGISTRY) == 16
         assert set(ADMIN_ACTIVITY_REGISTRY) == set(AdminActivityEvent.EventType.values)
         assert set(ADMIN_ACTIVITY_REGISTRY) == {
             'aquaculture.production_unit.created',
@@ -193,6 +193,7 @@ class TestAdminActivityProjection:
             'commerce.order.delivered',
             'commerce.order.ready_for_pickup',
             'commerce.order.received',
+            'commerce.order.cancelled',
             'support.user_message.received',
         }
 

@@ -5,7 +5,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useTranslation } from 'react-i18next';
 
 import { aquacultureService } from '@/features/aquaculture/services/aquacultureService';
-import { addToCart } from '@/features/commerce/store/commerceSlice';
+import { setCartItemFromRecommendation } from '@/features/commerce/store/commerceSlice';
+import { MAX_BAGS_PER_LINE } from '@/features/commerce/constants';
 import { RootStackParamList } from '@/navigation/MainNavigator';
 import { AppDispatch, RootState } from '@/store/store';
 import { FeedPhase, FeedPhaseProduct } from '@/types/aquaculture';
@@ -215,54 +216,70 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
   const handleQuantityChange = useCallback((key: string, delta: number) => {
     setQuantities((current) => ({
       ...current,
-      [key]: Math.max(0, (current[key] ?? 0) + delta),
+      [key]: Math.min(MAX_BAGS_PER_LINE, Math.max(0, (current[key] ?? 0) + delta)),
     }));
   }, []);
+
+  /**
+   * Envoie au panier la quantité choisie pour chaque produit des phases
+   * retenues. Les quantités sont FIXÉES (pas additionnées) : ajouter une
+   * phase puis « tout commander », ou revenir sur l'écran, ne double rien.
+   */
+  const syncPhasesToCart = useCallback((selectedPhaseIds: Set<string>, onlyPhase?: FeedPhase) => {
+    const lines = new Map<string, {
+      product: FeedPhaseProduct;
+      quantity: number;
+      breakdown: Array<{ phase_name: string; pellet_size_mm: string; suggested_bags: number }>;
+    }>();
+    phases.forEach((phase) => {
+      if (!selectedPhaseIds.has(phase.phase_id)) return;
+      phase.products.forEach((product) => {
+        const quantity = quantities[quantityKey(phase, product)] ?? product.quantity_bags;
+        const line = lines.get(product.product_id) ?? { product, quantity: 0, breakdown: [] };
+        line.quantity += quantity;
+        if (quantity > 0) {
+          line.breakdown.push({
+            phase_name: phaseLabel(phase, t),
+            pellet_size_mm: String(phase.pellet_size_mm),
+            suggested_bags: quantity,
+          });
+        }
+        lines.set(product.product_id, line);
+      });
+    });
+    const touchedProducts = onlyPhase
+      ? new Set(onlyPhase.products.map((product) => product.product_id))
+      : null;
+    lines.forEach((line, productId) => {
+      if (touchedProducts && !touchedProducts.has(productId)) return;
+      dispatch(setCartItemFromRecommendation({
+        product: buildProductForCart(line.product),
+        quantity: line.quantity,
+        recommendation_breakdown: line.breakdown,
+      }));
+    });
+  }, [dispatch, phases, quantities, t]);
 
   const addPhaseToCart = useCallback(
     (phase: FeedPhase) => {
       if (submittedScopes[phase.phase_id] || recommendation?.status === 'unavailable') return;
-      phase.products.forEach((product) => {
-        const quantity = quantities[quantityKey(phase, product)] ?? product.quantity_bags;
-        if (quantity > 0) dispatch(
-          addToCart({
-            product: buildProductForCart(product),
-            quantity,
-            recommendation: {
-              phase_name: phaseLabel(phase, t),
-              pellet_size_mm: String(phase.pellet_size_mm),
-              suggested_bags: quantity,
-            },
-          })
-        );
-      });
+      const selected = new Set(
+        Object.keys(submittedScopes).filter((scope) => scope !== 'all' && submittedScopes[scope]),
+      );
+      selected.add(phase.phase_id);
+      syncPhasesToCart(selected, phase);
       setSubmittedScopes((current) => ({ ...current, [phase.phase_id]: true }));
       Alert.alert(t('success'), t('feedPhaseAddedToCart'), [{ text: t('ok') }]);
     },
-    [dispatch, displayDecimal, phases, quantities, recommendation?.status, submittedScopes, t]
+    [recommendation?.status, submittedScopes, syncPhasesToCart, t]
   );
 
   const handleOrderAll = useCallback(() => {
     if (submittedScopes.all || recommendation?.status === 'unavailable') return;
-    phases.forEach((phase) =>
-      phase.products.forEach((product) => {
-        const quantity = quantities[quantityKey(phase, product)] ?? product.quantity_bags;
-        if (quantity > 0) dispatch(
-          addToCart({
-            product: buildProductForCart(product),
-            quantity,
-            recommendation: {
-              phase_name: phaseLabel(phase, t),
-              pellet_size_mm: String(phase.pellet_size_mm),
-              suggested_bags: quantity,
-            },
-          })
-        );
-      })
-    );
+    syncPhasesToCart(new Set(phases.map((phase) => phase.phase_id)));
     setSubmittedScopes((current) => ({ ...current, all: true }));
     navigation.navigate('Cart', { cycleId });
-  }, [cycleId, dispatch, displayDecimal, navigation, phases, quantities, recommendation?.status, submittedScopes.all]);
+  }, [cycleId, navigation, phases, recommendation?.status, submittedScopes.all, syncPhasesToCart]);
 
   const totalBags = useMemo(
     () => phases.reduce(
@@ -310,9 +327,10 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
               <Card variant="outlined" style={styles.summaryCard}>
                 <AppText variant="sectionTitle">{t('feedNeedSummaryTitle')}</AppText>
                 <View style={styles.summaryRow}><AppText color="muted">{t('feedNeedRemainingLabel')}</AppText><AppText variant="bodyStrong">{formatDecimalForDisplay(recommendation?.summary.estimated_remaining_need_kg, numberLocale)} kg</AppText></View>
-                <View style={styles.summaryRow}><AppText color="muted">{t('feedCompatibleStockLabel')}</AppText><AppText variant="bodyStrong">{formatDecimalForDisplay(recommendation?.summary.compatible_stock_kg, numberLocale)} kg</AppText></View>
-                <View style={styles.summaryRow}><AppText color="muted">{t('feedToSecureLabel')}</AppText><AppText variant="bodyStrong" color="link">{formatDecimalForDisplay(recommendation?.summary.feed_to_order_kg, numberLocale)} kg</AppText></View>
-                <View style={styles.summaryRow}><AppText color="muted">{t('feedPendingOrdersLabel')}</AppText><AppText variant="bodyStrong">{formatDecimalForDisplay(recommendation?.summary.pending_order_kg, numberLocale)} kg</AppText></View>
+                <View style={styles.summaryRow}><AppText color="muted">{t('feedCompatibleStockLabel')}</AppText><AppText variant="bodyStrong">− {formatDecimalForDisplay(recommendation?.summary.compatible_stock_kg, numberLocale)} kg</AppText></View>
+                <View style={styles.summaryRow}><AppText color="muted">{t('feedPendingOrdersLabel')}</AppText><AppText variant="bodyStrong">− {formatDecimalForDisplay(recommendation?.summary.pending_order_kg, numberLocale)} kg</AppText></View>
+                <Divider />
+                <View style={styles.summaryRow}><AppText variant="bodyStrong">{t('feedToSecureLabel')}</AppText><AppText variant="cardTitle" color="link">{formatDecimalForDisplay(recommendation?.summary.feed_to_order_kg, numberLocale)} kg</AppText></View>
               </Card>
             )}
             {recommendation ? (
@@ -414,6 +432,7 @@ export default function CycleFeedPhasesScreen({ navigation, route }: Props) {
                             icon="add"
                             accessibilityLabel={t('increaseQuantity')}
                             variant="surface"
+                            disabled={quantity >= MAX_BAGS_PER_LINE}
                             onPress={() => handleQuantityChange(key, 1)}
                           />
                         </View>

@@ -149,7 +149,7 @@ class FarmSupervisionService:
                 }
             )
         if has_capability_and_permission(user, AdminCapability.VIEW_COMMERCE, "commerce.view_order"):
-            current_orders = farm.orders.exclude(status="received")
+            current_orders = farm.orders.exclude(status__in=("received", "cancelled"))
             items.append(
                 {"label": _("Commandes en cours"), "status": current_orders.count(), "url": ""}
             )

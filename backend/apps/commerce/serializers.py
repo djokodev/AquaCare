@@ -6,11 +6,13 @@ logique métier déléguée aux Services.
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from rest_framework import serializers
 
-from .domain.validators import OrderItemPayload
+from .constants import CANCELLATION_REASON_MAX_LENGTH, MAX_BAGS_PER_LINE, MAX_ORDER_LINES
+from .domain.validators import OrderItemPayload, OrderValidator
 from .models import Order, OrderItem, Product
 
 
@@ -77,6 +79,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number', 'status',
             'delivered_at', 'ready_for_pickup_at', 'received_at',
+            'cancelled_at', 'cancellation_source', 'cancellation_reason',
             'user', 'user_name', 'farm_profile', 'farm_name',
             'production_cycle_id',
             'delivery_method', 'pickup_location',
@@ -91,9 +94,20 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'order_number', 'status', 'user', 'farm_profile',
             'delivered_at', 'ready_for_pickup_at', 'received_at',
+            'cancelled_at', 'cancellation_source', 'cancellation_reason',
             'subtotal', 'delivery_fee', 'total',
             'created_at', 'updated_at', 'synced_at'
         ]
+
+
+class OrderCancelSerializer(serializers.Serializer):
+    """Motif optionnel saisi par le client lorsqu'il annule sa commande."""
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=CANCELLATION_REASON_MAX_LENGTH,
+        trim_whitespace=True,
+    )
 
 
 class OrderItemInputSerializer(serializers.Serializer):
@@ -111,6 +125,7 @@ class OrderItemInputSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(
         required=True,
         min_value=1,
+        max_value=MAX_BAGS_PER_LINE,
         help_text="Quantité (nombre de sacs)"
     )
 
@@ -139,8 +154,14 @@ class RecommendedProductQuerySerializer(serializers.Serializer):
     weight_g = serializers.FloatField(
         required=True,
         min_value=0.1,
+        max_value=10000,
         help_text="Poids moyen en grammes",
     )
+
+    def validate_weight_g(self, value: float) -> float:
+        if not math.isfinite(value):
+            raise serializers.ValidationError("Poids invalide")
+        return value
 
     def validate_species(self, value: str) -> str:
         if value == 'clarias':
@@ -164,6 +185,7 @@ class OrderCreateSerializer(serializers.Serializer):
     items = OrderItemInputSerializer(
         many=True,
         required=True,
+        max_length=MAX_ORDER_LINES,
         help_text="Liste des articles à commander"
     )
     delivery_method = serializers.ChoiceField(
@@ -194,13 +216,14 @@ class OrderCreateSerializer(serializers.Serializer):
 
     @staticmethod
     def _build_items_payload(items: list[dict[str, Any]]) -> list[OrderItemPayload]:
-        return [
+        """Normalise les lignes et regroupe les doublons d'un même produit."""
+        return OrderValidator.merge_duplicate_items([
             {
                 'product_id': str(item['product_id']),
                 'quantity': int(item['quantity']),
             }
             for item in items
-        ]
+        ])
 
     @staticmethod
     def _validate_available_products(items: list[OrderItemPayload]) -> None:
@@ -249,7 +272,7 @@ class DeliveryFeePreviewSerializer(serializers.Serializer):
     Input : items + delivery_method
     Output : subtotal, delivery_fee, total
     """
-    items = OrderItemInputSerializer(many=True, required=True)
+    items = OrderItemInputSerializer(many=True, required=True, max_length=MAX_ORDER_LINES)
     delivery_method = serializers.ChoiceField(
         choices=['home', 'pickup'],
         required=True

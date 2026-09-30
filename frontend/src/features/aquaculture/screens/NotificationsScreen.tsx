@@ -24,6 +24,7 @@ const NOTIFICATION_COLORS = {
   order_confirmed: colors.status.info,
   order_delivered: colors.status.success,
   order_ready_for_pickup: colors.status.success,
+  order_cancelled: colors.status.error,
   new_message: colors.status.success,
 };
 
@@ -31,6 +32,7 @@ const NOTIFICATION_SURFACES = {
   order_confirmed: colors.status.infoSurface,
   order_delivered: colors.status.successSurface,
   order_ready_for_pickup: colors.status.successSurface,
+  order_cancelled: colors.status.errorSurface,
   new_message: colors.status.successSurface,
 };
 
@@ -122,6 +124,8 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         return 'checkmark-circle-outline';
       case 'order_ready_for_pickup':
         return 'storefront-outline';
+      case 'order_cancelled':
+        return 'close-circle-outline';
       default:
         return 'notifications-outline';
     }

@@ -238,7 +238,11 @@
 
       <div class="aq-confirmation-body">
         <p class="aq-confirmation-intro">
-          {% trans "Vérifiez les informations avant de confirmer cette action logistique." %}
+          {% if cancel_mode %}
+            {% trans "Vérifiez la commande avant de l'annuler. Le client recevra une notification avec le motif." %}
+          {% else %}
+            {% trans "Vérifiez les informations avant de confirmer cette action logistique." %}
+          {% endif %}
         </p>
 
         <dl class="aq-confirmation-summary">
@@ -311,6 +315,11 @@
           </table>
         </div>
 
+        {% if cancel_mode %}
+        <p class="aq-confirmation-alert aq-confirmation-alert--danger">
+          {% trans "L'annulation est définitive. La commande ne pourra plus être livrée ni confirmée." %}
+        </p>
+        {% else %}
         <p class="aq-confirmation-alert">
           {% if order.delivery_method == "home" %}
             {% trans "Le client sera invité à confirmer la réception de la commande." %}
@@ -319,12 +328,15 @@
           {% endif %}
         </p>
 
-        {% if not order.production_cycle %}
+        {% endif %}
+
+        {% if not order.production_cycle and not cancel_mode %}
           <p class="aq-confirmation-alert aq-confirmation-alert--danger">
             {% trans "Aucun cycle associé — cette commande ne générera pas d'entrée automatique dans un magasin de cycle." %}
           </p>
         {% endif %}
 
+        {% if not cancel_mode %}
         <p class="aq-confirmation-consequence">
           {% if order.delivery_method == "home" %}
             {% trans "La commande passera à l'état livrée et le client pourra confirmer sa réception." %}
@@ -332,12 +344,23 @@
             {% trans "La commande passera à l'état prête au retrait et le client pourra confirmer son retrait." %}
           {% endif %}
         </p>
+        {% endif %}
 
         <form method="post">
           {% csrf_token %}
+          {% if cancel_mode %}
+            <label for="id_reason" class="aq-confirmation-section-title" style="display:block">
+              {% trans "Motif (envoyé au client)" %}
+            </label>
+            {% if form_error %}
+              <p class="aq-confirmation-alert aq-confirmation-alert--danger">{{ form_error }}</p>
+            {% endif %}
+            <textarea id="id_reason" name="reason" rows="3" required maxlength="{{ reason_max_length }}"
+              style="width:100%;padding:0.6rem;border-radius:0.375rem">{{ reason }}</textarea>
+          {% endif %}
           <div class="aq-confirmation-actions">
-            <button type="submit">{{ action_label }}</button>
-            <a href="{% url 'admin:commerce_order_change' order.pk %}">{% trans "Annuler" %}</a>
+            <button type="submit" {% if cancel_mode %}style="background:#b91c1c !important;border-color:#b91c1c !important"{% endif %}>{{ action_label }}</button>
+            <a href="{% url 'admin:commerce_order_change' order.pk %}">{% if cancel_mode %}{% trans "Retour" %}{% else %}{% trans "Annuler" %}{% endif %}</a>
           </div>
         </form>
       </div>

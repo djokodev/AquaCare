@@ -33,7 +33,7 @@ export const AQUACULTURE_CONSTANTS = {
 
   /**
    * Prix moyen de l'aliment au kg (FCFA)
-   * Source: Moyenne DIBAQ + Aller Aqua (phase grossissement)
+   * Source: référentiel DIBAQ (phase grossissement)
    */
   FEED_PRICE_PER_KG: 1250,
 

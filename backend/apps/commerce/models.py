@@ -9,6 +9,9 @@ Workflow commande (MVP simplifié) :
 2. Opérateur commerce met la commande en 'delivered' (livrée)
 3. Aquaculteur confirme réception → statut 'received' (reçue)
 4. Paiement à la livraison (cash)
+
+Annulation : le client peut annuler tant que la commande est 'confirmed' ;
+l'équipe AquaCare peut annuler tant qu'elle n'est pas 'received'.
 """
 import uuid
 from decimal import Decimal
@@ -19,6 +22,8 @@ from django.utils.translation import gettext_lazy as _
 
 from .constants import (
     BRAND_CHOICES,
+    CANCELLATION_REASON_MAX_LENGTH,
+    CANCELLATION_SOURCE_CHOICES,
     DELIVERY_METHOD_CHOICES,
     ORDER_STATUS_CHOICES,
     PHASE_CHOICES,
@@ -311,6 +316,33 @@ class Order(models.Model):
         null=True,
         blank=True,
         help_text=_('Date à laquelle le client a confirmé la réception ou le retrait'),
+    )
+
+    cancelled_at = models.DateTimeField(
+        _('Annulée le'),
+        null=True,
+        blank=True,
+    )
+    cancelled_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders_cancelled',
+        verbose_name=_('Annulée par'),
+    )
+    cancellation_source = models.CharField(
+        _("Origine de l'annulation"),
+        max_length=20,
+        choices=CANCELLATION_SOURCE_CHOICES,
+        blank=True,
+        default='',
+    )
+    cancellation_reason = models.CharField(
+        _("Motif d'annulation"),
+        max_length=CANCELLATION_REASON_MAX_LENGTH,
+        blank=True,
+        default='',
     )
 
     # Livraison (snapshot adresse au moment de la commande)

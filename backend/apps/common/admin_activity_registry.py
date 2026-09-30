@@ -145,6 +145,14 @@ ADMIN_ACTIVITY_REGISTRY: Final[dict[str, AdminActivityDefinition]] = {
             context=ORDER_CONTEXT,
         ),
         _definition('commerce.order.received', 'commerce', 'commerce', 'order', context=ORDER_CONTEXT),
+        _definition(
+            'commerce.order.cancelled',
+            'commerce',
+            'commerce',
+            'order',
+            levels=ATTENTION,
+            context=ORDER_CONTEXT,
+        ),
         _definition('support.user_message.received', 'support', 'chat', 'message', levels=ATTENTION),
     )
 }

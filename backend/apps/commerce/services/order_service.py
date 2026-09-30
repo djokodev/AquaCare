@@ -18,7 +18,11 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, QuerySet, Sum
 from django.utils import timezone
 
-from ..constants import PICKUP_LOCATION_CHOICES
+from ..constants import (
+    CUSTOMER_CANCELLABLE_STATUSES,
+    OPERATOR_CANCELLABLE_STATUSES,
+    PICKUP_LOCATION_CHOICES,
+)
 from ..domain.calculators import DeliveryFeeCalculator, OrderTotalCalculator
 from ..domain.exceptions import DeliveryAddressIncompleteError, InvalidOrderError
 from ..domain.validators import DeliveryMethod, OrderItemPayload, OrderValidator
@@ -175,6 +179,7 @@ class OrderService(BaseCommerceService):
         if existing_order:
             return existing_order
 
+        items_data = OrderValidator.merge_duplicate_items(items_data)
         OrderValidator.validate_items(items_data)
         OrderValidator.validate_delivery_method(delivery_method, pickup_location)
 
@@ -185,6 +190,8 @@ class OrderService(BaseCommerceService):
             prepared_items=prepared_items,
         )
         production_cycle = OrderService._resolve_order_cycle(user, production_cycle_id)
+        if getattr(user, 'farm_profile', None) is None:
+            raise InvalidOrderError("Créez d'abord votre ferme avant de passer une commande")
 
         delivery_address_data = OrderService._build_delivery_address_snapshot(user)
         OrderService._validate_delivery_snapshot(delivery_method, delivery_address_data, user)
@@ -663,6 +670,104 @@ class OrderService(BaseCommerceService):
         return Order.objects.with_details().get(pk=locked_order.pk)
 
     @staticmethod
+    def _apply_cancellation(order: Order, *, actor: User, source: str, reason: str) -> None:
+        order.status = 'cancelled'
+        order.cancelled_at = timezone.now()
+        order.cancelled_by = actor
+        order.cancellation_source = source
+        order.cancellation_reason = (reason or '').strip()
+        order.save(update_fields=[
+            'status', 'cancelled_at', 'cancelled_by', 'cancellation_source',
+            'cancellation_reason', 'updated_at',
+        ])
+        record_order_activity(order, event_type='commerce.order.cancelled')
+
+    @staticmethod
+    @transaction.atomic
+    def cancel_order_by_customer(order: Order, user: User, reason: str = '') -> Order:
+        """
+        Annulation par le client, possible tant que rien n'est préparé
+        (statut 'confirmed'). Idempotent si la commande est déjà annulée.
+        """
+        locked_order = Order.objects.select_for_update().get(pk=order.pk)
+        if locked_order.user_id != user.id:
+            raise InvalidOrderError("Vous n'avez pas accès à cette commande")
+        if locked_order.status == 'cancelled':
+            return Order.objects.with_details().get(pk=locked_order.pk)
+        if locked_order.status not in CUSTOMER_CANCELLABLE_STATUSES:
+            raise InvalidOrderError(
+                "Cette commande est déjà en cours de livraison ou de retrait : "
+                "contactez le support pour l'annuler"
+            )
+        OrderService._apply_cancellation(locked_order, actor=user, source='customer', reason=reason)
+        return Order.objects.with_details().get(pk=locked_order.pk)
+
+    @staticmethod
+    def _notify_order_cancelled_by_operator(order: Order) -> None:
+        """Prévient le client (push + in-app) ; une panne n'annule pas l'annulation."""
+        try:
+            from notifications.services import NotificationService
+
+            language = getattr(order.user, 'language_preference', 'fr')
+            is_english = str(language).lower().startswith('en')
+            reason = order.cancellation_reason
+            if is_english:
+                title = 'Order cancelled'
+                message = f'Your order {order.order_number} has been cancelled by the AquaCare team.'
+                if reason:
+                    message += f' Reason: {reason}'
+            else:
+                title = 'Commande annulée'
+                message = f"Votre commande {order.order_number} a été annulée par l'équipe AquaCare."
+                if reason:
+                    message += f' Motif : {reason}'
+            NotificationService.create_notification(
+                user=order.user,
+                notification_type='order_cancelled',
+                title=title,
+                message=message,
+                content_object=order,
+                metadata={
+                    'order_id': str(order.id),
+                    'order_number': order.order_number,
+                    'production_cycle_id': (
+                        str(order.production_cycle_id) if order.production_cycle_id else None
+                    ),
+                },
+                channels=['in_app', 'push'],
+                send_immediately=True,
+            )
+        except Exception:
+            logger.exception('Order cancellation notification failed, order=%s', order.id)
+
+    @staticmethod
+    def _can_cancel_as_operator(user: User) -> bool:
+        return bool(user.is_superuser or user.has_perm('commerce.cancel_order'))
+
+    @staticmethod
+    @transaction.atomic
+    def cancel_order_by_operator(
+        order: Order,
+        operator: User,
+        reason: str,
+    ) -> OperatorOrderTransitionResult:
+        """Annulation par l'équipe (motif obligatoire), tant que la commande n'est pas reçue."""
+        if not OrderService._can_cancel_as_operator(operator):
+            raise InvalidOrderError("Vous n'êtes pas autorisé à effectuer cette action")
+        if not (reason or '').strip():
+            raise InvalidOrderError("Le motif d'annulation est obligatoire")
+
+        locked_order = Order.objects.select_for_update().get(pk=order.pk)
+        if locked_order.status == 'cancelled':
+            return OperatorOrderTransitionResult(order=locked_order, transitioned=False)
+        if locked_order.status not in OPERATOR_CANCELLABLE_STATUSES:
+            raise InvalidOrderError('Une commande reçue ne peut plus être annulée')
+
+        OrderService._apply_cancellation(locked_order, actor=operator, source='operator', reason=reason)
+        transaction.on_commit(lambda: OrderService._notify_order_cancelled_by_operator(locked_order))
+        return OperatorOrderTransitionResult(order=locked_order, transitioned=True)
+
+    @staticmethod
     def generate_order_number() -> str:
         """
         Génère un numéro de commande unique.
@@ -684,7 +789,8 @@ class OrderService(BaseCommerceService):
             >>> num
             'ORD-20250110-0001'
         """
-        today = datetime.now().strftime('%Y%m%d')
+        # Date locale (Africa/Douala) : le numéro suit le jour vu par le client.
+        today = timezone.localdate().strftime('%Y%m%d')
         prefix = f"ORD-{today}-"
 
         # select_for_update() pose un verrou de ligne (ou d'absence de ligne)
@@ -797,10 +903,11 @@ class OrderService(BaseCommerceService):
                 'last_order_date': datetime(...)
             }
         """
+        # Les commandes annulées ne comptent ni dans les dépenses ni dans les sacs.
         orders = OrderService._user_orders_queryset(
             user=user,
             production_cycle_id=production_cycle_id,
-        )
+        ).exclude(status='cancelled')
 
         order_aggregates = orders.aggregate(
             total_orders=Count('id'),
@@ -852,6 +959,8 @@ class OrderService(BaseCommerceService):
             >>> preview
             {'subtotal': Decimal('60000'), 'delivery_fee': Decimal('3000'), 'total': Decimal('63000')}
         """
+        items_data = OrderValidator.merge_duplicate_items(items_data)
+        OrderValidator.validate_items(items_data)
         prepared_items = OrderService._prepare_order_items(items_data)
         calculated_amounts = OrderService._calculate_order_amounts(
             delivery_method=delivery_method,

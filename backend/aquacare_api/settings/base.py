@@ -175,6 +175,7 @@ REST_FRAMEWORK = {
         "commerce_simulation": "20/hour",
         "commerce_suggestions": "30/hour",
         "commerce_delivery_preview": "60/hour",
+        "commerce_order_write": "30/hour",
         "notifications_bulk_mutation": "20/hour",
         "notifications_push_token": "30/hour",
         "aquaculture_sync": "30/hour",

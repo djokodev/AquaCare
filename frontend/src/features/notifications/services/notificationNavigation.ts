@@ -7,7 +7,7 @@ type NotificationData = {
 
 type Target = { name: string; params?: object };
 
-const ORDER_TYPES = new Set(['order_confirmed', 'order_delivered', 'order_ready_for_pickup']);
+const ORDER_TYPES = new Set(['order_confirmed', 'order_delivered', 'order_ready_for_pickup', 'order_cancelled']);
 
 /** Écran à ouvrir pour une notification serveur (push ou liste in-app). */
 export const getNotificationTarget = (data: NotificationData): Target | null => {

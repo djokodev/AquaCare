@@ -79,6 +79,20 @@ class OrderApplicationService:
         return OrderService.mark_order_ready_for_customer_confirmation(order, operator)
 
     @staticmethod
+    def cancel_order_by_customer(order: Order, user: User, reason: str = '') -> Order:
+        """Annulation par le client tant que la commande n'est pas préparée."""
+        return OrderService.cancel_order_by_customer(order, user, reason)
+
+    @staticmethod
+    def cancel_order_by_operator(
+        order: Order,
+        operator: User,
+        reason: str,
+    ) -> OperatorOrderTransitionResult:
+        """Annulation par l'équipe AquaCare, avec notification du client."""
+        return OrderService.cancel_order_by_operator(order, operator, reason)
+
+    @staticmethod
     def preview_delivery_fee(
         user: User,
         command: DeliveryFeePreviewCommand,

@@ -43,6 +43,7 @@ jest.mock('@/features/commerce/store/commerceSlice', () => ({
   fetchOrderStatistics: jest.fn((payload) => ({ type: 'fetchOrderStatistics', payload })),
   clearOrderContext: jest.fn(() => ({ type: 'clearOrderContext' })),
   confirmOrderReceipt: (id: string) => mockConfirmOrderReceipt(id),
+  cancelOrder: (payload: { orderId: string }) => ({ type: 'cancelOrder', payload }),
 }));
 
 jest.mock('@/services/dashboardSyncService', () => ({
@@ -98,6 +99,7 @@ describe('OrdersHistoryScreen', () => {
       },
     };
     mockDispatch.mockImplementation((action: { type?: string }) => {
+      if (action.type === 'cancelOrder') return { unwrap: jest.fn().mockResolvedValue({ ...createOrder('cancelled'), id: 'order-confirmed', cancellation_source: 'customer' }) };
       if (action.type === 'confirmOrderReceipt') return { unwrap: jest.fn().mockResolvedValue(createOrder('received')) };
       if (action.type === 'fetchOrders') return { unwrap: jest.fn().mockResolvedValue(mockState.commerce.orders.items) };
       if (action.type === 'fetchOrderStatistics') return { unwrap: jest.fn().mockResolvedValue(mockState.commerce.orders.statistics) };
@@ -204,6 +206,32 @@ describe('OrdersHistoryScreen', () => {
     await waitFor(() => expect(mockConfirmOrderReceipt).toHaveBeenCalledTimes(1));
 
     expect(Alert.alert).toHaveBeenCalledWith('success', 'confirmReceiptSuccess');
+  });
+
+  it('annule une commande encore confirmee apres confirmation', async () => {
+    let confirmCancel: (() => Promise<void>) | undefined;
+    jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      if (title === 'cancelOrderTitle') confirmCancel = buttons?.[1]?.onPress as () => Promise<void>;
+    });
+    const { getByLabelText, getByText } = render(<OrdersHistoryScreen />);
+    fireEvent.press(getByLabelText('details'));
+    fireEvent.press(getByText('cancelOrderAction'));
+    await confirmCancel?.();
+
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith({ type: 'cancelOrder', payload: { orderId: 'order-confirmed' } }));
+    expect(Alert.alert).toHaveBeenCalledWith('success', 'cancelOrderSuccess');
+  });
+
+  it('n affiche pas l annulation pour une commande prete et montre le motif d une annulation equipe', () => {
+    mockState.commerce.orders.items = [
+      createOrder('ready_for_pickup'),
+      { ...createOrder('cancelled'), cancellation_source: 'operator', cancellation_reason: 'Rupture' },
+    ];
+    const { getAllByLabelText, queryByText, getByText } = render(<OrdersHistoryScreen />);
+    getAllByLabelText('details').forEach((button) => fireEvent.press(button));
+    expect(queryByText('cancelOrderAction')).toBeNull();
+    expect(getByText('orderCancelledByTeam')).toBeTruthy();
+    expect(getByText('orderCancellationReason')).toBeTruthy();
   });
 
   it('confirme un retrait uniquement quand la commande est prête', async () => {

@@ -121,7 +121,7 @@ export const estimateProjectedWeight = (
 
 /**
  * Estime la quantitÃ© d'aliment journaliÃ¨re simplifiÃ©e.
- * Backend utilise les tables Skretting/Aller Aqua officielles.
+ * Backend utilise les tables techniques de référence.
  *
  * @param biomassKg - Biomasse en kg
  * @param feedingRatePercent - Taux d'alimentation en %

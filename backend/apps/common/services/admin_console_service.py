@@ -276,6 +276,7 @@ class AdminConsoleService:
                 "delivered": _("Commandes livrées"),
                 "ready_for_pickup": _("Commandes prêtes au retrait"),
                 "received": _("Commandes reçues"),
+                "cancelled": _("Commandes annulées"),
             }
             status_counts = {
                 row["status"]: row["count"]

@@ -9,7 +9,12 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Final, Literal, TypedDict
 
-from ..constants import PICKUP_LOCATION_CHOICES
+from ..constants import (
+    MAX_BAGS_PER_LINE,
+    MAX_BAGS_PER_ORDER,
+    MAX_ORDER_LINES,
+    PICKUP_LOCATION_CHOICES,
+)
 from .exceptions import InvalidOrderError
 
 DeliveryMethod = Literal["home", "pickup"]
@@ -26,6 +31,15 @@ class OrderValidator:
     """
 
     VALID_DELIVERY_METHODS: Final[tuple[DeliveryMethod, ...]] = ("home", "pickup")
+
+    @staticmethod
+    def merge_duplicate_items(items: list[OrderItemPayload]) -> list[OrderItemPayload]:
+        """Regroupe les lignes d'un même produit (ordre de première apparition)."""
+        merged: dict[str, int] = {}
+        for item in items:
+            product_id = str(item['product_id'])
+            merged[product_id] = merged.get(product_id, 0) + int(item['quantity'])
+        return [{'product_id': product_id, 'quantity': quantity} for product_id, quantity in merged.items()]
 
     @staticmethod
     def validate_items(items: list[OrderItemPayload]) -> None:
@@ -67,6 +81,19 @@ class OrderValidator:
                 raise InvalidOrderError(
                     f"La quantité doit être supérieure à 0 (reçu: {quantity})"
                 )
+            if quantity > MAX_BAGS_PER_LINE:
+                raise InvalidOrderError(
+                    f"Maximum {MAX_BAGS_PER_LINE} sacs par produit dans une commande"
+                )
+
+        if len(items) > MAX_ORDER_LINES:
+            raise InvalidOrderError(
+                f"Une commande peut contenir au maximum {MAX_ORDER_LINES} produits différents"
+            )
+        if sum(item['quantity'] for item in items) > MAX_BAGS_PER_ORDER:
+            raise InvalidOrderError(
+                f"Une commande peut contenir au maximum {MAX_BAGS_PER_ORDER} sacs"
+            )
 
     @staticmethod
     def validate_delivery_method(

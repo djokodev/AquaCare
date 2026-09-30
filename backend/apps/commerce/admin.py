@@ -35,6 +35,7 @@ from django.utils.html import escape, format_html, mark_safe
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
+from .constants import CANCELLATION_REASON_MAX_LENGTH, OPERATOR_CANCELLABLE_STATUSES
 from .domain.exceptions import InvalidOrderError
 from .models import Order, OrderItem, Product
 from .services.order_application_service import OrderApplicationService
@@ -256,7 +257,8 @@ class OrderAdmin(CommerceSecuredAdmin):
         'subtotal', 'delivery_fee', 'total', 'total_bags',
         'is_free_delivery', 'client_uuid', 'created_offline', 'synced_at',
         'delivered_at', 'delivered_by', 'ready_for_pickup_at',
-        'ready_for_pickup_by', 'received_at', 'created_at', 'updated_at',
+        'ready_for_pickup_by', 'received_at', 'cancelled_at', 'cancelled_by',
+        'cancellation_source', 'cancellation_reason', 'created_at', 'updated_at',
         'documents_display', 'workflow_history_display', 'workflow_action_display',
         'items_summary_display', 'no_cycle_warning',
     ]
@@ -334,6 +336,11 @@ class OrderAdmin(CommerceSecuredAdmin):
                 '<path:object_id>/fulfil/',
                 self.admin_site.admin_view(self.fulfil_order_view),
                 name='commerce_order_fulfil',
+            ),
+            path(
+                '<path:object_id>/cancel/',
+                self.admin_site.admin_view(self.cancel_order_view),
+                name='commerce_order_cancel',
             ),
         ]
         return custom + urls
@@ -554,6 +561,77 @@ class OrderAdmin(CommerceSecuredAdmin):
             context,
         )
 
+    def has_cancel_permission(self, request) -> bool:
+        return bool(
+            request.user.is_superuser
+            or has_capability_and_permission(
+                request.user,
+                AdminCapability.MANAGE_COMMERCE,
+                "commerce.cancel_order",
+            )
+        )
+
+    def cancel_order_view(self, request, object_id):
+        """Page POST/CSRF d'annulation : motif obligatoire, client notifié."""
+        order = self.get_object(request, object_id)
+        if order is None:
+            return HttpResponse(_('Commande introuvable.'), status=404)
+        if not self.has_cancel_permission(request):
+            raise PermissionDenied
+        if order.status not in OPERATOR_CANCELLABLE_STATUSES:
+            messages.warning(request, _('Cette commande ne peut plus être annulée.'))
+            return redirect('admin:commerce_order_change', object_id)
+
+        reason = ''
+        form_error = ''
+        if request.method == 'POST':
+            reason = (request.POST.get('reason') or '').strip()[:CANCELLATION_REASON_MAX_LENGTH]
+            if not reason:
+                form_error = _("Indiquez le motif : il sera envoyé au client.")
+            else:
+                try:
+                    result = OrderApplicationService.cancel_order_by_operator(
+                        order,
+                        request.user,
+                        reason,
+                    )
+                except InvalidOrderError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    if result.transitioned:
+                        self.log_change(request, result.order, _('Commande annulée : {}').format(reason))
+                        messages.success(
+                            request,
+                            _('La commande {} a été annulée. Le client a été notifié.').format(
+                                result.order.order_number
+                            ),
+                        )
+                    else:
+                        messages.info(
+                            request,
+                            _('La commande {} était déjà annulée.').format(result.order.order_number),
+                        )
+                return redirect('admin:commerce_order_change', object_id)
+
+        action_label = _('Annuler la commande')
+        context = {
+            **self.admin_site.each_context(request),
+            'opts': self.model._meta,
+            'order': order,
+            'items': order.items.all(),
+            'action_label': action_label,
+            'title': action_label,
+            'cancel_mode': True,
+            'reason': reason,
+            'form_error': form_error,
+            'reason_max_length': CANCELLATION_REASON_MAX_LENGTH,
+        }
+        return TemplateResponse(
+            request,
+            'admin/commerce/order/fulfil_confirmation.html',
+            context,
+        )
+
     # --- Display methods ---
 
     def order_column(self, obj):
@@ -601,10 +679,30 @@ class OrderAdmin(CommerceSecuredAdmin):
         )
         url = reverse('admin:commerce_order_fulfil', args=[obj.pk])
         return format_html('<a class="button" href="{}">{}</a>', url, label)
+
+    def cancel_action_link(self, obj):
+        if not obj.pk or obj.status not in OPERATOR_CANCELLABLE_STATUSES:
+            return ''
+        url = reverse('admin:commerce_order_cancel', args=[obj.pk])
+        return format_html(
+            '<a class="button" style="background:#b91c1c;color:#fff" href="{}">{}</a>',
+            url,
+            _('Annuler la commande'),
+        )
     workflow_action_link.short_description = _('Action')
 
     def workflow_action_display(self, obj):
-        return self.workflow_action_link(obj)
+        if obj.status == 'cancelled':
+            return format_html(
+                '<strong style="color:#b91c1c">{}</strong> {}',
+                _('Commande annulée.'),
+                obj.cancellation_reason or '',
+            )
+        return format_html(
+            '<div style="display:flex;flex-wrap:wrap;gap:8px">{}{}</div>',
+            self.workflow_action_link(obj) if obj.status == 'confirmed' else '',
+            self.cancel_action_link(obj),
+        )
     workflow_action_display.short_description = _('Action opérateur')
 
     def documents_compact(self, obj):
@@ -667,6 +765,12 @@ class OrderAdmin(CommerceSecuredAdmin):
             (_('Opérateur'), getattr(operator, 'display_name', None) or operator),
             (confirmed_label, obj.received_at),
         ]
+        if obj.status == 'cancelled':
+            rows.extend([
+                (_('Annulée le'), obj.cancelled_at),
+                (_('Annulée par'), obj.get_cancellation_source_display()),
+                (_('Motif'), obj.cancellation_reason),
+            ])
         rendered = []
         for label, value in rows:
             if hasattr(value, 'tzinfo') and value is not None:
@@ -714,6 +818,8 @@ class OrderAdmin(CommerceSecuredAdmin):
             'confirmed': (_('Confirmée'), '#2563eb'),
             'delivered': (_('Livrée'), '#f59e0b'),
             'received': (_('Reçue'), '#059669'),
+            'ready_for_pickup': (_('Prête au retrait'), '#f59e0b'),
+            'cancelled': (_('Annulée'), '#b91c1c'),
         }
         status_label, status_color = status_labels.get(obj.status, (escape(str(obj.status)), '#6b7280'))
 
@@ -896,6 +1002,7 @@ class OrderAdmin(CommerceSecuredAdmin):
             'delivered': '#f59e0b',
             'ready_for_pickup': '#f59e0b',
             'received': '#10b981',
+            'cancelled': '#b91c1c',
         }
         labels = {
             'confirmed': _('Commandée'),
@@ -906,6 +1013,7 @@ class OrderAdmin(CommerceSecuredAdmin):
                 if obj.delivery_method == 'home'
                 else _('Retrait confirmé')
             ),
+            'cancelled': _('Annulée'),
         }
         color = colors.get(obj.status, '#6b7280')
         return format_html(

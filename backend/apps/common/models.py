@@ -146,6 +146,7 @@ class AdminActivityEvent(models.Model):
             _('Commande prête au retrait'),
         )
         ORDER_RECEIVED = 'commerce.order.received', _('Commande reçue')
+        ORDER_CANCELLED = 'commerce.order.cancelled', _('Commande annulée')
         USER_MESSAGE_RECEIVED = (
             'support.user_message.received',
             _('Message utilisateur reçu'),

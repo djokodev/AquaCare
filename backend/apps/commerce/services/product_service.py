@@ -169,14 +169,14 @@ class ProductService(BaseCommerceService):
         Filtre produits par marque.
 
         Args:
-            brand: 'aller_aqua' ou 'dibaq'
+            brand: 'dibaq' (seule marque commercialisée)
 
         Returns:
             QuerySet: Produits de la marque spécifiée
 
         Examples:
-            >>> aller_aqua = ProductService.filter_by_brand('aller_aqua')
-            >>> aller_aqua.count()
+            >>> dibaq = ProductService.filter_by_brand('dibaq')
+            >>> dibaq.count()
             13
         """
         return Product.objects.available().filter(brand=brand).catalog_ordered()
@@ -220,7 +220,7 @@ class ProductService(BaseCommerceService):
             weight_g: Poids moyen du poisson en grammes
 
         Returns:
-            Product ou None: Produit recommandé (priorité Aller Aqua)
+            Product ou None: Produit DIBAQ recommandé
 
         Examples:
             >>> product = ProductService.get_recommended_product('catfish', 150)

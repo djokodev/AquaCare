@@ -261,6 +261,7 @@ class NotificationPreference(models.Model):
         'order_confirmed': 'order_confirmations',
         'order_delivered': 'order_status_updates',
         'order_ready_for_pickup': 'order_status_updates',
+        'order_cancelled': 'order_status_updates',
         'new_message': 'support_messages',
     }
 

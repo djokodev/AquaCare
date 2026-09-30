@@ -110,6 +110,20 @@ describe('CycleFeedPhasesScreen', () => {
     expect(mockDispatch).toHaveBeenCalledTimes(1);
   });
 
+  it('ajouter une phase puis tout commander fixe la quantite sans la doubler', async () => {
+    jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue(recommendation([phase]));
+    const { findByText, getByText } = render(<CycleFeedPhasesScreen {...props} />);
+    await findByText('Starter');
+    fireEvent.press(getByText('feedPhaseOrderBtn'));
+    fireEvent.press(getByText(/feedPhaseOrderAllBtn/));
+
+    const quantities = mockDispatch.mock.calls.map(([action]) => action.payload.quantity);
+    expect(quantities).toEqual([2, 2]);
+    mockDispatch.mock.calls.forEach(([action]) => {
+      expect(action.type).toBe('commerce/setCartItemFromRecommendation');
+    });
+  });
+
   it('affiche les avertissements structurés sans exposer une clé backend brute', async () => {
     jest.spyOn(aquacultureService, 'getCycleFeedPhases').mockResolvedValue({
       ...recommendation([phase]),

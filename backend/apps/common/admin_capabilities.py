@@ -108,6 +108,7 @@ ROLE_DJANGO_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "commerce.change_product",
         "commerce.view_order",
         "commerce.fulfil_order",
+        "commerce.cancel_order",
         "commerce.download_order_document",
         "commerce.view_orderitem",
     ),
@@ -151,6 +152,11 @@ CUSTOM_ADMIN_PERMISSIONS: dict[str, tuple[str, str, str]] = {
         "commerce",
         "order",
         "Can fulfil orders through the controlled Admin workflow",
+    ),
+    "commerce.cancel_order": (
+        "commerce",
+        "order",
+        "Can cancel customer orders through the controlled Admin workflow",
     ),
     "commerce.download_order_document": (
         "commerce",
