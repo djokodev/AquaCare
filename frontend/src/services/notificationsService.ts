@@ -70,6 +70,10 @@ class NotificationsService {
     const response = await apiService.post(`${this.baseUrl}/register_push_token/`, payload);
     return response.data;
   }
+
+  async unregisterPushToken(expoPushToken: string) {
+    await apiService.post(`${this.baseUrl}/unregister_push_token/`, { expo_push_token: expoPushToken });
+  }
 }
 
 export const notificationsService = new NotificationsService();

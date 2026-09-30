@@ -49,6 +49,7 @@ import type { Conversation, Message, MediaType } from '../types/chat';
 import { AUTO_REFRESH_INTERVAL_MS } from '../domain/constants';
 import { AppText, EmptyState, ErrorState, IconButton, InlineAlert, LoadingState } from '@/components/ui';
 import { colors, shadows, spacing } from '@/theme';
+import { promptPushPermissionOnce } from '@/features/notifications/services/pushRegistration';
 
 /**
  * AquaCare Design System Colors
@@ -294,6 +295,9 @@ export function ChatScreen() {
 
       await dispatch(loadOfflineQueue());
       await syncOfflineMessagesIfOnline(conversationId);
+
+      // Premier message au support : proposer les notifications pour la réponse.
+      void promptPushPermissionOnce('support');
 
       // Reload messages to immediately get the system auto-response
       await dispatch(fetchMessages({ conversationId, page: 1 }));

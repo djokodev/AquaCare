@@ -4,7 +4,6 @@ from decimal import Decimal
 import pytest
 from aquaculture.models import CycleLog, CycleUnitAllocation, FeedingPlan, NutritionalGuide, ProductionUnit
 from aquaculture.services.feeding_service import FeedingPlanService
-from django.contrib.contenttypes.models import ContentType
 from notifications.models import Notification
 
 from tests.fixtures.factories import ProductionCycleFactory
@@ -218,7 +217,7 @@ class TestUnitFeedingPlans:
         assert plans[0].week_number == 1
         assert future_plan.is_active is False
 
-    def test_notifications_include_unit_metadata(self):
+    def test_unit_plan_generation_does_not_create_notifications(self):
         create_guide()
         cycle = ProductionCycleFactory(
             species='tilapia',
@@ -230,16 +229,5 @@ class TestUnitFeedingPlans:
 
         plan = FeedingPlanService.generate_plan_for_allocation_week(allocation, week_number=1)
 
-        content_type = ContentType.objects.get_for_model(allocation)
-        notification = Notification.objects.filter(
-            content_type=content_type,
-            object_id=str(allocation.id),
-            notification_type='feeding_reminder',
-        ).first()
-
-        assert notification is not None
-        assert notification.metadata['cycle_id'] == str(cycle.id)
-        assert notification.metadata['cycle_unit_allocation_id'] == str(allocation.id)
-        assert notification.metadata['production_unit_name'] == 'Bac 1'
-        assert notification.metadata['plan_id'] == str(plan.id)
-        assert notification.metadata['minutes_before'] in {15, 30}
+        assert plan.pk is not None
+        assert not Notification.objects.exists()

@@ -71,14 +71,6 @@ SANITARY_EVENT_TYPES = [
     ('other', 'Autre'),
 ]
 
-NOTIFICATION_TYPES = [
-    ('feeding_reminder', 'Rappel nourrissage'),
-    ('sampling_reminder', 'Rappel échantillonnage'),
-    ('treatment_reminder', 'Rappel traitement'),
-    ('cycle_milestone', 'Étape du cycle'),
-    ('alert', 'Alerte'),
-]
-
 OPTIMAL_PARAMETERS = {
     'tilapia': {
         'temperature_min': 20,   

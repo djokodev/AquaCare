@@ -2,23 +2,20 @@
 Service métier pour la gestion des plans d'alimentation.
 
 Ce service centralise la logique métier liée aux plans d'alimentation automatiques,
-incluant la génération basée sur les guides nutritionnels et la création de notifications.
+incluant la génération basée sur les guides nutritionnels.
+Les rappels de nourrissage sont des alarmes locales gérées par l'application mobile.
 
 Responsabilités :
 - Génération automatique de plans hebdomadaires
 - Calculs quantités optimales selon biomasse
-- Création notifications rappels alimentation
 - Désactivation plans après récolte
 """
-from datetime import datetime, time, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
-from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from notifications.models import Notification
 
 from ..domain.calculators import AquacultureCalculator
 from ..domain.exceptions import FeedingPlanGenerationError
@@ -34,16 +31,7 @@ class FeedingPlanService(BaseService):
     - generate_weekly_plans() : Génération automatique multi-semaines
     - generate_plan_for_week() : Génération plan semaine spécifique
     - deactivate_future_plans() : Désactivation après récolte
-    - create_feeding_notifications() : Rappels alimentation
     """
-
-    # Heures de repas par défaut selon nombre de repas/jour
-    FEEDING_SCHEDULES = {
-        1: [time(13, 0)],  # 13h
-        2: [time(8, 0), time(17, 0)],  # 8h, 17h
-        3: [time(8, 0), time(13, 0), time(18, 0)],  # 8h, 13h, 18h
-        4: [time(7, 0), time(11, 0), time(15, 0), time(18, 0)]  # 7h, 11h, 15h, 18h
-    }
 
     @staticmethod
     @transaction.atomic
@@ -153,7 +141,6 @@ class FeedingPlanService(BaseService):
         ).first()
 
         if existing_plan:
-            FeedingPlanService.create_feeding_notifications(existing_plan, regenerate=True)
             return existing_plan
 
         # 1. Chercher le guide DIBAQ pour l'espèce et le poids actuel
@@ -244,8 +231,6 @@ class FeedingPlanService(BaseService):
             is_active=True,
         )
 
-        FeedingPlanService.create_feeding_notifications(plan)
-
         FeedingPlanService.log_operation(
             "plan_created",
             {
@@ -307,21 +292,6 @@ class FeedingPlanService(BaseService):
             return Decimal(str(latest_log_with_temp.water_temperature)).quantize(Decimal('0.1')), False
 
         return Decimal('26.0'), True
-
-    @staticmethod
-    def _get_plan_scope_notification_target(
-        plan: FeedingPlan,
-    ) -> tuple[ContentType, str]:
-        if plan.cycle_unit_allocation_id:
-            return ContentType.objects.get_for_model(plan.cycle_unit_allocation), str(plan.cycle_unit_allocation_id)
-        return ContentType.objects.get_for_model(plan.cycle), str(plan.cycle_id)
-
-    @staticmethod
-    def _get_plan_scope_name(plan: FeedingPlan) -> str:
-        allocation = getattr(plan, 'cycle_unit_allocation', None)
-        if allocation and allocation.production_unit:
-            return allocation.production_unit.name
-        return plan.cycle.cycle_name
 
     @staticmethod
     @transaction.atomic
@@ -402,35 +372,12 @@ class FeedingPlanService(BaseService):
         ).days
         current_week = max(1, days_elapsed // 7 + 1)
 
-        future_plans = list(
-            FeedingPlan.objects.select_related('cycle_unit_allocation__production_unit').filter(
-                cycle=allocation.cycle,
-                cycle_unit_allocation=allocation,
-                is_active=True,
-                week_number__gt=current_week,
-            )
-        )
-
-        count = len(future_plans)
-        FeedingPlan.objects.filter(
+        count = FeedingPlan.objects.filter(
             cycle=allocation.cycle,
             cycle_unit_allocation=allocation,
             is_active=True,
             week_number__gt=current_week,
         ).update(is_active=False)
-
-        now = timezone.now()
-        notification_scope = Q()
-        for plan in future_plans:
-            content_type, object_id = FeedingPlanService._get_plan_scope_notification_target(plan)
-            notification_scope |= Q(content_type=content_type, object_id=object_id)
-
-        if notification_scope:
-            Notification.objects.filter(
-                notification_scope,
-                notification_type='feeding_reminder',
-                scheduled_for__gt=now,
-            ).delete()
 
         FeedingPlanService.log_operation(
             "future_allocation_plans_deactivated",
@@ -473,7 +420,6 @@ class FeedingPlanService(BaseService):
             week_number=week_number,
         ).first()
         if existing_plan:
-            FeedingPlanService.create_feeding_notifications(existing_plan, regenerate=True)
             return existing_plan
 
         current_average_weight = FeedingPlanService._get_allocation_average_weight(allocation)
@@ -542,8 +488,6 @@ class FeedingPlanService(BaseService):
             is_active=True,
         )
 
-        FeedingPlanService.create_feeding_notifications(plan)
-
         FeedingPlanService.log_operation(
             "allocation_plan_created",
             {
@@ -565,7 +509,7 @@ class FeedingPlanService(BaseService):
     @transaction.atomic
     def deactivate_future_plans(cycle: ProductionCycle) -> int:
         """
-        Désactive tous les plans d'alimentation futurs d'un cycle et nettoie les rappels.
+        Désactive tous les plans d'alimentation futurs d'un cycle.
 
         Utilisé après :
         - Récolte du cycle
@@ -582,35 +526,11 @@ class FeedingPlanService(BaseService):
             {"cycle_id": str(cycle.id)}
         )
 
-        future_plans = list(
-            FeedingPlan.objects.select_related('cycle_unit_allocation__production_unit').filter(
-                cycle=cycle,
-                is_active=True,
-                start_date__gt=timezone.localdate(),
-            )
-        )
-
-        # Désactiver plans futurs
-        count = len(future_plans)
-        FeedingPlan.objects.filter(
+        count = FeedingPlan.objects.filter(
             cycle=cycle,
             is_active=True,
             start_date__gt=timezone.localdate()
         ).update(is_active=False)
-
-        # Supprimer notifications futures associées (rappels alimentation)
-        now = timezone.now()
-        notification_scope = Q()
-        for plan in future_plans:
-            content_type, object_id = FeedingPlanService._get_plan_scope_notification_target(plan)
-            notification_scope |= Q(content_type=content_type, object_id=object_id)
-
-        if notification_scope:
-            Notification.objects.filter(
-                notification_scope,
-                notification_type='feeding_reminder',
-                scheduled_for__gt=now,
-            ).delete()
 
         FeedingPlanService.log_operation(
             "future_plans_deactivated",
@@ -619,162 +539,3 @@ class FeedingPlanService(BaseService):
         )
 
         return count
-
-    @staticmethod
-    @transaction.atomic
-    def create_feeding_notifications(
-        plan: FeedingPlan,
-        regenerate: bool = False
-    ) -> int:
-        """
-        Crée des notifications de rappel d'alimentation pour un plan.
-
-        Stratégie :
-        - Double rappel : 30min avant + 15min avant
-        - Skip dates passées
-        - Skip heures passées si aujourd'hui
-        - Suppression anciennes notifications si regenerate=True
-        - Batch insert via bulk_create (au lieu de N appels individuels)
-
-        Args:
-            plan: Plan d'alimentation
-            regenerate: Supprimer et recréer toutes les notifications
-
-        Returns:
-            Nombre de notifications créées
-        """
-        FeedingPlanService.log_operation(
-            "create_feeding_notifications",
-            {"plan_id": str(plan.id), "regenerate": regenerate}
-        )
-
-        # Pre-load content type and user preferences once (not per notification)
-        content_type, object_id = FeedingPlanService._get_plan_scope_notification_target(plan)
-        user = plan.cycle.farm_profile.user
-
-        # Supprimer anciennes notifications si régénération
-        if regenerate:
-            Notification.objects.filter(
-                content_type=content_type,
-                object_id=object_id,
-                notification_type='feeding_reminder'
-            ).delete()
-
-        # Check user preferences once
-        from notifications.models import NotificationPreference
-        prefs, _created = NotificationPreference.objects.get_or_create(user=user)
-        if not prefs.is_type_enabled('feeding_reminder'):
-            return 0
-
-        channels = ['in_app']
-        if not prefs.in_app_enabled:
-            return 0
-
-        # Obtenir heures de repas
-        feeding_times = FeedingPlanService.FEEDING_SCHEDULES.get(
-            plan.meals_per_day,
-            FeedingPlanService.FEEDING_SCHEDULES[2]  # Default 2 repas
-        )
-
-        now = timezone.now()
-        notifications_to_create = []
-
-        for day_offset in range(7):
-            notification_date = plan.start_date + timedelta(days=day_offset)
-
-            if notification_date < timezone.localdate():
-                continue
-
-            daily_feeding_times = feeding_times
-            if notification_date == timezone.localdate():
-                current_time = now.time()
-                daily_feeding_times = [
-                    ft for ft in feeding_times
-                    if ft >= current_time.replace(second=0, microsecond=0)
-                ]
-
-            if not daily_feeding_times:
-                continue
-
-            for meal_index, meal_time in enumerate(daily_feeding_times):
-                meal_names = ['matin', 'midi', 'soir', 'nuit']
-                meal_name = meal_names[meal_index] if meal_index < len(meal_names) else f'repas {meal_index + 1}'
-                scope_name = FeedingPlanService._get_plan_scope_name(plan)
-
-                base_metadata = {
-                    'cycle_id': str(plan.cycle.id),
-                    'cycle_unit_allocation_id': (
-                        str(plan.cycle_unit_allocation_id) if plan.cycle_unit_allocation_id else None
-                    ),
-                    'production_unit_id': (
-                        str(plan.cycle_unit_allocation.production_unit_id)
-                        if plan.cycle_unit_allocation and plan.cycle_unit_allocation.production_unit_id
-                        else None
-                    ),
-                    'production_unit_name': (
-                        plan.cycle_unit_allocation.production_unit.name
-                        if plan.cycle_unit_allocation and plan.cycle_unit_allocation.production_unit
-                        else None
-                    ),
-                    'plan_id': str(plan.id),
-                    'meal': meal_name,
-                }
-
-                notification_30min = timezone.make_aware(
-                    datetime.combine(notification_date, meal_time)
-                ) - timedelta(minutes=30)
-
-                if notification_30min > now:
-                    notifications_to_create.append(Notification(
-                        user=user,
-                        notification_type='feeding_reminder',
-                        title=_('Nourrissage %(scope_name)s dans 30min') % {
-                            'scope_name': scope_name
-                        },
-                        message=_("Préparez %(amount).1f kg d'aliment pour %(scope_name)s.") % {
-                            'amount': plan.feed_per_meal,
-                            'scope_name': scope_name
-                        },
-                        content_type=content_type,
-                        object_id=object_id,
-                        metadata={**base_metadata, 'minutes_before': 30},
-                        channels=list(channels),
-                        priority='medium',
-                        scheduled_for=notification_30min,
-                    ))
-
-                notification_15min = timezone.make_aware(
-                    datetime.combine(notification_date, meal_time)
-                ) - timedelta(minutes=15)
-
-                if notification_15min > now:
-                    notifications_to_create.append(Notification(
-                        user=user,
-                        notification_type='feeding_reminder',
-                        title=_('Nourrissage %(scope_name)s dans 15min') % {
-                            'scope_name': scope_name
-                        },
-                        message=_("Donnez %(amount).1f kg d'aliment maintenant pour %(scope_name)s.") % {
-                            'amount': plan.feed_per_meal,
-                            'scope_name': scope_name
-                        },
-                        content_type=content_type,
-                        object_id=object_id,
-                        metadata={**base_metadata, 'minutes_before': 15},
-                        channels=list(channels),
-                        priority='medium',
-                        scheduled_for=notification_15min,
-                    ))
-
-        # Batch insert all notifications at once
-        if notifications_to_create:
-            Notification.objects.bulk_create(notifications_to_create, batch_size=100)
-
-        notifications_created = len(notifications_to_create)
-        FeedingPlanService.log_operation(
-            "notifications_created",
-            {"plan_id": str(plan.id), "count": notifications_created},
-            level='info'
-        )
-
-        return notifications_created

@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, View, FlatList, RefreshControl, Alert, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, View, FlatList, Pressable, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
-import { RouteProp, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useDispatch, useSelector } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
+import { openNotificationTarget } from '@/features/notifications/services/notificationNavigation';
 import { AppDispatch, RootState } from '@/store/store';
 import {
   fetchNotifications,
@@ -21,25 +21,20 @@ import { AppHeader, AppText, Button, Card, EmptyState, ErrorState, IconButton, I
 import { colors, spacing } from '@/theme';
 
 const NOTIFICATION_COLORS = {
-  feeding_reminder: colors.status.info,
-  sampling_reminder: colors.status.warning,
-  treatment_reminder: colors.status.error,
-  cycle_milestone: colors.status.success,
-  alert: colors.status.error,
+  order_confirmed: colors.status.info,
+  order_delivered: colors.status.success,
+  order_ready_for_pickup: colors.status.success,
   new_message: colors.status.success,
 };
 
 const NOTIFICATION_SURFACES = {
-  feeding_reminder: colors.status.infoSurface,
-  sampling_reminder: colors.status.warningSurface,
-  treatment_reminder: colors.status.errorSurface,
-  cycle_milestone: colors.status.successSurface,
-  alert: colors.status.errorSurface,
+  order_confirmed: colors.status.infoSurface,
+  order_delivered: colors.status.successSurface,
+  order_ready_for_pickup: colors.status.successSurface,
   new_message: colors.status.successSurface,
 };
 
 type NotificationsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Notifications'>;
-type NotificationsScreenRouteProp = RouteProp<RootStackParamList, 'Notifications'>;
 
 interface NotificationsScreenProps {
   navigation: NotificationsScreenNavigationProp;
@@ -52,60 +47,36 @@ interface ErrorWithMessage {
 export default function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const { t, i18n } = useTranslation();
   const dispatch = useDispatch<AppDispatch>();
-  const route = useRoute<NotificationsScreenRouteProp>();
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'read'>('all');
 
   const { notifications, loading, error, unreadCount } = useSelector((state: RootState) => state.notifications);
-  const currentCycleId = useSelector((state: RootState) => state.aquaculture.currentCycle?.id);
-  const effectiveCycleId = route.params?.cycleId ?? currentCycleId;
-
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
-
-  const startPolling = useCallback(() => {
-    if (pollingRef.current) {
-      return;
-    }
-
-    pollingRef.current = setInterval(() => {
-      dispatch(fetchNotificationsSilent({ cycleId: effectiveCycleId }));
-    }, 4000);
-  }, [dispatch, effectiveCycleId]);
-
+  // Les notifications sont liées au compte (commandes, support), pas au cycle.
+  // Pas de polling rapide ici : le polling global (60 s), le retour au premier
+  // plan, l'ouverture de l'écran et le « tirer pour rafraîchir » suffisent.
   useEffect(() => {
-    dispatch(fetchNotifications({ cycleId: effectiveCycleId }));
-  }, [dispatch, effectiveCycleId]);
+    dispatch(fetchNotifications(undefined));
+  }, [dispatch]);
 
   useFocusEffect(
     useCallback(() => {
-      dispatch(fetchNotificationsSilent({ cycleId: effectiveCycleId }));
-      startPolling();
-
-      return () => {
-        stopPolling();
-      };
-    }, [dispatch, effectiveCycleId, startPolling, stopPolling])
+      dispatch(fetchNotificationsSilent(undefined));
+    }, [dispatch])
   );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (status) => {
       if (status === 'active') {
-        dispatch(fetchNotificationsSilent({ cycleId: effectiveCycleId }));
+        dispatch(fetchNotificationsSilent(undefined));
       }
     });
 
     return () => subscription.remove();
-  }, [dispatch, effectiveCycleId]);
+  }, [dispatch]);
 
   const onRefresh = React.useCallback(() => {
-    dispatch(fetchNotifications({ cycleId: effectiveCycleId }));
-  }, [dispatch, effectiveCycleId]);
+    dispatch(fetchNotifications(undefined));
+  }, [dispatch]);
 
   const sortedNotifications = useMemo(
     () =>
@@ -145,16 +116,12 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
     switch (type) {
       case 'new_message':
         return 'chatbubbles-outline';
-      case 'feeding_reminder':
-        return 'restaurant-outline';
-      case 'sampling_reminder':
-        return 'scale-outline';
-      case 'treatment_reminder':
-        return 'medical-outline';
-      case 'cycle_milestone':
-        return 'trophy-outline';
-      case 'alert':
-        return 'alert-circle-outline';
+      case 'order_confirmed':
+        return 'receipt-outline';
+      case 'order_delivered':
+        return 'checkmark-circle-outline';
+      case 'order_ready_for_pickup':
+        return 'storefront-outline';
       default:
         return 'notifications-outline';
     }
@@ -179,6 +146,16 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
     }
   };
 
+  const handleOpenNotification = (notification: Notification) => {
+    if (!notification.is_read) {
+      dispatch(markNotificationAsRead(notification.id));
+    }
+    openNotificationTarget({
+      notification_type: notification.notification_type,
+      metadata: notification.metadata as { production_cycle_id?: unknown } | null,
+    });
+  };
+
   const handleMarkAllAsRead = () => {
     const unreadNotifications = notifications.filter((notification) => !notification.is_read);
 
@@ -193,7 +170,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         text: t('confirm'),
         onPress: async () => {
           try {
-            await dispatch(markAllNotificationsAsRead({ cycleId: effectiveCycleId })).unwrap();
+            await dispatch(markAllNotificationsAsRead(undefined)).unwrap();
           } catch {
             Alert.alert(t('error'), t('markAllReadError'));
           }
@@ -239,7 +216,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         style: 'destructive',
         onPress: async () => {
           try {
-            await dispatch(deleteAllReadNotifications({ cycleId: effectiveCycleId })).unwrap();
+            await dispatch(deleteAllReadNotifications(undefined)).unwrap();
           } catch (deleteAllError: unknown) {
             const errorWithMessage = deleteAllError as ErrorWithMessage;
             Alert.alert(t('error'), errorWithMessage.message || t('deleteAllReadError'));
@@ -259,7 +236,12 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
 
       return (
         <Card variant="outlined" style={styles.notificationCard}>
-          <View style={styles.notificationRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={notification.title}
+            onPress={() => handleOpenNotification(notification)}
+            style={styles.notificationRow}
+          >
             <View style={[styles.iconSurface, { backgroundColor: surfaceColor }]}>
               <Ionicons name={iconName} size={24} color={color} />
             </View>
@@ -272,7 +254,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
                 <AppText variant="caption" style={{ color }}>{t(`notificationType_${notification.notification_type}`, notification.notification_type)}</AppText>
               </View>
             </View>
-          </View>
+          </Pressable>
           <View style={styles.actions}>
             <Button label={notification.is_read ? t('read') : t('markAsRead')} variant="ghost" size="small" fullWidth={false} disabled={notification.is_read} onPress={() => handleMarkAsRead(notification)} />
             <IconButton icon="trash-outline" variant="danger" tone="danger" accessibilityLabel={t('deleteNotification')} onPress={() => handleDeleteNotification(notification)} />
@@ -280,7 +262,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
         </Card>
       );
     },
-    [t, i18n.language]
+    [t, i18n.language, handleOpenNotification]
   );
 
   const renderListHeader = useCallback(
@@ -323,7 +305,7 @@ export default function NotificationsScreen({ navigation }: NotificationsScreenP
     return (
       <View className="flex-1 bg-cream">
         {renderHeader()}
-        <ErrorState title={error ? t(error) : t('error')} actionLabel={t('retry')} onAction={() => dispatch(fetchNotifications({ cycleId: effectiveCycleId }))} />
+        <ErrorState title={error ? t(error) : t('error')} actionLabel={t('retry')} onAction={() => dispatch(fetchNotifications(undefined))} />
       </View>
     );
   }

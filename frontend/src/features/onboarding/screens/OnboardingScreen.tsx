@@ -1,6 +1,5 @@
 /**
- * Écran principal d'onboarding avec 5 slides activation utilisateur
- * Flow: Problème → Solution → Comment → Preuve sociale → Action
+ * Introduction de l'app en 4 pages : accueil, suivi, alimentation, commandes et support.
  * @module features/onboarding/screens
  */
 
@@ -8,6 +7,7 @@ import React, { useState, useRef } from 'react';
 import {
   View,
   FlatList,
+  Pressable,
   StyleSheet,
   Dimensions,
   NativeSyntheticEvent,
@@ -16,94 +16,23 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import OnboardingSlide from '../components/OnboardingSlide';
 import SlideIndicators from '../components/SlideIndicators';
 import OnboardingButton from '../components/OnboardingButton';
 import OnboardingService from '../services/onboardingService';
 import { OnboardingSlideData } from '../types/onboarding';
-import { AppText, Button, IconButton } from '@/components/ui';
-import { colors, sizing, spacing } from '@/theme';
+import { AppText } from '@/components/ui';
+import { colors, spacing } from '@/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-/**
- * Données des 5 slides (activation utilisateur)
- * Slide 1: Problème (reconnaissance)
- * Slide 2: Solution (promesse)
- * Slide 3: Comment (demo rapide)
- * Slide 4: Preuve sociale (confiance)
- * Slide 5: Action (call to action)
- */
 const SLIDES: OnboardingSlideData[] = [
-  // Slide 1: Problème
-  {
-    id: '1',
-    type: 'problem',
-    iconName: 'alert-circle-outline',
-    titleKey: 'onboarding_problem_title',
-    bulletItems: [
-      { iconName: 'skull-outline', textKey: 'onboarding_problem_item1' },
-      { iconName: 'fast-food-outline', textKey: 'onboarding_problem_item2' },
-      { iconName: 'eye-off-outline', textKey: 'onboarding_problem_item3' },
-    ],
-  },
-  // Slide 2: Solution
-  {
-    id: '2',
-    type: 'solution',
-    iconName: 'trending-up-outline',
-    titleKey: 'onboarding_solution_title',
-    bulletItems: [
-      { iconName: 'checkmark-circle', textKey: 'onboarding_solution_item1' },
-      { iconName: 'checkmark-circle', textKey: 'onboarding_solution_item2' },
-      { iconName: 'checkmark-circle', textKey: 'onboarding_solution_item3' },
-    ],
-  },
-  // Slide 3: Comment
-  {
-    id: '3',
-    type: 'how',
-    titleKey: 'onboarding_how_title',
-    howSteps: [
-      {
-        iconName: 'create-outline',
-        titleKey: 'onboarding_how_step1_title',
-        descKey: 'onboarding_how_step1_desc',
-      },
-      {
-        iconName: 'notifications-outline',
-        titleKey: 'onboarding_how_step2_title',
-        descKey: 'onboarding_how_step2_desc',
-      },
-      {
-        iconName: 'cash-outline',
-        titleKey: 'onboarding_how_step3_title',
-        descKey: 'onboarding_how_step3_desc',
-      },
-    ],
-  },
-  // Slide 4: Preuve sociale
-  {
-    id: '4',
-    type: 'social_proof',
-    titleKey: 'onboarding_social_title',
-    testimonialNameKey: 'onboarding_testimonial_name',
-    testimonialTextKey: 'onboarding_testimonial_text',
-    stats: [
-      { iconName: 'people-outline', textKey: 'onboarding_stat1' },
-      { iconName: 'analytics-outline', textKey: 'onboarding_stat2' },
-      { iconName: 'wallet-outline', textKey: 'onboarding_stat3' },
-      { iconName: 'storefront-outline', textKey: 'onboarding_stat4' },
-    ],
-  },
-  // Slide 5: Action
-  {
-    id: '5',
-    type: 'action',
-    titleKey: 'onboarding_action_title',
-    subtitleKey: 'onboarding_action_subtitle',
-  },
+  { id: 'welcome', visual: 'welcome', titleKey: 'onboardingWelcomeTitle', textKey: 'onboardingWelcomeText' },
+  { id: 'track', visual: 'track', titleKey: 'onboardingTrackTitle', textKey: 'onboardingTrackText' },
+  { id: 'feed', visual: 'feed', titleKey: 'onboardingFeedTitle', textKey: 'onboardingFeedText' },
+  { id: 'shop', visual: 'shop', titleKey: 'onboardingShopTitle', textKey: 'onboardingShopText' },
 ];
 
 interface OnboardingScreenProps {
@@ -194,33 +123,40 @@ export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps)
   const buttonAction = isLastSlide ? handleStart : handleNext;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
+        <View style={styles.circleLarge} pointerEvents="none" />
+        <View style={styles.circleSmall} pointerEvents="none" />
+
         <View style={styles.header}>
-          {currentIndex === 0 ? (
-            <Button
-              label={t('onboardingSkip')}
-              onPress={handleSkip}
-              variant="ghost"
-              disabled={isProcessing}
-              fullWidth={false}
-            />
-          ) : (
-            <IconButton
-              icon="arrow-back"
+          {currentIndex > 0 ? (
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel={t('onboardingBack')}
               onPress={() => flatListRef.current?.scrollToIndex({ index: currentIndex - 1, animated: true })}
               disabled={isProcessing}
-              variant="ghost"
-            />
+              hitSlop={12}
+              style={styles.headerButton}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.text.inverse} />
+            </Pressable>
+          ) : (
+            <View style={styles.headerButton} />
           )}
 
-          <AppText variant="helper" color="muted" style={styles.pageIndicator}>
-            {currentIndex + 1}/{SLIDES.length}
-          </AppText>
+          {!isLastSlide ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleSkip}
+              disabled={isProcessing}
+              hitSlop={12}
+              style={styles.headerButton}
+            >
+              <AppText variant="label" style={styles.skipText}>{t('onboardingSkip')}</AppText>
+            </Pressable>
+          ) : null}
         </View>
 
-        {/* FlatList horizontal avec slides */}
         <FlatList
           ref={flatListRef}
           data={SLIDES}
@@ -240,56 +176,49 @@ export default function OnboardingScreen({ onCompleted }: OnboardingScreenProps)
           })}
         />
 
-        {/* Footer avec indicateurs et bouton */}
-        <View style={styles.footer}>
-          <SlideIndicators
-            currentIndex={currentIndex}
-            totalSlides={SLIDES.length}
-          />
-
-          <OnboardingButton
-            title={buttonTitle}
-            onPress={buttonAction}
-            disabled={isProcessing}
-          />
-        </View>
+        <SafeAreaView edges={['bottom']} style={styles.footer}>
+          <SlideIndicators currentIndex={currentIndex} totalSlides={SLIDES.length} />
+          <OnboardingButton title={buttonTitle} onPress={buttonAction} disabled={isProcessing} />
+        </SafeAreaView>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.surface.card,
+  safeArea: { flex: 1, backgroundColor: colors.brand.dark },
+  container: { flex: 1, backgroundColor: colors.brand.dark, overflow: 'hidden' },
+  circleLarge: {
+    position: 'absolute',
+    top: -90,
+    right: -110,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
-
-  container: {
-    flex: 1,
-    backgroundColor: colors.surface.card,
+  circleSmall: {
+    position: 'absolute',
+    top: 150,
+    left: -70,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing[5],
     paddingVertical: spacing[3],
+    minHeight: 52,
   },
-
-  headerPlaceholder: {
-    height: sizing.controlLarge,
-  },
-
-  pageIndicator: {
-    fontWeight: '500',
-  },
-
+  headerButton: { minWidth: 44, minHeight: 44, justifyContent: 'center' },
+  skipText: { color: colors.text.inverse, textAlign: 'right' },
   footer: {
-    paddingBottom: spacing[10],
-    paddingTop: spacing[5],
-    paddingHorizontal: spacing[4],
-    alignItems: 'center',
+    paddingBottom: spacing[6],
+    paddingHorizontal: spacing[6],
     backgroundColor: colors.surface.card,
   },
 });

@@ -10,6 +10,7 @@ export { default as OnboardingScreen } from './screens/OnboardingScreen';
 // Components
 export { default as OnboardingButton } from './components/OnboardingButton';
 export { default as OnboardingSlide } from './components/OnboardingSlide';
+export { default as OnboardingVisual } from './components/OnboardingVisual';
 export { default as SlideIndicators } from './components/SlideIndicators';
 
 // Services

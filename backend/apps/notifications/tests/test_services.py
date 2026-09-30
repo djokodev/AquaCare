@@ -13,7 +13,6 @@ from unittest.mock import patch
 
 import pytest
 from django.db import transaction
-from django.test import override_settings
 from django.utils import timezone
 from notifications.application_services import (
     NotificationInboxApplicationService,
@@ -22,7 +21,7 @@ from notifications.application_services import (
     NotificationQueryFilters,
     PushTokenRegistrationCommand,
 )
-from notifications.models import Notification, NotificationPreference
+from notifications.models import Notification, NotificationPreference, PushToken
 from notifications.services import NotificationService
 
 
@@ -74,60 +73,31 @@ class TestNotificationServiceCreate:
 
         assert notif.metadata == metadata
 
-    @override_settings(FEEDING_REMINDER_LOCAL_ALARM_ONLY=True)
-    def test_feeding_reminder_strips_push_when_local_alarm_policy_enabled(self, user):
-        notif = NotificationService.create_notification(
-            user=user,
-            notification_type='feeding_reminder',
-            title='Feeding time',
-            message='Local reminder',
-            channels=['in_app', 'push'],
-        )
-
-        assert notif is not None
-        assert notif.channels == ['in_app']
-
-    @override_settings(FEEDING_REMINDER_LOCAL_ALARM_ONLY=False)
-    def test_feeding_reminder_keeps_push_when_policy_disabled(self, user):
-        notif = NotificationService.create_notification(
-            user=user,
-            notification_type='feeding_reminder',
-            title='Feeding time',
-            message='Push reminder',
-            channels=['in_app', 'push'],
-        )
-
-        assert notif is not None
-        assert notif.channels == ['in_app', 'push']
-
     def test_create_notification_returns_none_when_channels_all_disabled(self, user):
         prefs, _ = NotificationPreference.objects.get_or_create(user=user)
         prefs.in_app_enabled = False
-        prefs.email_enabled = False
         prefs.push_enabled = False
-        prefs.save(
-            update_fields=['in_app_enabled', 'email_enabled', 'push_enabled']
-        )
+        prefs.save(update_fields=['in_app_enabled', 'push_enabled'])
 
         notif = NotificationService.create_notification(
             user=user,
-            notification_type='system_update',
-            title='System Update',
+            notification_type='new_message',
+            title='Support',
             message='No channel should remain',
-            channels=['in_app', 'email', 'push'],
+            channels=['in_app', 'push'],
         )
 
         assert notif is None
 
     def test_create_notification_returns_none_when_type_is_opted_out(self, user):
         prefs, _ = NotificationPreference.objects.get_or_create(user=user)
-        prefs.system_alerts = False
-        prefs.save(update_fields=['system_alerts'])
+        prefs.support_messages = False
+        prefs.save(update_fields=['support_messages'])
 
         notif = NotificationService.create_notification(
             user=user,
-            notification_type='system_update',
-            title='System Update',
+            notification_type='new_message',
+            title='Support',
             message='Type disabled',
             channels=['in_app'],
         )
@@ -162,16 +132,16 @@ class TestNotificationServiceCreate:
         django_capture_on_commit_callbacks,
     ):
         with patch(
-            'notifications.tasks.send_email_notification_task.delay',
+            'notifications.tasks.send_push_notification_task.delay',
             side_effect=RuntimeError('queue unavailable'),
         ), patch('notifications.services.logger.exception') as mock_logger, \
                 django_capture_on_commit_callbacks(execute=True):
             notif = NotificationService.create_notification(
                 user=user,
-                notification_type='system_update',
+                notification_type='new_message',
                 title='Dispatch',
                 message='Still persisted',
-                channels=['email'],
+                channels=['in_app', 'push'],
                 send_immediately=True,
             )
 
@@ -179,20 +149,34 @@ class TestNotificationServiceCreate:
         assert Notification.objects.filter(id=notif.id).exists()
         mock_logger.assert_called_once()
 
+    def test_immediate_notification_is_marked_sent_to_avoid_duplicate_push(self, user):
+        with patch('notifications.tasks.send_push_notification_task.delay'):
+            notif = NotificationService.create_notification(
+                user=user,
+                notification_type='new_message',
+                title='Support',
+                message='Reply',
+                channels=['in_app', 'push'],
+                send_immediately=True,
+            )
+
+        assert notif.is_sent is True
+        assert notif.sent_at is not None
+
     def test_immediate_dispatch_waits_for_commit_and_never_dispatches_rolled_back_rows(
         self,
         user,
         django_capture_on_commit_callbacks,
     ):
-        with patch('notifications.tasks.send_email_notification_task.delay') as mock_delay:
+        with patch('notifications.tasks.send_push_notification_task.delay') as mock_delay:
             with django_capture_on_commit_callbacks(execute=True):
                 with transaction.atomic():
                     notif = NotificationService.create_notification(
                         user=user,
-                        notification_type='system_update',
+                        notification_type='new_message',
                         title='After commit',
                         message='Only dispatch after commit',
-                        channels=['email'],
+                        channels=['in_app', 'push'],
                         send_immediately=True,
                     )
                     mock_delay.assert_not_called()
@@ -205,10 +189,10 @@ class TestNotificationServiceCreate:
                 with transaction.atomic():
                     rolled_back = NotificationService.create_notification(
                         user=user,
-                        notification_type='system_update',
+                        notification_type='new_message',
                         title='Rollback',
                         message='Must not dispatch',
-                        channels=['email'],
+                        channels=['in_app', 'push'],
                         send_immediately=True,
                     )
                     raise RuntimeError('rollback')
@@ -471,6 +455,46 @@ class TestNotificationInboxApplicationService:
         assert created is True
         assert token.is_active is True
 
+    def test_register_push_token_reassigns_token_from_previous_account(self, user, user2):
+        token_value = 'ExponentPushToken[shareddevice1234]'
+        NotificationInboxApplicationService.register_push_token(
+            user,
+            PushTokenRegistrationCommand(expo_push_token=token_value, device_id='phone-1'),
+        )
+
+        token, created = NotificationInboxApplicationService.register_push_token(
+            user2,
+            PushTokenRegistrationCommand(expo_push_token=token_value, device_id='phone-1'),
+        )
+
+        assert created is True
+        assert token.user_id == user2.id
+        assert PushToken.objects.filter(expo_push_token=token_value).count() == 1
+        assert not PushToken.objects.filter(user=user).exists()
+
+    def test_register_push_token_is_idempotent_for_same_user(self, user):
+        command = PushTokenRegistrationCommand(
+            expo_push_token='ExponentPushToken[samedevice12345]',
+            device_id='phone-1',
+        )
+        NotificationInboxApplicationService.register_push_token(user, command)
+        token, created = NotificationInboxApplicationService.register_push_token(user, command)
+
+        assert created is False
+        assert PushToken.objects.filter(user=user).count() == 1
+
+    def test_unregister_push_token_only_removes_own_token(self, user, user2):
+        token_value = 'ExponentPushToken[ownedbyuser2xyz]'
+        NotificationInboxApplicationService.register_push_token(
+            user2,
+            PushTokenRegistrationCommand(expo_push_token=token_value, device_id='phone-2'),
+        )
+
+        assert NotificationInboxApplicationService.unregister_push_token(user, token_value) == 0
+        assert PushToken.objects.filter(user=user2).exists()
+        assert NotificationInboxApplicationService.unregister_push_token(user2, token_value) == 1
+        assert not PushToken.objects.exists()
+
 
 @pytest.mark.django_db
 class TestNotificationPreferenceApplicationService:
@@ -482,15 +506,13 @@ class TestNotificationPreferenceApplicationService:
         updated_preferences = NotificationPreferenceApplicationService.update_preferences(
             preferences,
             {
-                'email_enabled': False,
                 'push_enabled': False,
-                'email_frequency': 'never',
+                'order_status_updates': False,
             },
         )
 
-        assert updated_preferences.email_enabled is False
         assert updated_preferences.push_enabled is False
-        assert updated_preferences.email_frequency == 'never'
+        assert updated_preferences.order_status_updates is False
 
 
 @pytest.mark.django_db
@@ -554,12 +576,12 @@ class TestCreateBulkNotificationsN1:
 
     def test_bulk_notifications_skip_users_who_opted_out(self, user, user2):
         prefs, _ = NotificationPreference.objects.get_or_create(user=user)
-        prefs.system_alerts = False
-        prefs.save(update_fields=['system_alerts'])
+        prefs.support_messages = False
+        prefs.save(update_fields=['support_messages'])
 
         count = NotificationService.create_bulk_notifications(
             users=[user, user2],
-            notification_type='system_update',
+            notification_type='new_message',
             title='Bulk Test',
             message='Only one user should receive it',
         )

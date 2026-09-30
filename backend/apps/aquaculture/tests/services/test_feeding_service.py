@@ -208,8 +208,8 @@ class TestFeedingPlanServiceWithDibaq:
 
         assert plan.temperature_used_c == Decimal('28.0')
 
-    def test_creates_notifications_after_plan(self):
-        """Vérifier que des notifications de rappel sont créées après la génération."""
+    def test_plan_generation_does_not_create_server_reminders(self):
+        """Les rappels de nourrissage sont des alarmes locales, pas des notifications serveur."""
         self._create_guide()
         cycle = ProductionCycleFactory(
             species='tilapia',
@@ -220,14 +220,7 @@ class TestFeedingPlanServiceWithDibaq:
 
         FeedingPlanService.generate_plan_for_week(cycle, week_number=1)
 
-        from django.contrib.contenttypes.models import ContentType
-        ct = ContentType.objects.get_for_model(cycle)
-        notifications = Notification.objects.filter(
-            content_type=ct,
-            object_id=str(cycle.id),
-            notification_type='feeding_reminder',
-        )
-        assert notifications.exists()
+        assert not Notification.objects.exists()
 
     def test_recommended_feed_type_uses_dibaq_product(self):
         """Le libellé aliment utilise le produit DIBAQ, pas 'Granulés Xmm'."""

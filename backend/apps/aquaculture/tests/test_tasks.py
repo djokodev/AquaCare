@@ -46,7 +46,7 @@ class TestPostLogAsyncTasks:
 
         mock_warning.assert_called_once()
 
-    def test_creates_mortality_and_sampling_notifications(self):
+    def test_updates_metrics_without_creating_notifications(self):
         cycle = ProductionCycleFactory(
             start_date=date.today() - timedelta(days=14),
             current_count=100,
@@ -62,25 +62,14 @@ class TestPostLogAsyncTasks:
         with patch(
             'notifications.services.NotificationService.create_notification'
         ) as mock_create_notification, patch(
-            'aquaculture.services.AnalyticsService.check_and_create_environmental_alerts'
-        ) as mock_env_alerts, patch(
             'aquaculture.services.AnalyticsService.update_cycle_metrics_data'
         ) as mock_update_metrics, patch(
             'aquaculture.tasks.invalidate_dashboard_cache'
         ) as mock_invalidate_cache:
             post_log_async_tasks(str(log.id))
 
-        assert mock_create_notification.call_count == 2
-        mortality_call = mock_create_notification.call_args_list[0].kwargs
-        sampling_call = mock_create_notification.call_args_list[1].kwargs
-
-        assert mortality_call['notification_type'] == 'mortality_alert'
-        assert mortality_call['priority'] == 'urgent'
-        assert mortality_call['title'] == f'Alerte mortalite, {cycle.cycle_name}'
-        assert sampling_call['notification_type'] == 'sampling_reminder'
-        assert sampling_call['title'] == f'Échantillonnage hebdomadaire, {cycle.cycle_name}'
-        assert sampling_call['scheduled_for'].date() == log.log_date + timedelta(days=7)
-        mock_env_alerts.assert_called_once_with(log)
+        # Alertes mortalité/environnement et rappels d'échantillonnage retirés.
+        mock_create_notification.assert_not_called()
         mock_update_metrics.assert_called_once_with(cycle, new_log=log)
         mock_invalidate_cache.assert_called_once_with(str(cycle.farm_profile.user.id))
 

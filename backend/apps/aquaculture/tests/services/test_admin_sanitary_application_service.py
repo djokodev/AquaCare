@@ -89,7 +89,7 @@ def test_mobile_user_from_another_farm_cannot_resolve_incident():
 
 
 @pytest.mark.django_db
-def test_resolution_notification_remains_addressed_to_farm_owner():
+def test_resolution_does_not_notify_anyone():
     cycle = ProductionCycleFactory()
     incident = _incident(cycle)
     manager = _manager()
@@ -101,12 +101,9 @@ def test_resolution_notification_remains_addressed_to_farm_owner():
         command=ResolveSanitaryIssueCommand(),
     )
 
-    notification = Notification.objects.get(
-        notification_type="ticket_resolved",
-        object_id=incident.pk,
-    )
-    assert notification.user == cycle.farm_profile.user
-    assert notification.user != manager
+    incident.refresh_from_db()
+    assert incident.resolved is True
+    assert not Notification.objects.exists()
 
 
 @pytest.mark.django_db

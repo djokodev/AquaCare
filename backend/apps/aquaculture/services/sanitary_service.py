@@ -17,7 +17,6 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from notifications.services import NotificationService
 
 from ..domain.exceptions import (
     CycleNotFoundException,
@@ -32,9 +31,6 @@ from .admin_activity_projection_service import (
     record_sanitary_log_created,
     record_sanitary_log_resolved,
 )
-
-# Notification model moved to apps/notifications/models.py
-# Will be migrated to use NotificationService in Phase 1B
 from .base import BaseService
 
 
@@ -53,7 +49,6 @@ class SanitaryService(BaseService):
     Responsabilités :
     - Création/résolution de logs sanitaires avec validation métier
     - Analyse patterns sanitaires et tendances épidémiologiques
-    - Génération automatique d'alertes selon gravité
     - Recommandations préventives et curatives
     - Groupement et statistiques par cycle
     """
@@ -62,7 +57,6 @@ class SanitaryService(BaseService):
     SEVERITY_MAP = SANITARY_SEVERITY_BY_EVENT_TYPE
 
     # Seuils d'alerte pour analyse
-    CRITICAL_AFFECTED_THRESHOLD = 0.05  # 5% de l'effectif
     WARNING_AFFECTED_THRESHOLD = 0.02   # 2% de l'effectif
 
     @staticmethod
@@ -220,15 +214,6 @@ class SanitaryService(BaseService):
             **kwargs
         )
 
-        # Créer notification automatique selon gravité
-        SanitaryService._create_sanitary_notification(sanitary_log)
-
-        # Vérifier si alerte critique nécessaire
-        if affected_count and cycle.current_count > 0:
-            affected_rate = affected_count / cycle.current_count
-            if affected_rate >= SanitaryService.CRITICAL_AFFECTED_THRESHOLD:
-                SanitaryService._create_critical_alert(sanitary_log, affected_rate)
-
         record_sanitary_log_created(sanitary_log)
 
         return SanitaryLogMutationResult(log=sanitary_log, created=True)
@@ -345,23 +330,6 @@ class SanitaryService(BaseService):
             )
             sanitary_log.notes = f"{notes}\n{resolution_entry}".strip()
         sanitary_log.save()
-
-        # Créer notification de résolution
-        NotificationService.create_notification(
-            user=sanitary_log.cycle.farm_profile.user,
-            notification_type='ticket_resolved',
-            title=_("Problème résolu, %(cycle_name)s") % {'cycle_name': sanitary_log.cycle.cycle_name},
-            message=_(
-                "Le problème %(event_type)s du %(event_date)s a été marqué comme résolu."
-            ) % {
-                'event_type': sanitary_log.get_event_type_display().lower(),
-                'event_date': sanitary_log.event_date,
-            },
-            content_object=sanitary_log,
-            metadata={'cycle_id': str(sanitary_log.cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
-            channels=['in_app', 'push'],
-            scheduled_for=timezone.now()
-        )
 
         record_sanitary_log_resolved(
             sanitary_log,
@@ -509,83 +477,6 @@ class SanitaryService(BaseService):
             'health_score': health_score,
             'recommendations': recommendations
         }
-
-    @staticmethod
-    def _create_sanitary_notification(sanitary_log: SanitaryLog) -> None:
-        """
-        Crée une notification appropriée selon le type et la gravité.
-
-        Args:
-            sanitary_log: Log sanitaire créé
-        """
-        severity = SanitaryService.SEVERITY_MAP.get(sanitary_log.event_type, 'info')
-        cycle = sanitary_log.cycle
-
-        if severity == 'critical':
-            title = _("🚨 Alerte sanitaire, %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
-            message = _("Problème %(event_type)s détecté. Intervention recommandée rapidement.") % {
-                'event_type': sanitary_log.get_event_type_display().lower()
-            }
-            notification_type = 'alert'
-        elif severity == 'warning':
-            title = _("⚠️ Attention sanitaire, %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
-            message = _("Problème %(event_type)s signalé. Surveillance recommandée.") % {
-                'event_type': sanitary_log.get_event_type_display().lower()
-            }
-            notification_type = 'alert'
-        else:
-            title = _("📋 Événement sanitaire, %(cycle_name)s") % {'cycle_name': cycle.cycle_name}
-            message = _("Événement %(event_type)s enregistré.") % {
-                'event_type': sanitary_log.get_event_type_display().lower()
-            }
-            notification_type = 'info'
-
-        NotificationService.create_notification(
-            user=cycle.farm_profile.user,
-            notification_type=notification_type,
-            title=title,
-            message=message,
-            content_object=sanitary_log,
-            metadata={'cycle_id': str(cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
-            channels=['in_app', 'push'],
-            scheduled_for=timezone.now()
-        )
-
-    @staticmethod
-    def _create_critical_alert(sanitary_log: SanitaryLog, affected_rate: float) -> None:
-        """
-        Crée une alerte critique si le taux d'affectation est élevé.
-
-        Args:
-            sanitary_log: Log sanitaire concerné
-            affected_rate: Taux de poissons affectés (0.0 à 1.0)
-        """
-        cycle = sanitary_log.cycle
-        percentage = affected_rate * 100
-
-        NotificationService.create_notification(
-            user=cycle.farm_profile.user,
-            notification_type='mortality_alert',
-            title=_("ALERTE CRITIQUE, %(cycle_name)s") % {'cycle_name': cycle.cycle_name},
-            message=_(
-                "%(percentage).1f%% de l'effectif affecté (%(count)d poissons).\n"
-                "Type: %(event_type)s\n"
-                "ACTION URGENTE :\n"
-                "1. Isoler les poissons malades si possible\n"
-                "2. Vérifier la qualité de l'eau\n"
-                "3. Contacter le support AquaCare\n"
-                "4. Suspendre l'alimentation si besoin"
-            ) % {
-                'percentage': percentage,
-                'count': sanitary_log.affected_count,
-                'event_type': sanitary_log.get_event_type_display(),
-            },
-            content_object=sanitary_log,
-            metadata={'cycle_id': str(cycle.id), 'sanitary_log_id': str(sanitary_log.id)},
-            priority='urgent',
-            channels=['in_app', 'push', 'email'],
-            scheduled_for=timezone.now()
-        )
 
     @staticmethod
     def _calculate_health_score(

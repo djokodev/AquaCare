@@ -20,7 +20,10 @@ jest.mock('react-redux', () => ({
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: jest.fn(),
-  useRoute: jest.fn(() => ({ params: { cycleId: 'cycle-1' } })),
+}));
+
+jest.mock('@/features/notifications/services/notificationNavigation', () => ({
+  openNotificationTarget: jest.fn(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -46,9 +49,9 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
 
   const makeNotification = (override: Partial<Notification>): Notification => ({
     id: 'notif-1',
-    notification_type: 'feeding_reminder',
-    title: 'Rappel alimentation',
-    message: 'Distribuer la ration',
+    notification_type: 'order_delivered',
+    title: 'Commande livrée',
+    message: 'Veuillez confirmer la réception.',
     metadata: {},
     channels: ['in_app'],
     scheduled_for: '2026-02-19T10:00:00Z',
@@ -101,7 +104,7 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
 
     expect(getByText('Erreur notifications')).toBeTruthy();
     fireEvent.press(getByText('retry'));
-    expect(fetchNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+    expect(fetchNotifications).toHaveBeenCalledWith(undefined);
   });
 
   it('filtre les notifications par statut lu/non lu', () => {
@@ -180,7 +183,7 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
     fireEvent.press(screen.getByLabelText('markAllAsRead'));
     let alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
     await alertCall[2].find((action: { text: string }) => action.text === 'confirm').onPress();
-    expect(markAllNotificationsAsRead).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+    expect(markAllNotificationsAsRead).toHaveBeenCalledWith(undefined);
 
     fireEvent.press(screen.getAllByLabelText('deleteNotification')[0]);
     alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
@@ -190,10 +193,10 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
     fireEvent.press(screen.getByLabelText('deleteAllRead'));
     alertCall = (Alert.alert as jest.Mock).mock.calls.at(-1);
     await alertCall[2].find((action: { text: string }) => action.text === 'confirm').onPress();
-    expect(deleteAllReadNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+    expect(deleteAllReadNotifications).toHaveBeenCalledWith(undefined);
   });
 
-  it('charge et rafraichit les notifications selon le cycle de session', () => {
+  it('charge les notifications du compte sans filtre de cycle', () => {
     setSelectorState({
       notifications: [],
       loading: false,
@@ -203,6 +206,25 @@ describe('features/aquaculture/screens/NotificationsScreen', () => {
 
     render(<NotificationsScreen navigation={navigation} />);
 
-    expect(fetchNotifications).toHaveBeenCalledWith({ cycleId: 'cycle-1' });
+    expect(fetchNotifications).toHaveBeenCalledWith(undefined);
+  });
+
+  it('ouvre l ecran lie a la notification et la marque comme lue', () => {
+    const { openNotificationTarget } = jest.requireMock('@/features/notifications/services/notificationNavigation');
+    setSelectorState({
+      notifications: [makeNotification({ id: 'n1', title: 'Commande livrée', is_read: false, metadata: { order_id: 'o1' } })],
+      loading: false,
+      error: null,
+      unreadCount: 1,
+    });
+
+    const { getByLabelText } = render(<NotificationsScreen navigation={navigation} />);
+    fireEvent.press(getByLabelText('Commande livrée'));
+
+    expect(markNotificationAsRead).toHaveBeenCalledWith('n1');
+    expect(openNotificationTarget).toHaveBeenCalledWith({
+      notification_type: 'order_delivered',
+      metadata: { order_id: 'o1' },
+    });
   });
 });

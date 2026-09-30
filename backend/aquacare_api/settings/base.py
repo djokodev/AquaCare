@@ -269,6 +269,15 @@ SPECTACULAR_SETTINGS = {
 }
 
 # =============================================================================
+# PUSH NOTIFICATIONS (Expo)
+# =============================================================================
+
+# Access token Expo envoyé avec chaque push. Avec "Enhanced push security"
+# activé sur expo.dev, Expo refuse tout envoi sans ce token : un token de
+# téléphone volé ne suffit plus pour envoyer une fausse notification AquaCare.
+EXPO_ACCESS_TOKEN = _env_str('EXPO_ACCESS_TOKEN', '')
+
+# =============================================================================
 # CELERY CONFIGURATION
 # =============================================================================
 
@@ -329,9 +338,6 @@ FRONTEND_URL = _env_str('FRONTEND_URL', 'http://localhost:8081')
 # Vide en dev: on retombe sur l'hote de la requete (tests en LAN). En
 # staging/prod elle est fixee pour ne jamais dependre de l'en-tete Host.
 PUBLIC_API_BASE_URL = _env_str('PUBLIC_API_BASE_URL', '')
-
-# Notifications nourrissage : alarmes locales frontend prioritaires
-FEEDING_REMINDER_LOCAL_ALARM_ONLY = _env_bool('FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
 
 # Lot 2A écrit toujours les projections. Ce flag ne contrôlera que leur
 # exposition dans l'interface et les lectures, livrées au Lot 2B.

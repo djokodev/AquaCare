@@ -73,9 +73,11 @@ class TestNotificationPreferenceModel:
         pref = NotificationPreference.objects.create(user=user)
 
         assert pref.in_app_enabled is True
-        assert pref.email_enabled is True
         assert pref.push_enabled is True
-        assert pref.email_frequency == 'instant'
+        assert pref.order_confirmations is True
+        assert pref.order_status_updates is True
+        assert pref.support_messages is True
+        assert not hasattr(pref, 'email_enabled')
 
     def test_one_preference_per_user(self, user):
         """Test unicité : une seule préférence par utilisateur."""
@@ -202,13 +204,14 @@ class TestNotificationPreferenceQuietHours:
 
     def test_is_type_enabled_known_type(self, user):
         """Type connu et activé → True."""
-        pref = NotificationPreference.objects.create(user=user, feeding_reminders=True)
-        assert pref.is_type_enabled('feeding_reminder') is True
+        pref = NotificationPreference.objects.create(user=user, support_messages=True)
+        assert pref.is_type_enabled('new_message') is True
 
     def test_is_type_enabled_disabled_type(self, user):
         """Type connu mais désactivé → False."""
-        pref = NotificationPreference.objects.create(user=user, feeding_reminders=False)
-        assert pref.is_type_enabled('feeding_reminder') is False
+        pref = NotificationPreference.objects.create(user=user, order_status_updates=False)
+        assert pref.is_type_enabled('order_ready_for_pickup') is False
+        assert pref.is_type_enabled('order_delivered') is False
 
     def test_is_type_enabled_unknown_type(self, user):
         """Type inconnu → True par défaut."""

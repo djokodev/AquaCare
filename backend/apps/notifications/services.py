@@ -8,7 +8,6 @@ import logging
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.db.models import Model, QuerySet
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
     from accounts.models import User as AccountUser
 logger = logging.getLogger(__name__)
 
-type NotificationChannel = Literal["in_app", "email", "push"]
+type NotificationChannel = Literal["in_app", "push"]
 type NotificationPriority = Literal["low", "medium", "high", "urgent"]
 type NotificationMetadataValue = (
     str
@@ -48,7 +47,7 @@ class NotificationService:
     ) -> list[NotificationChannel]:
         if channels is None:
             default_channels = DEFAULT_CHANNELS_BY_TYPE.get(notification_type, ["in_app"])
-            return [channel for channel in default_channels if channel in {"in_app", "email", "push"}]
+            return [channel for channel in default_channels if channel in {"in_app", "push"}]
 
         return list(channels)
 
@@ -65,8 +64,6 @@ class NotificationService:
         filtered_channels = list(channels)
         if not prefs.in_app_enabled and "in_app" in filtered_channels:
             filtered_channels.remove("in_app")
-        if not prefs.email_enabled and "email" in filtered_channels:
-            filtered_channels.remove("email")
         if not prefs.push_enabled and "push" in filtered_channels:
             filtered_channels.remove("push")
         return filtered_channels
@@ -79,19 +76,6 @@ class NotificationService:
         if priority is not None:
             return priority
         return DEFAULT_PRIORITY_BY_TYPE.get(notification_type, "medium")
-
-    @staticmethod
-    def _apply_feeding_reminder_push_policy(
-        notification_type: str,
-        channels: list[NotificationChannel],
-    ) -> list[NotificationChannel]:
-        if (
-            notification_type == 'feeding_reminder'
-            and getattr(settings, 'FEEDING_REMINDER_LOCAL_ALARM_ONLY', True)
-            and 'push' in channels
-        ):
-            return [channel for channel in channels if channel != 'push']
-        return channels
 
     @staticmethod
     def _apply_quiet_hours_policy(
@@ -112,10 +96,6 @@ class NotificationService:
     ) -> list[NotificationChannel]:
         resolved_channels = NotificationService._resolve_channels(notification_type, channels)
         resolved_channels = NotificationService._filter_channels_by_preferences(prefs, resolved_channels)
-        resolved_channels = NotificationService._apply_feeding_reminder_push_policy(
-            notification_type,
-            resolved_channels,
-        )
         if apply_quiet_hours:
             resolved_channels = NotificationService._apply_quiet_hours_policy(prefs, resolved_channels)
         return resolved_channels
@@ -126,10 +106,8 @@ class NotificationService:
         channels: list[NotificationChannel],
     ) -> None:
         try:
-            from .tasks import send_email_notification_task, send_push_notification_task
+            from .tasks import send_push_notification_task
 
-            if "email" in channels:
-                send_email_notification_task.delay(notification_id)
             if "push" in channels:
                 send_push_notification_task.delay(notification_id)
         except Exception:
@@ -206,46 +184,25 @@ class NotificationService:
             message: Message complet
             content_object: Objet Django lié (optionnel) - Order, Cycle, Message, etc.
             metadata: Dict JSON pour contexte (optionnel)
-            channels: Liste canaux ['in_app', 'email', 'push'] (défaut: auto selon type)
+            channels: Liste canaux ['in_app', 'push'] (défaut: auto selon type)
             priority: Priorité ('low', 'medium', 'high', 'urgent') (défaut: auto selon type)
             scheduled_for: Date/heure affichage (défaut: maintenant)
-            send_immediately: Envoyer email/push immédiatement via Celery (défaut: False)
+            send_immediately: Envoyer le push immédiatement via Celery (défaut: False).
+                La notification est alors marquée envoyée pour que la tâche
+                périodique ne la redistribue pas.
 
         Returns:
             Notification créée, ou None si toutes préférences désactivées
 
         Examples:
-            # Commerce : Commande confirmée
-            NotificationService.create_notification(
-                user=order.user,
-                notification_type='order_confirmed',
-                title=f"Commande {order.order_number} confirmée",
-                message=f"Montant : {order.total_amount} FCFA",
-                content_object=order,
-                metadata={'order_number': order.order_number, 'amount': float(order.total_amount)},
-                channels=['in_app', 'email'],
-                send_immediately=True
-            )
-
-            # Chat : Nouveau message
             NotificationService.create_notification(
                 user=recipient,
                 notification_type='new_message',
-                title=f"Nouveau message de {sender.first_name}",
-                message=message_preview,
+                title="Nouveau message du support",
+                message="Vous avez reçu une réponse du support.",
                 content_object=chat_message,
                 channels=['in_app', 'push'],
                 send_immediately=True
-            )
-
-            # Support : Ticket résolu
-            NotificationService.create_notification(
-                user=ticket.user,
-                notification_type='ticket_resolved',
-                title=f"Ticket #{ticket.number} résolu",
-                message="Votre problème a été résolu par notre équipe.",
-                content_object=ticket,
-                channels=['in_app', 'email']
             )
         """
         prefs = NotificationService._get_or_create_preferences(user)
@@ -274,7 +231,9 @@ class NotificationService:
             metadata=metadata,
             channels=channels,
             priority=priority,
-            scheduled_for=scheduled_for or timezone.now()
+            scheduled_for=scheduled_for or timezone.now(),
+            is_sent=send_immediately,
+            sent_at=timezone.now() if send_immediately else None,
         )
 
         if send_immediately:
@@ -345,10 +304,7 @@ class NotificationService:
         Returns:
             Nombre de notifications créées
         """
-        channels = NotificationService._apply_feeding_reminder_push_policy(
-            notification_type,
-            NotificationService._resolve_channels(notification_type, channels),
-        )
+        channels = NotificationService._resolve_channels(notification_type, channels)
         priority = NotificationService._resolve_priority(notification_type, priority)
         if scheduled_for is None:
             scheduled_for = timezone.now()

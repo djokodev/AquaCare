@@ -36,8 +36,8 @@ class TestSanitaryServiceCreateLog:
         assert log.event_type == 'disease'
         assert log.resolved is False
 
-    def test_create_sanitary_log_creates_notification(self):
-        """Test création notification automatique."""
+    def test_create_sanitary_log_does_not_notify(self):
+        """Les événements sanitaires ne génèrent plus de notification."""
         cycle = ProductionCycleFactory()
 
         sanitary_log = SanitaryService.create_sanitary_log(
@@ -47,13 +47,12 @@ class TestSanitaryServiceCreateLog:
             symptoms="Maladie détectée avec pertes d'appétit"
         )
 
-        notifications = Notification.objects.filter(
+        assert sanitary_log.pk is not None
+        assert not Notification.objects.filter(
             content_type=ContentType.objects.get_for_model(SanitaryLog),
             object_id=sanitary_log.id,
-            notification_type='alert',
-            title=f'🚨 Alerte sanitaire, {cycle.cycle_name}',
-        )
-        assert notifications.exists()
+        ).exists()
+        assert not Notification.objects.exists()
 
     def test_create_sanitary_log_deduplicates_by_client_uuid(self):
         """Un retry offline avec le même client_uuid retourne le log existant."""
@@ -207,10 +206,8 @@ class TestSanitaryServiceAnalysis:
         recs = ' '.join(str(r) for r in analysis['recommendations'])
         assert 'Isolez' in recs or 'Maladie' in recs
 
-    def test_resolve_event_creates_resolution_notification(self):
-        """Résolution d'un événement doit créer une notification."""
-        from django.contrib.contenttypes.models import ContentType
-        from notifications.models import Notification
+    def test_resolve_event_does_not_notify(self):
+        """La résolution d'un événement ne génère plus de notification."""
 
         cycle = ProductionCycleFactory()
         log = SanitaryService.create_sanitary_log(
@@ -225,13 +222,9 @@ class TestSanitaryServiceAnalysis:
             resolution_notes='Aération améliorée et niveau normalisé'
         )
 
-        resolution_notifications = Notification.objects.filter(
-            content_type=ContentType.objects.get_for_model(SanitaryLog),
-            object_id=log.id,
-            notification_type='ticket_resolved'
-        )
-        resolution_notification = resolution_notifications.get()
-        assert resolution_notification.title == f'Problème résolu, {cycle.cycle_name}'
+        log.refresh_from_db()
+        assert log.resolved is True
+        assert not Notification.objects.exists()
 
     def test_resolve_event_without_notes(self):
         """Résolution sans notes doit fonctionner."""

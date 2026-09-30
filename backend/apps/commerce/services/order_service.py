@@ -471,16 +471,28 @@ class OrderService(BaseCommerceService):
         """
         from notifications.services import NotificationService
 
-        message = (
-            f"Votre commande {order.order_number} a été enregistrée. "
-            f"Montant total : {order.total:,.0f} FCFA. "
-            f"Notre équipe vous contactera pour organiser la livraison."
-        )
+        language = getattr(order.user, 'language_preference', 'fr')
+        is_english = str(language).lower().startswith('en')
+        total = f"{order.total:,.0f}"
+        if is_english:
+            title = "Order recorded"
+            message = (
+                f"Your order {order.order_number} has been recorded. "
+                f"Total: {total} FCFA. "
+                "Our team will contact you to arrange delivery."
+            )
+        else:
+            title = "Commande enregistrée"
+            message = (
+                f"Votre commande {order.order_number} a été enregistrée. "
+                f"Montant total : {total.replace(',', ' ')} FCFA. "
+                "Notre équipe vous contactera pour organiser la livraison."
+            )
 
         NotificationService.create_notification(
             user=order.user,
             notification_type='order_confirmed',
-            title="Commande enregistrée",
+            title=title,
             message=message,
             content_object=order,
             metadata={
@@ -489,7 +501,7 @@ class OrderService(BaseCommerceService):
                 'total': float(order.total),
                 'production_cycle_id': str(order.production_cycle_id) if order.production_cycle_id else None,
             },
-            channels=['in_app', 'email'],
+            channels=['in_app'],
             send_immediately=True
         )
 

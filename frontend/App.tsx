@@ -32,12 +32,12 @@ if (!__DEV__ && !isExpoGo) {
   });
 }
 import {
-  FEEDING_ALARM_ACTION_FEED_NOW,
-  FEEDING_ALARM_ACTION_SNOOZE_10M,
-  FEEDING_ALARM_CATEGORY_ID,
-  FEEDING_ALARM_DATA_TYPE,
-  registerFeedingAlarmCategory,
-} from '@/features/notifications/utils/alarmScheduler';
+  FEEDING_ALARM_ACTION_SNOOZE,
+  isFeedingAlarmNotification,
+  scheduleFeedingSnooze,
+} from '@/features/notifications/reminders/feedingReminders';
+import { openNotificationTarget } from '@/features/notifications/services/notificationNavigation';
+import { navigationRef } from '@/navigation/navigationRef';
 import './global.css';
 
 // Affiche les notifications même quand l'app est au premier plan
@@ -46,108 +46,69 @@ Notifications.setNotificationHandler({
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: true,
-    shouldSetBadge: true,
+    shouldSetBadge: false,
   }),
 });
 
-const incrementBadgeSafe = async () => {
-  try {
-    const current = await Notifications.getBadgeCountAsync();
-    await Notifications.setBadgeCountAsync(current + 1);
-  } catch (error) {
-    logger.warn('Impossible d incrementer le badge', error);
+const handledResponses = new Set<string>();
+
+const handleNotificationResponse = async (response: Notifications.NotificationResponse) => {
+  const { notification, actionIdentifier } = response;
+  // Une même réponse peut arriver par le listener et par la « dernière réponse » au démarrage.
+  const responseKey = `${notification.request.identifier}:${actionIdentifier}:${notification.date}`;
+  if (handledResponses.has(responseKey)) {
+    return;
   }
-};
+  handledResponses.add(responseKey);
 
-const decrementBadgeSafe = async () => {
-  try {
-    const current = await Notifications.getBadgeCountAsync();
-    await Notifications.setBadgeCountAsync(Math.max(current - 1, 0));
-  } catch (error) {
-    logger.warn('Impossible de decrementer le badge', error);
+  if (isFeedingAlarmNotification(notification)) {
+    // Les boutons d'action ne ferment pas toujours la notification sur Android.
+    await Notifications.dismissNotificationAsync(notification.request.identifier).catch(() => undefined);
+    if (actionIdentifier === FEEDING_ALARM_ACTION_SNOOZE) {
+      await scheduleFeedingSnooze(notification, {
+        title: i18n.t('feedingAlarmTitle'),
+        snoozeBody: i18n.t('feedingAlarmBodySnooze'),
+      });
+    }
+    return;
   }
-};
 
-const scheduleSnoozeNotification = async (notification: Notifications.Notification) => {
-  const triggerDate = new Date(Date.now() + 10 * 60 * 1000);
-  const data = (notification.request.content.data ?? {}) as Record<string, unknown>;
-
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: notification.request.content.title ?? i18n.t('feedingAlarmTitle'),
-      body: notification.request.content.body ?? i18n.t('feedingAlarmBodySnooze'),
-      sound: 'default',
-      categoryIdentifier: FEEDING_ALARM_CATEGORY_ID,
-      data: {
-        ...data,
-        type: FEEDING_ALARM_DATA_TYPE,
-        isSnooze: true,
-      },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DATE,
-      date: triggerDate,
-    },
-  });
+  if (actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
+    openNotificationTarget(notification.request.content.data as Parameters<typeof openNotificationTarget>[0]);
+  }
 };
 
 function App() {
   useEffect(() => {
-    const setupNotifications = async () => {
-      try {
-        await registerFeedingAlarmCategory({
-          actionFeedNow: i18n.t('alarmActionFeedNow'),
-          actionSnooze10m: i18n.t('alarmActionSnooze10m'),
-        });
+    if (Platform.OS === 'android') {
+      // Canal des push serveur (commandes, support). Les alarmes de nourrissage
+      // ont leur propre canal, créé à l'activation des rappels.
+      Notifications.setNotificationChannelAsync('default', {
+        name: i18n.t('pushChannelName'),
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: colors.brand.primary,
+        sound: 'default',
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      }).catch((error) => logger.warn('Configuration notifications incomplete', error));
+    }
 
-        if (Platform.OS === 'android') {
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
-            description: 'AquaCare reminders and alerts',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: colors.brand.primary,
-            sound: 'default',
-            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          });
-        }
-      } catch (error) {
-        logger.warn('Configuration notifications incomplete', error);
+    // Tap sur une notification alors que l'app était fermée.
+    try {
+      const lastResponse = Notifications.getLastNotificationResponse();
+      if (lastResponse) {
+        void handleNotificationResponse(lastResponse);
+        Notifications.clearLastNotificationResponse();
       }
-    };
+    } catch (error) {
+      logger.warn('Last notification response unavailable', error);
+    }
 
-    setupNotifications();
-
-    const receivedSub = Notifications.addNotificationReceivedListener(async (notification) => {
-      const data = notification.request.content.data as Record<string, unknown> | undefined;
-      if (data?.type === FEEDING_ALARM_DATA_TYPE) {
-        await incrementBadgeSafe();
-      }
-    });
-
-    const responseSub = Notifications.addNotificationResponseReceivedListener(async (response) => {
-      const notification = response.notification;
-      const data = notification.request.content.data as Record<string, unknown> | undefined;
-      if (data?.type !== FEEDING_ALARM_DATA_TYPE) {
-        return;
-      }
-
-      if (response.actionIdentifier === FEEDING_ALARM_ACTION_SNOOZE_10M) {
-        await scheduleSnoozeNotification(notification);
-        await decrementBadgeSafe();
-        return;
-      }
-
-      if (
-        response.actionIdentifier === FEEDING_ALARM_ACTION_FEED_NOW ||
-        response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
-      ) {
-        await decrementBadgeSafe();
-      }
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      void handleNotificationResponse(response);
     });
 
     return () => {
-      receivedSub.remove();
       responseSub.remove();
     };
   }, []);
@@ -156,7 +117,7 @@ function App() {
     <Provider store={store}>
       <SafeAreaProvider>
         <ErrorBoundary>
-          <NavigationContainer theme={navigationTheme}>
+          <NavigationContainer ref={navigationRef} theme={navigationTheme}>
             <AppNavigator />
             <StatusBar style="auto" />
           </NavigationContainer>

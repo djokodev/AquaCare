@@ -2327,25 +2327,17 @@ class TestFeedingPlanViewSet:
         assert response.data['results'][0]['week_number'] == 1
         assert str(response.data['results'][0]['cycle_unit_allocation']) == str(allocation.id)
 
-    def test_notification_creation_on_plan_generation(self, auth_client, production_cycle):
-        """Test création notifications lors génération plan."""
+    def test_plan_generation_does_not_create_notifications(self, auth_client, production_cycle):
+        """Les rappels de nourrissage sont gérés en alarmes locales côté mobile."""
         allocation = create_cycle_unit_allocation(production_cycle, name='Bac 1')
-        # Compter notif avant
-        notif_count_before = Notification.objects.filter(
-            user=production_cycle.farm_profile.user, notification_type='feeding_reminder'
-        ).count()
 
         url = reverse('aquaculture:feeding-plan-generate')
         data = {'cycle_unit_allocation_id': str(allocation.id), 'weeks_ahead': 1}
 
-        auth_client.post(url, data, format='json')
+        response = auth_client.post(url, data, format='json')
 
-        # Vérifier que des notifications ont été créées
-        notif_count_after = Notification.objects.filter(
-            user=production_cycle.farm_profile.user, notification_type='feeding_reminder'
-        ).count()
-
-        assert notif_count_after > notif_count_before
+        assert response.status_code in (200, 201)
+        assert not Notification.objects.filter(user=production_cycle.farm_profile.user).exists()
 
 
 @pytest.mark.django_db

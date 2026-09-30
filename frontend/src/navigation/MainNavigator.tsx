@@ -1,12 +1,17 @@
-﻿import React from 'react';
+﻿import React, { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { useSelector } from 'react-redux';
 
 import { colors } from '@/theme';
 import { useNotificationsPolling } from '@/features/notifications/hooks/useNotificationsPolling';
+import { useFeedingRemindersSync } from '@/features/notifications/reminders/useFeedingRemindersSync';
+import FeedingRemindersScreen from '@/features/notifications/screens/FeedingRemindersScreen';
+import { setMainNavigatorReady } from '@/features/notifications/services/notificationNavigation';
+import type { RootState } from '@/store/store';
 import DashboardScreen from '@/features/main/screens/DashboardScreen';
 import FarmMapScreen from '@/features/profile/screens/FarmMapScreen';
 import FarmProfileScreen from '@/features/profile/screens/FarmProfileScreen';
@@ -119,6 +124,7 @@ export type RootStackParamList = {
         productionUnitName?: string;
       }
     | undefined;
+  FeedingReminders: undefined;
   Statistics: undefined;
   Reports:
     | {
@@ -322,9 +328,19 @@ function MainTabNavigator() {
   );
 }
 
+/** Rafraîchissement de la liste in-app ; le temps réel passe par les push. */
+const NOTIFICATIONS_POLLING_INTERVAL_MS = 60_000;
+
 export default function MainNavigator() {
   const { t } = useTranslation();
-  useNotificationsPolling();
+  const userId = useSelector((state: RootState) => state.auth.user?.id ?? null);
+  useNotificationsPolling(NOTIFICATIONS_POLLING_INTERVAL_MS);
+  useFeedingRemindersSync(userId);
+
+  useEffect(() => {
+    setMainNavigatorReady(true);
+    return () => setMainNavigatorReady(false);
+  }, []);
 
   return (
     <RootStack.Navigator
@@ -370,6 +386,10 @@ export default function MainNavigator() {
       <RootStack.Screen
         name="FeedingPlan"
         component={FeedingPlanScreen}
+      />
+      <RootStack.Screen
+        name="FeedingReminders"
+        component={FeedingRemindersScreen}
       />
       <RootStack.Screen
         name="Statistics"

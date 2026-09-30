@@ -13,13 +13,18 @@
       "bundleIdentifier": "cm.mavecam.aquacare",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.developer.usernotifications.time-sensitive": true
       }
     },
     "android": {
       "package": "cm.mavecam.aquacare",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "SCHEDULE_EXACT_ALARM",
+        "ACCESS_NOTIFICATION_POLICY"
       ]
     },
     "plugins": [
@@ -40,7 +45,16 @@
         }
       ],
       "expo-sharing",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/feeding_alarm.wav"
+          ],
+          "color": "#059669"
+        }
+      ]
     ],
     "extra": {
       "eas": {

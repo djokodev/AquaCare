@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
@@ -180,17 +181,37 @@ class NotificationInboxApplicationService:
         user: AccountUser,
         command: PushTokenRegistrationCommand,
     ) -> tuple[PushToken, bool]:
-        """Cree ou met a jour un token push actif pour un device."""
-        return PushToken.objects.update_or_create(
+        """
+        Cree ou met a jour un token push actif pour un device.
+
+        Un token Expo identifie une installation : s'il appartenait a un autre
+        compte (changement de compte sur le meme telephone) ou a un autre
+        device_id, l'ancienne association est supprimee pour que les push de
+        l'ancien compte n'arrivent plus sur ce telephone.
+        """
+        with transaction.atomic():
+            PushToken.objects.select_for_update().filter(
+                expo_push_token=command.expo_push_token,
+            ).exclude(user=user, device_id=command.device_id).delete()
+            return PushToken.objects.update_or_create(
+                user=user,
+                device_id=command.device_id,
+                defaults={
+                    "expo_push_token": command.expo_push_token,
+                    "device_name": command.device_name,
+                    "platform": command.platform,
+                    "is_active": True,
+                },
+            )
+
+    @staticmethod
+    def unregister_push_token(user: AccountUser, expo_push_token: str) -> int:
+        """Supprime le token push de l'utilisateur (deconnexion). Idempotent."""
+        count, _ = PushToken.objects.filter(
             user=user,
-            device_id=command.device_id,
-            defaults={
-                "expo_push_token": command.expo_push_token,
-                "device_name": command.device_name,
-                "platform": command.platform,
-                "is_active": True,
-            },
-        )
+            expo_push_token=expo_push_token,
+        ).delete()
+        return count
 
 
 class NotificationPreferenceApplicationService:
