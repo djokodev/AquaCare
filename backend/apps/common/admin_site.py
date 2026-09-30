@@ -122,7 +122,6 @@ class AquaCareAdminSite(AdminSite):
         technical_models = {
             ("auth", "group"),
             ("auth", "permission"),
-            ("farm_gps", "geolocatedfarm"),
             ("notifications", "notificationpreference"),
             ("notifications", "pushtoken"),
         }

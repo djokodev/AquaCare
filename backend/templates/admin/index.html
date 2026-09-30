@@ -8,6 +8,29 @@
 {% block content %}
 <div data-admin-i18n-native class="aquacare-console">
     {% if has_business_console %}
+    <article class="aq-panel mb-3" id="todo">
+      <div class="aq-panel__body">
+        <h2 class="aq-section-title">{% translate "À traiter maintenant" %}</h2>
+        {% if dashboard_todo %}
+          <ul class="aq-alert-list">
+            {% for item in dashboard_todo %}
+              <li class="aq-alert aq-alert--{{ item.level }}"><a href="{{ item.url }}">{{ item.label }}</a></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="aq-muted">{% translate "Rien en attente : aucune commande à traiter, aucun message non lu, aucun incident ouvert." %}</p>
+        {% endif %}
+        {% if dashboard_stale_farms %}
+          <h3 class="aq-section-title mt-3" id="stale-farms">{% translate "Fermes à relancer (saisies en retard)" %}</h3>
+          <div class="aq-table-wrap"><table class="aq-table"><tbody>
+            {% for farm in dashboard_stale_farms %}
+              <tr><td><a href="{{ farm.url }}">{{ farm.label }}</a></td>
+                  <td>{% if farm.last_log_date %}{% blocktranslate with date=farm.last_log_date|date:"d/m/Y" %}Dernière saisie le {{ date }}{% endblocktranslate %}{% else %}{% translate "Aucune saisie pour le cycle en cours" %}{% endif %}</td></tr>
+            {% endfor %}
+          </tbody></table></div>
+        {% endif %}
+      </div>
+    </article>
     <div class="row">
         {% for card in dashboard_cards %}
         <div class="col-xl-3 col-md-6 col-12">

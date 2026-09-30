@@ -357,7 +357,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     def farm_display(self, obj):
         """Display farm info with link to farm profile."""
         user = obj.farm_profile.user
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile.id])
         return format_html(
             '<a href="{}">{} ({})</a>',
             url, obj.farm_profile.farm_name, user.display_name
@@ -555,7 +555,7 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
     """Administration des unités de production réelles."""
 
     list_display = [
-        'name',
+        'unit_workspace_link',
         'farm_display',
         'unit_type_display',
         'dimension_display',
@@ -589,6 +589,47 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('farm_profile', 'farm_profile__user')
 
+    def get_urls(self):
+        from django.urls import path
+
+        custom = [
+            path(
+                '<uuid:object_id>/fiche/',
+                self.admin_site.admin_view(self.workspace_view),
+                name='aquaculture_productionunit_workspace',
+            ),
+        ]
+        return custom + super().get_urls()
+
+    def workspace_view(self, request, object_id):
+        """Fiche unité : état actuel, journal quotidien, sanitaire, historique."""
+        from django.shortcuts import get_object_or_404
+        from django.template.response import TemplateResponse
+
+        from .services.unit_workspace_service import UnitWorkspaceService
+
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+        unit = get_object_or_404(
+            ProductionUnit.objects.select_related('farm_profile', 'farm_profile__user'),
+            pk=object_id,
+            farm_profile__is_deleted=False,
+        )
+        workspace = UnitWorkspaceService.build(
+            unit,
+            can_view_logs=request.user.has_perm('aquaculture.view_cyclelog'),
+            can_view_sanitary=request.user.has_perm('aquaculture.view_sanitarylog'),
+        )
+        context = {
+            **self.admin_site.each_context(request),
+            'opts': self.model._meta,
+            'title': _('%(unit)s — %(farm)s') % {'unit': unit.name, 'farm': unit.farm_profile.farm_name},
+            'workspace': workspace,
+            'change_url': reverse('admin:aquaculture_productionunit_change', args=[unit.pk])
+            if self.has_change_permission(request, unit) else '',
+        }
+        return TemplateResponse(request, 'admin/aquaculture/productionunit/workspace.html', context)
+
     def save_model(self, request, obj, form, change):
         if change:
             current = ProductionUnit.objects.get(pk=obj.pk)
@@ -615,8 +656,17 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
         for unit in queryset:
             self.delete_model(request, unit)
 
+    def get_list_display_links(self, request, list_display):
+        return None
+
+    def unit_workspace_link(self, obj):
+        url = reverse('admin:aquaculture_productionunit_workspace', args=[obj.pk])
+        return format_html('<a href="{}"><strong>{}</strong></a>', url, obj.name)
+    unit_workspace_link.short_description = _('Unité')
+    unit_workspace_link.admin_order_field = 'name'
+
     def farm_display(self, obj):
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile.id])
         return format_html('<a href="{}">{}</a>', url, obj.farm_profile.farm_name)
     farm_display.short_description = _('Ferme')
 
@@ -704,7 +754,7 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
         )
 
     def farm_display(self, obj):
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.cycle.farm_profile.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
     farm_display.short_description = _('Ferme')
 
@@ -714,7 +764,7 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
     cycle_display.short_description = _('Cycle')
 
     def production_unit_display(self, obj):
-        url = reverse('admin:aquaculture_productionunit_change', args=[obj.production_unit.id])
+        url = reverse('admin:aquaculture_productionunit_workspace', args=[obj.production_unit.id])
         return format_html('<a href="{}">{}</a>', url, obj.production_unit.name)
     production_unit_display.short_description = _('Unité')
 
@@ -857,7 +907,7 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
 
     def farm_display(self, obj):
         """Display farm name with link."""
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.cycle.farm_profile.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
     farm_display.short_description = _('Ferme')
     farm_display.admin_order_field = 'cycle__farm_profile__farm_name'
@@ -1040,7 +1090,7 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
 
     def farm_display(self, obj):
         """Display farm name with link."""
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.cycle.farm_profile.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
     farm_display.short_description = _('Ferme')
 

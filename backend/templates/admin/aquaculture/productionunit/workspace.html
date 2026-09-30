@@ -1,0 +1,124 @@
+{% extends "admin/base_site.html" %}
+{% load i18n humanize %}
+
+{% comment %}
+  Fiche unité : état actuel, journal quotidien, sanitaire, historique des cycles.
+  Couleurs : tokens et composants .aq-* uniquement.
+{% endcomment %}
+
+{% block content %}
+<div data-admin-i18n-native class="aq-workspace" data-aquacare-responsive-list="true">
+  <article class="aq-panel">
+    <header class="aq-panel__header"><h2>{{ workspace.unit.name }}</h2></header>
+    <div class="aq-panel__body">
+      <dl class="aq-dl">
+        <dt>{% translate "Ferme" %}</dt><dd>{% if workspace.farm.url %}<a href="{{ workspace.farm.url }}">{{ workspace.farm.name }}</a>{% else %}{{ workspace.farm.name }}{% endif %}</dd>
+        <dt>{% translate "Type" %}</dt><dd>{{ workspace.unit.type }}{% if workspace.unit.dimension %} · {{ workspace.unit.dimension }}{% endif %}</dd>
+        <dt>{% translate "Capacité conseillée" %}</dt><dd>{{ workspace.unit.capacity|default:"—" }}</dd>
+        <dt>{% translate "Statut" %}</dt><dd><span class="aq-badge aq-badge--muted">{{ workspace.unit.status }}</span></dd>
+      </dl>
+      {% if change_url %}<div class="aq-actions"><a class="btn aq-btn-secondary" href="{{ change_url }}">{% translate "Modifier l'unité" %}</a></div>{% endif %}
+    </div>
+  </article>
+
+  <article class="aq-panel">
+    <div class="aq-panel__body">
+      <h2 class="aq-section-title">{% translate "État actuel" %}</h2>
+      {% with current=workspace.current %}
+      {% if current %}
+        <p>{% translate "Cycle" %} : <a href="{{ current.cycle_url }}">{{ current.cycle_name }}</a> · {{ current.species }}
+          {% if current.has_today_log %}<span class="aq-badge aq-badge--ok">{% translate "Saisie du jour faite" %}</span>
+          {% elif current.days_since_last_log is None or current.days_since_last_log >= 2 %}<span class="aq-badge aq-badge--warn">{% translate "Saisie en retard" %}</span>
+          {% else %}<span class="aq-badge aq-badge--info">{% translate "Saisie du jour à faire" %}</span>{% endif %}
+          {% if current.active_sanitary_issues %}<span class="aq-badge aq-badge--danger">{% blocktranslate count count=current.active_sanitary_issues %}{{ count }} problème sanitaire en cours{% plural %}{{ count }} problèmes sanitaires en cours{% endblocktranslate %}</span>{% endif %}
+        </p>
+        <div class="aq-kpis">
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Poissons actuels" %}</span><span class="aq-kpi__value">{{ current.fish_count|intcomma }}</span><span class="aq-kpi__sub">{% blocktranslate with initial=current.initial_fish_count|intcomma %}sur {{ initial }} au départ{% endblocktranslate %}</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Mortalité cumulée" %}</span><span class="aq-kpi__value">{{ current.mortality_count|intcomma }}</span><span class="aq-kpi__sub">{{ current.mortality_rate_pct }} %</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Poids moyen" %}</span><span class="aq-kpi__value">{% if current.average_weight_g is not None %}{{ current.average_weight_g|floatformat:1 }} g{% else %}—{% endif %}</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Biomasse estimée" %}</span><span class="aq-kpi__value">{% if current.biomass_kg is not None %}{{ current.biomass_kg|floatformat:1|intcomma }} kg{% else %}—{% endif %}</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Aliment consommé" %}</span><span class="aq-kpi__value">{{ current.feed_kg|floatformat:1|intcomma }} kg</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Valeur estimée" %}</span><span class="aq-kpi__value">{% if current.market_value_fcfa is not None %}{{ current.market_value_fcfa|floatformat:0|intcomma }} FCFA{% else %}—{% endif %}</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Dernière saisie" %}</span><span class="aq-kpi__value">{% if current.last_log_date %}{{ current.last_log_date|date:"d/m" }}{% else %}—{% endif %}</span></div>
+        </div>
+      {% else %}
+        <p class="aq-muted">{% translate "Cette unité n'est utilisée dans aucun cycle en cours." %}</p>
+      {% endif %}
+      {% endwith %}
+    </div>
+  </article>
+
+  {% if workspace.can_view_logs %}
+  <article class="aq-panel">
+    <div class="aq-panel__body">
+      <h2 class="aq-section-title">{% translate "Journal quotidien (30 dernières saisies)" %}</h2>
+      {% if workspace.journal %}
+      <div class="aq-table-wrap"><table class="aq-table">
+        <thead><tr>
+          <th>{% translate "Date" %}</th><th class="aq-num">{% translate "Morts" %}</th><th class="aq-num">{% translate "Poids moyen" %}</th>
+          <th class="aq-num">{% translate "Aliment" %}</th><th class="aq-num">{% translate "Eau (°C / O₂ / pH)" %}</th><th>{% translate "Observations" %}</th>
+        </tr></thead>
+        <tbody>
+          {% for log in workspace.journal %}
+          <tr>
+            <td><a href="{{ log.url }}">{{ log.date|date:"d/m/Y" }}</a></td>
+            <td class="aq-num">{{ log.mortality }}{% if log.mortality_reason %}<br><span class="aq-muted">{{ log.mortality_reason }}</span>{% endif %}</td>
+            <td class="aq-num">{% if log.average_weight_g is not None %}{{ log.average_weight_g|floatformat:1 }} g{% else %}—{% endif %}</td>
+            <td class="aq-num">{% if log.feed_kg is not None %}{{ log.feed_kg|floatformat:1 }} kg{% else %}—{% endif %}{% if log.feed_size_mm %}<br><span class="aq-muted">{{ log.feed_size_mm|floatformat:1 }} mm</span>{% endif %}</td>
+            <td class="aq-num">{{ log.water_temperature|default:"—" }} / {{ log.dissolved_oxygen|default:"—" }} / {{ log.ph_level|default:"—" }}</td>
+            <td>{{ log.observations|default:"" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}<p class="aq-muted">{% translate "Aucune saisie pour cette unité." %}</p>{% endif %}
+    </div>
+  </article>
+  {% endif %}
+
+  {% if workspace.can_view_sanitary %}
+  <article class="aq-panel">
+    <div class="aq-panel__body">
+      <h2 class="aq-section-title">{% translate "Suivi sanitaire" %}</h2>
+      {% if workspace.sanitary %}
+      <div class="aq-table-wrap"><table class="aq-table">
+        <thead><tr><th>{% translate "Date" %}</th><th>{% translate "Événement" %}</th><th class="aq-num">{% translate "Poissons touchés" %}</th><th>{% translate "Traitement" %}</th><th>{% translate "État" %}</th></tr></thead>
+        <tbody>
+          {% for event in workspace.sanitary %}
+          <tr>
+            <td><a href="{{ event.url }}">{{ event.date|date:"d/m/Y" }}</a></td>
+            <td>{{ event.type }}</td>
+            <td class="aq-num">{{ event.affected_count|default:"—" }}</td>
+            <td>{{ event.treatment|default:"—" }}</td>
+            <td>{% if event.resolved %}<span class="aq-badge aq-badge--ok">{% translate "Résolu" %}</span>{% else %}<span class="aq-badge aq-badge--danger">{% translate "En cours" %}</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}<p class="aq-muted">{% translate "Aucun événement sanitaire." %}</p>{% endif %}
+    </div>
+  </article>
+  {% endif %}
+
+  <article class="aq-panel">
+    <div class="aq-panel__body">
+      <h2 class="aq-section-title">{% translate "Historique des cycles dans cette unité" %}</h2>
+      {% if workspace.history %}
+      <div class="aq-table-wrap"><table class="aq-table">
+        <thead><tr><th>{% translate "Cycle" %}</th><th>{% translate "Début" %}</th><th class="aq-num">{% translate "Poissons (départ → actuel)" %}</th><th>{% translate "Statut" %}</th></tr></thead>
+        <tbody>
+          {% for row in workspace.history %}
+          <tr>
+            <td><a href="{{ row.cycle_url }}">{{ row.cycle_name }}</a>{% if row.is_current %} <span class="aq-badge aq-badge--info">{% translate "En cours" %}</span>{% endif %}</td>
+            <td>{{ row.start_date|date:"d/m/Y" }}</td>
+            <td class="aq-num">{{ row.initial_fish_count|intcomma }} → {{ row.current_fish_count|intcomma }}</td>
+            <td><span class="aq-badge aq-badge--muted">{{ row.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}<p class="aq-muted">{% translate "Cette unité n'a encore jamais été utilisée." %}</p>{% endif %}
+    </div>
+  </article>
+</div>
+{% endblock %}

@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
     # Third party packages
     "rest_framework",
     "rest_framework_simplejwt",
@@ -61,7 +62,6 @@ INSTALLED_APPS = [
     "notifications",  # Module notifications multi-canal
     "chat",  # Module chat/support utilisateur-administration
     "common",  # Module commun (admin mixins, static CSS)
-    "farm_gps",  # Section GPS admin — fermes géolocalisées
 ]
 
 MIDDLEWARE = [

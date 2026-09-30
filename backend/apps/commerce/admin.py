@@ -709,7 +709,8 @@ class OrderAdmin(CommerceSecuredAdmin):
     def farm_cycle_column(self, obj):
         cycle_name = obj.production_cycle.cycle_name if obj.production_cycle else _('Aucun cycle associé')
         return format_html(
-            '<strong>{}</strong><small class="order-secondary"> · {}</small>',
+            '<a href="{}"><strong>{}</strong></a><small class="order-secondary"> · {}</small>',
+            reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile_id]),
             obj.farm_profile.farm_name,
             cycle_name,
         )
@@ -1063,8 +1064,8 @@ class OrderAdmin(CommerceSecuredAdmin):
     def farm_link(self, obj):
         """Lien vers ferme."""
         return format_html(
-            '<a href="/admin/accounts/farmprofile/{}/change/">{}</a>',
-            obj.farm_profile.id,
+            '<a href="{}">{}</a>',
+            reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile.id]),
             obj.farm_profile.farm_name
         )
     farm_link.short_description = _('Ferme')

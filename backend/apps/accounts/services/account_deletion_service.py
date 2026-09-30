@@ -128,6 +128,7 @@ class AccountDeletionService:
             main_species="",
             annual_production_kg=None,
             latitude=None,
+            location_captured_at=None,
             longitude=None,
             location_address="",
             is_deleted=True,

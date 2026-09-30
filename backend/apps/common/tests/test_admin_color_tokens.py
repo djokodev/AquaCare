@@ -45,5 +45,5 @@ def test_every_semantic_token_has_a_dark_theme_value():
     light_tokens = set(re.findall(r'(--aq-[a-z-]+):', '--aq-card-bg:' + light_block))
     dark_tokens = set(re.findall(r'(--aq-[a-z-]+):', dark_block))
     # Couleurs identiques dans les deux thèmes (fonds forts avec texte blanc).
-    same_in_both = {'--aq-danger', '--aq-on-strong'}
+    same_in_both = {'--aq-danger', '--aq-on-strong', '--aq-brand-strong'}
     assert light_tokens - same_in_both <= dark_tokens

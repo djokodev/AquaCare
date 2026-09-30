@@ -73,6 +73,11 @@
     --aq-warning-bg: #fff7ed;
     --aq-warning-text: #92400e;
     --aq-on-strong: #ffffff; /* texte sur fond vert ou rouge */
+    --aq-brand-strong: #047857; /* fond vert sous texte blanc (identique en sombre) */
+    --aq-success-bg: #ecfdf5;
+    --aq-success-text: #065f46;
+    --aq-info-bg: #eff6ff;
+    --aq-info-text: #1e40af;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -87,6 +92,10 @@
         --aq-danger-text: #fecaca;
         --aq-warning-bg: #431407;
         --aq-warning-text: #fed7aa;
+        --aq-success-bg: #052e16;
+        --aq-success-text: #bbf7d0;
+        --aq-info-bg: #172554;
+        --aq-info-text: #bfdbfe;
     }
 }
 
@@ -545,7 +554,7 @@ form[action=""] input[name="q"],
 
 .table td a,
 #result_list td a {
-    color: var(--aqua-primary-light) !important;
+    color: var(--aq-accent) !important;
 }
 
 .table td a:hover,
@@ -868,7 +877,8 @@ input[name="_continue"] {
 /* Liens dans le contenu */
 .content-wrapper a:not(.btn):not(.nav-link):not(.breadcrumb-item),
 .tab-content a:not(.btn) {
-    color: var(--aqua-primary-light) !important;
+    /* Token lié au thème : vert foncé en clair, vert vif en sombre (lisible dans les deux). */
+    color: var(--aq-accent) !important;
 }
 
 .content-wrapper a:not(.btn):not(.nav-link):hover {
@@ -1167,7 +1177,7 @@ body.change-list #result_list td {
 .aq-panel__header {
     padding: 1rem 1.25rem;
     color: var(--aq-on-strong);
-    background: var(--aq-accent);
+    background: var(--aq-brand-strong);
 }
 
 .aq-panel__header--danger {
@@ -1242,8 +1252,195 @@ body.change-list #result_list td {
     border: 1px solid var(--aq-danger) !important;
 }
 
+.aq-btn-primary {
+    color: var(--aq-on-strong) !important;
+    background: var(--aq-brand-strong) !important;
+    border: 1px solid var(--aq-brand-strong) !important;
+}
+
+a.btn.aq-btn-secondary,
+.btn.aq-btn-secondary,
 .aq-btn-secondary {
     color: var(--aq-accent) !important;
     background: transparent !important;
     border: 1px solid var(--aq-accent) !important;
+}
+
+
+/* =============================================================================
+   FICHES (ferme, unité) : en-tête, indicateurs, badges, tableaux
+   ============================================================================= */
+.aq-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 100%;
+}
+
+.aq-page-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin-top: 0.5rem;
+    color: var(--aq-card-muted);
+}
+
+.aq-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+.aq-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+}
+
+.aq-kpi {
+    padding: 0.75rem 1rem;
+    background: var(--aq-subtle-bg);
+    border: 1px solid var(--aq-card-border);
+    border-radius: 0.5rem;
+}
+
+.aq-kpi__label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--aq-card-muted);
+}
+
+.aq-kpi__value {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--aq-card-text);
+}
+
+.aq-kpi__sub {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--aq-card-muted);
+}
+
+.aq-section-title {
+    margin: 0 0 0.75rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--aq-card-text) !important;
+}
+
+.aq-badge {
+    display: inline-block;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.aq-badge--ok { color: var(--aq-success-text); background: var(--aq-success-bg); }
+.aq-badge--warn { color: var(--aq-warning-text); background: var(--aq-warning-bg); }
+.aq-badge--danger { color: var(--aq-danger-text); background: var(--aq-danger-bg); }
+.aq-badge--info { color: var(--aq-info-text); background: var(--aq-info-bg); }
+.aq-badge--muted { color: var(--aq-card-muted); background: var(--aq-subtle-bg); }
+
+.aq-alert--info,
+.content-wrapper .aq-panel__body .aq-alert--info {
+    color: var(--aq-info-text) !important;
+    background: var(--aq-info-bg);
+    border: 1px solid var(--aq-info-text);
+}
+
+.aq-alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.aq-alert-list .aq-alert {
+    margin: 0;
+}
+
+.aq-alert a {
+    color: inherit !important;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.aq-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.aq-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--aq-card-text);
+}
+
+.aq-table th,
+.aq-table td {
+    padding: 0.5rem 0.65rem;
+    border-bottom: 1px solid var(--aq-card-border);
+    text-align: left;
+    vertical-align: top;
+    color: var(--aq-card-text);
+}
+
+.aq-table th {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--aq-card-muted);
+    background: var(--aq-subtle-bg);
+    white-space: nowrap;
+}
+
+.aq-table td.aq-num,
+.aq-table th.aq-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.aq-panel a:not(.btn):not(.button) {
+    color: var(--aq-accent);
+}
+
+.aq-panel__header a {
+    color: var(--aq-on-strong) !important;
+}
+
+.aq-dl {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.35rem 1rem;
+    margin: 0;
+}
+
+.aq-dl dt {
+    font-weight: 600;
+    color: var(--aq-card-muted);
+}
+
+.aq-dl dd {
+    margin: 0;
+    color: var(--aq-card-text);
+    overflow-wrap: anywhere;
+}
+
+
+/* Liens posés sur un fond coloré (en-tête vert, alertes) : ils prennent la
+   couleur du texte de leur zone. Sélecteurs volontairement aussi précis que
+   la règle globale des liens ci-dessus, et placés après elle. */
+.content-wrapper .aq-panel__header a:not(.btn):not(.nav-link) {
+    color: var(--aq-on-strong) !important;
+}
+
+.content-wrapper .aq-alert a:not(.btn):not(.nav-link) {
+    color: inherit !important;
 }

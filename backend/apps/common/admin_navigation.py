@@ -61,6 +61,10 @@ def navigation_for_user(user) -> list[AdminNavigationItem]:
             user, AdminCapability.VIEW_FARM_DIRECTORY, "accounts.view_farmprofile"
         ):
             append(_item("farms", _("Fermes"), "fas fa-warehouse", "admin:accounts_farmprofile_changelist"))
+        if user.is_superuser or has_capability_and_permission(
+            user, AdminCapability.MANAGE_ACCOUNTS, "accounts.view_farmprofile"
+        ):
+            append(_item("farm_map", _("Carte des fermes"), "fas fa-map-marked-alt", "admin:accounts_farmprofile_map"))
         if has_capability_and_permission(user, AdminCapability.VIEW_USERS, "accounts.view_user"):
             append(_item("users", _("Utilisateurs"), "fas fa-users", "admin:accounts_user_changelist"))
         if can_view_aquaculture_activity_center(user):

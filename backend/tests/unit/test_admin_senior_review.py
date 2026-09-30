@@ -665,7 +665,6 @@ def test_all_registered_technical_admins_ignore_individual_django_permissions():
         "token_blacklist.blacklistedtoken",
         "notifications.notificationpreference",
         "notifications.pushtoken",
-        "farm_gps.geolocatedfarm",
     }
     technical_labels.update(
         f"{model._meta.app_label}.{model._meta.model_name}"
@@ -1036,27 +1035,8 @@ def test_system_tools_and_direct_technical_models_are_superuser_only():
         "admin:auth_permission_changelist",
         "admin:notifications_notificationpreference_changelist",
         "admin:notifications_pushtoken_changelist",
-        "admin:farm_gps_geolocatedfarm_changelist",
     ):
         assert reverse(url_name) in html
-
-
-@pytest.mark.django_db
-def test_direct_gps_model_denies_non_superuser_even_with_django_permission():
-    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
-    permission = Permission.objects.get(
-        content_type__app_label="farm_gps",
-        codename="view_geolocatedfarm",
-    )
-    manager.user_permissions.add(permission)
-    manager = type(manager).objects.get(pk=manager.pk)
-    farm = FarmProfileFactory()
-    url = reverse("admin:farm_gps_geolocatedfarm_changelist")
-
-    response = _client_for(manager).get(url)
-    assert response.status_code == 403
-    assert farm.user.phone_number not in response.content.decode()
-    assert _client_for(_staff_for_role(superuser=True)).get(url).status_code == 200
 
 
 def _nav_keys(response):
@@ -1069,7 +1049,7 @@ def _nav_keys(response):
     [
         (
             [RBACConstants.GROUP_MANAGERS],
-            ["dashboard", "farms", "users", "activity", "reports"],
+            ["dashboard", "farms", "farm_map", "users", "activity", "reports"],
         ),
         (
             [RBACConstants.GROUP_COMMERCE],
@@ -1081,7 +1061,7 @@ def _nav_keys(response):
         ),
         (
             [RBACConstants.GROUP_MANAGERS, RBACConstants.GROUP_SUPPORT],
-            ["dashboard", "farms", "users", "activity", "reports", "support", "conversations"],
+            ["dashboard", "farms", "farm_map", "users", "activity", "reports", "support", "conversations"],
         ),
     ],
 )
@@ -1252,6 +1232,7 @@ def test_superuser_navigation_is_business_union_plus_system_tools():
     assert _nav_keys(response) == [
         "dashboard",
         "farms",
+        "farm_map",
         "users",
         "activity",
         "reports",

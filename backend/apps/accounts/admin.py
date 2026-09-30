@@ -39,6 +39,7 @@ from django.utils.translation import gettext_lazy as _
 from .admin_serializers import FarmMapSerializer
 from .models import FarmProfile, User
 from .services.farm_supervision_service import FarmSupervisionService
+from .services.farm_workspace_service import FarmWorkspaceService
 
 
 class AccountsAdminRoleMixin:
@@ -833,10 +834,20 @@ class FarmProfileAdmin(AccountsAdminRoleMixin, ManagerMixin, PIIMaskingMixin, Se
 
         farm = get_object_or_404(queryset, pk=object_id)
         supervision = FarmSupervisionService.build(user=request.user, farm=farm)
+        workspace = FarmWorkspaceService.build(
+            user=request.user,
+            farm=farm,
+            selected_cycle_id=request.GET.get("cycle"),
+        )
         context = {
             **self.admin_site.each_context(request),
-            "title": _("Supervision de %(farm)s") % {"farm": farm.farm_name},
+            "title": farm.farm_name,
             "farm": farm,
+            "workspace": workspace,
+            "change_url": (
+                reverse('admin:accounts_farmprofile_change', args=[farm.pk])
+                if self.has_change_permission(request, farm) else ""
+            ),
             "sections": supervision["sections"],
             "activities": supervision["activities"],
             "opts": self.model._meta,

@@ -26,6 +26,30 @@ Pour changer une couleur de l'admin, modifier le token, jamais un écran.
   même test).
 - Vérifier l'écran dans les deux modes (réglage clair/sombre du Mac).
 
+### Composants des fiches (ferme, unité)
+
+- Mise en page : `.aq-workspace`, `.aq-page-meta`, `.aq-grid`,
+  `.aq-section-title`.
+- Chiffres clés : `.aq-kpis` > `.aq-kpi` (`__label`, `__value`, `__sub`).
+- Statuts : `.aq-badge--ok|warn|danger|info|muted`.
+- Alertes : `.aq-alert-list`, `.aq-alert--info|warning|danger`.
+- Tableaux : `.aq-table-wrap` > `.aq-table` (colonnes chiffrées : `.aq-num`).
+- Fiche d'identité : `.aq-dl`. Bouton principal : `.aq-btn-primary`.
+- En-têtes verts et boutons principaux : `--aq-brand-strong` (même valeur
+  dans les deux thèmes, texte `--aq-on-strong`).
+- Liens : toujours `--aq-accent` (lisible sur fond clair et sombre). Ne pas
+  utiliser le vert vif `--aqua-primary-light` pour du texte sur fond blanc.
+
+### Navigation centrée sur la ferme
+
+Les chiffres des fiches viennent des mêmes services que l'application
+mobile (`CycleDashboardService`, `ProductionUnitDashboardService`). Tout lien
+« Ferme » d'un écran admin pointe vers la fiche ferme
+(`admin:accounts_farmprofile_supervision`), tout lien « Unité » vers la fiche
+unité (`admin:aquaculture_productionunit_workspace`). La fiche ferme ne
+détaille qu'un cycle à la fois (`?cycle=<id>`) pour garder un nombre de
+requêtes borné.
+
 ## Écrans à migrer
 
 `farm_map.html` et `support_inbox.html` datent d'avant cette règle (liste
