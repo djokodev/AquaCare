@@ -1,5 +1,5 @@
 /**
- * Introduction de l'app en 3 pages : solution, fonctionnement, action.
+ * Introduction de l'app en 4 pages : accueil, suivi, alimentation, commandes et support.
  * @module features/onboarding/screens
  */
 
@@ -29,39 +29,10 @@ import { colors, spacing } from '@/theme';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const SLIDES: OnboardingSlideData[] = [
-  {
-    id: '1',
-    type: 'solution',
-    iconName: 'fish',
-    titleKey: 'onboarding_solution_title',
-    bulletItems: [
-      { iconName: 'trending-down', textKey: 'onboarding_solution_item1' },
-      { iconName: 'nutrition', textKey: 'onboarding_solution_item2' },
-      { iconName: 'checkmark-done', textKey: 'onboarding_solution_item3' },
-    ],
-  },
-  {
-    id: '2',
-    type: 'how',
-    iconName: 'time',
-    titleKey: 'onboarding_how_title',
-    howSteps: [
-      { iconName: 'create-outline', titleKey: 'onboarding_how_step1_title' },
-      { iconName: 'notifications-outline', titleKey: 'onboarding_how_step2_title' },
-      { iconName: 'stats-chart-outline', titleKey: 'onboarding_how_step3_title' },
-    ],
-  },
-  {
-    id: '3',
-    type: 'action',
-    iconName: 'rocket',
-    titleKey: 'onboarding_action_title',
-    subtitleKey: 'onboarding_action_subtitle',
-    chips: [
-      { iconName: 'people-outline', textKey: 'onboarding_stat1' },
-      { iconName: 'storefront-outline', textKey: 'onboarding_stat4' },
-    ],
-  },
+  { id: 'welcome', visual: 'welcome', titleKey: 'onboardingWelcomeTitle', textKey: 'onboardingWelcomeText' },
+  { id: 'track', visual: 'track', titleKey: 'onboardingTrackTitle', textKey: 'onboardingTrackText' },
+  { id: 'feed', visual: 'feed', titleKey: 'onboardingFeedTitle', textKey: 'onboardingFeedText' },
+  { id: 'shop', visual: 'shop', titleKey: 'onboardingShopTitle', textKey: 'onboardingShopText' },
 ];
 
 interface OnboardingScreenProps {

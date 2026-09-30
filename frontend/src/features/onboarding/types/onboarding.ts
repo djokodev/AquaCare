@@ -1,36 +1,17 @@
 /**
- * Types du module Onboarding (introduction en 3 pages)
+ * Types du module Onboarding (introduction en 4 pages)
  * @module features/onboarding/types
  */
 
-export type OnboardingSlideType = 'solution' | 'how' | 'action';
-
-export interface BulletItem {
-  iconName: string;
-  textKey: string;
-}
-
-export interface HowStep {
-  iconName: string;
-  titleKey: string;
-}
-
-export interface ChipItem {
-  iconName: string;
-  textKey: string;
-}
+/** Visuel affiché en haut de la page : aperçu réaliste d'un écran de l'app. */
+export type OnboardingVisualType = 'welcome' | 'track' | 'feed' | 'shop';
 
 /** Données d'une page d'introduction (clés i18n uniquement). */
 export interface OnboardingSlideData {
   id: string;
-  type: OnboardingSlideType;
-  /** Icône Ionicons affichée dans le visuel du haut. */
-  iconName: string;
+  visual: OnboardingVisualType;
   titleKey: string;
-  subtitleKey?: string;
-  bulletItems?: BulletItem[];
-  howSteps?: HowStep[];
-  chips?: ChipItem[];
+  textKey: string;
 }
 
 export interface OnboardingSlideProps {

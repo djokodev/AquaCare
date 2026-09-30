@@ -1366,48 +1366,25 @@ export const fr = {
   onboardingNext: 'Suivant',
   onboardingStart: 'Commencer',
 
-  // Slide 1: Problème (réaliste et impactant)
-  onboarding_problem_title: 'Sans un bon suivi, vos poissons meurent, vous gaspillez de l\'aliment et votre cycle n\'est pas rentable',
-  onboarding_problem_item1: '',
-  onboarding_problem_item2: '',
-  onboarding_problem_item3: '',
-  onboarding_problem_guarantee: 'Si vous utilisez {{appName}} pendant un cycle complet et que vous ne constatez pas d\'amélioration, nous vous REMBOURSONS votre abonnement ET nous vous offrons un sac d\'aliment gratuit.',
-
-  // Slide 2: Solution (promesse réaliste)
-  onboarding_solution_title: 'Avec AquaCare, gardez plus de poissons vivants',
-  onboarding_solution_item1: 'Réduisez votre mortalité',
-  onboarding_solution_item2: 'Optimisez vos rations',
-  onboarding_solution_item3: 'Prenez de bonnes décisions',
-
-  // Slide 3: Comment (simple et clair)
-  onboarding_how_title: '3 minutes par jour suffisent',
-  onboarding_how_step1_title: 'Saisissez vos données',
-  onboarding_how_step1_desc: '',
-  onboarding_how_step2_title: 'Recevez des alertes',
-  onboarding_how_step2_desc: '',
-  onboarding_how_step3_title: 'Suivez vos résultats',
-  onboarding_how_step3_desc: '',
-
-  // Slide 4: Preuve sociale (minimaliste)
-  onboarding_social_title: '',
-  onboarding_testimonial_name: '',
-  onboarding_testimonial_text: '',
-  onboarding_stat1: '+200 pisciculteurs nous font confiance',
-  onboarding_stat2: '',
-  onboarding_stat3: '',
-  onboarding_stat4: 'Réseau d\'acheteurs partenaires pour valoriser votre production',
-
-  // Slide 5: Action (promesse claire)
-  onboarding_action_title: 'Augmentez vos profits et réduisez vos pertes',
-  onboarding_action_subtitle: 'Même si vous débutez en pisciculture',
-
-  // Legacy keys (pour compatibilité)
-  onboardingSlide1Title: 'Bienvenue dans AquaCare',
-  onboardingSlide1Description: 'Gérez votre ferme, suivez vos cycles d\'élevage, optimisez votre alimentation et commandez vos intrants en ligne.',
-  onboardingSlide2Title: 'Suivez vos cycles de production',
-  onboardingSlide2Description: 'Enregistrez vos poissons, suivez leur croissance et optimisez vos résultats en temps réel',
-  onboardingSlide3Title: 'Optimisez votre alimentation',
-  onboardingSlide3Description: 'Commandez vos aliments, planifiez vos rations et maximisez votre rentabilité',
+  onboardingWelcomeTitle: 'Bienvenue sur AquaCare',
+  onboardingWelcomeText: 'L\'application du pisciculteur : suivez vos bacs, nourrissez au bon moment et commandez vos intrants, depuis votre téléphone.',
+  onboardingWelcomeTagline: 'Votre ferme piscicole dans la poche',
+  onboardingTrackTitle: 'Suivez vos bacs chaque jour',
+  onboardingTrackText: 'Notez la mortalité et l\'aliment donné en une minute. AquaCare tient le compte de vos poissons et l\'évolution de votre cycle.',
+  onboardingTrackMockTitle: 'Bac 2 · Silure · Jour 45',
+  onboardingTrackMockAlive: 'Poissons vivants',
+  onboardingTrackMockDeaths: 'Mortalité du jour',
+  onboardingTrackMockFeed: 'Aliment donné',
+  onboardingFeedTitle: 'La bonne ration, au bon moment',
+  onboardingFeedText: 'Un plan d\'alimentation adapté à la taille de vos poissons, et une alarme qui vous rappelle chaque repas.',
+  onboardingFeedMockTitle: 'Plan du jour',
+  onboardingFeedMockAlarm: 'Il est l\'heure de nourrir vos poissons',
+  onboardingShopTitle: 'Intrants et conseils sans vous déplacer',
+  onboardingShopText: 'Commandez votre aliment en livraison ou en retrait, et posez vos questions au support directement dans l\'app.',
+  onboardingShopMockProduct: 'Aliment 3 mm · 2 sacs',
+  onboardingShopMockStatus: 'Prête pour le retrait',
+  onboardingShopMockChat: 'Bonjour, votre commande vous attend au dépôt.',
+  onboardingShopMockSupport: 'Support AquaCare',
 
   // Notifications push
   pushNotifications: 'Notifications push',

@@ -1367,48 +1367,25 @@
   onboardingNext: 'Next',
   onboardingStart: 'Get Started',
 
-  // Slide 1: Problem (realistic and impactful)
-  onboarding_problem_title: 'Without proper tracking, your fish die, you waste feed and your cycle is not profitable',
-  onboarding_problem_item1: '',
-  onboarding_problem_item2: '',
-  onboarding_problem_item3: '',
-  onboarding_problem_guarantee: 'If you use {{appName}} for a complete cycle and don\'t see improvement, we will REFUND your subscription AND give you a FREE bag of feed.',
-
-  // Slide 2: Solution (realistic promise)
-  onboarding_solution_title: 'With AquaCare, keep more fish alive',
-  onboarding_solution_item1: 'Reduce your mortality',
-  onboarding_solution_item2: 'Optimize your rations',
-  onboarding_solution_item3: 'Make better decisions',
-
-  // Slide 3: How (simple and clear)
-  onboarding_how_title: '3 minutes a day is all it takes',
-  onboarding_how_step1_title: 'Enter your data',
-  onboarding_how_step1_desc: '',
-  onboarding_how_step2_title: 'Receive alerts',
-  onboarding_how_step2_desc: '',
-  onboarding_how_step3_title: 'Track your results',
-  onboarding_how_step3_desc: '',
-
-  // Slide 4: Social proof (minimalist)
-  onboarding_social_title: '',
-  onboarding_testimonial_name: '',
-  onboarding_testimonial_text: '',
-  onboarding_stat1: '+200 fish farmers trust us',
-  onboarding_stat2: '',
-  onboarding_stat3: '',
-  onboarding_stat4: 'Partner buyer network to purchase your harvest',
-
-  // Slide 5: Action (clear promise)
-  onboarding_action_title: 'Increase your profits and reduce your losses',
-  onboarding_action_subtitle: 'Even if you\'re new to fish farming',
-
-  // Legacy keys (for compatibility)
-  onboardingSlide1Title: 'Welcome to AquaCare',
-  onboardingSlide1Description: 'Manage your farm, track your breeding cycles, optimize your feed, and order your inputs online.',
-  onboardingSlide2Title: 'Track Your Production Cycles',
-  onboardingSlide2Description: 'Record your fish, monitor their growth, and optimize your results in real-time',
-  onboardingSlide3Title: 'Optimize Your Feeding',
-  onboardingSlide3Description: 'Order your feed, plan your rations, and maximize your profitability',
+  onboardingWelcomeTitle: 'Welcome to AquaCare',
+  onboardingWelcomeText: 'The fish farmer\'s app: track your tanks, feed at the right time and order your inputs, right from your phone.',
+  onboardingWelcomeTagline: 'Your fish farm in your pocket',
+  onboardingTrackTitle: 'Track your tanks every day',
+  onboardingTrackText: 'Record mortality and feed given in one minute. AquaCare keeps count of your fish and how your cycle is progressing.',
+  onboardingTrackMockTitle: 'Tank 2 · Catfish · Day 45',
+  onboardingTrackMockAlive: 'Live fish',
+  onboardingTrackMockDeaths: 'Deaths today',
+  onboardingTrackMockFeed: 'Feed given',
+  onboardingFeedTitle: 'The right ration, at the right time',
+  onboardingFeedText: 'A feeding plan adapted to the size of your fish, and an alarm that reminds you of every meal.',
+  onboardingFeedMockTitle: 'Today\'s plan',
+  onboardingFeedMockAlarm: 'Time to feed your fish',
+  onboardingShopTitle: 'Inputs and advice without travelling',
+  onboardingShopText: 'Order your feed for delivery or pickup, and ask the support team your questions right in the app.',
+  onboardingShopMockProduct: 'Feed 3 mm · 2 bags',
+  onboardingShopMockStatus: 'Ready for pickup',
+  onboardingShopMockChat: 'Hello, your order is waiting for you at the depot.',
+  onboardingShopMockSupport: 'AquaCare support',
 
   // Push notifications
   pushNotifications: 'Push notifications',
