@@ -1305,6 +1305,7 @@ export const fr = {
   storeRefreshAfterConfirmationError: 'La confirmation est enregistrée, mais les données du magasin seront actualisées ultérieurement.',
   ordersPendingConfirmationTitle: '{{count}} commande(s) à confirmer',
   ordersPendingConfirmationDescription: 'Confirmez rapidement les commandes déjà livrées.',
+  dashboardPendingReceiptHint: 'Touchez pour confirmer la réception dans le Magasin.',
   productNotFound: 'Produit introuvable',
 
   // Commerce - Feeding Suggestions

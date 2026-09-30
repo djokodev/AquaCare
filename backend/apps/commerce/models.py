@@ -192,7 +192,9 @@ class Product(models.Model):
 
     @property
     def price_per_kg(self):
-        """Calcule le prix au kilogramme."""
+        """Prix au kilogramme, ou None tant que prix et poids ne sont pas saisis."""
+        if not self.price_per_package or not self.package_weight_kg:
+            return None
         return self.price_per_package / self.package_weight_kg
 
 

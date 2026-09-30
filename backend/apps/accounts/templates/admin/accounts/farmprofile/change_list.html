@@ -3,11 +3,7 @@
 
 {% block object-tools-items %}
 {% if farm_map_url %}
-<li>
-  <a href="{{ farm_map_url }}" class="viewsitelink">
-    🗺️ Carte des fermes géolocalisées
-  </a>
-</li>
+<li><a href="{{ farm_map_url }}" class="btn btn-sm aq-btn-secondary">{% translate "Voir sur la carte" %}</a></li>
 {% endif %}
 {{ block.super }}
 {% endblock %}

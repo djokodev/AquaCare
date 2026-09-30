@@ -1,0 +1,110 @@
+{% extends "admin/base_site.html" %}
+{% load i18n humanize %}
+{% comment %}
+  Page « Commerce » : état du module et commandes à traiter.
+  Couleurs : composants .aq-* uniquement (admin_custom.css).
+{% endcomment %}
+{% block bodyclass %}{{ block.super }} aquacare-commerce{% endblock %}
+{% block content_title %}{% translate "Commerce" %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div class="aq-workspace" data-admin-i18n-native>
+  <div class="aq-kpis">
+    {% for kpi in kpis %}
+      {% if kpi.url %}<a class="aq-kpi" href="{{ kpi.url }}">{% else %}<div class="aq-kpi">{% endif %}
+        <span class="aq-kpi__label">
+          {% if kpi.label == "to_fulfil" %}{% translate "À préparer / livrer" %}
+          {% elif kpi.label == "awaiting" %}{% translate "En attente du client" %}
+          {% elif kpi.label == "received_month" %}{% translate "Reçues ce mois" %}
+          {% elif kpi.label == "revenue_month" %}{% translate "Chiffre d'affaires du mois" %}
+          {% else %}{% translate "Annulées ce mois" %}{% endif %}
+        </span>
+        <span class="aq-kpi__value">{% if kpi.label == "revenue_month" %}{{ kpi.value|floatformat:0|intcomma }} FCFA{% else %}{{ kpi.value }}{% endif %}</span>
+      {% if kpi.url %}</a>{% else %}</div>{% endif %}
+    {% endfor %}
+  </div>
+
+  <section class="aq-panel" id="to-fulfil">
+    <div class="aq-panel__body">
+      <div class="aq-page-head">
+        <h2 class="aq-section-title">{% translate "Commandes à préparer ou livrer" %}</h2>
+        <a class="btn aq-btn-secondary btn-sm" href="{{ orders_url }}">{% translate "Toutes les commandes" %}</a>
+      </div>
+      {% if to_fulfil %}
+      <div class="aq-table-wrap"><table class="aq-table">
+        <thead><tr>
+          <th>{% translate "Commande" %}</th><th>{% translate "Ferme" %}</th><th>{% translate "Passée le" %}</th>
+          <th>{% translate "Livraison" %}</th><th class="aq-num">{% translate "Sacs" %}</th><th class="aq-num">{% translate "Total" %}</th>
+          <th>{% translate "Action" %}</th>
+        </tr></thead>
+        <tbody>
+        {% for row in to_fulfil %}
+          <tr>
+            <td><a href="{{ row.url }}">{{ row.number }}</a></td>
+            <td><a href="{{ row.farm_url }}">{{ row.farm }}</a></td>
+            <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
+            <td>{% if row.delivery_method == "pickup" %}{% translate "Retrait" %}{% if row.pickup_location %} · {{ row.pickup_location }}{% endif %}{% else %}{% translate "Domicile" %}{% if row.city %} · {{ row.city }}{% endif %}{% endif %}</td>
+            <td class="aq-num">{{ row.bags }}</td>
+            <td class="aq-num">{{ row.total|floatformat:0|intcomma }} FCFA</td>
+            <td><div class="aq-actions">
+              {% if row.fulfil_url %}<a class="aq-link-btn aq-link-btn--strong" href="{{ row.fulfil_url }}">{% if row.delivery_method == "pickup" %}{% translate "Prête au retrait" %}{% else %}{% translate "Marquer livrée" %}{% endif %}</a>{% endif %}
+              {% if row.cancel_url %}<a class="aq-link-btn aq-link-btn--danger" href="{{ row.cancel_url }}">{% translate "Annuler" %}</a>{% endif %}
+            </div></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+        <p class="aq-muted">{% translate "Aucune commande à préparer." %}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="aq-panel" id="awaiting">
+    <div class="aq-panel__body">
+      <h2 class="aq-section-title">{% translate "En attente de confirmation du client" %}</h2>
+      <p class="aq-muted">{% translate "Livrées ou prêtes au retrait : le pisciculteur doit confirmer la réception dans l'application." %}</p>
+      {% if awaiting %}
+      <div class="aq-table-wrap"><table class="aq-table">
+        <thead><tr><th>{% translate "Commande" %}</th><th>{% translate "Ferme" %}</th><th>{% translate "Statut" %}</th><th class="aq-num">{% translate "Attente" %}</th><th class="aq-num">{% translate "Total" %}</th></tr></thead>
+        <tbody>
+        {% for row in awaiting %}
+          <tr>
+            <td><a href="{{ row.url }}">{{ row.number }}</a></td>
+            <td><a href="{{ row.farm_url }}">{{ row.farm }}</a></td>
+            <td><span class="aq-badge aq-badge--warn">{{ row.status_label }}</span></td>
+            <td class="aq-num">{% if row.waiting_days is not None %}{% blocktranslate count days=row.waiting_days %}{{ days }} jour{% plural %}{{ days }} jours{% endblocktranslate %}{% else %}—{% endif %}</td>
+            <td class="aq-num">{{ row.total|floatformat:0|intcomma }} FCFA</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+        <p class="aq-muted">{% translate "Aucune commande en attente." %}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if products %}
+  <section class="aq-panel" id="catalogue">
+    <div class="aq-panel__body">
+      <div class="aq-page-head">
+        <h2 class="aq-section-title">{% translate "Catalogue" %}</h2>
+        <div class="aq-actions">
+          {% if products.add_url %}<a class="btn aq-btn-primary btn-sm" href="{{ products.add_url }}">{% translate "Ajouter un produit" %}</a>{% endif %}
+          <a class="btn aq-btn-secondary btn-sm" href="{{ products.url }}">{% translate "Gérer le catalogue" %}</a>
+        </div>
+      </div>
+      <p>
+        {% blocktranslate count count=products.available %}{{ count }} produit disponible à la commande{% plural %}{{ count }} produits disponibles à la commande{% endblocktranslate %}
+        {% if products.unavailable_count %} · <a href="{{ products.url }}?is_available__exact=0">{% blocktranslate count count=products.unavailable_count %}{{ count }} indisponible{% plural %}{{ count }} indisponibles{% endblocktranslate %}</a>{% endif %}
+      </p>
+      {% if products.unavailable %}
+        <p class="aq-muted">{% translate "Indisponibles :" %} {{ products.unavailable|join:", " }}</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

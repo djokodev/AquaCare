@@ -170,150 +170,79 @@ def test_dashboard_is_complete_for_manager_commerce_and_support():
     _incident(cycle)
     _report(farm)
     _order(farm)
-    Product.objects.create(
-        name="Aliment indisponible",
-        brand="dibaq",
-        species="tilapia",
-        phase="grossissement",
-        pellet_size_mm=Decimal("4.0"),
-        package_weight_kg=20,
-        price_per_package=Decimal("32000.00"),
-        is_available=False,
-    )
     MessageService.send_user_message(farm.user, "Besoin d'aide sur mon cycle")
 
-    manager_html = _client_for(
-        _staff_for_role(RBACConstants.GROUP_MANAGERS)
-    ).get(reverse("admin:index")).content.decode()
-    for label in (
-        "Fermes actives suivies",
-        "Unités actives",
-        "Cycles actifs",
-        "Incidents sanitaires non résolus",
-        "Rapports récents",
-        "Fermes nécessitant une attention",
-        "Ferme à surveiller",
-    ):
-        assert label in manager_html
+    manager_response = _client_for(_staff_for_role(RBACConstants.GROUP_MANAGERS)).get(reverse("admin:index"))
+    manager_html = manager_response.content.decode()
+    assert "À traiter maintenant" in manager_html
+    assert "incident(s) sanitaire(s) non résolu(s)" in manager_html
+    assert "Ferme à surveiller" in manager_html  # fermes à relancer (aucune saisie)
+    assert {kpi["key"] for kpi in manager_response.context["dashboard_kpis"]} == {
+        "farms", "active_cycles", "fish", "active_units",
+    }
 
-    commerce_html = _client_for(
-        _staff_for_role(RBACConstants.GROUP_COMMERCE)
-    ).get(reverse("admin:index")).content.decode()
-    for label in (
-        "Commandes confirmées",
-        "Commandes nécessitant une action",
-        "Produits disponibles",
-        "Produits indisponibles",
-    ):
-        assert label in commerce_html
+    commerce_response = _client_for(_staff_for_role(RBACConstants.GROUP_COMMERCE)).get(reverse("admin:index"))
+    commerce_html = commerce_response.content.decode()
+    assert "commande(s) à livrer ou préparer" in commerce_html
+    assert commerce_response.context["dashboard_kpis"] == []
 
     support_html = _client_for(
         _staff_for_role(RBACConstants.GROUP_SUPPORT)
     ).get(reverse("admin:index")).content.decode()
-    assert "Messages Support non lus" in support_html
-    assert "Conversations récentes" in support_html
-    assert "Aucune activité autorisée récente." not in support_html
+    assert "conversation(s) support avec messages non lus" in support_html
     assert "Besoin d'aide sur mon cycle" not in support_html
     assert farm.user.phone_number not in support_html
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    ("permission_name", "model_label", "card_key", "label", "url_name"),
+    ("permission_name", "model_label", "kpi_key"),
     [
-        (
-            "accounts.view_farmprofile",
-            "accounts.FarmProfile",
-            "active_farms",
-            "Fermes actives suivies",
-            "admin:accounts_farmprofile_changelist",
-        ),
-        (
-            "aquaculture.view_productionunit",
-            "aquaculture.ProductionUnit",
-            "active_units",
-            "Unités actives",
-            "admin:aquaculture_productionunit_changelist",
-        ),
-        (
-            "aquaculture.view_productioncycle",
-            "aquaculture.ProductionCycle",
-            "active_cycles",
-            "Cycles actifs",
-            "admin:aquaculture_productioncycle_changelist",
-        ),
-        (
-            "aquaculture.view_sanitarylog",
-            "aquaculture.SanitaryLog",
-            "unresolved_sanitary",
-            "Incidents sanitaires non résolus",
-            "admin:aquaculture_sanitarylog_changelist",
-        ),
-        (
-            "aquaculture.view_productionreport",
-            "aquaculture.ProductionReport",
-            "recent_reports",
-            "Rapports récents",
-            "admin:aquaculture_productionreport_changelist",
-        ),
+        ("accounts.view_farmprofile", "accounts.FarmProfile", "farms"),
+        ("aquaculture.view_productionunit", "aquaculture.ProductionUnit", "active_units"),
+        ("aquaculture.view_productioncycle", "aquaculture.ProductionCycle", "active_cycles"),
     ],
 )
 def test_manager_dashboard_blocks_require_their_own_django_permission(
     permission_name,
     model_label,
-    card_key,
-    label,
-    url_name,
+    kpi_key,
 ):
     manager = _without_role_permissions(
         _staff_for_role(RBACConstants.GROUP_MANAGERS),
         permission_name,
     )
-    model = apps.get_model(model_label)
+    response = _client_for(manager).get(reverse("admin:index"))
+    assert response.status_code == 200
+    assert kpi_key not in {kpi["key"] for kpi in response.context["dashboard_kpis"]}
+
+
+@pytest.mark.django_db
+def test_commerce_overview_keeps_orders_but_hides_products_without_permission():
+    commerce = _without_role_permissions(
+        _staff_for_role(RBACConstants.GROUP_COMMERCE),
+        "commerce.view_product",
+    )
+    _order(FarmProfileFactory())
 
     with CaptureQueriesContext(connection) as captured:
-        response = _client_for(manager).get(reverse("admin:index"))
+        response = _client_for(commerce).get(reverse("admin:aquacare_commerce"))
 
     html = response.content.decode()
-    cards = response.context["dashboard_cards"]
     assert response.status_code == 200
-    assert card_key not in {card["key"] for card in cards}
-    assert label not in html
-    assert reverse(url_name) not in {card["url"] for card in cards}
+    assert "Commandes à préparer ou livrer" in html
+    assert response.context["products"] is None
+    assert "Catalogue" not in html
     assert not any(
-        f'FROM "{model._meta.db_table}"' in query["sql"]
+        f'FROM "{Product._meta.db_table}"' in query["sql"]
         for query in captured.captured_queries
     )
 
 
 @pytest.mark.django_db
-def test_commerce_dashboard_keeps_orders_but_hides_products_without_permission():
-    commerce = _without_role_permissions(
-        _staff_for_role(RBACConstants.GROUP_COMMERCE),
-        "commerce.view_product",
-    )
-
-    with CaptureQueriesContext(connection) as captured:
-        response = _client_for(commerce).get(reverse("admin:index"))
-
-    html = response.content.decode()
-    card_keys = {card["key"] for card in response.context["dashboard_cards"]}
-    shortcut_keys = {
-        shortcut["key"] for shortcut in response.context["dashboard_shortcuts"]
-    }
-    assert response.status_code == 200
-    assert "orders_confirmed" in card_keys
-    assert "orders" in shortcut_keys
-    assert "Commandes confirmées" in html
-    assert "products_available" not in card_keys
-    assert "products_unavailable" not in card_keys
-    assert "products" not in shortcut_keys
-    assert "Produits disponibles" not in html
-    assert "Produits indisponibles" not in html
-    assert not any(
-        f'FROM "{Product._meta.db_table}"' in query["sql"]
-        for query in captured.captured_queries
-    )
+def test_commerce_overview_is_denied_without_order_permission():
+    support = _staff_for_role(RBACConstants.GROUP_SUPPORT)
+    assert _client_for(support).get(reverse("admin:aquacare_commerce")).status_code == 403
 
 
 @pytest.mark.django_db
@@ -326,12 +255,15 @@ def test_manager_farm_list_uses_real_relations_and_workspace_as_primary_link():
 
     response = _client_for(manager).get(reverse("admin:accounts_farmprofile_changelist"))
     html = response.content.decode()
-    list_display = tuple(response.context["cl"].list_display)
+    list_display = tuple(
+        field for field in response.context["cl"].list_display if field != "action_checkbox"
+    )
 
     assert response.status_code == 200
     assert list_display[:2] == ("farm_workspace_link", "user_display_name")
     assert "farm_location" in list_display
-    assert "certification_status" in list_display
+    assert "certification_badge" not in list_display  # certification masquée en V1
+    assert "gps_status" in list_display
     assert "active_unit_count" in list_display
     assert "active_cycle_count" in list_display
     assert "unresolved_incident_count" in list_display
@@ -398,7 +330,7 @@ def test_farm_workspace_has_complete_role_scoped_sections(role, expected_keys):
     assert farm.user.display_name in html
     assert farm.user.get_region_display() in html
     assert farm.user.city in html
-    assert farm.get_certification_status_display() in html
+    assert farm.get_certification_status_display() not in html  # certification masquée en V1
     assert "GPS disponible" in html
     if role == RBACConstants.GROUP_MANAGERS:
         assert "Support" not in [section["key"] for section in response.context["sections"]]
@@ -564,27 +496,10 @@ def test_conversation_admin_query_growth_is_bounded():
 
 
 @pytest.mark.django_db
-def test_support_dashboard_handles_missing_farm_and_name_without_pii_or_n_plus_one():
+def test_support_dashboard_shows_unread_todo_without_pii_or_n_plus_one():
     support = _staff_for_role(RBACConstants.GROUP_SUPPORT)
-    named_farm = FarmProfileFactory()
-    named = named_farm.user
-    type(named).objects.filter(pk=named.pk).update(
-        first_name="Alice", last_name="Support", business_name=""
-    )
-    named.refresh_from_db()
-    business = UserFactory()
-    type(business).objects.filter(pk=business.pk).update(business_name="Ferme Business")
-    business.refresh_from_db()
-    nameless = UserFactory()
-    type(nameless).objects.filter(pk=nameless.pk).update(
-        first_name="", last_name="", business_name=""
-    )
-    nameless.refresh_from_db()
-    nameless_phone = nameless.phone_number
-    nameless_email = nameless.email
+    named = FarmProfileFactory().user
     MessageService.send_user_message(named, "Contenu secret nomme")
-    MessageService.send_user_message(business, "Contenu secret entreprise")
-    MessageService.send_user_message(nameless, "Contenu secret anonyme")
     client = _client_for(support)
     url = reverse("admin:index")
 
@@ -592,21 +507,16 @@ def test_support_dashboard_handles_missing_farm_and_name_without_pii_or_n_plus_o
         response = client.get(url)
     html = response.content.decode()
     assert response.status_code == 200
-    assert "Alice Support" in html
-    assert "Ferme Business" in html
-    assert named_farm.farm_name in html
-    assert "Utilisateur sans nom" in html
-    assert "Aucune ferme associée" in html
-    assert nameless_phone not in html
-    assert nameless_email not in html
+    assert "1 conversation(s) support avec messages non lus" in html
+    assert named.phone_number not in html
     assert "Contenu secret" not in html
 
     for index in range(12):
         owner = UserFactory(first_name=f"Support{index}", last_name="Test")
         MessageService.send_user_message(owner, f"Secret {index}")
     with CaptureQueriesContext(connection) as large_capture:
-        large_response = client.get(url)
-    assert len(large_response.context["dashboard_support_conversations"]) == 10
+        large_html = client.get(url).content.decode()
+    assert "13 conversation(s) support avec messages non lus" in large_html
     assert len(large_capture) <= len(small_capture) + 1
 
 
@@ -618,7 +528,7 @@ def test_support_attention_requires_unread_messages():
     message.conversation.save(update_fields=["unread_count_admin"])
 
     html = _client_for(support).get(reverse("admin:index")).content.decode()
-    assert "Conversations Support nécessitant une attention" not in html
+    assert "conversation(s) support avec messages non lus" not in html
 
 
 @pytest.mark.django_db
@@ -665,7 +575,6 @@ def test_all_registered_technical_admins_ignore_individual_django_permissions():
         "token_blacklist.blacklistedtoken",
         "notifications.notificationpreference",
         "notifications.pushtoken",
-        "farm_gps.geolocatedfarm",
     }
     technical_labels.update(
         f"{model._meta.app_label}.{model._meta.model_name}"
@@ -813,7 +722,6 @@ def test_superuser_cycle_form_and_allocation_inline_are_immutable():
         FeedingPlan,
         CalibrationOperation,
         FinalHarvestOperation,
-        ProductionReport,
         ReportDispatchLog,
         Order,
         OrderItem,
@@ -1036,27 +944,8 @@ def test_system_tools_and_direct_technical_models_are_superuser_only():
         "admin:auth_permission_changelist",
         "admin:notifications_notificationpreference_changelist",
         "admin:notifications_pushtoken_changelist",
-        "admin:farm_gps_geolocatedfarm_changelist",
     ):
         assert reverse(url_name) in html
-
-
-@pytest.mark.django_db
-def test_direct_gps_model_denies_non_superuser_even_with_django_permission():
-    manager = _staff_for_role(RBACConstants.GROUP_MANAGERS)
-    permission = Permission.objects.get(
-        content_type__app_label="farm_gps",
-        codename="view_geolocatedfarm",
-    )
-    manager.user_permissions.add(permission)
-    manager = type(manager).objects.get(pk=manager.pk)
-    farm = FarmProfileFactory()
-    url = reverse("admin:farm_gps_geolocatedfarm_changelist")
-
-    response = _client_for(manager).get(url)
-    assert response.status_code == 403
-    assert farm.user.phone_number not in response.content.decode()
-    assert _client_for(_staff_for_role(superuser=True)).get(url).status_code == 200
 
 
 def _nav_keys(response):
@@ -1069,19 +958,19 @@ def _nav_keys(response):
     [
         (
             [RBACConstants.GROUP_MANAGERS],
-            ["dashboard", "farms", "users", "activity", "reports"],
+            ["dashboard", "farms", "farm_map", "users", "activity", "reports"],
         ),
         (
             [RBACConstants.GROUP_COMMERCE],
-            ["commerce_dashboard", "orders", "products"],
+            ["commerce", "orders", "products"],
         ),
         (
             [RBACConstants.GROUP_SUPPORT],
-            ["support", "conversations", "users", "farms"],
+            ["support", "users", "farms"],
         ),
         (
             [RBACConstants.GROUP_MANAGERS, RBACConstants.GROUP_SUPPORT],
-            ["dashboard", "farms", "users", "activity", "reports", "support", "conversations"],
+            ["dashboard", "farms", "farm_map", "users", "activity", "reports", "support"],
         ),
     ],
 )
@@ -1129,8 +1018,8 @@ def test_activity_center_navigation_and_blocks_follow_partial_permissions(
     if status == 200:
         html = response.content.decode()
         assert 'data-activity-center="true"' in html
-        assert ("Journaux de cycle" in html) is cycle_visible
-        assert ("Incidents sanitaires" in html) is sanitary_visible
+        assert ('id="recent-logs"' in html) is cycle_visible
+        assert ('id="open-incidents"' in html) is sanitary_visible
 
 
 @pytest.mark.django_db
@@ -1252,14 +1141,14 @@ def test_superuser_navigation_is_business_union_plus_system_tools():
     assert _nav_keys(response) == [
         "dashboard",
         "farms",
+        "farm_map",
         "users",
         "activity",
         "reports",
-        "commerce_dashboard",
+        "commerce",
         "orders",
         "products",
         "support",
-        "conversations",
         "system",
     ]
 
@@ -1340,32 +1229,18 @@ def test_admin_theme_and_tables_have_structural_readability_guards():
         / "admin_custom.css"
     ).read_text(encoding="utf-8")
 
-    assert re.search(
-        r"\.jazzmin-login-page \.login-box-msg,\s*"
-        r"\.jazzmin-login-page \.text-center\s*\{\s*"
-        r"color: var\(--text-dark\) !important;",
-        css,
-    )
-    assert re.search(
-        r"@media \(prefers-color-scheme: dark\).*?"
-        r"\.jazzmin-login-page \.login-box-msg,\s*"
-        r"\.jazzmin-login-page \.text-center\s*\{\s*"
-        r"color: var\(--text-primary\) !important;",
-        css,
-        re.DOTALL,
-    )
-    assert ".aquacare-console .card-header .card-title" in css
-    assert "color: var(--text-primary) !important;" in css
-    assert ".aquacare-dashboard-card .info-box-icon" in css
-    assert "flex-shrink: 0;" in css
+    # Connexion : texte lisible via les tokens (clair et sombre).
+    assert ".jazzmin-login-page .login-box-msg" in css
+    assert "color: var(--aq-card-text) !important;" in css
+    # Listes : une ligne par objet, défilement horizontal.
     assert "body.change-list #result_list" in css
     assert "width: max-content;" in css
     assert "white-space: nowrap;" in css
-    assert ".field-pdf_download_link .aquacare-pdf-action" in css
+    # Petits boutons des colonnes d'action et badges de rôle.
+    assert ".aq-link-btn" in css
     assert ".aquacare-role-badge" in css
     assert re.search(
-        r"\.aquacare-role-badge--manager\s*\{\s*"
-        r"background: var\(--aqua-primary-hover\);",
+        r"\.aquacare-role-badge--manager,\s*\.aquacare-role-badge--commerce\s*\{[^}]*var\(--aq-success-text\)",
         css,
     )
 

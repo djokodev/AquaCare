@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .constants import (
@@ -400,6 +401,13 @@ class FarmProfile(models.Model):
         help_text=_('Adresse lisible issue du reverse geocoding (ex: Mbalmayo, Centre)')
     )
 
+    location_captured_at = models.DateTimeField(
+        _('Position GPS enregistrée le'),
+        null=True,
+        blank=True,
+        help_text=_("Date de la dernière capture de la position (ne change pas avec les autres champs)"),
+    )
+
     created_at = models.DateTimeField(
         _('Date de création'),
         auto_now_add=True,
@@ -420,8 +428,8 @@ class FarmProfile(models.Model):
     
     class Meta:
         app_label = 'accounts'
-        verbose_name = _('Profil de ferme')
-        verbose_name_plural = _('Profils de fermes')
+        verbose_name = _('Ferme')
+        verbose_name_plural = _('Fermes')
         db_table = 'accounts_farm_profile'
         ordering = ['-created_at']
         indexes = [
@@ -458,7 +466,28 @@ class FarmProfile(models.Model):
         if errors:
             raise ValidationError(errors)
     
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_coordinates = (instance.__dict__.get('latitude'), instance.__dict__.get('longitude'))
+        return instance
+
+    def _sync_location_captured_at(self) -> None:
+        """Date réelle de capture : mise à jour seulement si la position change."""
+        coordinates = (self.latitude, self.longitude)
+        if self.latitude is None or self.longitude is None:
+            self.location_captured_at = None
+            return
+        previous = getattr(self, '_loaded_coordinates', (None, None))
+        if coordinates != previous:
+            self.location_captured_at = timezone.now()
+        self._loaded_coordinates = coordinates
+
     def save(self, *args, validate: bool = True, **kwargs):
+        self._sync_location_captured_at()
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and ({'latitude', 'longitude'} & set(update_fields)):
+            kwargs['update_fields'] = list(set(update_fields) | {'location_captured_at'})
         if validate:
             self.full_clean()
         super().save(*args, **kwargs)

@@ -26,7 +26,7 @@
             <ul class="nav nav-pills nav-sidebar flex-column {{ jazzmin_ui.sidebar_list_classes }}" data-widget="treeview" role="menu" data-collapsible="false">
                 {% for item in aquacare_navigation %}
                 <li class="nav-item">
-                    <a href="{{ item.url }}" class="nav-link" data-nav-key="{{ item.key }}"{% if item.badge_key %} data-badge-key="{{ item.badge_key }}"{% endif %}>
+                    <a href="{{ item.url }}" class="nav-link{% if item.key == aquacare_active_nav %} active{% endif %}"{% if item.key == aquacare_active_nav %} aria-current="page"{% endif %} data-nav-key="{{ item.key }}"{% if item.badge_key %} data-badge-key="{{ item.badge_key }}"{% endif %}>
                         <i class="nav-icon {{ item.icon }}" aria-hidden="true"></i>
                         <p>{{ item.label }}{% if item.badge_key %}<span class="right badge badge-warning admin-nav-badge" hidden></span>{% endif %}</p>
                     </a>

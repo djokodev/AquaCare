@@ -16,6 +16,7 @@ from common.admin_mixins import (
     SecuredModelAdmin,
     SupportOperatorMixin,
 )
+from common.admin_ui import badge, muted
 from django.contrib import admin
 from django.contrib import messages as dj_messages
 from django.contrib.admin.models import ADDITION, CHANGE
@@ -235,26 +236,26 @@ class MessageAdmin(ChatSecuredAdmin):
     sender_display.short_description = _("Expediteur")
 
     def media_badge(self, obj):
-        """Display media type with a small badge."""
         if obj.media_type == 'image':
-            return format_html('<span style="color:#059669;font-weight:600;">Image</span>')
+            return badge(_("Image"), 'ok')
         if obj.media_type == 'video':
-            return format_html('<span style="color:#0ea5e9;font-weight:600;">Video</span>')
-        return format_html('<span style="color:#64748b;">-</span>')
+            return badge(_("Vidéo"), 'info')
+        return '-'
     media_badge.short_description = _("Media")
 
     def media_preview(self, obj):
         """Inline preview for image/video."""
         if obj.media_type == 'image' and obj.media_file:
             return format_html(
-                '<a href="{url}" target="_blank">'
-                '<img src="{url}" style="max-width:240px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.25);" />'
-                '</a>',
+                '<a href="{url}" target="_blank" rel="noopener">'
+                '<img src="{url}" class="aq-media-preview" alt="" /></a>',
                 url=obj.media_file.url
             )
         if obj.media_type == 'video' and obj.media_file:
-            return format_html('<a href="{}" target="_blank">{}</a>', obj.media_file.url, _("Ouvrir la video"))
-        return format_html('<span style="color:#64748b;">{}</span>', _("Aucun media"))
+            return format_html(
+                '<a href="{}" target="_blank" rel="noopener">{}</a>', obj.media_file.url, _("Ouvrir la video")
+            )
+        return muted(_("Aucun media"))
     media_preview.short_description = _("Apercu media")
 
     def content_preview(self, obj):
@@ -299,7 +300,7 @@ def support_inbox_view(request, *, admin_site=None):
 
     if selected_id:
         selected_conversation = get_object_or_404(
-            Conversation.objects.select_related("user"),
+            Conversation.objects.select_related("user__farm_profile"),
             id=selected_id,
         )
         messages_qs = list(

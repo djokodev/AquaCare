@@ -1,57 +1,210 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
+{% load i18n humanize %}
+
+{% comment %}
+  Fiche ferme. Ordre : identité et localisation, points d'attention, cycles en
+  cours avec chaque unité, commandes et support, historique. Couleurs : tokens
+  et composants .aq-* uniquement (admin_custom.css).
+{% endcomment %}
 
 {% block content %}
-<div data-admin-i18n-native class="farm-supervision" data-aquacare-responsive-list="true">
-    <div class="card" id="farm-overview">
-        <div class="card-body">
-            <h2>{{ farm.farm_name }}</h2>
-            <dl class="row mb-0">
-                <dt class="col-sm-3">{% translate "Proprietaire" %}</dt><dd class="col-sm-9">{{ farm.user.display_name }}</dd>
-                <dt class="col-sm-3">{% translate "Region et ville" %}</dt><dd class="col-sm-9">{{ farm.user.get_region_display }}, {% if farm.user.city %}{{ farm.user.city }}{% else %}{% translate "Ville inconnue" %}{% endif %}</dd>
-                <dt class="col-sm-3">{% translate "Certification" %}</dt><dd class="col-sm-9">{{ farm.get_certification_status_display }}</dd>
-                <dt class="col-sm-3">{% translate "GPS" %}</dt>
-                <dd class="col-sm-9">{% if farm.latitude and farm.longitude %}{% translate "GPS disponible" %}{% else %}{% translate "GPS non disponible" %}{% endif %}</dd>
-            </dl>
-        </div>
-    </div>
+<div data-admin-i18n-native class="farm-supervision aq-workspace" data-aquacare-responsive-list="true">
 
-    <div class="row">
-        {% for section in sections %}
-        <div class="col-xl-4 col-md-6 col-12 mb-3">
-            <section class="card h-100 farm-section" data-section-key="{{ section.key }}">
-                <div class="card-header">
-                    <h3 class="card-title"><a href="{{ section.url }}">{{ section.label }}</a></h3>
-                    {% if section.count is not None %}<span class="badge badge-secondary float-right">{{ section.count }}</span>{% endif %}
-                </div>
-                <div class="card-body p-0">
-                    <ul class="list-group list-group-flush">
-                        {% for item in section.items %}
-                        <li class="list-group-item d-flex justify-content-between align-items-start">
-                            {% if item.url %}<a href="{{ item.url }}">{{ item.label }}</a>{% else %}<span>{{ item.label }}</span>{% endif %}
-                            <span class="badge badge-light">{{ item.status }}</span>
-                        </li>
-                        {% empty %}<li class="list-group-item text-muted">{% translate "Aucun element recent." %}</li>{% endfor %}
-                    </ul>
-                </div>
-            </section>
+  {# 1. Identité, contact et localisation #}
+  <div class="aq-grid" id="farm-overview">
+    <article class="aq-panel">
+      <header class="aq-panel__header"><h2>{{ workspace.identity.farm_name }}</h2></header>
+      <div class="aq-panel__body">
+        <dl class="aq-dl">
+          <dt>{% translate "Proprietaire" %}</dt>
+          <dd>{% if workspace.identity.user_url %}<a href="{{ workspace.identity.user_url }}">{{ workspace.identity.owner_name }}</a>{% else %}{{ workspace.identity.owner_name }}{% endif %}
+            {% if not workspace.identity.account_active %}<span class="aq-badge aq-badge--danger">{% translate "Compte supprimé" %}</span>{% endif %}</dd>
+          <dt>{% translate "Téléphone" %}</dt><dd>{{ workspace.identity.phone|default:"—" }}</dd>
+          <dt>{% translate "Region et ville" %}</dt>
+          <dd>{{ farm.user.get_region_display|default:"—" }}, {% if farm.user.city %}{{ farm.user.city }}{% else %}{% translate "Ville inconnue" %}{% endif %}{% if farm.user.neighborhood %} · {{ farm.user.neighborhood }}{% endif %}</dd>
+          {% if certification_enabled %}
+          <dt>{% translate "Certification" %}</dt>
+          <dd><span class="aq-badge {% if workspace.identity.is_certified %}aq-badge--ok{% else %}aq-badge--muted{% endif %}">{{ farm.get_certification_status_display }}</span></dd>
+          {% endif %}
+          <dt>{% translate "Inscrite le" %}</dt><dd>{{ workspace.identity.member_since|date:"d/m/Y" }}</dd>
+        </dl>
+        {% if change_url %}<div class="aq-actions"><a class="btn aq-btn-secondary" href="{{ change_url }}">{% translate "Modifier la fiche" %}</a></div>{% endif %}
+      </div>
+    </article>
+
+    <article class="aq-panel">
+      <header class="aq-panel__header"><h2>{% translate "Localisation" %}</h2></header>
+      <div class="aq-panel__body">
+        {% if workspace.location.available %}
+          <p><span class="aq-badge aq-badge--ok">{% translate "GPS disponible" %}</span></p>
+          <dl class="aq-dl">
+            <dt>{% translate "Coordonnées" %}</dt><dd>{{ workspace.location.latitude }}, {{ workspace.location.longitude }}</dd>
+            <dt>{% translate "Adresse" %}</dt><dd>{{ workspace.location.address|default:"—" }}</dd>
+            <dt>{% translate "Position enregistrée le" %}</dt>
+            <dd>{% if workspace.location.captured_at %}{{ workspace.location.captured_at|date:"d/m/Y H:i" }}{% else %}{% translate "Date inconnue (position antérieure au suivi)" %}{% endif %}</dd>
+          </dl>
+          <div class="aq-actions">
+            <a class="btn aq-btn-secondary" href="{{ workspace.location.osm_url }}" target="_blank" rel="noopener noreferrer">{% translate "Voir sur OpenStreetMap" %}</a>
+            {% if workspace.location.map_url %}<a class="btn aq-btn-secondary" href="{{ workspace.location.map_url }}">{% translate "Carte de toutes les fermes" %}</a>{% endif %}
+          </div>
+        {% else %}
+          <p><span class="aq-badge aq-badge--muted">{% translate "GPS non disponible" %}</span></p>
+          <p class="aq-muted">{% translate "Le pisciculteur n'a pas encore enregistré la position de sa ferme dans l'application." %}</p>
+        {% endif %}
+      </div>
+    </article>
+  </div>
+
+  {# 2. Points d'attention #}
+  <article class="aq-panel">
+    <div class="aq-panel__body">
+      <h2 class="aq-section-title">{% translate "Points d'attention" %}</h2>
+      {% if workspace.alerts %}
+        <ul class="aq-alert-list">
+          {% for alert in workspace.alerts %}
+            <li class="aq-alert aq-alert--{{ alert.level }}">{% if alert.url %}<a href="{{ alert.url }}">{{ alert.label }}</a>{% else %}{{ alert.label }}{% endif %}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="aq-muted">{% translate "Rien à signaler : pas d'incident ouvert, saisies à jour, aucune action en attente." %}</p>
+      {% endif %}
+    </div>
+  </article>
+
+  {# 3. Cycles en cours et unités #}
+  {% if workspace.can_view_cycles %}
+    {% if workspace.active_cycles|length > 1 %}
+    <nav class="aq-actions" aria-label="{% translate 'Cycles en cours' %}">
+      {% for tab in workspace.active_cycles %}
+        <a class="btn {% if tab.is_selected %}aq-btn-primary{% else %}aq-btn-secondary{% endif %}" href="?cycle={{ tab.id }}#cycle-{{ tab.id }}">{{ tab.name }} · {{ tab.species }}</a>
+      {% endfor %}
+    </nav>
+    {% endif %}
+    {% for cycle in workspace.cycles %}
+    <article class="aq-panel" id="cycle-{{ cycle.id }}">
+      <header class="aq-panel__header"><h2><a href="{{ cycle.url }}">{{ cycle.name }}</a> · {{ cycle.species }}</h2></header>
+      <div class="aq-panel__body">
+        <div class="aq-kpis">
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Poissons actuels" %}</span><span class="aq-kpi__value">{{ cycle.fish_count|intcomma|default:"—" }}</span><span class="aq-kpi__sub">{% blocktranslate with initial=cycle.initial_fish_count|intcomma %}sur {{ initial }} au départ{% endblocktranslate %}</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Mortalité" %}</span><span class="aq-kpi__value">{{ cycle.mortality_rate_pct|default:"0" }} %</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Biomasse estimée" %}</span><span class="aq-kpi__value">{% if cycle.biomass_kg is not None %}{{ cycle.biomass_kg|floatformat:1|intcomma }} kg{% else %}—{% endif %}</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Aliment consommé" %}</span><span class="aq-kpi__value">{{ cycle.feed_kg|floatformat:1|intcomma }} kg</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Valeur marchande estimée" %}</span><span class="aq-kpi__value">{% if cycle.market_value_fcfa is not None %}{{ cycle.market_value_fcfa|floatformat:0|intcomma }} FCFA{% else %}—{% endif %}</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Coût direct" %}</span><span class="aq-kpi__value">{% if cycle.direct_cost_fcfa is not None %}{{ cycle.direct_cost_fcfa|floatformat:0|intcomma }} FCFA{% else %}—{% endif %}</span></div>
+          <div class="aq-kpi"><span class="aq-kpi__label">{% translate "Avancement" %}</span><span class="aq-kpi__value">{% if cycle.progress_pct is not None %}{{ cycle.progress_pct|floatformat:0 }} %{% else %}—{% endif %}</span><span class="aq-kpi__sub">{% if cycle.days_remaining is not None %}{% blocktranslate with days=cycle.days_remaining %}{{ days }} jours restants{% endblocktranslate %}{% endif %}</span></div>
         </div>
+
+        {% if cycle.units %}
+        <h3 class="aq-section-title mt-3">{% translate "Unités de production" %}</h3>
+        <div class="aq-table-wrap">
+          <table class="aq-table">
+            <thead><tr>
+              <th>{% translate "Unité" %}</th>
+              <th class="aq-num">{% translate "Poissons" %}</th>
+              <th class="aq-num">{% translate "Mortalité" %}</th>
+              <th class="aq-num">{% translate "Poids moyen" %}</th>
+              <th class="aq-num">{% translate "Biomasse" %}</th>
+              <th class="aq-num">{% translate "Aliment" %}</th>
+              <th>{% translate "Dernière saisie" %}</th>
+              <th>{% translate "État" %}</th>
+            </tr></thead>
+            <tbody>
+              {% for unit in cycle.units %}
+              <tr>
+                <td>{% if unit.url %}<a href="{{ unit.url }}"><strong>{{ unit.name }}</strong></a>{% else %}<strong>{{ unit.name }}</strong>{% endif %}<br><span class="aq-muted">{{ unit.type }}{% if unit.dimension %} · {{ unit.dimension }}{% endif %}</span></td>
+                <td class="aq-num">{{ unit.fish_count|intcomma }}<br><span class="aq-muted">/ {{ unit.initial_fish_count|intcomma }}</span></td>
+                <td class="aq-num">{{ unit.mortality_count|intcomma }}<br><span class="aq-muted">{{ unit.mortality_rate_pct }} %</span></td>
+                <td class="aq-num">{% if unit.average_weight_g is not None %}{{ unit.average_weight_g|floatformat:1 }} g{% else %}—{% endif %}</td>
+                <td class="aq-num">{% if unit.biomass_kg is not None %}{{ unit.biomass_kg|floatformat:1|intcomma }} kg{% else %}—{% endif %}</td>
+                <td class="aq-num">{{ unit.feed_kg|floatformat:1|intcomma }} kg</td>
+                <td>{% if unit.last_log_date %}{{ unit.last_log_date|date:"d/m/Y" }}{% else %}{% translate "Aucune" %}{% endif %}</td>
+                <td>
+                  {% if unit.has_today_log %}<span class="aq-badge aq-badge--ok">{% translate "Saisie du jour faite" %}</span>
+                  {% elif unit.days_since_last_log is None or unit.days_since_last_log >= 2 %}<span class="aq-badge aq-badge--warn">{% translate "Saisie en retard" %}</span>
+                  {% else %}<span class="aq-badge aq-badge--info">{% translate "Saisie du jour à faire" %}</span>{% endif %}
+                  {% if unit.has_sanitary_issue %}<span class="aq-badge aq-badge--danger">{% translate "Problème sanitaire" %}</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </article>
+    {% empty %}
+    <article class="aq-panel"><div class="aq-panel__body"><p class="aq-muted">{% translate "Aucun cycle en cours pour cette ferme." %}</p></div></article>
+    {% endfor %}
+  {% endif %}
+
+  {# 4. Commandes et support #}
+  {% if workspace.orders or workspace.support %}
+  <div class="aq-grid">
+    {% if workspace.orders %}
+    <article class="aq-panel">
+      <div class="aq-panel__body">
+        <h2 class="aq-section-title"><a href="{{ workspace.orders.list_url }}">{% translate "Commandes récentes" %}</a></h2>
+        {% if workspace.orders.recent %}
+        <div class="aq-table-wrap"><table class="aq-table"><tbody>
+          {% for order in workspace.orders.recent %}
+          <tr>
+            <td><a href="{{ order.url }}">{{ order.number }}</a><br><span class="aq-muted">{{ order.created_at|date:"d/m/Y" }} · {{ order.method }}</span></td>
+            <td><span class="aq-badge {% if order.status == 'received' %}aq-badge--ok{% elif order.status == 'cancelled' %}aq-badge--danger{% elif order.status == 'confirmed' %}aq-badge--warn{% else %}aq-badge--info{% endif %}">{{ order.status_label }}</span></td>
+            <td class="aq-num">{{ order.total|floatformat:0|intcomma }} FCFA</td>
+          </tr>
+          {% endfor %}
+        </tbody></table></div>
+        {% else %}<p class="aq-muted">{% translate "Aucune commande." %}</p>{% endif %}
+      </div>
+    </article>
+    {% endif %}
+    {% if workspace.support %}
+    <article class="aq-panel">
+      <div class="aq-panel__body">
+        <h2 class="aq-section-title"><a href="{{ workspace.support.url }}">{% translate "Support" %}</a></h2>
+        {% if workspace.support.exists %}
+          <dl class="aq-dl">
+            <dt>{% translate "Non lus" %}</dt><dd>{% if workspace.support.unread %}<span class="aq-badge aq-badge--warn">{{ workspace.support.unread }}</span>{% else %}0{% endif %}</dd>
+            <dt>{% translate "Dernier message" %}</dt><dd>{{ workspace.support.last_message_at|date:"d/m/Y H:i"|default:"—" }}</dd>
+          </dl>
+          {% if workspace.support.last_message_preview %}<p class="aq-muted mt-2">« {{ workspace.support.last_message_preview }} »</p>{% endif %}
+        {% else %}<p class="aq-muted">{% translate "Le pisciculteur n'a jamais écrit au support." %}</p>{% endif %}
+      </div>
+    </article>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# 5. Historique #}
+  {% if workspace.past_cycles %}
+  <article class="aq-panel">
+    <div class="aq-panel__body">
+      <h2 class="aq-section-title">{% translate "Cycles précédents" %}</h2>
+      <div class="aq-table-wrap"><table class="aq-table"><tbody>
+        {% for cycle in workspace.past_cycles %}
+        <tr><td><a href="{{ cycle.url }}">{{ cycle.name }}</a></td><td>{{ cycle.species }}</td><td>{{ cycle.start_date|date:"d/m/Y" }} → {{ cycle.end_date|date:"d/m/Y"|default:"—" }}</td><td><span class="aq-badge aq-badge--muted">{{ cycle.status }}</span></td></tr>
         {% endfor %}
+      </tbody></table></div>
     </div>
+  </article>
+  {% endif %}
 
-    <section class="card mt-3">
-        <div class="card-header"><h2 class="card-title">{% translate "Derniere activite autorisee" %}</h2></div>
-        <div class="card-body p-0">
-            <ul class="list-group list-group-flush">
-                {% for activity in activities %}
-                <li class="list-group-item">
-                    <a href="{{ activity.url }}"><strong>{{ activity.label }}</strong></a>
-                    <time class="d-block text-muted" datetime="{{ activity.occurred_at|date:'c' }}">{{ activity.occurred_at }}</time>
-                    {% if activity.business_date %}<span>{% translate "Date metier" %}: {{ activity.business_date }}</span>{% endif %}
-                </li>
-                {% empty %}<li class="list-group-item">{% translate "Aucune activite visible pour ce role." %}</li>{% endfor %}
-            </ul>
-        </div>
-    </section>
+  <details class="aq-panel">
+    <summary class="aq-panel__body"><strong>{% translate "Tous les éléments de la ferme" %}</strong></summary>
+    <div class="aq-panel__body">
+      <div class="aq-grid">
+        {% for section in sections %}
+        <section class="farm-section" data-section-key="{{ section.key }}">
+          <h3 class="aq-section-title"><a href="{{ section.url }}">{{ section.label }}</a>{% if section.count is not None %} <span class="aq-badge aq-badge--muted">{{ section.count }}</span>{% endif %}</h3>
+          <ul class="list-unstyled">
+            {% for item in section.items %}
+            <li>{% if item.url %}<a href="{{ item.url }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %} <span class="aq-muted">— {{ item.status }}</span></li>
+            {% empty %}<li class="aq-muted">{% translate "Aucun element recent." %}</li>{% endfor %}
+          </ul>
+        </section>
+        {% endfor %}
+      </div>
+    </div>
+  </details>
 </div>
 {% endblock %}

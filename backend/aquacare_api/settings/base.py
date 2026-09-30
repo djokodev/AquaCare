@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
     # Third party packages
     "rest_framework",
     "rest_framework_simplejwt",
@@ -61,7 +62,6 @@ INSTALLED_APPS = [
     "notifications",  # Module notifications multi-canal
     "chat",  # Module chat/support utilisateur-administration
     "common",  # Module commun (admin mixins, static CSS)
-    "farm_gps",  # Section GPS admin — fermes géolocalisées
 ]
 
 MIDDLEWARE = [
@@ -136,6 +136,11 @@ CSRF_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 SECURE_REFERRER_POLICY = "same-origin"
+
+# Certification des fermes : pas utilisée dans la première version. Tant que
+# ce drapeau est faux, l'admin masque colonnes, filtres, actions et champs de
+# certification (les données restent en base, rien n'est supprimé).
+AQUACARE_CERTIFICATION_ENABLED = _env_bool("AQUACARE_CERTIFICATION_ENABLED", False)
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 
 # Django REST Framework
@@ -201,7 +206,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": False,  # Avoid 1 DB write per token refresh
+    "UPDATE_LAST_LOGIN": False,  # La connexion AquaCare met à jour last_login elle-même (auth_application_service)
     "ALGORITHM": "HS256",
     "SIGNING_KEY": _env_str('JWT_SECRET_KEY', _env_str('DJANGO_SECRET_KEY')),
     "VERIFYING_KEY": None,

@@ -3,6 +3,11 @@
 
 {% block extrahead %}
 {{ block.super }}
+<script src="{% static 'js/admin_theme.js' %}"
+        data-label-auto="{% translate 'Thème : automatique' %}"
+        data-label-light="{% translate 'Thème : clair' %}"
+        data-label-dark="{% translate 'Thème : sombre' %}"
+        data-label-hint="{% translate 'Changer le thème (automatique suit le réglage de votre ordinateur)' %}"></script>
 <script defer src="{% static 'js/admin_badges.js' %}"></script>
 {% endblock %}
 

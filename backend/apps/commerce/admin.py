@@ -21,6 +21,8 @@ from common.admin_mixins import (
     CommerceOperatorMixin,
     SecuredModelAdmin,
 )
+from common.admin_ui import badge, link_button
+from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.core.exceptions import PermissionDenied
@@ -98,17 +100,75 @@ class OrderItemInline(admin.TabularInline):
         return False
 
 
+class ProductAdminForm(forms.ModelForm):
+    """
+    Saisie d'un produit du catalogue depuis l'admin.
+
+    - Seules les trois phases actuelles sont proposées (les anciennes valeurs
+      restent affichées pour un produit qui les porte déjà).
+    - Pas de doublon : même marque, même nom et même poids de sac.
+    """
+
+    CURRENT_PHASES = ('alevinage', 'pre_grossissement', 'grossissement')
+
+    class Meta:
+        model = Product
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        phase = self.fields.get('phase')
+        if phase is not None:
+            keep = set(self.CURRENT_PHASES)
+            if self.instance and self.instance.pk and self.instance.phase:
+                keep.add(self.instance.phase)
+            phase.choices = [choice for choice in phase.choices if choice[0] in keep or choice[0] == '']
+
+    def clean(self):
+        cleaned = super().clean()
+        name = (cleaned.get('name') or '').strip()
+        duplicates = Product.objects.filter(
+            brand=cleaned.get('brand'),
+            name__iexact=name,
+            package_weight_kg=cleaned.get('package_weight_kg'),
+        )
+        if self.instance and self.instance.pk:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if name and duplicates.exists():
+            raise forms.ValidationError(
+                _("Ce produit existe déjà (même marque, même nom, même poids de sac). "
+                  "Modifiez le produit existant au lieu d'en créer un second.")
+            )
+        return cleaned
+
+
 @admin.register(Product)
 class ProductAdmin(CommerceSecuredAdmin):
     """
     Administration securisee du catalogue produits AquaCare.
     """
+    form = ProductAdminForm
     list_display = [
         'name', 'brand_badge', 'species_badge', 'phase',
         'pellet_size_mm', 'protein_percentage', 'package_weight_kg',
         'price_display', 'availability_badge', 'updated_at'
     ]
     list_filter = ['brand', 'species', 'phase', 'is_available']
+    actions = ['make_available', 'make_unavailable']
+
+    @admin.action(description=_("Rendre disponibles à la commande"))
+    def make_available(self, request, queryset):
+        if not self.has_change_permission(request):
+            raise PermissionDenied
+        count = queryset.filter(is_available=False).update(is_available=True)
+        messages.success(request, _('{count} produit(s) rendu(s) disponible(s).').format(count=count))
+
+    @admin.action(description=_("Retirer de la vente (indisponibles)"))
+    def make_unavailable(self, request, queryset):
+        if not self.has_change_permission(request):
+            raise PermissionDenied
+        count = queryset.filter(is_available=True).update(is_available=False)
+        messages.success(request, _('{count} produit(s) retiré(s) de la vente.').format(count=count))
     search_fields = ['name', 'brand']
     readonly_fields = ['id', 'price_per_kg', 'created_at', 'updated_at']
     ordering = ['species', 'phase', 'pellet_size_mm']
@@ -170,40 +230,11 @@ class ProductAdmin(CommerceSecuredAdmin):
     # --- Display methods ---
 
     def brand_badge(self, obj):
-        """Badge couleur pour marque."""
-        colors = {
-            'dibaq': '#3b82f6'
-        }
-        color = colors.get(obj.brand, '#6b7280')
-        badge_template = (
-            '<span style="display:inline-block; min-width:90px; text-align:center; '
-            'white-space:nowrap; background-color: {}; color: white; '
-            'padding: 4px 10px; border-radius: 6px;">{}</span>'
-        )
-        return format_html(
-            badge_template,
-            color,
-            obj.get_brand_display(),
-        )
+        return badge(obj.get_brand_display(), "info")
     brand_badge.short_description = _('Marque')
 
     def species_badge(self, obj):
-        """Badge couleur pour espece."""
-        colors = {
-            'tilapia': '#10b981',
-            'catfish': '#f59e0b'
-        }
-        color = colors.get(obj.species, '#6b7280')
-        badge_template = (
-            '<span style="display:inline-block; min-width:90px; text-align:center; '
-            'white-space:nowrap; background-color: {}; color: white; '
-            'padding: 4px 10px; border-radius: 6px;">{}</span>'
-        )
-        return format_html(
-            badge_template,
-            color,
-            obj.get_species_display(),
-        )
+        return badge(obj.get_species_display(), "ok" if obj.species == "tilapia" else "warn")
     species_badge.short_description = _('Espece')
 
     def price_display(self, obj):
@@ -214,20 +245,9 @@ class ProductAdmin(CommerceSecuredAdmin):
     price_display.admin_order_field = 'price_per_package'
 
     def availability_badge(self, obj):
-        """Badge disponibilite."""
-        available_badge = (
-            '<span style="display:inline-block; min-width:110px; text-align:center; '
-            'white-space:nowrap; background-color: #10b981; color: white; '
-            'padding: 4px 10px; border-radius: 6px;">{}</span>'
-        )
-        unavailable_badge = (
-            '<span style="display:inline-block; min-width:120px; text-align:center; '
-            'white-space:nowrap; background-color: #ef4444; color: white; '
-            'padding: 4px 10px; border-radius: 6px;">{}</span>'
-        )
         if obj.is_available:
-            return format_html(available_badge, _('Disponible'))
-        return format_html(unavailable_badge, _('Indisponible'))
+            return badge(_('Disponible'), "ok")
+        return badge(_('Indisponible'), "danger")
     availability_badge.short_description = _('Disponibilite')
 
 
@@ -260,6 +280,7 @@ class OrderAdmin(CommerceSecuredAdmin):
         'ready_for_pickup_by', 'received_at', 'cancelled_at', 'cancelled_by',
         'cancellation_source', 'cancellation_reason', 'created_at', 'updated_at',
         'documents_display', 'workflow_history_display', 'workflow_action_display',
+        'order_summary_display', 'farm_link',
         'items_summary_display', 'no_cycle_warning',
     ]
     inlines = []
@@ -268,14 +289,17 @@ class OrderAdmin(CommerceSecuredAdmin):
     actions = ['cancel_orders_action', 'generate_pdf_fr_action', 'generate_pdf_en_action']
 
     fieldsets = (
-        (_('Résumé de commande'), {
-            'fields': ('order_number', 'status', 'no_cycle_warning')
+        (_('Commande'), {
+            'fields': ('order_summary_display', 'workflow_action_display')
         }),
-        (_('Workflow et statut'), {
-            'fields': ('workflow_action_display', 'workflow_history_display')
+        (_('Articles'), {
+            'fields': ('items_summary_display',)
         }),
-        (_('Ferme, client et cycle'), {
-            'fields': ('farm_profile', 'user', 'production_cycle')
+        (_('Ferme et cycle'), {
+            'fields': ('farm_link', 'production_cycle', 'no_cycle_warning')
+        }),
+        (_('Suivi'), {
+            'fields': ('workflow_history_display',)
         }),
         (_('Livraison ou retrait'), {
             'fields': (
@@ -284,14 +308,12 @@ class OrderAdmin(CommerceSecuredAdmin):
                 'delivery_city', 'delivery_full_address'
             )
         }),
-        (_('Articles'), {
-            'fields': ('items_summary_display',)
-        }),
         (_('Montants'), {
             'fields': (
                 'subtotal', 'delivery_fee', 'total',
                 'total_bags', 'is_free_delivery'
-            )
+            ),
+            'classes': ('collapse',)
         }),
         (_('Documents'), {
             'fields': ('documents_display',)
@@ -709,7 +731,8 @@ class OrderAdmin(CommerceSecuredAdmin):
     def farm_cycle_column(self, obj):
         cycle_name = obj.production_cycle.cycle_name if obj.production_cycle else _('Aucun cycle associé')
         return format_html(
-            '<strong>{}</strong><small class="order-secondary"> · {}</small>',
+            '<a href="{}"><strong>{}</strong></a><small class="order-secondary"> · {}</small>',
+            reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile_id]),
             obj.farm_profile.farm_name,
             cycle_name,
         )
@@ -744,36 +767,29 @@ class OrderAdmin(CommerceSecuredAdmin):
             else _('Marquer comme prête au retrait')
         )
         url = reverse('admin:commerce_order_fulfil', args=[obj.pk])
-        return format_html('<a class="button" href="{}">{}</a>', url, label)
-
+        return link_button(url, label, strong=True)
     def cancel_action_link(self, obj):
         if not obj.pk or obj.status not in OPERATOR_CANCELLABLE_STATUSES:
             return ''
         url = reverse('admin:commerce_order_cancel', args=[obj.pk])
-        return format_html(
-            '<a class="button aq-btn-danger" href="{}">{}</a>',
-            url,
-            _('Annuler la commande'),
-        )
-    workflow_action_link.short_description = _('Action')
-
+        return link_button(url, _('Annuler la commande'), danger=True)
     def workflow_actions_column(self, obj):
         fulfil = self.workflow_action_link(obj) if obj.status == 'confirmed' else ''
         cancel = self.cancel_action_link(obj)
         if not fulfil and not cancel:
             return '—'
-        return format_html('<div style="display:flex;flex-wrap:wrap;gap:6px">{}{}</div>', fulfil, cancel)
+        return format_html('<div class="aq-actions">{}{}</div>', fulfil, cancel)
     workflow_actions_column.short_description = _('Action')
 
     def workflow_action_display(self, obj):
         if obj.status == 'cancelled':
             return format_html(
-                '<strong style="color:#b91c1c">{}</strong> {}',
+                '<strong class="aq-text-danger">{}</strong> {}',
                 _('Commande annulée.'),
                 obj.cancellation_reason or '',
             )
         return format_html(
-            '<div style="display:flex;flex-wrap:wrap;gap:8px">{}{}</div>',
+            '<div class="aq-actions">{}{}</div>',
             self.workflow_action_link(obj) if obj.status == 'confirmed' else '',
             self.cancel_action_link(obj),
         )
@@ -797,16 +813,11 @@ class OrderAdmin(CommerceSecuredAdmin):
         view_url = reverse('admin:commerce_order_view_pdf', args=[obj.pk])
         download_url = reverse('admin:commerce_order_download_pdf', args=[obj.pk])
         return format_html(
-            '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-            '<a class="button" href="{}?language=fr" target="_blank">{}</a>'
-            '<a class="button" href="{}?language=fr">{}</a>'
-            '<a class="button" href="{}?language=en" target="_blank">{}</a>'
-            '<a class="button" href="{}?language=en">{}</a>'
-            '</div>',
-            view_url, _('Visualiser FR'),
-            download_url, _('Télécharger FR'),
-            view_url, _('View EN'),
-            download_url, _('Download EN'),
+            '<div class="aq-actions">{}{}{}{}</div>',
+            link_button(f'{view_url}?language=fr', _('Visualiser FR'), new_tab=True),
+            link_button(f'{download_url}?language=fr', _('Télécharger FR')),
+            link_button(f'{view_url}?language=en', _('View EN'), new_tab=True),
+            link_button(f'{download_url}?language=en', _('Download EN')),
         )
     documents_display.short_description = _('Documents')
 
@@ -814,7 +825,7 @@ class OrderAdmin(CommerceSecuredAdmin):
         if obj.production_cycle_id:
             return _('Cycle associé : {}').format(obj.production_cycle)
         return format_html(
-            '<strong style="color:#b45309">{}</strong>',
+            '<strong class="aq-text-warn">{}</strong>',
             _(
                 'Aucun cycle associé — cette commande ne générera pas '
                 "d'entrée automatique dans un magasin de cycle."
@@ -851,9 +862,9 @@ class OrderAdmin(CommerceSecuredAdmin):
                 value = timezone.localtime(value).strftime('%d/%m/%Y %H:%M')
             rendered.append((label, value or '—'))
         return format_html(
-            '<dl style="display:grid;grid-template-columns:max-content 1fr;gap:6px 16px">{}</dl>',
+            '<dl class="aq-dl">{}</dl>',
             mark_safe(''.join(
-                f'<dt><strong>{escape(str(label))}</strong></dt><dd>{escape(str(value))}</dd>'
+                f'<dt>{escape(str(label))}</dt><dd>{escape(str(value))}</dd>'
                 for label, value in rendered
             )),
         )
@@ -865,189 +876,73 @@ class OrderAdmin(CommerceSecuredAdmin):
             return _('Aucun article.')
         rows = ''.join(
             '<tr>'
-            f'<td style="padding:6px">{escape(item.product_name)}</td>'
-            f'<td style="padding:6px;text-align:center">{item.quantity}</td>'
-            f'<td style="padding:6px;text-align:right">{item.unit_price:,.0f} FCFA</td>'
-            f'<td style="padding:6px;text-align:right">{item.line_total:,.0f} FCFA</td>'
+            f'<td>{escape(item.product_name)}</td>'
+            f'<td class="aq-num">{item.quantity}</td>'
+            f'<td class="aq-num">{item.unit_price:,.0f} FCFA</td>'
+            f'<td class="aq-num">{item.line_total:,.0f} FCFA</td>'
             '</tr>'
             for item in items
         )
         return format_html(
-            '<table style="width:100%;border-collapse:collapse">'
-            '<thead><tr><th>{}</th><th>{}</th>'
-            '<th>{}</th><th>{}</th></tr></thead>'
-            '<tbody>{}</tbody></table>',
+            '<div class="aq-table-wrap"><table class="aq-table">'
+            '<thead><tr><th>{}</th><th class="aq-num">{}</th>'
+            '<th class="aq-num">{}</th><th class="aq-num">{}</th></tr></thead>'
+            '<tbody>{}</tbody></table></div>',
             _('Produit'), _('Quantité'), _('Prix unitaire'), _('Total'),
             mark_safe(rows),
         )
     items_summary_display.short_description = _('Articles commandés')
 
     def order_summary_display(self, obj):
-        """Aperçu visuel complet de la commande directement dans l'admin."""
+        """Récapitulatif lisible de la commande (en-tête, montants, livraison)."""
         if not obj.pk:
-            return mark_safe('<em style="color:#6b7280;">—</em>')
-
-        order_number = escape(str(obj.order_number or '—'))
-        status_labels = {
-            'confirmed': (_('Confirmée'), '#2563eb'),
-            'delivered': (_('Livrée'), '#f59e0b'),
-            'received': (_('Reçue'), '#059669'),
-            'ready_for_pickup': (_('Prête au retrait'), '#f59e0b'),
-            'cancelled': (_('Annulée'), '#b91c1c'),
-        }
-        status_label, status_color = status_labels.get(obj.status, (escape(str(obj.status)), '#6b7280'))
-
-        # Delivery info
-        delivery_method_display = (
-            obj.get_delivery_method_display()
-            if hasattr(obj, 'get_delivery_method_display')
-            else obj.delivery_method
-        )
-        delivery_label = escape(str(delivery_method_display))
-        pickup_label = ''
-        if obj.pickup_location:
-            pickup_display = (
-                f" — {obj.get_pickup_location_display()}"
-                if hasattr(obj, 'get_pickup_location_display')
-                else ''
+            return '—'
+        status_label, tone = self._status_label_and_tone(obj)
+        if obj.delivery_method == 'pickup':
+            delivery = _('Retrait') + (
+                f" — {obj.get_pickup_location_display()}" if obj.pickup_location else ''
             )
-            pickup_label = escape(pickup_display)
-        delivery_name = escape(str(obj.delivery_name or '—'))
-        delivery_phone = escape(str(obj.delivery_phone or '—'))
-        delivery_city = escape(str(obj.delivery_city or ''))
-        delivery_region = escape(str(obj.delivery_region or ''))
-        delivery_address = escape(str(obj.delivery_full_address or ''))
+        else:
+            delivery = _('Livraison à domicile')
+        destination = ' · '.join(
+            str(part) for part in (
+                obj.delivery_name, obj.delivery_phone, obj.delivery_city,
+                getattr(obj, 'get_delivery_region_display', lambda: obj.delivery_region)(),
+            ) if part
+        )
 
-        # Totals
-        subtotal = f'{obj.subtotal:,.0f}' if obj.subtotal else '—'
-        delivery_fee = f'{obj.delivery_fee:,.0f}' if obj.delivery_fee else '—'
-        total = f'{obj.total:,.0f}' if obj.total else '—'
-        bags = str(obj.total_bags or '—')
+        def amount(value):
+            return f'{value:,.0f} FCFA' if value else '—'
 
-        # Items
-        items_html = ''
-        try:
-            items = obj.items.select_related('product').all()
-            if items.exists():
-                items_html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-                items_html += (
-                    '<tr style="background:#f3f4f6;">'
-                    '<th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e5e7eb;">{}</th>'
-                    '<th style="padding:6px 10px;text-align:center;border-bottom:1px solid #e5e7eb;">{}</th>'
-                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">{}</th>'
-                    '<th style="padding:6px 10px;text-align:right;border-bottom:1px solid #e5e7eb;">{}</th>'
-                    '</tr>'
-                    .format(_('Produit'), _('Qté (sacs)'), _('Prix unit.'), _('Total'))
-                )
-                for item in items:
-                    product_name = escape(str(item.product_name or '—'))
-                    qty = escape(str(item.quantity))
-                    unit_price = f'{item.unit_price:,.0f} FCFA' if item.unit_price else '—'
-                    line_total = f'{item.line_total:,.0f} FCFA' if item.line_total else '—'
-                    items_html += (
-                        f'<tr style="border-bottom:1px solid #f3f4f6;">'
-                        f'<td style="padding:6px 10px;">{product_name}</td>'
-                        f'<td style="padding:6px 10px;text-align:center;">{qty}</td>'
-                        f'<td style="padding:6px 10px;text-align:right;">{escape(unit_price)}</td>'
-                        f'<td style="padding:6px 10px;text-align:right;font-weight:bold;">{escape(line_total)}</td>'
-                        f'</tr>'
-                    )
-                items_html += '</table>'
-            else:
-                items_html = (
-                    '<em style="color:#6b7280;font-size:13px;">{}</em>'
-                    .format(_('Aucun article.'))
-                )
-        except Exception:
-            items_html = (
-                '<em style="color:#6b7280;">{}</em>'
-                .format(_('Articles non disponibles.'))
-            )
-
-        card_wrapper_open = (
-            '<div style="font-family:sans-serif;max-width:780px;'
-            'border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;'
-            'margin:4px 0;">'
+        cells = [
+            (_('Sous-total'), amount(obj.subtotal)),
+            (_('Livraison'), amount(obj.delivery_fee)),
+            (_('Total'), amount(obj.total)),
+            (_('Sacs commandés'), str(obj.total_bags or '—')),
+        ]
+        return format_html(
+            '<div class="aq-summary">'
+            '<div class="aq-summary__head"><strong>{} {}</strong>{}</div>'
+            '<div class="aq-summary__cells">{}</div>'
+            '<div class="aq-summary__body"><strong>{}</strong> — {}{}</div>'
+            '</div>',
+            _('Commande'), obj.order_number or '—', badge(status_label, tone),
+            mark_safe(''.join(
+                f'<div class="aq-summary__cell"><span class="aq-kpi__label">{escape(str(label))}</span>'
+                f'<span class="aq-strong">{escape(value)}</span></div>'
+                for label, value in cells
+            )),
+            delivery, destination or '—',
+            format_html('<br><span class="aq-muted">{}</span>', obj.delivery_full_address)
+            if obj.delivery_full_address else '',
         )
-        card_header = (
-            '<div style="background:#059669;color:white;padding:10px 16px;'
-            'display:flex;justify-content:space-between;align-items:center;">'
-        )
-        status_badge = (
-            f'<span style="background:{status_color};color:white;padding:2px 10px;'
-            f'border-radius:20px;font-size:12px;">{status_label}</span>'
-        )
-        html = "".join(
-            [
-                card_wrapper_open,
-                card_header,
-                f"<strong>{escape(str(_('Commande #')))}{order_number}</strong>",
-                status_badge,
-                "</div>",
-                '<div style="border-bottom:1px solid #e5e7eb;">',
-                items_html,
-                "</div>",
-                '<div style="display:flex;border-bottom:1px solid #e5e7eb;">',
-                '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Sous-total")))}</div>',
-                f'<div style="font-weight:bold;">{escape(subtotal)} FCFA</div>',
-                "</div>",
-                '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Livraison")))}</div>',
-                f'<div style="font-weight:bold;">{escape(delivery_fee)} FCFA</div>',
-                "</div>",
-                '<div style="flex:1;padding:10px 16px;border-right:1px solid #e5e7eb;">',
-                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Total")))}</div>',
-                f'<div style="font-weight:bold;color:#059669;font-size:16px;">{escape(total)} FCFA</div>',
-                "</div>",
-                '<div style="flex:1;padding:10px 16px;">',
-                f'<div style="font-size:12px;color:#6b7280;">{escape(str(_("Sacs commandés")))}</div>',
-                (
-                    f'<div style="font-weight:bold;">{escape(bags)} '
-                    f'{escape(str(ngettext("sac", "sacs", obj.total_bags or 0)))}</div>'
-                ),
-                "</div>",
-                "</div>",
-                '<div style="padding:10px 16px;font-size:13px;background:#f9fafb;">',
-                f"<strong>🚚 {delivery_label}{pickup_label}</strong> — ",
-                f"{delivery_name} · {delivery_phone}",
-                f'{"  ·  " + delivery_city if delivery_city else ""}',
-                f'{"  ·  " + delivery_region if delivery_region else ""}',
-                (
-                    f"<br><span style='color:#6b7280;'>{delivery_address}</span>"
-                    if delivery_address
-                    else ""
-                ),
-                "</div>",
-                "</div>",
-            ]
-        )
-        return mark_safe(html)
     order_summary_display.short_description = _('Aperçu de la commande')
 
     def pdf_download_link(self, obj):
         """Boutons PDF français et anglais."""
         if not obj.pk:
             return "—"
-        view_url = reverse('admin:commerce_order_view_pdf', args=[obj.pk])
-        download_url = reverse('admin:commerce_order_download_pdf', args=[obj.pk])
-        btn_base = (
-            'display:inline-block;padding:6px 14px;border-radius:4px;'
-            'text-decoration:none;font-weight:bold;font-size:13px;'
-        )
-        return format_html(
-            '<a href="{}?language=fr" target="_blank" style="{}background:#3b82f6;color:white;">{}</a>'
-            '&nbsp;&nbsp;'
-            '<a href="{}?language=fr" style="{}background:#059669;color:white;">{}</a>'
-            '&nbsp;&nbsp;'
-            '<a href="{}?language=en" target="_blank" style="{}background:#3b82f6;color:white;">{}</a>'
-            '&nbsp;&nbsp;'
-            '<a href="{}?language=en" style="{}background:#059669;color:white;">{}</a>',
-            view_url, btn_base, _('Visualiser FR'),
-            download_url, btn_base, _('Télécharger FR'),
-            view_url, btn_base, _('Visualiser EN'),
-            download_url, btn_base, _('Télécharger EN'),
-        )
+        return self.documents_display(obj)
     pdf_download_link.short_description = _('Bon de commande PDF')
 
     def user_link(self, obj):
@@ -1063,23 +958,23 @@ class OrderAdmin(CommerceSecuredAdmin):
     def farm_link(self, obj):
         """Lien vers ferme."""
         return format_html(
-            '<a href="/admin/accounts/farmprofile/{}/change/">{}</a>',
-            obj.farm_profile.id,
+            '<a href="{}">{}</a>',
+            reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile.id]),
             obj.farm_profile.farm_name
         )
     farm_link.short_description = _('Ferme')
 
-    def status_badge(self, obj):
-        """Badge statut colore."""
-        colors = {
-            'confirmed': '#2563eb',
-            'delivered': '#f59e0b',
-            'ready_for_pickup': '#f59e0b',
-            'received': '#10b981',
-            'cancelled': '#b91c1c',
-        }
+    STATUS_TONES = {
+        'confirmed': 'info',
+        'delivered': 'warn',
+        'ready_for_pickup': 'warn',
+        'received': 'ok',
+        'cancelled': 'danger',
+    }
+
+    def _status_label_and_tone(self, obj):
         labels = {
-            'confirmed': _('Commandée'),
+            'confirmed': _('À préparer'),
             'delivered': _('Livrée — confirmation attendue'),
             'ready_for_pickup': _('Prête au retrait'),
             'received': (
@@ -1089,29 +984,21 @@ class OrderAdmin(CommerceSecuredAdmin):
             ),
             'cancelled': _('Annulée'),
         }
-        color = colors.get(obj.status, '#6b7280')
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
-            color,
-            labels.get(obj.status, obj.get_status_display())
+        return (
+            labels.get(obj.status, obj.get_status_display()),
+            self.STATUS_TONES.get(obj.status, 'muted'),
         )
+
+    def status_badge(self, obj):
+        label, tone = self._status_label_and_tone(obj)
+        return badge(label, tone)
     status_badge.short_description = _('Statut')
 
     def delivery_method_badge(self, obj):
-        """Badge mode livraison."""
-        colors = {
-            'home': '#3b82f6',
-            'pickup': '#f59e0b'
-        }
-        color = colors.get(obj.delivery_method, '#6b7280')
         text = obj.get_delivery_method_display()
         if obj.pickup_location:
             text += f' ({obj.get_pickup_location_display()})'
-
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
-            color, text
-        )
+        return badge(text, 'info' if obj.delivery_method == 'home' else 'muted')
     delivery_method_badge.short_description = _('Livraison')
 
     def total_bags_display(self, obj):
@@ -1128,7 +1015,7 @@ class OrderAdmin(CommerceSecuredAdmin):
         """Affichage formate du total."""
         formatted_total = f"{obj.total:,.0f}"
         return format_html(
-            '<strong style="color: #059669;">{} FCFA</strong>',
+            '<strong class="aq-text-ok">{} FCFA</strong>',
             formatted_total
         )
     total_display.short_description = _('Total')

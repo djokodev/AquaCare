@@ -9,6 +9,7 @@ from accounts.domain.login_identifier import LoginIdentifier
 from accounts.managers import AmbiguousLoginNameError
 from accounts.models import User
 from accounts.validators import normalize_phone_number
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.settings import api_settings
@@ -181,6 +182,10 @@ class AuthApplicationService:
                 _("Mot de passe incorrect."),
                 field_name="password",
             )
+        # Une écriture par connexion (pas par rafraîchissement de jeton) : la
+        # fiche utilisateur de l'admin affiche ainsi la dernière connexion.
+        user.last_login = timezone.now()
+        User.objects.filter(pk=user.pk).update(last_login=user.last_login)
         return user
 
     @staticmethod

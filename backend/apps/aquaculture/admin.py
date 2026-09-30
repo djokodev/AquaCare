@@ -19,7 +19,8 @@ from common.admin_capabilities import (
     has_capability,
     has_capability_and_permission,
 )
-from common.admin_mixins import SecuredModelAdmin
+from common.admin_mixins import CertificationFeatureMixin, SecuredModelAdmin
+from common.admin_ui import badge, link_button, muted
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -27,7 +28,7 @@ from django.db import IntegrityError
 from django.db.models import Avg, Count, Sum
 from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import reverse
-from django.utils.html import escape, format_html, mark_safe
+from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 
 from .domain.exceptions import BusinessRuleViolation, InvalidSanitaryDataException
@@ -234,7 +235,9 @@ class FinalHarvestOperationAdmin(AquacultureSecuredAdmin):
 
 
 @admin.register(ProductionCycle)
-class ProductionCycleAdmin(AquacultureSecuredAdmin):
+class ProductionCycleAdmin(CertificationFeatureMixin, AquacultureSecuredAdmin):
+    certification_fields = ('farm_profile__certification_status',)
+
     """
     Administration securisee des cycles de production.
 
@@ -357,7 +360,7 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     def farm_display(self, obj):
         """Display farm info with link to farm profile."""
         user = obj.farm_profile.user
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile.id])
         return format_html(
             '<a href="{}">{} ({})</a>',
             url, obj.farm_profile.farm_name, user.display_name
@@ -372,18 +375,8 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     species_display.admin_order_field = 'species'
 
     def status_display(self, obj):
-        """Display status with color coding."""
-        colors = {
-            'planned': '#FFA500',
-            'active': '#28A745',
-            'harvested': '#007BFF',
-            'cancelled': '#DC3545'
-        }
-        color = colors.get(obj.status, '#6C757D')
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span>',
-            color, obj.get_status_display()
-        )
+        tones = {'planned': 'info', 'active': 'ok', 'harvested': 'muted', 'cancelled': 'danger'}
+        return badge(obj.get_status_display(), tones.get(obj.status, 'muted'))
     status_display.short_description = _('Statut')
     status_display.admin_order_field = 'status'
 
@@ -401,38 +394,20 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
     current_biomass_display.admin_order_field = 'current_biomass'
 
     def survival_rate_display(self, obj):
-        """Display survival rate with color coding."""
-        if obj.survival_rate is not None:
-            if obj.survival_rate >= 85:
-                color = '#28A745'
-            elif obj.survival_rate >= 70:
-                color = '#FFC107'
-            else:
-                color = '#DC3545'
-
-            return format_html(
-                '<span style="color: {}; font-weight: bold;">{}%</span>',
-                color, f"{obj.survival_rate:.1f}"
-            )
-        return "-"
+        if obj.survival_rate is None:
+            return "-"
+        rate = float(obj.survival_rate)
+        tone = 'ok' if rate >= 85 else 'warn' if rate >= 70 else 'danger'
+        return badge(f"{rate:.1f} %", tone)
     survival_rate_display.short_description = _('Taux survie')
     survival_rate_display.admin_order_field = 'survival_rate'
 
     def fcr_display(self, obj):
-        """Display FCR with color coding."""
-        if obj.fcr is not None:
-            if obj.fcr <= 1.5:
-                color = '#28A745'
-            elif obj.fcr <= 2.0:
-                color = '#FFC107'
-            else:
-                color = '#DC3545'
-
-            return format_html(
-                '<span style="color: {}; font-weight: bold;">{}</span>',
-                color, f"{obj.fcr:.2f}"
-            )
-        return "-"
+        if obj.fcr is None:
+            return "-"
+        fcr = float(obj.fcr)
+        tone = 'ok' if fcr <= 1.5 else 'warn' if fcr <= 2.0 else 'danger'
+        return badge(f"{fcr:.2f}", tone)
     fcr_display.short_description = _('FCR')
     fcr_display.admin_order_field = 'fcr'
 
@@ -440,7 +415,6 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
         """Overall performance indicator."""
         if obj.status != 'active' or obj.survival_rate is None:
             return "-"
-
         score = 0
         if obj.survival_rate >= 80:
             score += 1
@@ -448,13 +422,11 @@ class ProductionCycleAdmin(AquacultureSecuredAdmin):
             score += 1
         if obj.days_active() <= 150:
             score += 1
-
         if score >= 2:
-            return format_html('<span style="color: #28A745;">Bon</span>')
-        elif score == 1:
-            return format_html('<span style="color: #FFC107;">Moyen</span>')
-        else:
-            return format_html('<span style="color: #DC3545;">Faible</span>')
+            return badge(_('Bon'), 'ok')
+        if score == 1:
+            return badge(_('Moyen'), 'warn')
+        return badge(_('Faible'), 'danger')
     performance_indicator.short_description = _('Performance')
 
     def id_short(self, obj):
@@ -555,7 +527,7 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
     """Administration des unités de production réelles."""
 
     list_display = [
-        'name',
+        'unit_workspace_link',
         'farm_display',
         'unit_type_display',
         'dimension_display',
@@ -589,6 +561,47 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('farm_profile', 'farm_profile__user')
 
+    def get_urls(self):
+        from django.urls import path
+
+        custom = [
+            path(
+                '<uuid:object_id>/fiche/',
+                self.admin_site.admin_view(self.workspace_view),
+                name='aquaculture_productionunit_workspace',
+            ),
+        ]
+        return custom + super().get_urls()
+
+    def workspace_view(self, request, object_id):
+        """Fiche unité : état actuel, journal quotidien, sanitaire, historique."""
+        from django.shortcuts import get_object_or_404
+        from django.template.response import TemplateResponse
+
+        from .services.unit_workspace_service import UnitWorkspaceService
+
+        if not self.has_view_permission(request):
+            raise PermissionDenied
+        unit = get_object_or_404(
+            ProductionUnit.objects.select_related('farm_profile', 'farm_profile__user'),
+            pk=object_id,
+            farm_profile__is_deleted=False,
+        )
+        workspace = UnitWorkspaceService.build(
+            unit,
+            can_view_logs=request.user.has_perm('aquaculture.view_cyclelog'),
+            can_view_sanitary=request.user.has_perm('aquaculture.view_sanitarylog'),
+        )
+        context = {
+            **self.admin_site.each_context(request),
+            'opts': self.model._meta,
+            'title': _('%(unit)s — %(farm)s') % {'unit': unit.name, 'farm': unit.farm_profile.farm_name},
+            'workspace': workspace,
+            'change_url': reverse('admin:aquaculture_productionunit_change', args=[unit.pk])
+            if self.has_change_permission(request, unit) else '',
+        }
+        return TemplateResponse(request, 'admin/aquaculture/productionunit/workspace.html', context)
+
     def save_model(self, request, obj, form, change):
         if change:
             current = ProductionUnit.objects.get(pk=obj.pk)
@@ -615,8 +628,17 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
         for unit in queryset:
             self.delete_model(request, unit)
 
+    def get_list_display_links(self, request, list_display):
+        return None
+
+    def unit_workspace_link(self, obj):
+        url = reverse('admin:aquaculture_productionunit_workspace', args=[obj.pk])
+        return format_html('<a href="{}"><strong>{}</strong></a>', url, obj.name)
+    unit_workspace_link.short_description = _('Unité')
+    unit_workspace_link.admin_order_field = 'name'
+
     def farm_display(self, obj):
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile.id])
         return format_html('<a href="{}">{}</a>', url, obj.farm_profile.farm_name)
     farm_display.short_description = _('Ferme')
 
@@ -633,7 +655,7 @@ class ProductionUnitAdmin(AquacultureSecuredAdmin):
     recommended_capacity_display.short_description = _('Capacité conseillée')
 
     def status_display(self, obj):
-        return obj.get_status_display()
+        return badge(obj.get_status_display(), 'ok' if obj.status == 'active' else 'muted')
     status_display.short_description = _('Statut')
 
 
@@ -704,7 +726,7 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
         )
 
     def farm_display(self, obj):
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.cycle.farm_profile.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
     farm_display.short_description = _('Ferme')
 
@@ -714,7 +736,7 @@ class CycleUnitAllocationAdmin(AquacultureSecuredAdmin):
     cycle_display.short_description = _('Cycle')
 
     def production_unit_display(self, obj):
-        url = reverse('admin:aquaculture_productionunit_change', args=[obj.production_unit.id])
+        url = reverse('admin:aquaculture_productionunit_workspace', args=[obj.production_unit.id])
         return format_html('<a href="{}">{}</a>', url, obj.production_unit.name)
     production_unit_display.short_description = _('Unité')
 
@@ -857,7 +879,7 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
 
     def farm_display(self, obj):
         """Display farm name with link."""
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.cycle.farm_profile.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
     farm_display.short_description = _('Ferme')
     farm_display.admin_order_field = 'cycle__farm_profile__farm_name'
@@ -874,30 +896,16 @@ class CycleLogAdmin(AquacultureSecuredAdmin):
         allocation = obj.cycle_unit_allocation
         if not allocation or not allocation.production_unit:
             return '-'
-        url = reverse('admin:aquaculture_productionunit_change', args=[allocation.production_unit.id])
+        url = reverse('admin:aquaculture_productionunit_workspace', args=[allocation.production_unit.id])
         return format_html('<a href="{}">{}</a>', url, allocation.production_unit.name)
     production_unit_display.short_description = _('Unité')
 
     def water_temp_status(self, obj):
-        """Display water temperature with status indicator."""
         if not obj.water_temperature:
             return "-"
-
         temp = float(obj.water_temperature)
-        if 25 <= temp <= 32:
-            color = '#28A745'
-            status = 'OK'
-        elif 20 <= temp <= 35:
-            color = '#FFC107'
-            status = '!'
-        else:
-            color = '#DC3545'
-            status = 'X'
-
-        return format_html(
-            '<span style="color: {};">{} {}C</span>',
-            color, status, f"{temp:.1f}"
-        )
+        tone = 'ok' if 25 <= temp <= 32 else 'warn' if 20 <= temp <= 35 else 'danger'
+        return badge(f"{temp:.1f} °C", tone)
     water_temp_status.short_description = _('Temperature')
 
     def id_short(self, obj):
@@ -1040,7 +1048,7 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
 
     def farm_display(self, obj):
         """Display farm name with link."""
-        url = reverse('admin:accounts_farmprofile_change', args=[obj.cycle.farm_profile.id])
+        url = reverse('admin:accounts_farmprofile_supervision', args=[obj.cycle.farm_profile.id])
         return format_html('<a href="{}">{}</a>', url, obj.cycle.farm_profile.farm_name)
     farm_display.short_description = _('Ferme')
 
@@ -1056,34 +1064,25 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
         allocation = obj.cycle_unit_allocation
         if not allocation or not allocation.production_unit:
             return '-'
-        url = reverse('admin:aquaculture_productionunit_change', args=[allocation.production_unit.id])
+        url = reverse('admin:aquaculture_productionunit_workspace', args=[allocation.production_unit.id])
         return format_html('<a href="{}">{}</a>', url, allocation.production_unit.name)
     production_unit_display.short_description = _('Unité')
 
     def event_type_display(self, obj):
-        """Display event type with warning for abnormal mortality."""
         if obj.event_type == 'abnormal_mortality':
-            return format_html('<span style="color: #DC3545;">! {}</span>', obj.get_event_type_display())
+            return badge(obj.get_event_type_display(), 'danger')
         return obj.get_event_type_display()
     event_type_display.short_description = _('Type')
 
     def resolution_status(self, obj):
-        """Display resolution status with color coding."""
         if obj.resolved:
-            return format_html(
-                '<span style="color: #28A745;">Resolu ({})</span>',
-                obj.resolution_date
-            )
-        else:
-            days_since = (date.today() - obj.event_date).days
-            if days_since > 7:
-                color = '#DC3545'
-            else:
-                color = '#FFC107'
-            return format_html(
-                '<span style="color: {};">En cours ({} jours)</span>',
-                color, days_since
-            )
+            resolved_on = obj.resolution_date.strftime('%d/%m/%Y') if obj.resolution_date else ''
+            return badge(_('Résolu %(date)s') % {'date': resolved_on}, 'ok')
+        days_since = (date.today() - obj.event_date).days
+        return badge(
+            _('En cours depuis %(days)s j') % {'days': days_since},
+            'danger' if days_since > 7 else 'warn',
+        )
     resolution_status.short_description = _('Statut resolution')
 
     def has_photo(self, obj):
@@ -1097,19 +1096,15 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
     has_photo.short_description = _('Photo')
 
     def farmer_contact(self, obj):
-        """Display farmer contact information for communication."""
         user = obj.cycle.farm_profile.user
         farm = obj.cycle.farm_profile
-
+        place = ", ".join(part for part in (user.region, user.city) if part) or "—"
         return format_html(
-            '<div style="font-size: 12px; line-height: 1.4;">'
-            '<strong style="color: #059669;">{}</strong><br>'
-            '<span style="color: #666;">Ferme: {}</span><br>'
-            '<span style="color: #999; font-size: 10px;">Lieu: {}</span>'
-            '</div>',
+            '<div class="aq-stack"><strong>{}</strong><span class="aq-muted">{}</span>'
+            '<span class="aq-muted">{}</span></div>',
             user.display_name or f"{user.first_name} {user.last_name}",
-            farm.farm_name[:30] + ('...' if len(farm.farm_name) > 30 else ''),
-            f"{user.region}, {user.city}" if user.region and user.city else user.region or user.city or 'N/A'
+            farm.farm_name,
+            place,
         )
     farmer_contact.short_description = _('Eleveur')
 
@@ -1317,17 +1312,21 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
     change_list_template = "admin/aquaculture/productionreport/change_list.html"
 
     list_display = [
-        'id_short',
+        'period_display',
         'farm_display',
         'report_type_badge',
-        'period_display',
         'status_badge',
         'email_status',
         'whatsapp_status',
         'generated_at',
         'pdf_download_link',
     ]
-    list_filter = ['report_type', 'status', 'email_status', 'whatsapp_status']
+    list_display_links = ['period_display']
+    list_filter = [
+        'report_type', 'status', 'email_status', 'whatsapp_status', 'generated_at',
+        ('is_deleted', admin.BooleanFieldListFilter),
+    ]
+    date_hierarchy = 'period_start'
     search_fields = ['farm_profile__farm_name', 'farm_profile__user__phone_number']
     readonly_fields = [
         'id', 'farm_profile', 'report_type', 'period_start', 'period_end',
@@ -1369,6 +1368,9 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
     )
     actions = ['download_report_pdf_action', 'regenerate_report_action', 'validate_report_action']
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('farm_profile')
+
     # --- Permissions ---
 
     def has_view_permission(self, request, obj=None):
@@ -1407,7 +1409,28 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        """Suppression définitive (fichier PDF compris) : superuser ou rôle autorisé."""
+        if request.user.is_superuser:
+            return True
+        return has_capability_and_permission(
+            request.user,
+            AdminCapability.VIEW_REPORTS,
+            "aquaculture.delete_productionreport",
+        )
+
+    @staticmethod
+    def _delete_pdf(report):
+        if report.pdf_file:
+            report.pdf_file.delete(save=False)
+
+    def delete_model(self, request, obj):
+        self._delete_pdf(obj)
+        super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        for report in queryset.select_related(None).only('id', 'pdf_file'):
+            self._delete_pdf(report)
+        super().delete_queryset(request, queryset)
 
     # --- Custom URL for single-report PDF download ---
 
@@ -1500,66 +1523,49 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
     id_short.short_description = _('ID')
 
     def farm_display(self, obj):
-        return obj.farm_profile.farm_name
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:accounts_farmprofile_supervision', args=[obj.farm_profile_id]),
+            obj.farm_profile.farm_name,
+        )
     farm_display.short_description = _('Ferme')
+    farm_display.admin_order_field = 'farm_profile__farm_name'
 
     def period_display(self, obj):
-        return f"{obj.period_start} → {obj.period_end}"
+        if obj.period_start == obj.period_end:
+            return obj.period_start.strftime('%d/%m/%Y')
+        return f"{obj.period_start:%d/%m/%Y} → {obj.period_end:%d/%m/%Y}"
     period_display.short_description = _('Période')
+    period_display.admin_order_field = 'period_start'
 
     def report_type_badge(self, obj):
-        labels = {'daily': 'Journalier', 'weekly': 'Hebdomadaire', 'monthly': 'Mensuel'}
-        colors = {'daily': '#6b7280', 'weekly': '#3b82f6', 'monthly': '#059669'}
-        color = colors.get(obj.report_type, '#6b7280')
-        label = labels.get(obj.report_type, obj.report_type)
-        return format_html(
-            '<span style="background:{}; color:white; padding:3px 8px; border-radius:4px;">{}</span>',
-            color, label
-        )
+        return badge(obj.get_report_type_display(), 'info' if obj.report_type != 'daily' else 'muted')
     report_type_badge.short_description = _('Type')
 
     def status_badge(self, obj):
-        colors = {'draft': '#f59e0b', 'validated': '#059669', 'archived': '#6b7280'}
-        labels = {'draft': 'Brouillon', 'validated': 'Validé', 'archived': 'Archivé'}
-        color = colors.get(obj.status, '#6b7280')
-        label = labels.get(obj.status, obj.status)
-        return format_html(
-            '<span style="background:{}; color:white; padding:3px 8px; border-radius:4px;">{}</span>',
-            color, label
-        )
+        tones = {'draft': 'warn', 'validated': 'ok', 'archived': 'muted', 'generating': 'info'}
+        return badge(obj.get_status_display(), tones.get(obj.status, 'muted'))
     status_badge.short_description = _('Statut')
 
     def pdf_download_link(self, obj):
         """Boutons Visualiser + Télécharger PDF (liste + détail)."""
         if not obj.pk:
             return "—"
+        if not obj.pdf_file:
+            return muted(_("PDF non généré"))
         view_url = reverse('admin:aquaculture_productionreport_view_pdf', args=[obj.pk])
         download_url = reverse('admin:aquaculture_productionreport_download_pdf', args=[obj.pk])
-        btn_base = (
-            'display:inline-block;padding:4px 10px;border-radius:4px;'
-            'text-decoration:none;font-size:12px;font-weight:bold;'
+        return format_html(
+            '<div class="aq-actions">{}{}</div>',
+            link_button(view_url, _("Visualiser"), new_tab=True),
+            link_button(download_url, _("Télécharger")),
         )
-        if obj.pdf_file:
-            return format_html(
-                '<a class="aquacare-pdf-action" href="{}" target="_blank" '
-                'style="{}background:#3b82f6;color:white;">👁 {}</a>'
-                '&nbsp;'
-                '<a class="aquacare-pdf-action" href="{}" '
-                'style="{}background:#059669;color:white;">📄 {}</a>',
-                view_url,
-                btn_base,
-                _("Visualiser"),
-                download_url,
-                btn_base,
-                _("Télécharger"),
-            )
-        return _("PDF non genere")
     pdf_download_link.short_description = _('PDF')
 
     def report_content_preview(self, obj):
-        """Affiche un aperçu lisible du contenu du rapport directement dans l'admin."""
+        """Aperçu lisible du contenu du rapport, sans style en ligne."""
         if not obj.payload or not isinstance(obj.payload, dict):
-            return mark_safe('<em style="color:#6b7280;">Aucune donnée — générez d\'abord le rapport.</em>')
+            return muted(_("Aucune donnée — générez d'abord le rapport."))
 
         payload = obj.payload
         farm = payload.get('farm', {}) or {}
@@ -1567,137 +1573,84 @@ class ProductionReportAdmin(AquacultureSecuredAdmin):
         cycles = payload.get('cycles', []) or []
         meta = payload.get('report_meta', {}) or {}
 
-        farm_name = escape(str(farm.get('farm_name', '—')))
-        period_start = escape(str(meta.get('period_start', '?')))
-        period_end = escape(str(meta.get('period_end', '?')))
-        promoter = escape(str(farm.get('promoter_name', '') or farm.get('promoter_phone', '')))
+        def fmt(value, pattern='{}'):
+            if value in (None, ''):
+                return '—'
+            try:
+                return pattern.format(float(value)) if pattern != '{}' else str(value)
+            except (TypeError, ValueError):
+                return str(value)
 
-        type_labels = {'daily': 'Journalier', 'weekly': 'Hebdomadaire', 'monthly': 'Mensuel'}
-        type_label = escape(type_labels.get(str(meta.get('report_type', '')), meta.get('report_type', '—')))
-
-        # -- Header --
-        html = (
-            '<div style="font-family:sans-serif;max-width:780px;border:1px solid #d1fae5;'
-            'border-radius:8px;overflow:hidden;margin:4px 0;">'
-            f'<div style="background:#059669;color:white;padding:10px 16px;display:flex;'
-            f'justify-content:space-between;align-items:center;">'
-            f'<strong style="font-size:14px;">🐟 {farm_name}</strong>'
-            f'<span style="font-size:12px;opacity:0.85;">{type_label} · {period_start} → {period_end}</span>'
-            f'</div>'
-            f'<div style="font-size:12px;color:#374151;padding:4px 16px;background:#ecfdf5;">'
-            f'Promoteur : {promoter}'
-            f'</div>'
+        summary_cells = [
+            (_('Cycles actifs'), summary.get('cycle_count')),
+            (_('Saisies'), summary.get('total_log_count')),
+            (_('Aliment (kg)'), summary.get('total_feed')),
+            (_('Mortalité'), summary.get('total_mortality')),
+            (_('Événements sanitaires'), summary.get('total_sanitary_events')),
+        ]
+        cells_html = format_html_join(
+            '',
+            '<div class="aq-summary__cell"><span class="aq-kpi__label">{}</span>'
+            '<span class="aq-strong">{}</span></div>',
+            ((label, fmt(value)) for label, value in summary_cells),
         )
 
-        # -- Résumé global --
-        html += (
-            '<div style="display:flex;gap:0;border-bottom:1px solid #e5e7eb;">'
-        )
-        for label, value, color in [
-            ('Cycles actifs', summary.get('cycle_count', '—'), '#059669'),
-            ('Logs saisis', summary.get('total_log_count', '—'), '#374151'),
-            ('Aliment (kg)', summary.get('total_feed', '—'), '#374151'),
-            ('Mortalité', summary.get('total_mortality', '—'), '#dc2626'),
-            ('Événements sanitaires', summary.get('total_sanitary_events', '—'), '#f59e0b'),
-        ]:
-            val = escape(str(value if value is not None else '—'))
-            html += (
-                f'<div style="flex:1;padding:10px 12px;border-right:1px solid #e5e7eb;text-align:center;">'
-                f'<div style="font-size:18px;font-weight:bold;color:{color};">{val}</div>'
-                f'<div style="font-size:11px;color:#6b7280;">{escape(label)}</div>'
-                f'</div>'
+        rows = []
+        for section in cycles:
+            cycle = section.get('cycle', {}) or {}
+            metrics = section.get('current_metrics', {}) or {}
+            period = section.get('period_metrics', {}) or {}
+            eco = section.get('economic_plan', {}) or {}
+            rows.append((
+                cycle.get('cycle_name', '?'),
+                cycle.get('species_display', ''),
+                fmt(metrics.get('current_count')),
+                fmt(metrics.get('current_average_weight'), '{:.0f} g'),
+                fmt(metrics.get('current_biomass'), '{:.1f} kg'),
+                fmt(metrics.get('fcr'), '{:.2f}'),
+                fmt(metrics.get('survival_rate'), '{:.1f} %'),
+                fmt(eco.get('projected_roi_pct'), '{:.1f} %'),
+                fmt(period.get('log_count')),
+                fmt(period.get('total_feed'), '{:.1f} kg'),
+                fmt(period.get('total_mortality')),
+            ))
+        if rows:
+            table = format_html(
+                '<div class="aq-table-wrap"><table class="aq-table aq-table--compact"><thead><tr>'
+                '<th>{}</th><th>{}</th><th class="aq-num">{}</th><th class="aq-num">{}</th>'
+                '<th class="aq-num">{}</th><th class="aq-num">{}</th><th class="aq-num">{}</th>'
+                '<th class="aq-num">{}</th><th class="aq-num">{}</th><th class="aq-num">{}</th>'
+                '<th class="aq-num">{}</th></tr></thead><tbody>{}</tbody></table></div>',
+                _('Cycle'), _('Espèce'), _('Poissons'), _('Poids moyen'), _('Biomasse'),
+                _('FCR'), _('Survie'), _('ROI estimé'), _('Saisies (période)'),
+                _('Aliment (période)'), _('Mortalité (période)'),
+                format_html_join(
+                    '',
+                    '<tr><td>{}</td><td>{}</td><td class="aq-num">{}</td><td class="aq-num">{}</td>'
+                    '<td class="aq-num">{}</td><td class="aq-num">{}</td><td class="aq-num">{}</td>'
+                    '<td class="aq-num">{}</td><td class="aq-num">{}</td><td class="aq-num">{}</td>'
+                    '<td class="aq-num">{}</td></tr>',
+                    rows,
+                ),
             )
-        html += '</div>'
-
-        # -- Détail par cycle --
-        if cycles:
-            html += (
-                '<div style="padding:4px 16px 0;background:#f9fafb;border-bottom:1px solid #e5e7eb;">'
-                '<strong style="font-size:12px;color:#374151;">Détail par cycle</strong>'
-                '</div>'
-            )
-            for section in cycles:
-                cycle = section.get('cycle', {}) or {}
-                metrics = section.get('current_metrics', {}) or {}
-                period = section.get('period_metrics', {}) or {}
-                eco = section.get('economic_plan', {}) or {}
-
-                cycle_name = escape(str(cycle.get('cycle_name', '?')))
-                pond = escape(str(cycle.get('pond_identifier', '')))
-                species = escape(str(cycle.get('species_display', '')))
-                days = escape(str(cycle.get('days_active', '?')))
-
-                fcr = metrics.get('fcr')
-                fcr_color = '#059669' if fcr is not None and float(fcr) <= 1.5 else (
-                    '#f59e0b' if fcr is not None and float(fcr) <= 2.0 else '#dc2626'
-                )
-                fcr_str = escape(f'{float(fcr):.2f}' if fcr is not None else '—')
-
-                survival = metrics.get('survival_rate')
-                surv_color = '#059669' if survival is not None and float(survival) >= 85 else (
-                    '#f59e0b' if survival is not None and float(survival) >= 70 else '#dc2626'
-                )
-                surv_str = escape(
-                    f'{float(survival):.1f}%' if survival is not None else '—'
-                )
-
-                biomass = escape(
-                    str(
-                        f'{float(metrics["current_biomass"]):.1f} kg'
-                        if metrics.get('current_biomass') is not None
-                        else '—'
-                    )
-                )
-                weight = escape(
-                    str(
-                        f'{float(metrics["current_average_weight"]):.0f} g'
-                        if metrics.get('current_average_weight')
-                        else '—'
-                    )
-                )
-                count = escape(str(metrics.get('current_count', '—')))
-                p_feed = escape(str(f'{float(period["total_feed"]):.1f} kg' if period.get('total_feed') else '—'))
-                p_mort = escape(str(period.get('total_mortality', '—')))
-                p_temp = escape(
-                    str(
-                        f'{float(period["average_temperature"]):.1f}°C'
-                        if period.get('average_temperature')
-                        else '—'
-                    )
-                )
-                p_logs = escape(str(period.get('log_count', '—')))
-                roi = eco.get('projected_roi_pct')
-                roi_str = escape(f'{float(roi):.1f}%' if roi is not None else '—')
-                roi_color = '#059669' if roi and float(roi) > 0 else '#dc2626'
-
-                html += (
-                    f'<div style="padding:10px 16px;border-bottom:1px solid #f3f4f6;">'
-                    f'<div style="margin-bottom:6px;">'
-                    f'<strong style="color:#065f46;">{cycle_name}</strong>'
-                    f'<span style="color:#6b7280;font-size:12px;margin-left:8px;">{species} · {pond} · J+{days}</span>'
-                    f'</div>'
-                    f'<div style="display:flex;flex-wrap:wrap;gap:16px;font-size:12px;">'
-                    f'<span>🐟 <strong>{count}</strong> poissons</span>'
-                    f'<span>⚖️ <strong>{weight}</strong> poids moy.</span>'
-                    f'<span>📦 <strong>{biomass}</strong> biomasse</span>'
-                    f'<span style="color:{fcr_color};">📊 FCR <strong>{fcr_str}</strong></span>'
-                    f'<span style="color:{surv_color};">💚 Survie <strong>{surv_str}</strong></span>'
-                    f'<span style="color:{roi_color};">💰 ROI estimé <strong>{roi_str}</strong></span>'
-                    f'</div>'
-                    f'<div style="margin-top:4px;font-size:11px;color:#6b7280;">'
-                    f'Période : {p_logs} logs · Aliment {p_feed} · Mortalité {p_mort} · Temp. moy. {p_temp}'
-                    f'</div>'
-                    f'</div>'
-                )
         else:
-            html += (
-                '<div style="padding:12px 16px;color:#6b7280;font-size:13px;">'
-                '<em>Aucun cycle actif sur cette période.</em>'
-                '</div>'
-            )
+            table = muted(_('Aucun cycle actif sur cette période.'))
 
-        html += '</div>'
-        return mark_safe(html)
+        return format_html(
+            '<div class="aq-summary">'
+            '<div class="aq-summary__head"><strong>{}</strong><span>{} · {} → {}</span></div>'
+            '<div class="aq-summary__cells">{}</div>'
+            '<div class="aq-summary__body"><p class="aq-muted">{} {}</p>{}</div>'
+            '</div>',
+            farm.get('farm_name', '—'),
+            obj.get_report_type_display(),
+            meta.get('period_start', '?'),
+            meta.get('period_end', '?'),
+            cells_html,
+            _('Promoteur :'),
+            farm.get('promoter_name', '') or '—',
+            table,
+        )
     report_content_preview.short_description = _('Aperçu du rapport')
 
     # --- Actions ---

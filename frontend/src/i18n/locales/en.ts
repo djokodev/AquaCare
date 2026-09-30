@@ -1306,6 +1306,7 @@
   storeRefreshAfterConfirmationError: 'The confirmation was recorded, but store data will be refreshed later.',
   ordersPendingConfirmationTitle: '{{count}} order(s) to confirm',
   ordersPendingConfirmationDescription: 'Quickly confirm orders already delivered.',
+  dashboardPendingReceiptHint: 'Tap to confirm receipt in the Store.',
   productNotFound: 'Product not found',
 
   // Commerce - Feeding Suggestions

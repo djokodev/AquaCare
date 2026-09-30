@@ -8,6 +8,15 @@
   // Ne pas exécuter sur la page de login
   if (document.body && document.body.classList.contains('login')) return;
 
+  // Le menu surligne côté serveur la bonne entrée (aria-current). Jazzmin
+  // ajoute aussi « active » aux liens dont l'adresse correspond à la page ou
+  // au fil d'Ariane : on retire ces doublons une fois son script passé.
+  window.addEventListener('load', function () {
+    document.querySelectorAll('#jazzy-sidebar .nav-link.active:not([aria-current])').forEach(function (link) {
+      link.classList.remove('active');
+    });
+  });
+
   const SECTIONS = ['chat', 'cycle_logs', 'sanitary_logs', 'orders', 'production_reports', 'dispatch_logs', 'activity_alerts', 'reports'];
   const sidebar = document.getElementById('jazzy-sidebar');
   const badgeUrl = sidebar && sidebar.dataset.badgeUrl;

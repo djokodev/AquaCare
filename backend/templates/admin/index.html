@@ -1,70 +1,68 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
-
+{% load i18n humanize %}
+{% comment %}
+  Tableau de bord : 1) ce qui attend une action, 2) quelques chiffres,
+  3) les fermes à relancer. Rien d'autre. Composants .aq-* uniquement.
+{% endcomment %}
 {% block bodyclass %}{{ block.super }} dashboard{% endblock %}
-{% block content_title %}{% translate "Console de supervision" %}{% endblock %}
+{% block content_title %}{% translate "Tableau de bord" %}{% endblock %}
 {% block breadcrumbs %}{% endblock %}
 
 {% block content %}
-<div data-admin-i18n-native class="aquacare-console">
-    {% if has_business_console %}
-    <div class="row">
-        {% for card in dashboard_cards %}
-        <div class="col-xl-3 col-md-6 col-12">
-            <a href="{{ card.url }}" class="info-box aquacare-dashboard-card">
-                <span class="info-box-icon bg-success"><i class="{{ card.icon }}" aria-hidden="true"></i></span>
-                <span class="info-box-content">
-                    <span class="info-box-text">{{ card.label }}</span>
-                    <span class="info-box-number">{{ card.value }}</span>
-                </span>
-            </a>
-        </div>
-        {% empty %}
-        <div class="col-12"><p>{% translate "Aucune donnee accessible avec vos permissions actuelles." %}</p></div>
+<div data-admin-i18n-native class="aq-workspace">
+  {% if has_business_console %}
+    <section class="aq-panel" id="todo">
+      <div class="aq-panel__body">
+        <h2 class="aq-section-title">{% translate "À traiter maintenant" %}</h2>
+        {% if dashboard_todo %}
+          <ul class="aq-alert-list">
+            {% for item in dashboard_todo %}
+              <li class="aq-alert aq-alert--{{ item.level }}"><a href="{{ item.url }}">{{ item.label }}</a></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="aq-muted">{% translate "Rien en attente : aucune commande à traiter, aucun message non lu, aucun incident ouvert." %}</p>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if dashboard_kpis %}
+      <div class="aq-kpis" id="kpis">
+        {% for kpi in dashboard_kpis %}
+          {% if kpi.url %}<a class="aq-kpi" href="{{ kpi.url }}">{% else %}<div class="aq-kpi">{% endif %}
+            <span class="aq-kpi__label">{{ kpi.label }}</span>
+            <span class="aq-kpi__value">{{ kpi.value|intcomma }}</span>
+          {% if kpi.url %}</a>{% else %}</div>{% endif %}
         {% endfor %}
-    </div>
-    <div class="clearfix" aria-hidden="true"></div>
-    {% if dashboard_attention %}
-    <section class="card mt-3">
-        <div class="card-header"><h2 class="card-title">{% translate "Fermes nécessitant une attention" %}</h2></div>
-        <div class="card-body p-0">
-            <ul class="list-group list-group-flush">
-                {% for item in dashboard_attention %}
-                <li class="list-group-item"><a href="{{ item.url }}">{{ item.label }}</a><span class="float-right text-muted">{{ item.detail }}</span></li>
-                {% endfor %}
-            </ul>
+      </div>
+    {% endif %}
+
+    {% if dashboard_stale_farms %}
+      <section class="aq-panel" id="stale-farms">
+        <div class="aq-panel__body">
+          <h2 class="aq-section-title">{% translate "Fermes à relancer" %}</h2>
+          <p class="aq-muted">{% translate "Cycle en cours mais aucune saisie depuis au moins 2 jours." %}</p>
+          <div class="aq-table-wrap"><table class="aq-table">
+            <thead><tr><th>{% translate "Ferme" %}</th><th>{% translate "Dernière saisie" %}</th></tr></thead>
+            <tbody>
+              {% for farm in dashboard_stale_farms %}
+                <tr>
+                  <td><a href="{{ farm.url }}">{{ farm.label }}</a></td>
+                  <td>{% if farm.last_log_date %}{{ farm.last_log_date|date:"d/m/Y" }}{% else %}<span class="aq-badge aq-badge--danger">{% translate "Aucune saisie" %}</span>{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
         </div>
-    </section>
+      </section>
     {% endif %}
-    <section id="activities-alerts" class="card mt-3">
-        <div class="card-header"><h2 class="card-title">{% translate "Activites et alertes" %}</h2></div>
-        <div class="card-body p-0">
-            <ul class="list-group list-group-flush">
-                {% for activity in dashboard_activities %}
-                <li class="list-group-item"><a href="{{ activity.url }}">{{ activity.label }}</a><time class="float-right text-muted">{{ activity.occurred_at }}</time></li>
-                {% empty %}<li class="list-group-item text-muted">{% translate "Aucune activité autorisée récente." %}</li>{% endfor %}
-            </ul>
-        </div>
-    </section>
-    {% if dashboard_support_conversations %}
-    <section class="card mt-3">
-        <div class="card-header"><h2 class="card-title">{% translate "Conversations récentes" %}</h2></div>
-        <div class="card-body p-0"><ul class="list-group list-group-flush">
-            {% for conversation in dashboard_support_conversations %}<li class="list-group-item"><a href="{{ conversation.url }}">{{ conversation.label }}</a><time class="float-right text-muted">{{ conversation.occurred_at }}</time></li>{% endfor %}
-        </ul></div>
-    </section>
-    {% endif %}
-    {% if dashboard_shortcuts %}
-    <nav class="card mt-3" aria-label="{% translate 'Raccourcis métier' %}">
-        <div class="card-header"><h2 class="card-title">{% translate "Raccourcis métier" %}</h2></div>
-        <div class="card-body">{% for shortcut in dashboard_shortcuts %}<a class="btn btn-outline-success mr-2" href="{{ shortcut.url }}">{{ shortcut.label }}</a>{% endfor %}</div>
-    </nav>
-    {% endif %}
-    {% else %}
-    <div class="callout callout-info">
-        <h2>{% translate "Console vide" %}</h2>
+  {% else %}
+    <section class="aq-panel">
+      <div class="aq-panel__body">
+        <h2 class="aq-section-title">{% translate "Console vide" %}</h2>
         <p>{% translate "Aucun role metier AquaCare ne vous a ete attribue. Contactez un superadministrateur." %}</p>
-    </div>
-    {% endif %}
+      </div>
+    </section>
+  {% endif %}
 </div>
 {% endblock %}

@@ -1,67 +1,75 @@
 {% extends "admin/base_site.html" %}
 {% load i18n %}
-
+{% comment %}
+  « Saisies et incidents » : incidents sanitaires ouverts, puis dernières
+  saisies des pisciculteurs. Composants .aq-* uniquement.
+{% endcomment %}
 {% block bodyclass %}{{ block.super }} aquacare-activity-center{% endblock %}
-{% block content_title %}{% translate "Activites et alertes" %}{% endblock %}
-
-{% block breadcrumbs %}
-<nav aria-label="breadcrumb">
-    <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="{% url 'admin:index' %}">{% translate "Accueil" %}</a></li>
-        <li class="breadcrumb-item active">{% translate "Activites et alertes" %}</li>
-    </ol>
-</nav>
-{% endblock %}
+{% block content_title %}{% translate "Saisies et incidents" %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
 
 {% block content %}
-<div class="aquacare-activity-page" data-activity-center="true" data-admin-i18n-native>
-    <p class="aquacare-page-intro">
-        {% translate "Consultez les journaux et incidents accessibles avec votre role." %}
-    </p>
-
-    <div class="row">
-        {% if can_view_cycle_logs %}
-        <div class="col-md-6 col-12">
-            <a class="info-box aquacare-dashboard-card" href="{% url 'admin:aquaculture_cyclelog_changelist' %}">
-                <span class="info-box-icon bg-success"><i class="fas fa-clipboard-list" aria-hidden="true"></i></span>
-                <span class="info-box-content"><span class="info-box-text">{% translate "Journaux de cycle" %}</span></span>
-            </a>
-        </div>
-        {% endif %}
-        {% if can_view_sanitary_logs %}
-        <div class="col-md-6 col-12">
-            <a class="info-box aquacare-dashboard-card" href="{% url 'admin:aquaculture_sanitarylog_changelist' %}">
-                <span class="info-box-icon bg-success"><i class="fas fa-notes-medical" aria-hidden="true"></i></span>
-                <span class="info-box-content"><span class="info-box-text">{% translate "Incidents sanitaires" %}</span></span>
-            </a>
-        </div>
-        {% endif %}
+<div class="aq-workspace" data-activity-center="true" data-admin-i18n-native>
+  {% if can_view_sanitary_logs %}
+  <section class="aq-panel" id="open-incidents">
+    <div class="aq-panel__body">
+      <div class="aq-page-head">
+        <h2 class="aq-section-title">{% translate "Incidents sanitaires ouverts" %}</h2>
+        <a class="btn aq-btn-secondary btn-sm" href="{% url 'admin:aquaculture_sanitarylog_changelist' %}">{% translate "Tous les incidents" %}</a>
+      </div>
+      {% if activity_center_attention %}
+      <div class="aq-table-wrap"><table class="aq-table">
+        <thead><tr><th>{% translate "Déclaré le" %}</th><th>{% translate "Ferme" %}</th><th>{% translate "Unité" %}</th><th>{% translate "Type" %}</th><th class="aq-num">{% translate "Poissons touchés" %}</th><th>{% translate "Ouvert depuis" %}</th><th></th></tr></thead>
+        <tbody>
+        {% for item in activity_center_attention %}
+          <tr>
+            <td>{{ item.date|date:"d/m/Y" }}</td>
+            <td><a href="{{ item.farm_url }}">{{ item.farm }}</a></td>
+            <td>{% if item.unit_url %}<a href="{{ item.unit_url }}">{{ item.unit }}</a>{% else %}—{% endif %}</td>
+            <td>{% if item.serious %}<span class="aq-badge aq-badge--danger">{{ item.type }}</span>{% else %}{{ item.type }}{% endif %}</td>
+            <td class="aq-num">{{ item.affected|default:"—" }}</td>
+            <td><span class="aq-badge {% if item.days_open > 7 %}aq-badge--danger{% else %}aq-badge--warn{% endif %}">{% blocktranslate count days=item.days_open %}{{ days }} jour{% plural %}{{ days }} jours{% endblocktranslate %}</span></td>
+            <td><a class="aq-link-btn" href="{{ item.url }}">{% translate "Ouvrir" %}</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+        <p class="aq-muted">{% translate "Aucun incident ouvert." %}</p>
+      {% endif %}
     </div>
+  </section>
+  {% endif %}
 
-    {% if activity_center_attention %}
-    <section class="card mt-3">
-        <div class="card-header"><h2 class="card-title">{% translate "Fermes nécessitant une attention" %}</h2></div>
-        <div class="card-body p-0">
-            <ul class="list-group list-group-flush">
-                {% for item in activity_center_attention %}
-                <li class="list-group-item"><a href="{{ item.url }}">{{ item.label }}</a><span class="float-right text-muted">{{ item.detail }}</span></li>
-                {% endfor %}
-            </ul>
-        </div>
-    </section>
-    {% endif %}
-
-    <section class="card mt-3">
-        <div class="card-header"><h2 class="card-title">{% translate "Activites recentes" %}</h2></div>
-        <div class="card-body p-0">
-            <ul class="list-group list-group-flush">
-                {% for activity in activity_center_activities %}
-                <li class="list-group-item"><a href="{{ activity.url }}">{{ activity.label }}</a><time class="float-right text-muted">{{ activity.occurred_at }}</time></li>
-                {% empty %}
-                <li class="list-group-item text-muted">{% translate "Aucune activité autorisée récente." %}</li>
-                {% endfor %}
-            </ul>
-        </div>
-    </section>
+  {% if can_view_cycle_logs %}
+  <section class="aq-panel" id="recent-logs">
+    <div class="aq-panel__body">
+      <div class="aq-page-head">
+        <h2 class="aq-section-title">{% translate "Dernières saisies" %}</h2>
+        <a class="btn aq-btn-secondary btn-sm" href="{% url 'admin:aquaculture_cyclelog_changelist' %}">{% translate "Toutes les saisies" %}</a>
+      </div>
+      {% if activity_center_activities %}
+      <div class="aq-table-wrap"><table class="aq-table">
+        <thead><tr><th>{% translate "Date" %}</th><th>{% translate "Ferme" %}</th><th>{% translate "Unité" %}</th><th class="aq-num">{% translate "Mortalité" %}</th><th class="aq-num">{% translate "Poids moyen" %}</th><th class="aq-num">{% translate "Aliment" %}</th><th></th></tr></thead>
+        <tbody>
+        {% for item in activity_center_activities %}
+          <tr>
+            <td>{{ item.date|date:"d/m/Y" }}{% if item.offline %} <span class="aq-badge aq-badge--muted">{% translate "hors ligne" %}</span>{% endif %}</td>
+            <td><a href="{{ item.farm_url }}">{{ item.farm }}</a></td>
+            <td>{% if item.unit_url %}<a href="{{ item.unit_url }}">{{ item.unit }}</a>{% else %}{{ item.unit }}{% endif %}</td>
+            <td class="aq-num">{{ item.mortality|default_if_none:"—" }}</td>
+            <td class="aq-num">{% if item.average_weight %}{{ item.average_weight|floatformat:0 }} g{% else %}—{% endif %}</td>
+            <td class="aq-num">{% if item.feed %}{{ item.feed|floatformat:1 }} kg{% else %}—{% endif %}</td>
+            <td><a class="aq-link-btn" href="{{ item.url }}">{% translate "Ouvrir" %}</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+        <p class="aq-muted">{% translate "Aucune saisie récente." %}</p>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

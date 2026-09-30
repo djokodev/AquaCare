@@ -587,6 +587,44 @@ describe("features/main/screens/DashboardScreen", () => {
     });
   });
 
+  it("affiche une alerte simple qui ouvre le Magasin pour confirmer une commande livrée", async () => {
+    const baseSelector = mockUseSelector.getMockImplementation();
+    mockUseSelector.mockImplementation((selector: any) =>
+      baseSelector?.((state: any) =>
+        selector({
+          ...state,
+          commerce: {
+            orders: {
+              items: [
+                {
+                  id: "order-1",
+                  order_number: "ORD-20260930-0003",
+                  status: "delivered",
+                  delivery_method: "home",
+                  total: "23000",
+                },
+              ],
+              statistics: null,
+              loading: false,
+              error: null,
+            },
+          },
+        }),
+      ),
+    );
+
+    const { getByTestId, queryByText } = render(
+      <DashboardScreen navigation={navigation} />,
+    );
+
+    const alert = await waitFor(() => getByTestId("dashboard-pending-receipt-alert"));
+    expect(queryByText("confirmReceiptAction")).toBeNull();
+    fireEvent.press(alert);
+    expect(navigation.navigate).toHaveBeenCalledWith("Store", {
+      cycleId: cycleA.id,
+    });
+  });
+
   it("permet de rouvrir le selecteur de cycle depuis le dashboard", async () => {
     const { getByText, queryByText } = render(
       <DashboardScreen navigation={navigation} />,

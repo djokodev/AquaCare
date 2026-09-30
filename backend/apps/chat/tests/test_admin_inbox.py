@@ -160,6 +160,7 @@ def test_support_inbox_uses_compact_readable_master_detail_structure():
     html = response.content.decode()
 
     assert response.status_code == 200
-    assert 'class="support-inbox-intro"' in html
-    assert 'class="conversation-summary"' in html
-    assert 'class="reply-note"' in html
+    assert 'class="support-inbox-intro aq-page-head"' in html
+    assert 'class="inbox-layout"' in html
+    assert 'class="conv-item active unread"' in html
+    assert 'class="reply-form"' in html

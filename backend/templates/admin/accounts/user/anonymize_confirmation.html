@@ -1,0 +1,25 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}Confirmation de l'anonymisation. Composants .aq-* uniquement.{% endcomment %}
+{% block content_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="aq-workspace">
+  <article class="aq-panel">
+    <header class="aq-panel__header aq-panel__header--danger"><h2>{{ title }}</h2></header>
+    <div class="aq-panel__body">
+      <p>{% translate "Ces comptes vont être anonymisés (nom, téléphone, e-mail, position de la ferme effacés, connexion coupée). Les commandes et rapports restent, rattachés à un compte anonyme. Action définitive." %}</p>
+      <ul>{% for user in targets %}<li>{{ user.display_name|default:user.phone_number }}</li>{% empty %}<li>{% translate "Aucun compte supprimable dans la sélection." %}</li>{% endfor %}</ul>
+      {% if skipped %}<p class="aq-alert aq-alert--warning">{% translate "Ignorés (administrateurs ou votre propre compte) :" %} {% for user in skipped %}{{ user.display_name|default:user.phone_number }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+      <form method="post">{% csrf_token %}
+        {% for pk in selected_ids %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ pk }}">{% endfor %}
+        <input type="hidden" name="action" value="anonymize_accounts">
+        <input type="hidden" name="apply" value="1">
+        <div class="aq-actions aq-actions--spaced">
+          {% if targets %}<button type="submit" class="btn aq-btn-danger">{% translate "Supprimer ces comptes" %}</button>{% endif %}
+          <a class="btn aq-btn-secondary" href="{% url 'admin:accounts_user_changelist' %}">{% translate "Retour" %}</a>
+        </div>
+      </form>
+    </div>
+  </article>
+</div>
+{% endblock %}
