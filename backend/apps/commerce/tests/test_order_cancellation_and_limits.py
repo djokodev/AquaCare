@@ -292,3 +292,35 @@ class TestCatalogInputHardening:
     def test_recommended_rejects_non_realistic_weight(self, client_for, weight):
         response = client_for.get(f'/api/commerce/products/recommended/?species=tilapia&weight_g={weight}')
         assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestAdminBulkCancelAction:
+    def test_list_action_asks_reason_then_cancels_and_skips_received(self, customer, product, superuser):
+        from django.test import Client
+
+        open_order = _order(customer, product)
+        received = _order(customer, product)
+        OrderService.mark_order_ready_for_customer_confirmation(received, superuser)
+        OrderService.confirm_order_receipt(received, customer)
+        client = Client()
+        client.force_login(superuser)
+        url = reverse('admin:commerce_order_changelist')
+        selected = [str(open_order.pk), str(received.pk)]
+
+        page = client.post(url, {'action': 'cancel_orders_action', '_selected_action': selected})
+        assert page.status_code == 200
+        assert 'name="reason"' in page.content.decode()
+        open_order.refresh_from_db()
+        assert open_order.status == 'confirmed'
+
+        done = client.post(url, {
+            'action': 'cancel_orders_action', '_selected_action': selected,
+            'apply': '1', 'reason': 'Produit en rupture',
+        })
+        assert done.status_code == 302
+        open_order.refresh_from_db()
+        received.refresh_from_db()
+        assert open_order.status == 'cancelled'
+        assert open_order.cancellation_reason == 'Produit en rupture'
+        assert received.status == 'received'

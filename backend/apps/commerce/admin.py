@@ -239,7 +239,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     list_display = [
         'order_column', 'farm_cycle_column', 'status_badge',
         'delivery_summary', 'total_bags_display', 'total_display',
-        'created_at_compact', 'workflow_action_link', 'documents_compact',
+        'created_at_compact', 'workflow_actions_column', 'documents_compact',
     ]
     list_select_related = ['user', 'farm_profile', 'production_cycle']
     list_filter = ['status', 'delivery_method', 'created_at', 'created_offline']
@@ -265,7 +265,7 @@ class OrderAdmin(CommerceSecuredAdmin):
     inlines = []
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
-    actions = ['generate_pdf_fr_action', 'generate_pdf_en_action']
+    actions = ['cancel_orders_action', 'generate_pdf_fr_action', 'generate_pdf_en_action']
 
     fieldsets = (
         (_('Résumé de commande'), {
@@ -433,13 +433,79 @@ class OrderAdmin(CommerceSecuredAdmin):
         if not self.has_order_document_permission(request):
             actions.pop('generate_pdf_fr_action', None)
             actions.pop('generate_pdf_en_action', None)
+        if not self.has_cancel_permission(request):
+            actions.pop('cancel_orders_action', None)
 
         return actions
 
+    @admin.action(description=_('Annuler les commandes sélectionnées'))
+    def cancel_orders_action(self, request, queryset):
+        """
+        Annulation depuis la liste : page intermédiaire pour saisir le motif
+        (obligatoire, envoyé au client), puis annulation via le service métier.
+        """
+        if not self.has_cancel_permission(request):
+            raise PermissionDenied
+        orders = list(queryset.select_related('farm_profile').order_by('-created_at'))
+        cancellable = [order for order in orders if order.status in OPERATOR_CANCELLABLE_STATUSES]
+        skipped = [order for order in orders if order.status not in OPERATOR_CANCELLABLE_STATUSES]
+
+        if request.POST.get('apply') == '1':
+            reason = (request.POST.get('reason') or '').strip()[:CANCELLATION_REASON_MAX_LENGTH]
+            if not reason:
+                messages.error(request, _("Indiquez le motif : il sera envoyé au client."))
+            else:
+                cancelled = 0
+                for order in cancellable:
+                    try:
+                        result = OrderApplicationService.cancel_order_by_operator(order, request.user, reason)
+                    except InvalidOrderError as exc:
+                        messages.error(request, f'{order.order_number} : {exc}')
+                        continue
+                    if result.transitioned:
+                        cancelled += 1
+                        self.log_change(request, result.order, _('Commande annulée : {}').format(reason))
+                if cancelled:
+                    messages.success(
+                        request,
+                        ngettext(
+                            '%(count)d commande annulée. Le client a été notifié.',
+                            '%(count)d commandes annulées. Les clients ont été notifiés.',
+                            cancelled,
+                        ) % {'count': cancelled},
+                    )
+                if skipped:
+                    messages.warning(
+                        request,
+                        _('Ignorées (déjà reçues ou annulées) : {}').format(
+                            ', '.join(order.order_number for order in skipped)
+                        ),
+                    )
+                return None
+
+        if not cancellable:
+            messages.warning(request, _('Aucune commande sélectionnée ne peut être annulée (déjà reçue ou annulée).'))
+            return None
+
+        return TemplateResponse(
+            request,
+            'admin/commerce/order/cancel_bulk.html',
+            {
+                **self.admin_site.each_context(request),
+                'opts': self.model._meta,
+                'title': _('Annuler les commandes sélectionnées'),
+                'orders': cancellable,
+                'skipped': skipped,
+                'selected_ids': [str(order.pk) for order in orders],
+                'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
+                'reason_max_length': CANCELLATION_REASON_MAX_LENGTH,
+            },
+        )
+
     def get_list_display(self, request):
         fields = list(super().get_list_display(request))
-        if not self.has_workflow_permission(request):
-            fields.remove('workflow_action_link')
+        if not self.has_workflow_permission(request) and not self.has_cancel_permission(request):
+            fields.remove('workflow_actions_column')
         if not self.has_order_document_permission(request):
             fields.remove('documents_compact')
         return fields
@@ -690,6 +756,14 @@ class OrderAdmin(CommerceSecuredAdmin):
             _('Annuler la commande'),
         )
     workflow_action_link.short_description = _('Action')
+
+    def workflow_actions_column(self, obj):
+        fulfil = self.workflow_action_link(obj) if obj.status == 'confirmed' else ''
+        cancel = self.cancel_action_link(obj)
+        if not fulfil and not cancel:
+            return '—'
+        return format_html('<div style="display:flex;flex-wrap:wrap;gap:6px">{}{}</div>', fulfil, cancel)
+    workflow_actions_column.short_description = _('Action')
 
     def workflow_action_display(self, obj):
         if obj.status == 'cancelled':

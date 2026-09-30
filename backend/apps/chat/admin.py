@@ -286,8 +286,9 @@ def support_inbox_view(request, *, admin_site=None):
     ):
         raise PermissionDenied(_("Vous n'avez pas acces a la boite de support."))
 
+    # Conversations actives d'abord ; celles des comptes supprimés en dernier.
     conversations_qs = Conversation.objects.with_api_annotations().order_by(
-        '-unread_count_admin', '-last_message_at'
+        '-user__is_active', '-unread_count_admin', '-last_message_at'
     )
     paginator = Paginator(conversations_qs, 50)
     conversations_page = paginator.get_page(request.GET.get("page") or 1)
@@ -325,6 +326,12 @@ def support_inbox_view(request, *, admin_site=None):
             return redirect(f"{reverse('admin:chat_support_inbox')}?conversation={conv.id}")
         if action != "reply":
             raise PermissionDenied(_("Action Support non autorisee."))
+        if not conv.user.is_active:
+            dj_messages.warning(
+                request,
+                _("Ce compte a été supprimé : la conversation est en lecture seule."),
+            )
+            return redirect(f"{reverse('admin:chat_support_inbox')}?conversation={conv.id}")
         if not request.user.is_superuser and not has_capability_and_permission(
             request.user,
             AdminCapability.MANAGE_SUPPORT,

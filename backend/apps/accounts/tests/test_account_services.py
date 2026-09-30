@@ -333,6 +333,7 @@ class TestAccountCleanupPorts:
     def test_default_cleanup_ports_use_infrastructure_adapters(self) -> None:
         ports = get_default_account_cleanup_ports()
 
-        assert len(ports) == 2
+        assert len(ports) == 3
         assert isinstance(ports[0], JwtTokenCleanupAdapter)
         assert isinstance(ports[1], PushTokenCleanupAdapter)
+        assert type(ports[2]).__name__ == 'SupportConversationCleanupAdapter'

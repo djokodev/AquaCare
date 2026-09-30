@@ -3,6 +3,7 @@ import { AppState, AppStateStatus } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { fetchNotificationsSilent } from '@/features/notifications/store/notificationSlice';
+import { refreshSupportUnread } from '@/features/chat/store/chatSlice';
 import type { AppDispatch, RootState } from '@/store/store';
 
 /**
@@ -31,7 +32,11 @@ export function useNotificationsPolling(intervalMs: number = 60_000) {
 
     isFetchingRef.current = true;
     try {
-      await dispatch(fetchNotificationsSilent(undefined));
+      await Promise.all([
+        dispatch(fetchNotificationsSilent(undefined)),
+        // Badge rouge de l'onglet Support (réponses non lues du support)
+        dispatch(refreshSupportUnread()),
+      ]);
     } finally {
       isFetchingRef.current = false;
     }

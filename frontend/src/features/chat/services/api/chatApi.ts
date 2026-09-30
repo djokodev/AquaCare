@@ -35,6 +35,19 @@ export async function fetchConversation(): Promise<Conversation> {
 }
 
 /**
+ * Résumé de ma conversation (non lus) SANS la créer : utilisé pour le badge
+ * de l'onglet Support. Retourne null si l'utilisateur n'a jamais écrit.
+ */
+export async function fetchMyConversationSummary(): Promise<Conversation | null> {
+  const response = await api.get<{ results?: Conversation[] } | Conversation[]>(
+    `${CHAT_BASE_URL}/conversations/`
+  );
+  const payload = response.data;
+  const conversations = Array.isArray(payload) ? payload : payload.results ?? [];
+  return conversations[0] ?? null;
+}
+
+/**
  * Get conversation by ID
  *
  * @param conversationId - Conversation UUID

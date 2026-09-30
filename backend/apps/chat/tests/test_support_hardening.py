@@ -132,3 +132,27 @@ class TestMessageOrdering:
         response = auth_client.get(reverse('conversation-messages', kwargs={'pk': conversation.id}))
         contents = [item['content'] for item in response.data['results'] if item['sender_type'] == 'user']
         assert contents[0] == 'Message 2'
+
+
+class TestDeletedAccountConversation:
+    def test_deleting_account_clears_unread_and_inbox_is_read_only(self, authenticated_user, aquacare_admin):
+        from accounts.services.account_deletion_service import AccountDeletionService
+        from django.test import Client
+
+        conversation = ConversationService.get_or_create_conversation(authenticated_user)
+        MessageService.send_user_message(
+            user=authenticated_user, content='Bonjour', media_file=None,
+            media_type='none', client_uuid=None, created_offline=False,
+        )
+        AccountDeletionService.anonymize_user_account(authenticated_user)
+        conversation.refresh_from_db()
+        assert conversation.unread_count_admin == 0
+        assert conversation.messages.exists()  # historique conservé
+
+        client = Client()
+        client.force_login(aquacare_admin)
+        url = reverse('admin:chat_support_inbox')
+        page = client.get(f'{url}?conversation={conversation.id}').content.decode()
+        assert 'name="reply_content"' not in page
+        client.post(url, {'conversation_id': str(conversation.id), 'action': 'reply', 'reply_content': 'Allo'})
+        assert not conversation.messages.filter(sender_type='admin').exists()
