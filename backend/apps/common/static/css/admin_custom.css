@@ -50,6 +50,46 @@
     --shadow-focus: 0 0 0 3px rgba(5, 150, 105, 0.15);
 }
 
+/*
+ * TOKENS SÉMANTIQUES « --aq-* » : SOURCE UNIQUE DES COULEURS DE CONTENU.
+ *
+ * L'admin a deux thèmes Jazzmin : clair (« default ») et sombre (« darkly »),
+ * ce dernier chargé avec media="(prefers-color-scheme: dark)". Les tokens
+ * ci-dessous suivent EXACTEMENT la même règle : clair par défaut, sombre dans
+ * le bloc media. Tout nouvel écran (template, carte, alerte, formulaire)
+ * utilise ces tokens ou les composants « .aq-* » plus bas — jamais de couleur
+ * en dur dans un template (un test le vérifie).
+ */
+:root {
+    --aq-card-bg: #ffffff;
+    --aq-card-text: #1f2937;
+    --aq-card-muted: #4b5563;
+    --aq-card-border: #d1d5db;
+    --aq-subtle-bg: #f8fafc;
+    --aq-accent: #047857;
+    --aq-danger: #b91c1c;
+    --aq-danger-bg: #fef2f2;
+    --aq-danger-text: #991b1b;
+    --aq-warning-bg: #fff7ed;
+    --aq-warning-text: #92400e;
+    --aq-on-strong: #ffffff; /* texte sur fond vert ou rouge */
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --aq-card-bg: #303030;
+        --aq-card-text: #f1f5f9;
+        --aq-card-muted: #cbd5e1;
+        --aq-card-border: #4b5563;
+        --aq-subtle-bg: #1f2937;
+        --aq-accent: #34d399;
+        --aq-danger-bg: #450a0a;
+        --aq-danger-text: #fecaca;
+        --aq-warning-bg: #431407;
+        --aq-warning-text: #fed7aa;
+    }
+}
+
 /* Console Lot 1, la structure AdminLTE reste intacte pour PushMenu et mobile. */
 .aquacare-dashboard-card {
     color: inherit;
@@ -312,7 +352,8 @@ a.btn,
 }
 
 .card-body {
-    color: var(--text-body);
+    /* Suit le thème (clair/sombre) : avant, gris foncé fixe illisible en sombre. */
+    color: var(--aq-card-text);
 }
 
 .card-tools .btn,
@@ -1106,4 +1147,96 @@ body.change-list #result_list td {
 
 .aquacare-console > .clearfix {
     clear: both;
+}
+
+
+/* =============================================================================
+   COMPOSANTS .aq-* (pages d'action : confirmation, annulation…)
+   Couleurs uniquement via les tokens --aq-* ci-dessus.
+   ============================================================================= */
+.aq-panel {
+    overflow: hidden;
+    color: var(--aq-card-text);
+    background: var(--aq-card-bg);
+    border: 1px solid var(--aq-card-border);
+    border-radius: 0.5rem;
+}
+
+.aq-panel__header {
+    padding: 1rem 1.25rem;
+    color: var(--aq-on-strong);
+    background: var(--aq-accent);
+}
+
+.aq-panel__header--danger {
+    background: var(--aq-danger);
+}
+
+.aq-panel__header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--aq-on-strong) !important;
+}
+
+.aq-panel__body {
+    padding: 1.25rem;
+    color: var(--aq-card-text);
+}
+
+.aq-panel__body p,
+.aq-panel__body li,
+.aq-panel__body label {
+    color: var(--aq-card-text) !important;
+}
+
+.aq-muted {
+    color: var(--aq-card-muted) !important;
+}
+
+.aq-alert {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    border-radius: 0.375rem;
+}
+
+.aq-alert--warning {
+    color: var(--aq-warning-text) !important;
+    background: var(--aq-warning-bg);
+    border: 1px solid var(--aq-warning-text);
+}
+
+.aq-alert--danger {
+    color: var(--aq-danger-text) !important;
+    background: var(--aq-danger-bg);
+    border: 1px solid var(--aq-danger-text);
+}
+
+.aq-textarea {
+    width: 100%;
+    margin: 0.5rem 0;
+    padding: 0.6rem;
+    color: var(--aq-card-text);
+    background: var(--aq-subtle-bg);
+    border: 1px solid var(--aq-card-border);
+    border-radius: 0.375rem;
+}
+
+.aq-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.aq-btn-danger {
+    color: var(--aq-on-strong) !important;
+    background: var(--aq-danger) !important;
+    border: 1px solid var(--aq-danger) !important;
+}
+
+.aq-btn-secondary {
+    color: var(--aq-accent) !important;
+    background: transparent !important;
+    border: 1px solid var(--aq-accent) !important;
 }

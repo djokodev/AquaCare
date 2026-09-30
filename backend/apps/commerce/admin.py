@@ -751,7 +751,7 @@ class OrderAdmin(CommerceSecuredAdmin):
             return ''
         url = reverse('admin:commerce_order_cancel', args=[obj.pk])
         return format_html(
-            '<a class="button" style="background:#b91c1c;color:#fff" href="{}">{}</a>',
+            '<a class="button aq-btn-danger" href="{}">{}</a>',
             url,
             _('Annuler la commande'),
         )
