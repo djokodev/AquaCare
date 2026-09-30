@@ -32,13 +32,6 @@ function WelcomeVisual() {
   const { t } = useTranslation();
   return (
     <View style={styles.center}>
-      <View style={styles.logoDisc}>
-        <Image
-          source={require('../../../../assets/brand/aquacare-mark.png')}
-          style={styles.logo}
-          accessibilityIgnoresInvertColors
-        />
-      </View>
       <AppText style={styles.brandName}>AquaCare</AppText>
       <AppText style={styles.tagline}>{t('onboardingWelcomeTagline')}</AppText>
     </View>
@@ -145,18 +138,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { alignItems: 'center' },
   stack: { width: '100%', maxWidth: 320, gap: spacing[3] },
-  logoDisc: {
-    width: 120,
-    height: 120,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.large,
-  },
-  logo: { width: 64, height: 64, resizeMode: 'contain' },
-  brandName: { ...typography.display, color: colors.text.inverse, marginTop: spacing[4] },
-  tagline: { ...typography.body, color: 'rgba(255,255,255,0.85)', marginTop: spacing[1] },
+  brandName: { ...typography.display, fontSize: 44, lineHeight: 52, color: colors.text.inverse },
+  tagline: { ...typography.body, fontSize: 18, lineHeight: 26, color: 'rgba(255,255,255,0.85)', marginTop: spacing[2] },
   card: {
     width: '100%',
     maxWidth: 320,
