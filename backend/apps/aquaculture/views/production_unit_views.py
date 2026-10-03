@@ -119,8 +119,13 @@ class ProductionUnitViewSet(
             raise serializers.ValidationError({'detail': str(exc)}) from exc
 
 
-class CycleUnitAllocationViewSet(viewsets.ModelViewSet):
-    """CRUD des allocations de cycle par unité de production."""
+class CycleUnitAllocationViewSet(viewsets.ReadOnlyModelViewSet):
+    """Lecture des allocations et actions métier (calibrage, récoltes).
+
+    Une allocation naît uniquement du lancement de cycle et ses effectifs ne
+    changent que par le registre (journaux, transferts, récoltes) : l'API
+    n'expose donc ni création, ni modification, ni suppression directe.
+    """
 
     serializer_class = CycleUnitAllocationSerializer
     permission_classes = [permissions.IsAuthenticated]

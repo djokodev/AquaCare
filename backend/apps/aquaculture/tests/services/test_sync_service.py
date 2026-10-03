@@ -12,6 +12,7 @@ from aquaculture.models import (
     CycleLog,
     CycleUnitAllocation,
     FinalHarvestOperation,
+    ProductionCycle,
     ProductionUnit,
     SanitaryLog,
 )
@@ -222,8 +223,8 @@ class TestSyncServicePushData:
         assert result2['created'] == 0
         assert result2['updated'] == 1
 
-    def test_sync_new_cycles_deduplicates_by_client_uuid(self):
-        """Deux retries du même nouveau cycle offline ne créent pas de doublon."""
+    def test_sync_new_cycles_refuses_cycles_without_production_units(self):
+        """Comme POST /cycles/, la synchro ne crée jamais de cycle sans unité."""
         import uuid
 
         from tests.fixtures.factories import FarmProfileFactory
@@ -247,10 +248,36 @@ class TestSyncServicePushData:
         result1 = SyncService.sync_new_cycles(user, cycles_data)
         result2 = SyncService.sync_new_cycles(user, cycles_data)
 
-        assert result1['errors'] == []
-        assert result1['created'] == 1
+        assert result1['created'] == 0
         assert result2['created'] == 0
-        assert result2['updated'] == 1
+        assert [error['error'] for error in result1['errors']] == [
+            'cycle_launch_requires_production_units'
+        ]
+        assert not ProductionCycle.objects.filter(client_uuid=client_uuid).exists()
+
+    def test_sync_new_cycles_replays_an_existing_launched_cycle(self):
+        """Un cycle déjà lancé et rejoué par le mobile reste accepté sans doublon."""
+        import uuid
+
+        from tests.fixtures.factories import FarmProfileFactory
+
+        user = UserFactory()
+        farm = FarmProfileFactory(user=user)
+        client_uuid = str(uuid.uuid4())
+        cycle = ProductionCycleFactory(farm_profile=farm, client_uuid=client_uuid)
+
+        result = SyncService.sync_new_cycles(user, [{
+            'client_uuid': client_uuid,
+            'cycle_name': 'Cycle déjà lancé',
+            'species': 'tilapia',
+            'start_date': date.today().isoformat(),
+            'initial_count': 200,
+        }])
+
+        assert result['errors'] == []
+        assert result['updated'] == 1
+        assert result['synced_ids'] == [str(cycle.id)]
+        assert ProductionCycle.objects.filter(client_uuid=client_uuid).count() == 1
 
     def test_sync_new_cycles_rejects_client_uuid_from_another_user(self):
         """Un client_uuid de cycle appartenant à un autre utilisateur est rejeté."""
@@ -1120,7 +1147,7 @@ class TestSyncSanitaryLogs:
 
         assert result['status'] == 'partial_success'
         assert result['accepted'] == {
-            'cycles': [str(uuids['cycle'])],
+            'cycles': [],
             'cycle_logs': [str(uuids['log'])],
             'sanitary_logs': [str(uuids['sanitary'])],
             'calibration_tanks': [str(uuids['tank'])],
@@ -1128,7 +1155,7 @@ class TestSyncSanitaryLogs:
             'final_harvests': [str(uuids['harvest'])],
         }
         assert result['processed'] == {
-            'cycles': 1,
+            'cycles': 0,
             'cycle_logs': 1,
             'cycle_logs_updated': 0,
             'sanitary_logs': 1,
@@ -1137,9 +1164,12 @@ class TestSyncSanitaryLogs:
             'final_harvests': 1,
         }
         assert {item['client_uuid'] for item in result['items']} == {
-            str(uuids[key]) for key in ('cycle', 'log', 'sanitary', 'tank', 'harvest')
+            str(uuids[key]) for key in ('log', 'sanitary', 'tank', 'harvest')
         }
-        assert result['errors'][0]['client_uuid'] == str(uuids['calibration'])
+        assert {error.get('client_uuid') for error in result['errors']} == {
+            str(uuids['cycle']),
+            str(uuids['calibration']),
+        }
 
     def test_full_sync_does_not_accept_failed_items(self):
         sync_result = SyncService._build_full_sync_response({})

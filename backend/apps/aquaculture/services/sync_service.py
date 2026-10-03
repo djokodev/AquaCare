@@ -669,14 +669,6 @@ class SyncService(BaseService):
         for cycle_data in cycles_data:
             try:
                 client_uuid = cycle_data.get('client_uuid')
-                cycle_payload = {
-                    key: value
-                    for key, value in cycle_data.items()
-                    if key not in {'farm_profile', 'id', 'created_at', 'updated_at', 'synced_at'}
-                }
-                cycle_payload['created_offline'] = True
-                cycle_payload['synced_at'] = timezone.now()
-
                 existing_cycle = None
                 if client_uuid:
                     existing_cycle = existing_cycles_by_uuid.get(str(client_uuid))
@@ -690,18 +682,20 @@ class SyncService(BaseService):
                         )
                         continue
 
-                from ..serializers import ProductionCycleSerializer  # noqa: PLC0415
+                if existing_cycle is None:
+                    # Même règle que POST /cycles/ : un cycle naît uniquement du
+                    # lancement transactionnel avec ses unités de production.
+                    # Un cycle sans allocation échapperait au registre.
+                    SyncService._append_sync_error(
+                        result,
+                        error_type='cycle',
+                        client_uuid=client_uuid,
+                        cycle_name=cycle_data.get('cycle_name'),
+                        error='cycle_launch_requires_production_units',
+                    )
+                    continue
 
-                serializer = ProductionCycleSerializer(data=cycle_payload)
-                serializer.is_valid(raise_exception=True)
-                cycle_payload = dict(serializer.validated_data)
-                cycle_payload['created_offline'] = True
-                cycle_payload['synced_at'] = timezone.now()
-
-                new_cycle = ProductionCycleService.create_cycle(
-                    farm_profile=user.farm_profile,
-                    cycle_data=cycle_payload
-                )
+                new_cycle = existing_cycle
 
                 SyncService._record_sync_success(
                     result,

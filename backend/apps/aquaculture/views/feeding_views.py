@@ -82,33 +82,14 @@ from ..services import (
                 }
             )
         ]
-    ),
-    create=extend_schema(
-        summary="Créer un plan d'alimentation",
-        description="""
-        Crée un plan d'alimentation personnalisé pour une semaine spécifique d'une unité.
-        Calcule automatiquement les quantités en fonction de la biomasse actuelle de l'allocation.
-        """,
-        examples=[
-            OpenApiExample(
-                'Nouveau plan hebdomadaire',
-                value={
-                    'cycle': '456e7890-e89b-12d3-a456-426614174001',
-                    'week_number': 1,
-                    'estimated_fish_count': 4980,
-                    'average_weight': 25.50,
-                    'biomass': 127.00,
-                    'feeding_rate': 4.5,
-                    'meals_per_day': 2,
-                    'recommended_feed_type': 'AquaCare Superior 2-3mm'
-                }
-            )
-        ]
     )
 )
-class FeedingPlanViewSet(viewsets.ModelViewSet):
+class FeedingPlanViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Gestion des plans d'alimentation avec génération automatique.
+
+    Les plans sont calculés par le serveur (action ``generate``) : l'API
+    n'accepte ni création, ni modification, ni suppression manuelle.
     
     Génère des recommandations d'alimentation basées sur les guides nutritionnels,
     l'état actuel des cycles et les performances historiques.

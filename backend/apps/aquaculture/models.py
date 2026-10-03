@@ -13,6 +13,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+from common.protected_media import RandomizedUploadPath
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -2056,7 +2057,7 @@ class SanitaryLog(models.Model):
     
     # Photo documentation (compressed client-side to max 1280x720)
     photo = models.ImageField(
-        upload_to='sanitary_logs/%Y/%m/', 
+        upload_to=RandomizedUploadPath('sanitary_logs/%Y/%m', ('jpg', 'jpeg', 'png', 'webp')),
         null=True, 
         blank=True,
         verbose_name=_("Photo"),
@@ -2476,7 +2477,7 @@ class ProductionReport(models.Model):
         help_text=_("Snapshot des données utilisées pour la génération")
     )
     pdf_file = models.FileField(
-        upload_to='reports/%Y/%m/',
+        upload_to=RandomizedUploadPath('reports/%Y/%m', ('pdf',)),
         null=True,
         blank=True,
         verbose_name=_("Fichier PDF")

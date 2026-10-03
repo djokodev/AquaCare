@@ -25,6 +25,8 @@ FEEDING_WEEK_DURATION_DAYS = 6
 
 # Bulk operation limits
 MAX_BULK_LOGS = 500
+# Upper bound for every other list pushed in one /sync/ request.
+MAX_SYNC_ITEMS_PER_KIND = 200
 MAX_GENERATION_WEEKS = 12
 
 # Feeding schedules by meals_per_day {count: [time objects]}

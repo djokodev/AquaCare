@@ -126,6 +126,12 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Fichiers privés (photos sanitaires, rapports PDF) : jamais servis par /media/.
+# En production, Django autorise puis délègue l'envoi à nginx (X-Accel-Redirect
+# vers une location `internal`). Ailleurs, Django renvoie le fichier lui-même.
+PROTECTED_MEDIA_USE_X_ACCEL = False
+PROTECTED_MEDIA_INTERNAL_PREFIX = '/protected-media/'
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Custom user model

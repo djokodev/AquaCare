@@ -135,7 +135,7 @@ def test_patch_without_duration_preserves_legacy_null_cycle(farm_profile):
 
 
 @pytest.mark.django_db
-def test_patch_species_preserves_custom_duration_and_date(farm_profile):
+def test_patch_species_is_rejected_after_launch(farm_profile):
     cycle = ProductionCycle.objects.create(
         farm_profile=farm_profile,
         species="clarias",
@@ -150,10 +150,12 @@ def test_patch_species_preserves_custom_duration_and_date(farm_profile):
     )
 
     serializer = ProductionCycleSerializer(cycle, data={"species": "tilapia"}, partial=True)
-    assert serializer.is_valid(), serializer.errors
-    updated = serializer.save()
-    assert updated.planned_cycle_duration_days == 150
-    assert updated.planned_harvest_date == date(2026, 8, 28)
+    assert serializer.is_valid() is False
+    assert "species" in serializer.errors
+    cycle.refresh_from_db()
+    assert cycle.species == "clarias"
+    assert cycle.planned_cycle_duration_days == 150
+    assert cycle.planned_harvest_date == date(2026, 8, 28)
 
 
 def _make_modern_duration_cycle(farm_profile, *, duration=150, harvest_date=date(2026, 8, 28)):
@@ -204,7 +206,7 @@ def test_patch_explicit_null_preserves_modern_duration_and_date(farm_profile):
     cycle = _make_modern_duration_cycle(farm_profile)
     serializer = ProductionCycleSerializer(
         cycle,
-        data={"species": "tilapia", "planned_cycle_duration_days": None},
+        data={"planned_cycle_duration_days": None},
         partial=True,
     )
     assert serializer.is_valid(), serializer.errors
@@ -255,7 +257,7 @@ def test_creation_without_harvest_date_derives_from_custom_duration(farm_profile
 
 
 @pytest.mark.django_db
-def test_patch_start_date_uses_legacy_fallback_without_persisting_duration(farm_profile):
+def test_patch_start_date_is_rejected_after_launch(farm_profile):
     cycle = ProductionCycle.objects.create(
         farm_profile=farm_profile,
         species="clarias",
@@ -274,10 +276,12 @@ def test_patch_start_date_uses_legacy_fallback_without_persisting_duration(farm_
         data={"start_date": date(2026, 5, 1), "planned_cycle_duration_days": None},
         partial=True,
     )
-    assert serializer.is_valid(), serializer.errors
-    updated = serializer.save()
-    assert updated.planned_cycle_duration_days is None
-    assert updated.planned_harvest_date == date(2026, 8, 28)
+    # La date de début alimente le registre : elle n'est plus modifiable.
+    assert serializer.is_valid() is False
+    assert "start_date" in serializer.errors
+    cycle.refresh_from_db()
+    assert cycle.start_date == date(2026, 4, 1)
+    assert cycle.planned_harvest_date is None
 
 
 @pytest.mark.django_db
@@ -425,11 +429,6 @@ def test_production_cycle_serializer_rejects_contradictory_harvest_date():
             {"planned_cycle_duration_days": 120, "planned_harvest_date": date(2026, 7, 29)},
             date(2026, 7, 29),
         ),
-        ({"start_date": date(2026, 5, 1)}, date(2026, 9, 27)),
-        (
-            {"start_date": date(2026, 5, 1), "planned_harvest_date": date(2026, 9, 27)},
-            date(2026, 9, 27),
-        ),
     ],
 )
 def test_modern_patch_keeps_harvest_date_derived(farm_profile, payload, expected_date):
@@ -446,7 +445,6 @@ def test_modern_patch_keeps_harvest_date_derived(farm_profile, payload, expected
     [
         {"planned_harvest_date": date(2026, 9, 15)},
         {"planned_cycle_duration_days": 120, "planned_harvest_date": date(2026, 7, 30)},
-        {"start_date": date(2026, 5, 1), "planned_harvest_date": date(2026, 9, 28)},
         {"planned_cycle_duration_days": None, "planned_harvest_date": date(2026, 9, 15)},
     ],
 )
@@ -482,3 +480,38 @@ def test_harvest_date_error_is_localized(language, expected):
     with override(language):
         assert serializer.is_valid() is False
         assert str(serializer.errors["planned_harvest_date"][0]) == expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"start_date": date(2026, 5, 1)},
+        {"initial_count": 999},
+        {"initial_average_weight": Decimal("50")},
+        {"client_uuid": "11111111-1111-4111-8111-111111111111"},
+        {"pond_surface_m2": Decimal("1")},
+    ],
+)
+def test_patch_identity_fields_are_rejected_after_launch(farm_profile, payload):
+    cycle = _make_modern_duration_cycle(farm_profile)
+    serializer = ProductionCycleSerializer(cycle, data=payload, partial=True)
+    assert serializer.is_valid() is False
+    assert next(iter(payload)) in serializer.errors
+    cycle.refresh_from_db()
+    assert cycle.start_date == date(2026, 4, 1)
+    assert cycle.initial_count == 100
+
+
+@pytest.mark.django_db
+def test_patch_is_rejected_on_harvested_cycle(farm_profile):
+    cycle = _make_modern_duration_cycle(farm_profile)
+    cycle.status = "harvested"
+    cycle.save(update_fields=["status"])
+    serializer = ProductionCycleSerializer(
+        cycle,
+        data={"planned_selling_price_per_kg_fcfa": Decimal("3000")},
+        partial=True,
+    )
+    assert serializer.is_valid() is False
+    assert "detail" in serializer.errors

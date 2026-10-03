@@ -11,6 +11,7 @@ Roles:
 import csv
 import io
 import logging
+import mimetypes
 import zipfile
 from datetime import date
 
@@ -21,12 +22,14 @@ from common.admin_capabilities import (
 )
 from common.admin_mixins import CertificationFeatureMixin, SecuredModelAdmin
 from common.admin_ui import badge, link_button, muted
+from common.csv_safety import csv_safe
+from common.protected_media import serve_protected_file
 from django.contrib import admin, messages
 from django.contrib.admin.models import CHANGE
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
 from django.db.models import Avg, Count, Sum
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
@@ -458,8 +461,8 @@ class ProductionCycleAdmin(CertificationFeatureMixin, AquacultureSecuredAdmin):
             duration = cycle.days_active()
 
             writer.writerow([
-                cycle.farm_profile.farm_name,
-                cycle.cycle_name,
+                csv_safe(cycle.farm_profile.farm_name),
+                csv_safe(cycle.cycle_name),
                 cycle.get_species_display(),
                 cycle.get_status_display(),
                 cycle.start_date,
@@ -954,9 +957,33 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
         'symptoms',
         'treatment_applied',
     ]
-    readonly_fields = ['id', 'created_at', 'farmer_contact']
+    readonly_fields = ['id', 'created_at', 'farmer_contact', 'has_photo']
+    # Le widget de fichier afficherait le chemin public /media/ : la photo
+    # passe uniquement par la vue protégée `photo_view` (lien has_photo).
+    exclude = ['photo']
     date_hierarchy = 'event_date'
     actions = ['resolve_selected_issues']
+
+    def get_urls(self):
+        from django.urls import path
+
+        custom = [
+            path(
+                '<path:object_id>/photo/',
+                self.admin_site.admin_view(self.photo_view),
+                name='aquaculture_sanitarylog_photo',
+            ),
+        ]
+        return custom + super().get_urls()
+
+    def photo_view(self, request, object_id):
+        sanitary_log = self.get_object(request, object_id)
+        if sanitary_log is None or not sanitary_log.photo:
+            raise Http404
+        if not self.has_view_permission(request, sanitary_log):
+            raise PermissionDenied(_("Accès refusé."))
+        content_type = mimetypes.guess_type(sanitary_log.photo.name)[0] or 'application/octet-stream'
+        return serve_protected_file(sanitary_log.photo, content_type=content_type)
 
     def has_add_permission(self, request):
         return False
@@ -1087,10 +1114,11 @@ class SanitaryLogAdmin(AquacultureSecuredAdmin):
 
     def has_photo(self, obj):
         """Display photo link if available."""
-        if obj.photo:
-            return format_html(
-                '<a href="{}" target="_blank">Voir photo</a>',
-                obj.photo.url
+        if obj.photo and obj.pk:
+            return link_button(
+                reverse('admin:aquaculture_sanitarylog_photo', args=[obj.pk]),
+                _("Voir photo"),
+                new_tab=True,
             )
         return "-"
     has_photo.short_description = _('Photo')

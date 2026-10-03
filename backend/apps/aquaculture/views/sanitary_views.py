@@ -3,10 +3,13 @@ Sanitary Views pour le module aquaculture.
 """
 
 import logging
+import mimetypes
 
+from common.protected_media import serve_protected_file
+from django.http import Http404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
@@ -104,7 +107,12 @@ logger = logging.getLogger(__name__)
         ]
     )
 )
-class SanitaryLogViewSet(viewsets.ModelViewSet):
+class SanitaryLogViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
     """
     Gestion des logs sanitaires avec support photo.
     
@@ -119,6 +127,13 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
         if self.action == 'resolve':
             return SanitaryResolutionSerializer
         return super().get_serializer_class()
+
+    def get_throttles(self):
+        # La création accepte une photo (5 Mo) : même quota que les autres
+        # actions sanitaires pour empêcher le remplissage du disque.
+        if self.action == 'create':
+            return [*super().get_throttles(), AquacultureSanitaryActionThrottle()]
+        return super().get_throttles()
 
     def get_queryset(self):
         """Retourne les logs sanitaires pour les cycles de l'utilisateur."""
@@ -213,6 +228,22 @@ class SanitaryLogViewSet(viewsets.ModelViewSet):
 
         response_serializer = SanitaryLogSerializer(resolved_log, context={'request': request})
         return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Photo d'un événement sanitaire",
+        description=(
+            "Retourne la photo après contrôle d'accès. Les photos ne sont jamais "
+            "servies par le chemin public /media/."
+        ),
+        responses={200: OpenApiTypes.BINARY, 404: OpenApiTypes.OBJECT},
+    )
+    @action(detail=True, methods=['get'], url_path='photo')
+    def photo(self, request, pk=None):
+        sanitary_log = self.get_object()
+        if not sanitary_log.photo:
+            raise Http404
+        content_type = mimetypes.guess_type(sanitary_log.photo.name)[0] or 'application/octet-stream'
+        return serve_protected_file(sanitary_log.photo, content_type=content_type)
 
     @extend_schema(
         summary="Problèmes sanitaires actifs",

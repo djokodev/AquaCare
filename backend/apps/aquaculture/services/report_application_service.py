@@ -496,5 +496,16 @@ class ReportApplicationService:
             ReportApplicationService.request_report_regeneration(report)
             return ReportDownloadDecision(status="regenerating")
 
-        filename = report.pdf_file.name.split("/")[-1] or f"report_{report.id}.pdf"
-        return ReportDownloadDecision(status="ready", filename=filename)
+        return ReportDownloadDecision(
+            status="ready",
+            filename=ReportApplicationService.build_download_filename(report),
+        )
+
+    @staticmethod
+    def build_download_filename(report: ProductionReport) -> str:
+        """Nom lisible du PDF, indépendant du nom aléatoire de stockage."""
+        scope = report.scope_type or "farm"
+        return (
+            f"aquacare_{report.report_type}_{scope}_"
+            f"{report.period_start.isoformat()}_{report.period_end.isoformat()}.pdf"
+        )

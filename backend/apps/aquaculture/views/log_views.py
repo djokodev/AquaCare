@@ -24,6 +24,7 @@ from ..services import (
     CycleLogApplicationService,
     UnauthorizedCycleAccessError,
 )
+from ..throttles import AquacultureSyncThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +214,12 @@ class CycleLogViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(str(exc)) from exc
 
         serializer.instance = updated_log
+
+    def perform_destroy(self, instance):
+        try:
+            CycleLogApplicationService.delete_log(user=self.request.user, log=instance)
+        except UnauthorizedCycleAccessError as exc:
+            raise PermissionDenied(str(exc)) from exc
     
     @extend_schema(
         summary="Création en bulk de logs (sync offline)",
@@ -254,7 +261,7 @@ class CycleLogViewSet(viewsets.ModelViewSet):
             )
         ]
     )
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], throttle_classes=[AquacultureSyncThrottle])
     def bulk_create(self, request):
         """
         Crée plusieurs logs pour synchronisation offline.

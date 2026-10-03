@@ -127,13 +127,12 @@ logger = logging.getLogger(__name__)
         summary="Détails d'un cycle de production",
         description="Retourne les détails complets d'un cycle avec métriques calculées."
     ),
-    update=extend_schema(
-        summary="Mettre à jour un cycle de production",
-        description="Met à jour les paramètres d'un cycle actif (pond, objectifs, etc.)."
-    ),
     partial_update=extend_schema(
-        summary="Mise à jour partielle d'un cycle",
-        description="Met à jour partiellement un cycle de production."
+        summary="Mettre à jour les objectifs d'un cycle actif",
+        description=(
+            "Seuls les paramètres de planification sont modifiables : nom, poids cible, "
+            "durée prévue, survie attendue, prix de vente, coût des alevins, autres charges."
+        ),
     ),
     destroy=extend_schema(
         summary="Supprimer un cycle de production",
@@ -149,6 +148,8 @@ class ProductionCycleViewSet(viewsets.ModelViewSet):
     """
     serializer_class = ProductionCycleSerializer
     permission_classes = [permissions.IsAuthenticated]
+    # PUT remplacerait l'identité du cycle : seul PATCH (objectifs) est permis.
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
     def get_serializer_class(self):
         if self.action == 'harvest':
