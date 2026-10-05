@@ -367,14 +367,17 @@ class TestReportApplicationService:
             status="validated",
         )
         mock_file = MagicMock()
-        mock_file.name = "reports/2026/04/rapport.pdf"
+        mock_file.name = "reports/2026/04/0f3c9a1e6b2d4c8e9a7b5d3f1e2c4a6b.pdf"
         mock_file.__bool__ = lambda self: True
         report.pdf_file = mock_file
 
         decision = ReportApplicationService.prepare_report_download(report)
 
         assert decision.status == "ready"
-        assert decision.filename == "rapport.pdf"
+        # Le nom de téléchargement est lisible et ne révèle pas le nom aléatoire
+        # du stockage.
+        day = timezone.localdate().isoformat()
+        assert decision.filename == f"aquacare_daily_{report.scope_type}_{day}_{day}.pdf"
 
     def test_request_report_regeneration_passes_restore_validation_when_validated(self):
         farm_profile = FarmProfileFactory()

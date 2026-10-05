@@ -65,6 +65,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+PROTECTED_MEDIA_USE_X_ACCEL = config('PROTECTED_MEDIA_USE_X_ACCEL', default=True, cast=bool)
 
 LOGGING = {
     'version': 1,

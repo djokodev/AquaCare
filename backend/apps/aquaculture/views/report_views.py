@@ -4,11 +4,10 @@ Report Views pour le module aquaculture.
 from __future__ import annotations
 
 import logging
-from urllib.parse import quote
 from uuid import UUID
 
+from common.protected_media import serve_protected_file
 from django.db.models import Q
-from django.http import FileResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
@@ -451,9 +450,7 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         filename = decision.filename or f"report_{report.id}.pdf"
-        try:
-            file_handle = report.pdf_file.open('rb')
-        except FileNotFoundError:
+        if not report.pdf_file.storage.exists(report.pdf_file.name):
             report.pdf_file = None
             report.save(update_fields=['pdf_file', 'updated_at'])
             try:
@@ -463,6 +460,9 @@ class ProductionReportViewSet(viewsets.ReadOnlyModelViewSet):
             return self._pending_response(
                 _("Le fichier PDF est introuvable. Régénération lancée, réessayez dans quelques instants.")
             )
-        response = FileResponse(file_handle, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{quote(filename)}"'
-        return response
+        return serve_protected_file(
+            report.pdf_file,
+            content_type='application/pdf',
+            download_name=filename,
+            as_attachment=True,
+        )

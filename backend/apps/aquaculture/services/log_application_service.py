@@ -102,13 +102,20 @@ class CycleLogApplicationService:
         return CycleLogMutationResult(log=new_log, created=True)
 
     @staticmethod
+    @transaction.atomic
     def update_log(
         *,
         user,
         log: CycleLog,
         validated_data: CycleLogPayload,
     ) -> CycleLog:
-        """Met a jour un log et recalcule les metriques associees."""
+        """Met a jour un log et recalcule les metriques associees.
+
+        Tout est dans une seule transaction : si le registre refuse la nouvelle
+        chronologie (stock négatif, récolte finale contredite), la modification
+        du journal est annulée au lieu de rester enregistrée avec des
+        métriques périmées.
+        """
         if log.cycle.farm_profile.user_id != user.id:
             raise UnauthorizedCycleAccessError("Cycle non autorise.")
 
@@ -140,6 +147,20 @@ class CycleLogApplicationService:
         )
 
         return updated_log
+
+    @staticmethod
+    @transaction.atomic
+    def delete_log(*, user, log: CycleLog) -> None:
+        """Supprime un journal et rejoue le registre sous verrou du cycle.
+
+        Le verrou sérialise la suppression avec les saisies concurrentes du même
+        cycle ; le signal post_delete rejoue les métriques dans la même
+        transaction, donc une chronologie refusée annule la suppression.
+        """
+        if log.cycle.farm_profile.user_id != user.id:
+            raise UnauthorizedCycleAccessError("Cycle non autorise.")
+        ProductionCycle.objects.select_for_update().get(pk=log.cycle_id)
+        log.delete()
 
     @staticmethod
     def create_bulk_logs(

@@ -24,6 +24,7 @@ from typing import Any, cast
 from commerce.models import Product
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Sum
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema_field
@@ -43,8 +44,10 @@ from .constants import (
     FEEDING_WEEK_DURATION_DAYS,
     LOG_TEMPERATURE_MAX,
     LOG_TEMPERATURE_MIN,
+    MAX_BULK_LOGS,
     MAX_GENERATION_WEEKS,
     MAX_INITIAL_FISH_COUNT,
+    MAX_SYNC_ITEMS_PER_KIND,
     SPECIES_CHOICES,
 )
 from .domain.calculators import AquacultureCalculator
@@ -579,7 +582,43 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
         )
         return float(total_cost)
 
+    # Après le lancement, seuls les objectifs de planification restent
+    # modifiables. L'identité du cycle (espèce, dates, effectifs, poids,
+    # dimensions) alimente le registre et les rapports : la changer sans
+    # rejouer l'historique rendrait les chiffres incohérents.
+    UPDATABLE_FIELDS = frozenset({
+        'cycle_name',
+        'target_harvest_weight_g',
+        'planned_cycle_duration_days',
+        'planned_harvest_date',
+        'expected_survival_rate_pct',
+        'planned_selling_price_per_kg_fcfa',
+        'fingerlings_cost_fcfa',
+        'other_operational_costs_fcfa',
+    })
+
+    def _validate_update_scope(self) -> None:
+        submitted = getattr(self, 'initial_data', None) or {}
+        forbidden = sorted(
+            name
+            for name in submitted
+            if name in self.fields
+            and not self.fields[name].read_only
+            and name not in self.UPDATABLE_FIELDS
+        )
+        if forbidden:
+            raise serializers.ValidationError({
+                name: [_("Ce champ ne peut plus être modifié après le lancement du cycle.")]
+                for name in forbidden
+            })
+        if self.instance.status != 'active':
+            raise serializers.ValidationError({
+                'detail': _("Seul un cycle en cours peut être modifié."),
+            })
+
     def validate(self, attrs):
+        if self.instance is not None:
+            self._validate_update_scope()
         species = attrs.get('species') or getattr(self.instance, 'species', None)
         defaults = ECONOMIC_DEFAULTS_BY_SPECIES.get(species or 'tilapia', ECONOMIC_DEFAULTS_BY_SPECIES['tilapia'])
         is_create = self.instance is None
@@ -760,6 +799,10 @@ class ProductionCycleSerializer(serializers.ModelSerializer):
                 'planned_harvest_date': _("La date prévisionnelle de récolte doit être après la date de début")
             })
 
+        if not is_create:
+            # Les valeurs par défaut calculées plus haut ne doivent jamais
+            # toucher un champ d'identité lors d'une mise à jour.
+            attrs = {key: value for key, value in attrs.items() if key in self.UPDATABLE_FIELDS}
         return attrs
 
     def create(self, validated_data):
@@ -926,7 +969,40 @@ class CalibrationResponseSerializer(serializers.Serializer):
     idempotent_replay = serializers.BooleanField()
 
 
-class CycleLogSerializer(serializers.ModelSerializer):
+class OwnerScopedRelationsMixin:
+    """Restreint les relations écrites aux objets de l'utilisateur connecté.
+
+    Sans ce filtre, un identifiant de cycle d'une autre ferme était résolu
+    avant le contrôle de propriété du service, et les messages de validation
+    (dates du cycle, effectif) pouvaient renseigner sur ce cycle. Les lots de
+    synchronisation (sérialiseur enfant d'une liste) gardent leur contrôle
+    élément par élément, qui renvoie une erreur par ligne sans bloquer le lot.
+    """
+
+    owner_scoped_relations: dict[str, str] = {
+        'cycle': 'farm_profile__user',
+        'cycle_unit_allocation': 'cycle__farm_profile__user',
+        'feed_reference': 'farm_profile__user',
+    }
+
+    def get_fields(self):
+        fields = super().get_fields()
+        if isinstance(getattr(self, 'parent', None), serializers.ListSerializer):
+            return fields
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if not getattr(user, 'is_authenticated', False):
+            return fields
+        for name, lookup in self.owner_scoped_relations.items():
+            field = fields.get(name)
+            queryset = getattr(field, 'queryset', None)
+            if field is None or field.read_only or queryset is None:
+                continue
+            field.queryset = queryset.filter(**{lookup: user})
+        return fields
+
+
+class CycleLogSerializer(OwnerScopedRelationsMixin, serializers.ModelSerializer):
     """
     Sérialiseur pour les logs quotidiens de cycle avec validation pour synchronisation offline.
     """
@@ -1318,7 +1394,7 @@ class FeedingPlanGenerationRequestSerializer(serializers.Serializer):
     weeks_ahead = serializers.IntegerField(min_value=1, max_value=MAX_GENERATION_WEEKS, default=1)
 
 
-class SanitaryLogSerializer(serializers.ModelSerializer):
+class SanitaryLogSerializer(OwnerScopedRelationsMixin, serializers.ModelSerializer):
     """
     Sérialiseur pour les logs sanitaires avec support photo.
     """
@@ -1368,12 +1444,19 @@ class SanitaryLogSerializer(serializers.ModelSerializer):
         }
 
     def get_photo_url(self, obj):
-        """Retourne l'URL complète de la photo si disponible."""
-        if obj.photo:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.photo.url)
-        return None
+        """URL authentifiée de la photo : jamais le chemin public /media/."""
+        if not obj.photo or not obj.pk:
+            return None
+        path = reverse('aquaculture:sanitary-log-photo', args=[obj.pk])
+        request = self.context.get('request')
+        return request.build_absolute_uri(path) if request else path
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Le champ photo reste accepté en écriture, mais sa lecture renverrait
+        # l'URL publique du stockage : on expose la même URL protégée.
+        data['photo'] = self.get_photo_url(instance)
+        return data
 
     def get_days_since_event(self, obj):
         """Calcule les jours depuis que l'événement s'est produit."""
@@ -2279,6 +2362,8 @@ class ProductionReportDetailSerializer(ProductionReportListSerializer):
     validated_by_name = serializers.CharField(source='validated_by.display_name', read_only=True)
     dispatch_logs = ReportDispatchLogSerializer(many=True, read_only=True)
     pdf_url = serializers.SerializerMethodField()
+    # Conservé pour la compatibilité du contrat mobile : même URL protégée.
+    pdf_file = serializers.SerializerMethodField()
 
     class Meta(ProductionReportListSerializer.Meta):
         model = ProductionReport
@@ -2292,12 +2377,17 @@ class ProductionReportDetailSerializer(ProductionReportListSerializer):
         ]
 
     def get_pdf_url(self, obj: ProductionReport) -> str | None:
+        """URL authentifiée de téléchargement : jamais le chemin public /media/."""
         request = cast(Request | None, self.context.get('request'))
         if not obj.pdf_file:
             return None
+        path = reverse('aquaculture:production-report-download', args=[obj.pk])
         if request is None:
-            return obj.pdf_file.url
-        return request.build_absolute_uri(obj.pdf_file.url)
+            return path
+        return request.build_absolute_uri(path)
+
+    def get_pdf_file(self, obj: ProductionReport) -> str | None:
+        return self.get_pdf_url(obj)
 
 
 class MarkWhatsAppSharedSerializer(serializers.Serializer):
@@ -2307,6 +2397,15 @@ class MarkWhatsAppSharedSerializer(serializers.Serializer):
 
     recipient = serializers.CharField(required=False, allow_blank=True, max_length=255)
     metadata = serializers.DictField(required=False)
+
+    MAX_METADATA_JSON_LENGTH = 2000
+
+    def validate_metadata(self, value):
+        import json  # noqa: PLC0415
+
+        if len(json.dumps(value, default=str)) > self.MAX_METADATA_JSON_LENGTH:
+            raise serializers.ValidationError(_("Les métadonnées de partage sont trop volumineuses."))
+        return value
 
 
 class GenerateReportSerializer(serializers.Serializer):
@@ -2387,14 +2486,21 @@ class SyncRequestSerializer(serializers.Serializer):
     """
     Sérialiseur pour les requêtes de synchronisation.
     """
-    cycle_logs = CycleLogSyncSerializer(many=True, required=False)
-    sanitary_logs = SanitaryLogSerializer(many=True, required=False)
-    new_cycles = ProductionCycleSerializer(many=True, required=False)
-    calibration_tanks = CalibrationTankSerializer(many=True, required=False)
-    calibration_operations = CalibrationRequestSerializer(many=True, required=False)
+    # Bornes par lot : une seule requête ne doit pas pouvoir bloquer un worker
+    # (le mobile envoie ses files hors ligne par paquets).
+    cycle_logs = CycleLogSyncSerializer(many=True, required=False, max_length=MAX_BULK_LOGS)
+    sanitary_logs = SanitaryLogSerializer(many=True, required=False, max_length=MAX_SYNC_ITEMS_PER_KIND)
+    new_cycles = ProductionCycleSerializer(many=True, required=False, max_length=MAX_SYNC_ITEMS_PER_KIND)
+    calibration_tanks = CalibrationTankSerializer(many=True, required=False, max_length=MAX_SYNC_ITEMS_PER_KIND)
+    calibration_operations = CalibrationRequestSerializer(
+        many=True,
+        required=False,
+        max_length=MAX_SYNC_ITEMS_PER_KIND,
+    )
     final_harvests = serializers.ListField(
         child=serializers.DictField(),
         required=False,
+        max_length=MAX_SYNC_ITEMS_PER_KIND,
     )
     last_sync = serializers.DateTimeField(required=False)
     device_id = serializers.CharField(max_length=100, required=False)

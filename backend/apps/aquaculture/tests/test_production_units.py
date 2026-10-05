@@ -371,16 +371,29 @@ class TestProductionUnitViews:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['unit_type'] == 'tank'
 
-    def test_create_cycle_unit_allocation(self, auth_client, production_cycle, farm_profile):
+    def test_cycle_unit_allocation_api_refuses_direct_writes(
+        self, auth_client, production_cycle, farm_profile
+    ):
+        """Les effectifs d'une allocation ne changent que par le registre."""
         unit = ProductionUnit.objects.create(
             farm_profile=farm_profile,
             name='Bac allocation API',
             unit_type='tank',
             volume_m3=Decimal('4.00'),
         )
+        allocation = CycleUnitAllocation.objects.create(
+            cycle=production_cycle,
+            production_unit=unit,
+            initial_fish_count=400,
+            current_fish_count=390,
+            initial_biomass_kg=Decimal('4.00'),
+            current_biomass_kg=Decimal('3.90'),
+        )
+        list_url = reverse('aquaculture:cycle-unit-allocation-list')
+        detail_url = reverse('aquaculture:cycle-unit-allocation-detail', args=[allocation.id])
 
-        response = auth_client.post(
-            reverse('aquaculture:cycle-unit-allocation-list'),
+        create_response = auth_client.post(
+            list_url,
             {
                 'cycle': str(production_cycle.id),
                 'production_unit': str(unit.id),
@@ -388,14 +401,23 @@ class TestProductionUnitViews:
                 'current_fish_count': 390,
                 'initial_biomass_kg': '4.00',
                 'current_biomass_kg': '3.90',
-                'expected_survival_rate_pct': '97.50',
             },
             format='json',
         )
+        patch_response = auth_client.patch(
+            detail_url,
+            {'initial_fish_count': 5000, 'current_fish_count': 5000},
+            format='json',
+        )
+        delete_response = auth_client.delete(detail_url)
 
-        assert response.status_code == status.HTTP_201_CREATED
-        assert str(response.data['cycle']) == str(production_cycle.id)
-        assert str(response.data['production_unit']) == str(unit.id)
+        assert create_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        assert patch_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        assert delete_response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+        allocation.refresh_from_db()
+        assert allocation.initial_fish_count == 400
+        assert allocation.current_fish_count == 390
+        assert auth_client.get(detail_url).status_code == status.HTTP_200_OK
 
     def test_delete_production_unit_archives_unit_and_preserves_allocations(
         self,
@@ -438,77 +460,3 @@ class TestProductionUnitViews:
         assert archived_response.status_code == status.HTTP_200_OK
         assert len(archived_response.data['results']) == 1
         assert archived_response.data['results'][0]['id'] == str(unit.id)
-
-    def test_create_cycle_unit_allocation_rejects_foreign_cycle(
-        self,
-        auth_client,
-        farm_profile,
-        user_factory,
-    ):
-        other_user = user_factory(phone_number='+237690666666', email='foreign-cycle@test.com')
-        foreign_cycle = ProductionCycle.objects.create(
-            farm_profile=other_user.farm_profile,
-            cycle_name='Cycle externe',
-            species='tilapia',
-            pond_identifier='Bassin externe',
-            pond_surface_m2=Decimal('100.00'),
-            start_date=date.today(),
-            initial_count=1000,
-            initial_average_weight=Decimal('10.00'),
-            initial_biomass=Decimal('10.00'),
-            current_count=1000,
-            current_average_weight=Decimal('10.00'),
-            current_biomass=Decimal('10.00'),
-        )
-        unit = ProductionUnit.objects.create(
-            farm_profile=farm_profile,
-            name='Bac local',
-            unit_type='tank',
-            volume_m3=Decimal('4.00'),
-        )
-
-        response = auth_client.post(
-            reverse('aquaculture:cycle-unit-allocation-list'),
-            {
-                'cycle': str(foreign_cycle.id),
-                'production_unit': str(unit.id),
-                'initial_fish_count': 400,
-                'current_fish_count': 390,
-                'initial_biomass_kg': '4.00',
-                'current_biomass_kg': '3.90',
-            },
-            format='json',
-        )
-
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'cycle' in response.data
-
-    def test_create_cycle_unit_allocation_rejects_foreign_unit(
-        self,
-        auth_client,
-        production_cycle,
-        user_factory,
-    ):
-        other_user = user_factory(phone_number='+237690555555', email='foreign-unit@test.com')
-        foreign_unit = ProductionUnit.objects.create(
-            farm_profile=other_user.farm_profile,
-            name='Bac externe',
-            unit_type='tank',
-            volume_m3=Decimal('4.00'),
-        )
-
-        response = auth_client.post(
-            reverse('aquaculture:cycle-unit-allocation-list'),
-            {
-                'cycle': str(production_cycle.id),
-                'production_unit': str(foreign_unit.id),
-                'initial_fish_count': 400,
-                'current_fish_count': 390,
-                'initial_biomass_kg': '4.00',
-                'current_biomass_kg': '3.90',
-            },
-            format='json',
-        )
-
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert 'production_unit' in response.data

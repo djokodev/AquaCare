@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from accounts.models import FarmProfile, User
+from common.pdf_security import data_uri_only_url_fetcher
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
@@ -3629,6 +3630,7 @@ class ReportService(BaseService):
         return HTML(
             string=html_string,
             base_url=str(settings.BASE_DIR),
+            url_fetcher=data_uri_only_url_fetcher(),
         ).write_pdf()
 
     @staticmethod

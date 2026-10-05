@@ -3334,3 +3334,15 @@ msgid ""
 msgstr ""
 "This product already exists (same brand, name and bag weight). Edit the "
 "existing product instead of creating a second one."
+
+msgid "Ce champ ne peut plus être modifié après le lancement du cycle."
+msgstr "This field can no longer be changed once the cycle has started."
+
+msgid "Seul un cycle en cours peut être modifié."
+msgstr "Only an ongoing cycle can be changed."
+
+msgid "Les métadonnées de partage sont trop volumineuses."
+msgstr "The sharing metadata is too large."
+
+msgid "Voir photo"
+msgstr "View photo"
